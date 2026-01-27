@@ -1,4 +1,4 @@
-Configure the backend URL inside `MainActivity` (`SESSION_URL`, points to `/session`).
+Configure the backend URL in `MainActivity` (`SESSION_URL`, points to `/session`).
 
 Build:
 ```
