@@ -53,10 +53,20 @@ class OpenAIRealtimeClient(
 ) {
 
     interface Listener {
-        fun onUserTranscriptDelta(delta: String)
-        fun onUserTranscript(transcript: String)
-        fun onAssistantTranscriptDelta(delta: String)
-        fun onAssistantTranscriptFinal(transcript: String)
+        fun onConversationItemAdded(
+            itemId: String,
+            role: String,
+            status: String,
+            previousItemId: String?
+        )
+        fun onConversationItemDone(
+            itemId: String,
+            role: String,
+            status: String,
+            previousItemId: String?
+        )
+        fun onUserTranscript(itemId: String, transcript: String)
+        fun onAssistantTranscriptFinal(itemId: String, transcript: String)
         fun onConnectionStateChanged(state: PeerConnection.IceConnectionState)
         fun onError(message: String, throwable: Throwable? = null)
     }
@@ -69,6 +79,7 @@ class OpenAIRealtimeClient(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val okHttp = OkHttpClient()
     private val eglBase: EglBase = EglBase.create()
+    private val seenEventIds = HashSet<String>()
 
     private val audioDeviceModule by lazy {
         JavaAudioDeviceModule.builder(context)
@@ -398,26 +409,40 @@ class OpenAIRealtimeClient(
     private fun handleServerEvent(jsonText: String) {
         try {
             val json = JSONObject(jsonText)
+            if (shouldIgnoreEvent(json)) return
             when (val type = json.optString("type")) {
-                "conversation.item.input_audio_transcription.delta" -> {
-                    // Deltas intentionally ignored for now; rely on completed for final text.
-                }
-
-                "conversation.item.input_audio_transcription.completed" -> {
-                    val transcript = json.optString("transcript", "")
-                    if (transcript.isNotEmpty()) {
-                        listener.onUserTranscript(transcript)
+                "conversation.item.added",
+                "conversation.item.done" -> {
+                    val item = json.optJSONObject("item") ?: return
+                    val itemId = item.optString("id")
+                    if (itemId.isBlank()) return
+                    val role = item.optString("role", "")
+                    val status = item.optString("status", "")
+                    val prevId = if (json.has("previous_item_id")) {
+                        json.optString("previous_item_id").takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                    if (type == "conversation.item.added") {
+                        listener.onConversationItemAdded(itemId, role, status, prevId)
+                    } else {
+                        listener.onConversationItemDone(itemId, role, status, prevId)
                     }
                 }
 
-                "response.output_audio_transcript.delta" -> {
-                    // Deltas intentionally ignored for now; rely on done for final text.
+                "conversation.item.input_audio_transcription.completed" -> {
+                    val itemId = json.optString("item_id", "")
+                    if (itemId.isNotEmpty()) {
+                        val transcript = json.optString("transcript", "")
+                        listener.onUserTranscript(itemId, transcript)
+                    }
                 }
 
                 "response.output_audio_transcript.done" -> {
-                    val transcript = json.optString("transcript", "")
-                    if (transcript.isNotEmpty()) {
-                        listener.onAssistantTranscriptFinal(transcript)
+                    val itemId = json.optString("item_id", "")
+                    if (itemId.isNotEmpty()) {
+                        val transcript = json.optString("transcript", "")
+                        listener.onAssistantTranscriptFinal(itemId, transcript)
                     }
                 }
 
@@ -428,6 +453,16 @@ class OpenAIRealtimeClient(
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to parse server event: $jsonText", t)
         }
+    }
+
+    private fun shouldIgnoreEvent(json: JSONObject): Boolean {
+        val eventId = json.optString("event_id", "")
+        if (eventId.isBlank()) return false
+        synchronized(seenEventIds) {
+            if (seenEventIds.contains(eventId)) return true
+            seenEventIds.add(eventId)
+        }
+        return false
     }
 
     private suspend fun createOffer(pc: PeerConnection): SessionDescription =

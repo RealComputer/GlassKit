@@ -21,9 +21,11 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
     private lateinit var binding: ActivityMainBinding
 
-    private val conversation = mutableListOf<Message>()
-    private val userBuffer = StringBuilder()
-    private val assistantBuffer = StringBuilder()
+    private val itemsById = mutableMapOf<String, UiItem>()
+    private val orderedIds = mutableListOf<String>()
+    private val pendingText = mutableMapOf<String, String>()
+    private val waitingForPrev = mutableMapOf<String, MutableSet<String>>()
+    private var localSystemCounter = 0
     private var realtimeClient: OpenAIRealtimeClient? = null
 
     companion object {
@@ -39,9 +41,6 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
         binding.tvTitle.text = "Assembly Assistant"
         setStatus("Requesting mic/camera...")
-
-        // Start with an empty user message so assistant replies can't get ahead in the UI order.
-        ensureUserPlaceholder()
 
         setupAutoScroll(binding.tvConversation, binding.scrollView)
         ensurePermissions()
@@ -133,49 +132,42 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     private fun stopRealtime() {
         realtimeClient?.release()
         realtimeClient = null
-        assistantBuffer.clear()
         setStatus("Stopped")
     }
 
-    override fun onUserTranscript(transcript: String) {
+    override fun onConversationItemAdded(
+        itemId: String,
+        role: String,
+        status: String,
+        previousItemId: String?
+    ) {
         runOnUiThread {
-            userBuffer.clear()
-            userBuffer.append(transcript)
-            upsertUserMessage(userBuffer.toString())
+            upsertItem(itemId, role, status, previousItemId)
+        }
+    }
+
+    override fun onConversationItemDone(
+        itemId: String,
+        role: String,
+        status: String,
+        previousItemId: String?
+    ) {
+        runOnUiThread {
+            upsertItem(itemId, role, status, previousItemId)
+        }
+    }
+
+    override fun onUserTranscript(itemId: String, transcript: String) {
+        runOnUiThread {
+            attachTranscript(itemId, transcript)
             setStatus("Heard you")
         }
     }
 
-    override fun onUserTranscriptDelta(delta: String) {
+    override fun onAssistantTranscriptFinal(itemId: String, transcript: String) {
         runOnUiThread {
-            // Always write into the latest user message, even if an assistant line was already added.
-            if (conversation.lastOrNull()?.role != MessageRole.USER) {
-                ensureUserPlaceholder()
-                userBuffer.clear()
-            }
-            userBuffer.append(delta)
-            upsertUserMessage(userBuffer.toString())
-            setStatus("Hearing you")
-        }
-    }
-
-    override fun onAssistantTranscriptDelta(delta: String) {
-        runOnUiThread {
-            assistantBuffer.append(delta)
-            val current = assistantBuffer.toString()
-            upsertAssistantMessage(current)
-            setStatus("Assistant speaking")
-        }
-    }
-
-    override fun onAssistantTranscriptFinal(transcript: String) {
-        runOnUiThread {
-            assistantBuffer.clear()
-            assistantBuffer.append(transcript)
-            upsertAssistantMessage(transcript)
+            attachTranscript(itemId, transcript)
             setStatus("Assistant done")
-            // Prepare a placeholder for the next user utterance so ordering stays User → Assistant.
-            ensureUserPlaceholder()
         }
     }
 
@@ -200,52 +192,101 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
         }
     }
 
-    private fun addMessage(role: MessageRole, text: String) {
-        conversation.add(Message(role, text))
-        renderConversation()
-    }
-
-    private fun upsertAssistantMessage(text: String) {
-        val lastIndex = conversation.lastIndex
-        if (lastIndex >= 0 && conversation[lastIndex].role == MessageRole.ASSISTANT) {
-            conversation[lastIndex] = conversation[lastIndex].copy(content = text)
+    private fun upsertItem(
+        itemId: String,
+        role: String,
+        status: String,
+        previousItemId: String?
+    ) {
+        val itemRole = parseRole(role)
+        val itemStatus = parseStatus(status)
+        val existing = itemsById[itemId]
+        val resolvedPrevId = if (previousItemId == null && existing != null) {
+            existing.prevId
         } else {
-            conversation.add(Message(MessageRole.ASSISTANT, text))
+            previousItemId
         }
+        val uiItem = existing ?: UiItem(
+            id = itemId,
+            role = itemRole,
+            status = itemStatus,
+            prevId = resolvedPrevId,
+            text = ""
+        )
+        uiItem.role = itemRole
+        uiItem.status = itemStatus
+        uiItem.prevId = resolvedPrevId
+        itemsById[itemId] = uiItem
+        if (existing == null || previousItemId != null) {
+            upsertOrder(itemId, resolvedPrevId)
+        }
+        applyPendingText(itemId)
         renderConversation()
     }
 
-    private fun upsertUserMessage(text: String) {
-        val idx = conversation.indexOfLast { it.role == MessageRole.USER }
-        if (idx >= 0) {
-            conversation[idx] = conversation[idx].copy(content = text)
-        } else {
-            conversation.add(Message(MessageRole.USER, text))
-        }
-        renderConversation()
-    }
-
-    private fun ensureUserPlaceholder() {
-        if (conversation.lastOrNull()?.role != MessageRole.USER) {
-            conversation.add(Message(MessageRole.USER, ""))
+    private fun attachTranscript(itemId: String, transcript: String) {
+        val item = itemsById[itemId]
+        if (item != null) {
+            item.text = transcript
             renderConversation()
+        } else {
+            pendingText[itemId] = transcript
+        }
+    }
+
+    private fun applyPendingText(itemId: String) {
+        val pending = pendingText.remove(itemId) ?: return
+        val item = itemsById[itemId] ?: return
+        item.text = pending
+    }
+
+    private fun upsertOrder(itemId: String, previousItemId: String?) {
+        orderedIds.remove(itemId)
+        if (previousItemId == null) {
+            orderedIds.add(0, itemId)
+        } else {
+            val prevIndex = orderedIds.indexOf(previousItemId)
+            if (prevIndex >= 0) {
+                orderedIds.add(prevIndex + 1, itemId)
+            } else {
+                val waiters = waitingForPrev.getOrPut(previousItemId) { mutableSetOf() }
+                waiters.add(itemId)
+                orderedIds.add(itemId)
+            }
+        }
+
+        val waiters = waitingForPrev.remove(itemId) ?: return
+        for (waiter in waiters) {
+            val waiterItem = itemsById[waiter] ?: continue
+            upsertOrder(waiter, waiterItem.prevId)
         }
     }
 
     private fun appendSystemMessage(msg: String) {
-        addMessage(MessageRole.SYSTEM, msg)
+        val id = "local-system-${localSystemCounter++}"
+        val item = UiItem(
+            id = id,
+            role = MessageRole.SYSTEM,
+            status = ItemStatus.COMPLETED,
+            prevId = null,
+            text = msg
+        )
+        itemsById[id] = item
+        orderedIds.add(id)
+        renderConversation()
     }
 
     private fun renderConversation() {
         val builder = SpannableStringBuilder()
 
-        conversation.forEach { message ->
+        orderedIds.mapNotNull { itemsById[it] }.forEach { message ->
             if (builder.isNotEmpty()) builder.append("\n")
 
             val prefix = when (message.role) {
                 MessageRole.USER -> "User:"
                 MessageRole.ASSISTANT -> "Assistant:"
                 MessageRole.SYSTEM -> "[System]"
+                MessageRole.TOOL -> "Tool:"
             }
 
             val start = builder.length
@@ -269,7 +310,7 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
             builder.append("\n")
             val contentStart = builder.length
-            builder.append(message.content)
+            builder.append(message.text)
             val contentEnd = builder.length
             // Only style non-empty content to avoid zero-length span errors.
             if (contentEnd > contentStart) {
@@ -302,11 +343,46 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
         )
     }
 
-    private data class Message(val role: MessageRole, val content: String)
+    private fun parseRole(role: String): MessageRole {
+        return when (role.lowercase()) {
+            "user" -> MessageRole.USER
+            "assistant" -> MessageRole.ASSISTANT
+            "system" -> MessageRole.SYSTEM
+            "tool" -> MessageRole.TOOL
+            else -> MessageRole.SYSTEM
+        }
+    }
+
+    private fun parseStatus(status: String): ItemStatus {
+        return when (status.lowercase()) {
+            "in_progress" -> ItemStatus.IN_PROGRESS
+            "completed" -> ItemStatus.COMPLETED
+            "cancelled" -> ItemStatus.CANCELLED
+            "incomplete" -> ItemStatus.INCOMPLETE
+            else -> ItemStatus.UNKNOWN
+        }
+    }
+
+    private data class UiItem(
+        val id: String,
+        var role: MessageRole,
+        var status: ItemStatus,
+        var prevId: String?,
+        var text: String
+    )
 
     private enum class MessageRole {
         USER,
         ASSISTANT,
-        SYSTEM
+        SYSTEM,
+        TOOL
+    }
+
+    private enum class ItemStatus {
+        IN_PROGRESS,
+        COMPLETED,
+        CANCELLED,
+        INCOMPLETE,
+        UNKNOWN
     }
 }
