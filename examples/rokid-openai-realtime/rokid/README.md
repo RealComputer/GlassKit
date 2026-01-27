@@ -1,6 +1,23 @@
-Configure the backend URL in `MainActivity` (`SESSION_URL`, points to `/session`).
+Configure the backend URL in `MainActivity` (`SESSION_URL`, which should point to the backend's `/session` endpoint).
 
-Open this directory in Android Studio.
+Before running the app, connect the Rokid Glasses to your computer using the dev cable, then turn on Wi-Fi on the glasses.
+
+```sh
+adb devices # check that you see your device
+adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
+adb shell cmd wifi set-wifi-enabled enabled
+adb shell cmd wifi connect-network <NAME> wpa2 <PASSWORD>
+adb shell cmd wifi status # confirm the connection
+
+# Optional:
+adb shell ip -f inet addr show wlan0 # check the glasses' IP
+ping -c 1 <IP> # check connectivity
+adb tcpip 5555 # prepare for remote adb connection for convenience
+adb connect <IP> # connect to the glasses via remote adb
+adb devices # check the remote connection (you can unplug the cable afterward for convenience)
+```
+
+Open this directory in Android Studio, select Rokid Glasses as the device, and run the app.
 
 Build:
 ```
