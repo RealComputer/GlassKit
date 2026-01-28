@@ -43,8 +43,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * Streams microphone audio + glasses camera video over WebRTC to the backend `/session` endpoint.
- * The backend forwards media to OpenAI Realtime; events land on the "oai-events" data channel.
+ * Establishes a WebRTC session via the backend `/session` SDP broker, then streams
+ * microphone audio + camera video directly to OpenAI Realtime; events land on the
+ * "oai-events" data channel.
  */
 class OpenAIRealtimeClient(
     private val context: Context,
@@ -365,7 +366,7 @@ class OpenAIRealtimeClient(
     }
 
     /**
-     * Match the legacy glasses logic: prefer a back/outward camera; otherwise first available.
+     * Prefer a back/outward camera when available; otherwise use the first device found.
      */
     private fun selectPreferredCameraName(
         enumerator: Camera2Enumerator,
