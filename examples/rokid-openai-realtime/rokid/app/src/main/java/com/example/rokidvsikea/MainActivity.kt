@@ -279,7 +279,10 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     private fun renderConversation() {
         val builder = SpannableStringBuilder()
 
-        orderedIds.mapNotNull { itemsById[it] }.forEach { message ->
+        orderedIds
+            .mapNotNull { itemsById[it] }
+            .filter { it.text.isNotBlank() }
+            .forEach { message ->
             if (builder.isNotEmpty()) builder.append("\n")
 
             val prefix = when (message.role) {
