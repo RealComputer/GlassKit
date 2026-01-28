@@ -1,4 +1,8 @@
-Configure the backend URL in `MainActivity` (`SESSION_URL`, which should point to the backend's `/session` endpoint).
+Configure the backend URL in `rokid/local.properties` (gitignored) via `SESSION_URL`, which should point to the backend's `/session` endpoint:
+
+```
+SESSION_URL=http://YourBackend:3000/session
+```
 
 Before running the app, connect the Rokid Glasses to your computer using the dev cable, then turn on Wi-Fi on the glasses.
 

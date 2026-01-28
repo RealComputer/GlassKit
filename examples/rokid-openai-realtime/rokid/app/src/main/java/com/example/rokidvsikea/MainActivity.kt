@@ -30,8 +30,9 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
-        private const val SESSION_URL = "http://192.168.68.51:3000/session" // TODO set to your backend
     }
+
+    private val sessionUrl: String = BuildConfig.SESSION_URL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,7 +125,7 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
         realtimeClient = OpenAIRealtimeClient(
             context = applicationContext,
-            sessionUrl = SESSION_URL,
+            sessionUrl = sessionUrl,
             listener = this
         ).also { it.start() }
     }
