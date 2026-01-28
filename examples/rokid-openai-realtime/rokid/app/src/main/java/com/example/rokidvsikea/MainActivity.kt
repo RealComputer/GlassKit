@@ -10,6 +10,7 @@ import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.view.KeyEvent
 import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding.tvTitle.text = "Assembly Assistant"
         setStatus("Requesting mic/camera...")
@@ -89,6 +91,7 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     }
 
     override fun onDestroy() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroy()
         stopRealtime()
     }
