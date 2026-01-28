@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    /* Basic */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+
+    /* Projects */
+    "target": "ESNext",
+    "module": "NodeNext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+
+    /* Type Checking */
+    "checkJs": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false
+  }
+}
