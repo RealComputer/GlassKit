@@ -4,11 +4,11 @@ Project overview: Real-time, vision-enabled voice assistant example for Rokid Gl
 
 - Entry point `MainActivity`: auto-starts streaming after camera/mic permissions; temple tap (`KEYCODE_DPAD_CENTER`/`ENTER`) toggles start/stop.
 - Media: `OpenAIRealtimeClient` uses Stream WebRTC.
-- After Android code changes, run `cd rokid && ./gradlew :app:assembleDebug`
+- After Android code changes, always run `cd rokid && ./gradlew :app:assembleDebug`
 
 # Backend — `backend/`
 
 - Node 24, ESM. Required env: `OPENAI_API_KEY`
 - Entry point `server.ts`: handles session requests, sideband, and tools.
 - `POST /session` accepts SDP offer, forwards to an OpenAI endpoint with our session config, returns the SDP answer.
-- After backend code changes, run `cd backend && npm run typecheck && npm run format`.
+- After backend code changes, always run `cd backend && npm run typecheck && npm run format`.
