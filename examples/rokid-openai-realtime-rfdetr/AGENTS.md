@@ -23,10 +23,10 @@ Real-time, vision-enabled voice assistant example for Rokid Glasses (Android sma
 - Optional backend overrides: `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`, `RFDETR_MIN_INTERVAL_S`, `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`.
 
 # Commands
-## Android (required after Android changes)
+## Android (always run after Android changes)
 - `cd rokid && ./gradlew :app:assembleDebug`
 
-## Backend (required after backend changes)
+## Backend (always run after backend changes)
 - `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`
 
 ## Backend utilities
