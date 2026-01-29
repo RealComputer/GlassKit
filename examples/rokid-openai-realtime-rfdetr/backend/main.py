@@ -124,6 +124,10 @@ session_config = {
 vision_store = LatestFrameStore()
 vision_processor = VisionProcessor(vision_store)
 vision_peers: set[RTCPeerConnection] = set()
+TURN_END_EVENTS = {
+    "input_audio_buffer.speech_stopped",
+    "input_audio_buffer.committed",
+}
 
 
 @asynccontextmanager
@@ -290,6 +294,7 @@ async def start_sideband(call_id: str) -> None:
         ) as ws:
             logger.info("sideband: connected %s", call_id)
 
+            pending_turns: set[str] = set()
             sent_images: set[str] = set()
 
             async for raw in ws:
@@ -301,6 +306,14 @@ async def start_sideband(call_id: str) -> None:
                     continue
 
                 msg_type = msg.get("type")
+                if msg_type in TURN_END_EVENTS:
+                    item_id = msg.get("item_id")
+                    if isinstance(item_id, str) and item_id:
+                        pending_turns.add(item_id)
+                    else:
+                        logger.info("sideband: %s missing item_id", msg_type)
+                    continue
+
                 if msg_type == "conversation.item.created":
                     item = msg.get("item") or {}
                     item_id = item.get("id")
@@ -308,8 +321,9 @@ async def start_sideband(call_id: str) -> None:
                         isinstance(item_id, str)
                         and item_id
                         and item_id not in sent_images
-                        and _is_user_audio_item(item)
+                        and (_is_user_audio_item(item) or item_id in pending_turns)
                     ):
+                        pending_turns.discard(item_id)
                         sent_images.add(item_id)
                         await _send_latest_frame(ws, item_id)
 
