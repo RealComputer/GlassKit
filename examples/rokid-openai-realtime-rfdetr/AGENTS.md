@@ -23,7 +23,7 @@ uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 uv run ty check && uv run ruff check --fix && uv run ruff format
 
 # use Python command like this:
-uv run -- python foo.py
+uv run -- python -c "print('hello')"
 
 # you can add package like this:
 uv add package_name
