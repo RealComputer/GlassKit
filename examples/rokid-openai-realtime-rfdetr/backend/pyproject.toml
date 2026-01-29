@@ -11,4 +11,11 @@ dependencies = [
     "numpy>=2.3.5",
     "pillow>=11.3.0",
     "supervision>=0.27.0",
+    "torch==2.9.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.14",
+    "ty>=0.0.14",
 ]
