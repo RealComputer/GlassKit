@@ -339,6 +339,7 @@ dependencies = [
     { name = "pillow" },
     { name = "supervision" },
     { name = "torch" },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -356,6 +357,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "supervision", specifier = ">=0.27.0" },
     { name = "torch", specifier = "==2.9.1" },
+    { name = "websockets", specifier = ">=16.0" },
 ]
 
 [package.metadata.requires-dev]
