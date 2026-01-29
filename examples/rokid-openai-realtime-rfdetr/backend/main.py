@@ -7,7 +7,12 @@ from typing import Any, AsyncIterator
 
 import httpx
 import websockets
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
+from aiortc import (
+    MediaStreamTrack,
+    RTCPeerConnection,
+    RTCRtpReceiver,
+    RTCSessionDescription,
+)
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
 from websockets.asyncio.client import ClientConnection
@@ -176,7 +181,8 @@ async def vision_session(request: Request) -> Response:
 
     offer = RTCSessionDescription(sdp=sdp, type="offer")
     pc = RTCPeerConnection()
-    pc.addTransceiver("video", direction="recvonly")
+    transceiver = pc.addTransceiver("video", direction="recvonly")
+    _prefer_video_codec(transceiver, "video/H264")
     vision_peers.add(pc)
 
     @pc.on("connectionstatechange")
@@ -205,6 +211,28 @@ def _extract_call_id(location: str | None) -> str | None:
     if not location:
         return None
     return location.rstrip("/").split("/")[-1] or None
+
+
+def _prefer_video_codec(transceiver: Any, mime_type: str) -> None:
+    try:
+        capabilities = RTCRtpReceiver.getCapabilities("video")
+    except Exception:
+        logger.exception("vision: failed to read video capabilities")
+        return
+    if capabilities is None:
+        logger.warning("vision: no video capabilities; using default codec order")
+        return
+
+    mime_type = mime_type.lower()
+    preferences = [
+        codec for codec in capabilities.codecs if codec.mimeType.lower() == mime_type
+    ]
+    if not preferences:
+        logger.warning("vision: %s not available; using default codec order", mime_type)
+        return
+
+    transceiver.setCodecPreferences(preferences)
+    logger.info("vision: preferring %s for inbound video", mime_type)
 
 
 def _log_task_exception(task: asyncio.Task[Any]) -> None:
