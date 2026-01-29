@@ -448,7 +448,7 @@ class OpenAIRealtimeClient(
                 }
 
                 else -> {
-                    Log.d(TAG, "Ignoring event type: $type")
+                    // Log.d(TAG, "Ignoring event type: $type")
                 }
             }
         } catch (t: Throwable) {
