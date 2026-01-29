@@ -341,16 +341,11 @@ def _parse_arguments(raw_args: Any) -> dict[str, Any]:
 
 async def run_tool(name: str, args: dict[str, Any]) -> str:
     if name == "list_items":
-        items = await list_items()
+        items = await list_item_names()
         return json.dumps(items)
     if name == "load_item_instructions":
         return await load_item_instructions(args)
     return f'Error: unknown tool "{name}"'
-
-
-async def list_items() -> list[str]:
-    await asyncio.sleep(1.5)
-    return await list_item_names()
 
 
 async def load_item_instructions(args: dict[str, Any]) -> str:

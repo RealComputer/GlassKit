@@ -227,20 +227,12 @@ async function runTool(
 ): Promise<string> {
   switch (name) {
     case "list_items":
-      return JSON.stringify(await listItems());
+      return JSON.stringify(await listItemNames());
     case "load_item_instructions":
       return await loadItemInstructions(args);
     default:
       return `Error: unknown tool "${name}"`;
   }
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function listItems() {
-  await sleep(1500);
-  const items = await listItemNames();
-  return items;
 }
 
 async function loadItemInstructions(args: Record<string, unknown>) {
