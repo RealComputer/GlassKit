@@ -1,3 +1,5 @@
+The Rokid Glasses Android app streams microphone audio to the OpenAI Realtime session (via the backend) and sends low-rate camera video to the backend for RF-DETR detection. Tap the temple button (DPAD center/Enter) to start or stop the voice + vision link.
+
 Configure the backend URLs in `rokid/local.properties` (gitignored):
 
 ```
