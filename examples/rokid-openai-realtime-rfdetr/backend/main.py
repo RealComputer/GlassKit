@@ -10,8 +10,7 @@ import websockets
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("rokid-realtime")
+logger = logging.getLogger("uvicorn.error")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
