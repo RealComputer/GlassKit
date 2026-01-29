@@ -11,6 +11,8 @@ if (localPropertiesFile.exists()) {
 }
 val sessionUrl = localProperties.getProperty("SESSION_URL")
     ?: error("SESSION_URL is required in rokid/local.properties")
+val visionSessionUrl = localProperties.getProperty("VISION_SESSION_URL")
+    ?: error("VISION_SESSION_URL is required in rokid/local.properties")
 
 android {
     namespace = "com.example.rokidopenairealtimerfdetr"
@@ -27,6 +29,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SESSION_URL", "\"$sessionUrl\"")
+        buildConfigField("String", "VISION_SESSION_URL", "\"$visionSessionUrl\"")
     }
 
     buildTypes {

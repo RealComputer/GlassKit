@@ -1,9 +1,9 @@
-Project overview: Real-time, vision-enabled voice assistant example for Rokid Glasses (smart glasses). The Android client (running on the glasses) directly streams microphone audio and a camera feed over WebRTC to the OpenAI Realtime API, then speaks back to the user. Our backend establishes the connection and handles function calls.
+Project overview: Real-time, vision-enabled voice assistant example for Rokid Glasses (smart glasses). The Android client streams microphone audio to the OpenAI Realtime API, and streams low-rate camera video over a separate WebRTC session to the backend for RF-DETR object detection; the backend injects the latest annotated frame into OpenAI responses. Our backend establishes the OpenAI connection, ingests video, and handles function calls.
 
 # Rokid Glasses (Android) app — `rokid/`
 
 - Entry point `MainActivity`: auto-starts streaming after camera/mic permissions; temple tap (`KEYCODE_DPAD_CENTER`/`ENTER`) toggles start/stop.
-- Media: `OpenAIRealtimeClient` uses Stream WebRTC.
+- Media: `OpenAIRealtimeClient` streams audio to OpenAI; `BackendVisionClient` streams video to `/vision/session`.
 - After Android code changes, always run `cd rokid && ./gradlew :app:assembleDebug`.
 
 # Backend — `backend/`

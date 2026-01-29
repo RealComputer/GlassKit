@@ -28,12 +28,37 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     private val waitingForPrev = mutableMapOf<String, MutableSet<String>>()
     private var localSystemCounter = 0
     private var realtimeClient: OpenAIRealtimeClient? = null
+    private var visionClient: BackendVisionClient? = null
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
     }
 
     private val sessionUrl: String = BuildConfig.SESSION_URL
+    private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
+
+    private val visionListener = object : BackendVisionClient.Listener {
+        override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
+            runOnUiThread {
+                if (state == PeerConnection.IceConnectionState.FAILED ||
+                    state == PeerConnection.IceConnectionState.CLOSED ||
+                    state == PeerConnection.IceConnectionState.DISCONNECTED
+                ) {
+                    appendSystemMessage("Vision link closed ($state).")
+                    visionClient?.release()
+                    visionClient = null
+                }
+            }
+        }
+
+        override fun onError(message: String, throwable: Throwable?) {
+            runOnUiThread {
+                appendSystemMessage("Vision error: $message")
+                visionClient?.release()
+                visionClient = null
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,34 +133,46 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     }
 
     private fun toggleRealtime() {
-        if (realtimeClient == null) {
-            appendSystemMessage("Starting voice link...")
+        if (realtimeClient == null || visionClient == null) {
+            appendSystemMessage("Starting voice + vision link...")
             startRealtimeIfNeeded()
         } else {
-            appendSystemMessage("Stopping voice link...")
+            appendSystemMessage("Stopping voice + vision link...")
             stopRealtime()
         }
     }
 
     private fun startRealtimeIfNeeded() {
-        if (realtimeClient != null) return
+        if (realtimeClient != null && visionClient != null) return
         if (!hasPermissions()) {
             ensurePermissions()
             return
         }
         setStatus("Connecting...")
-        // appendSystemMessage("Streaming mic + camera to assistant...")
+        // appendSystemMessage("Streaming mic to assistant, video to backend...")
 
-        realtimeClient = OpenAIRealtimeClient(
-            context = applicationContext,
-            sessionUrl = sessionUrl,
-            listener = this
-        ).also { it.start() }
+        if (realtimeClient == null) {
+            realtimeClient = OpenAIRealtimeClient(
+                context = applicationContext,
+                sessionUrl = sessionUrl,
+                listener = this
+            ).also { it.start() }
+        }
+
+        if (visionClient == null) {
+            visionClient = BackendVisionClient(
+                context = applicationContext,
+                sessionUrl = visionSessionUrl,
+                listener = visionListener
+            ).also { it.start() }
+        }
     }
 
     private fun stopRealtime() {
         realtimeClient?.release()
         realtimeClient = null
+        visionClient?.release()
+        visionClient = null
         setStatus("Stopped")
     }
 

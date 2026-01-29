@@ -7,8 +7,11 @@ from typing import Any
 
 import httpx
 import websockets
+from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
+
+from vision import LatestFrameStore, VisionProcessor, summarize_labels
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -68,7 +71,11 @@ session_config = {
         "input": {
             "noise_reduction": {"type": "near_field"},
             "transcription": {"language": "en", "model": "whisper-1"},
-            "turn_detection": {"type": "semantic_vad"},
+            "turn_detection": {
+                "type": "semantic_vad",
+                "create_response": False,
+                "interrupt_response": False,
+            },
         },
         "output": {"voice": "marin"},
     },
@@ -108,6 +115,9 @@ session_config = {
 }
 
 app = FastAPI()
+vision_store = LatestFrameStore()
+vision_processor = VisionProcessor(vision_store)
+vision_peers: set[RTCPeerConnection] = set()
 
 
 @app.get("/health")
@@ -144,6 +154,46 @@ async def session(request: Request) -> Response:
     )
 
 
+@app.post("/vision/session")
+async def vision_session(request: Request) -> Response:
+    sdp_bytes = await request.body()
+    sdp = sdp_bytes.decode()
+
+    offer = RTCSessionDescription(sdp=sdp, type="offer")
+    pc = RTCPeerConnection()
+    pc.addTransceiver("video", direction="recvonly")
+    vision_peers.add(pc)
+
+    @pc.on("connectionstatechange")
+    async def on_connection_state_change() -> None:
+        logger.info("vision: connection state %s", pc.connectionState)
+        if pc.connectionState in {"failed", "closed", "disconnected"}:
+            await pc.close()
+            vision_peers.discard(pc)
+
+    @pc.on("track")
+    def on_track(track) -> None:
+        if track.kind == "video":
+            task = asyncio.create_task(vision_processor.consume(track))
+            task.add_done_callback(_log_task_exception)
+        else:
+            logger.info("vision: ignoring track kind=%s", track.kind)
+
+    await pc.setRemoteDescription(offer)
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    return PlainTextResponse(pc.localDescription.sdp)
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    coros = [pc.close() for pc in list(vision_peers)]
+    if coros:
+        await asyncio.gather(*coros, return_exceptions=True)
+    vision_peers.clear()
+
+
 def _extract_call_id(location: str | None) -> str | None:
     if not location:
         return None
@@ -157,6 +207,43 @@ def _log_task_exception(task: asyncio.Task) -> None:
         logger.exception("sideband task failed")
 
 
+def _is_user_audio_item(item: dict[str, Any]) -> bool:
+    if item.get("type") != "message" or item.get("role") != "user":
+        return False
+    content = item.get("content") or []
+    return any(part.get("type") == "input_audio" for part in content)
+
+
+async def _send_latest_frame(ws, item_id: str) -> None:
+    latest = await vision_store.wait_for(timeout=0.5)
+    if not latest:
+        logger.warning("vision: no frame available for item %s", item_id)
+        await ws.send(json.dumps({"type": "response.create"}))
+        return
+
+    logger.info(
+        "vision: sending frame for item %s (%s)",
+        item_id,
+        summarize_labels(latest.labels),
+    )
+    payload = {
+        "type": "conversation.item.create",
+        "previous_item_id": item_id,
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_image",
+                    "image_url": latest.data_uri,
+                }
+            ],
+        },
+    }
+    await ws.send(json.dumps(payload))
+    await ws.send(json.dumps({"type": "response.create"}))
+
+
 async def start_sideband(call_id: str) -> None:
     url = f"wss://api.openai.com/v1/realtime?call_id={call_id}"
 
@@ -167,6 +254,8 @@ async def start_sideband(call_id: str) -> None:
         ) as ws:
             logger.info("sideband: connected %s", call_id)
 
+            sent_images: set[str] = set()
+
             async for raw in ws:
                 raw_text = raw.decode() if isinstance(raw, bytes) else raw
                 try:
@@ -174,6 +263,19 @@ async def start_sideband(call_id: str) -> None:
                 except json.JSONDecodeError:
                     logger.info("sideband: message parse error %s", raw_text)
                     continue
+
+                msg_type = msg.get("type")
+                if msg_type == "conversation.item.created":
+                    item = msg.get("item") or {}
+                    item_id = item.get("id")
+                    if (
+                        isinstance(item_id, str)
+                        and item_id
+                        and item_id not in sent_images
+                        and _is_user_audio_item(item)
+                    ):
+                        sent_images.add(item_id)
+                        await _send_latest_frame(ws, item_id)
 
                 response = msg.get("response") or {}
                 output_items = response.get("output") or []
