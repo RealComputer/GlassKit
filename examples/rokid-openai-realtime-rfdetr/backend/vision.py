@@ -62,7 +62,7 @@ RFDETR_FRAMES_DIR = Path(
     os.getenv("RFDETR_FRAME_DIR", str(Path(__file__).with_name("frames")))
 )
 LABEL_MAP = {
-    "wood panel": "BASE PANEL",
+    "wood panel with label": "BASE PANEL",
     "two-board wood panel": "LARGER SIDE PANELS",
     "plain narrow wood panel": "SHORTER SIDE PIECE",
     "narrow wood board with cutout": "HANDLE SIDE PIECE",
