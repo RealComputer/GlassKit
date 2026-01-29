@@ -60,12 +60,6 @@ http
 
       console.log(`request: ${req.method} ${pathname}`);
 
-      if (req.method === "GET" && pathname === "/health") {
-        res.writeHead(200, { "Content-Type": "text/plain" });
-        res.end("ok");
-        return;
-      }
-
       if (req.method === "POST" && pathname === "/session") {
         await handleSessionRequest(req, res);
         return;

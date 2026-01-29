@@ -134,11 +134,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/health")
-async def health() -> PlainTextResponse:
-    return PlainTextResponse("ok")
-
-
 @app.post("/session")
 async def session(request: Request) -> Response:
     sdp_bytes = await request.body()
