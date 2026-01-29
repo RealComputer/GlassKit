@@ -23,10 +23,4 @@ uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 
 # type check, lint, and format
 uv run ty check && uv run ruff check --fix && uv run ruff format
-
-# run a one-off Python command
-uv run -- python -c "print('hello')"
-
-# add a package
-uv add package_name
 ```

@@ -30,6 +30,6 @@ Real-time, vision-enabled voice assistant example for Rokid Glasses (Android sma
 - `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`
 
 ## Backend utilities
-- `cd backend && uv run --env-file .env script-with-loaded-env.py`
-- `cd backend && uv run -- python -c "print('hello')"`
-- `cd backend && uv add <package>`
+- `cd backend && uv run --env-file .env foo.py` (run a script with env loaded)
+- `cd backend && uv run -- python -c "print('hello')"` (run a one-off Python command)
+- `cd backend && uv add <package>` (add a package)
