@@ -1,23 +1,32 @@
+Backend service for the Rokid real-time assistant. It brokers WebRTC sessions, runs RF-DETR inference on incoming video, and feeds the latest annotated frame into the OpenAI Realtime conversation.
+
+## Endpoints
+- `POST /session`: SDP broker for the OpenAI Realtime (audio) session.
+- `POST /vision/session`: SDP broker for the inbound vision WebRTC stream.
+
+## Environment
+Required:
+- `OPENAI_API_KEY`
+- `ROBOFLOW_API_KEY`
+
+Optional vision overrides:
+- `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`, `RFDETR_MIN_INTERVAL_S`
+- `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`
+
+## Common commands
 ```sh
-cp .env.example .env # set ROBOFLOW_API_KEY and OPENAI_API_KEY
+# create env file
+cp .env.example .env
 
 # run server with env loaded
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 
-# endpoints
-# - POST /session        -> OpenAI Realtime (audio)
-# - POST /vision/session -> WebRTC video ingest for RF-DETR
-
-# optional vision env overrides
-# - RFDETR_MODEL_ID, RFDETR_CONFIDENCE, RFDETR_MIN_INTERVAL_S
-# - RFDETR_FRAME_DIR, RFDETR_HISTORY_LIMIT, RFDETR_JPEG_QUALITY
-
 # type check, lint, and format
 uv run ty check && uv run ruff check --fix && uv run ruff format
 
-# use Python like this:
-uv run -- python foo.py
+# run a one-off Python command
+uv run -- python -c "print('hello')"
 
-# you can add package like this:
+# add a package
 uv add package_name
 ```
