@@ -25,6 +25,8 @@ import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
+import org.webrtc.RtpParameters
+import org.webrtc.RtpSender
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
@@ -264,8 +266,18 @@ class BackendVisionClient(
             videoCapturer.startCapture(1024, 768, 2)
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
-            localVideoTrack?.let { track -> pc.addTrack(track) }
+            localVideoTrack?.let { track ->
+                val sender = pc.addTrack(track)
+                configureVideoSender(sender)
+            }
         }
+    }
+
+    private fun configureVideoSender(sender: RtpSender?) {
+        if (sender == null) return
+        val params = sender.parameters ?: return
+        params.degradationPreference = RtpParameters.DegradationPreference.DISABLED
+        sender.parameters = params
     }
 
     private fun createCameraCapturer(): VideoCapturer? {
