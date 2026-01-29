@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -13,9 +12,10 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
 from websockets.asyncio.client import ClientConnection
 
+from logging_utils import get_logger
 from vision import LatestFrameStore, VisionProcessor, summarize_labels
 
-logger = logging.getLogger("uvicorn.error")
+logger = get_logger(__name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:

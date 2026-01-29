@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import logging
 import os
 import threading
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -14,10 +14,33 @@ from typing import Any, Iterable
 import numpy as np
 import supervision as sv
 from aiortc import MediaStreamTrack
-from inference import get_model
 from PIL import Image
 
-logger = logging.getLogger("uvicorn.error")
+from logging_utils import get_logger
+
+_INFERENCE_WARNINGS_DISABLED = {
+    "QWEN_2_5_ENABLED": "False",
+    "QWEN_3_ENABLED": "False",
+    "CORE_MODEL_SAM_ENABLED": "False",
+    "CORE_MODEL_SAM3_ENABLED": "False",
+    "CORE_MODEL_GAZE_ENABLED": "False",
+    "CORE_MODEL_YOLO_WORLD_ENABLED": "False",
+}
+for name, value in _INFERENCE_WARNINGS_DISABLED.items():
+    os.environ.setdefault(name, value)
+
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message="Importing from timm.models.layers is deprecated.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    category=SyntaxWarning,
+    message="invalid escape sequence.*",
+)
+
+logger = get_logger(__name__)
 
 
 def _env_float(name: str, default: float) -> float:
@@ -43,10 +66,10 @@ def _env_int(name: str, default: int) -> int:
 
 
 RFDETR_MODEL_ID = os.getenv("RFDETR_MODEL_ID", "test2-abpsp/4")
-RFDETR_CONFIDENCE = _env_float("RFDETR_CONFIDENCE", 0.5)
+RFDETR_CONFIDENCE = _env_float("RFDETR_CONFIDENCE", 0.8)
 RFDETR_MIN_INTERVAL_S = _env_float("RFDETR_MIN_INTERVAL_S", 0.4)
 RFDETR_JPEG_QUALITY = _env_int("RFDETR_JPEG_QUALITY", 85)
-RFDETR_HISTORY_LIMIT = _env_int("RFDETR_HISTORY_LIMIT", 200)
+RFDETR_HISTORY_LIMIT = _env_int("RFDETR_HISTORY_LIMIT", 1000)
 RFDETR_FRAMES_DIR = Path(
     os.getenv("RFDETR_FRAME_DIR", str(Path(__file__).with_name("frames")))
 )
@@ -196,6 +219,8 @@ class VisionProcessor:
             api_key = os.getenv("ROBOFLOW_API_KEY")
             if not api_key:
                 raise RuntimeError("Set ROBOFLOW_API_KEY in env")
+            from inference import get_model
+
             self._model = await asyncio.to_thread(
                 get_model,
                 model_id=self._model_id,
