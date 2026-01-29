@@ -50,9 +50,6 @@ class BackendVisionClient(
 
     companion object {
         private const val TAG = "BackendVisionClient"
-        private const val WIDTH = 640
-        private const val HEIGHT = 360
-        private const val FPS = 5
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -252,7 +249,11 @@ class BackendVisionClient(
         )
 
         localVideoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
-            adaptOutputFormat(WIDTH, HEIGHT, FPS)
+            adaptOutputFormat(
+                1024,
+                768,
+                2
+            )
         }
         localVideoSource?.let { source ->
             videoCapturer.initialize(
@@ -260,7 +261,7 @@ class BackendVisionClient(
                 context,
                 source.capturerObserver
             )
-            videoCapturer.startCapture(WIDTH, HEIGHT, FPS)
+            videoCapturer.startCapture(1024, 768, 2)
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
             localVideoTrack?.let { track -> pc.addTrack(track) }

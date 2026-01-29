@@ -243,6 +243,7 @@ async def _send_latest_frame(ws: ClientConnection, item_id: str) -> None:
                 {
                     "type": "input_image",
                     "image_url": latest.data_uri,
+                    "detail": "high",
                 }
             ],
         },
