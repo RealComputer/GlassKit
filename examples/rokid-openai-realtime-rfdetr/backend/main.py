@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -123,9 +123,14 @@ vision_peers: set[RTCPeerConnection] = set()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    warmup_task = asyncio.create_task(vision_processor.warmup())
     try:
         yield
     finally:
+        if not warmup_task.done():
+            warmup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await warmup_task
         coros = [pc.close() for pc in list(vision_peers)]
         if coros:
             await asyncio.gather(*coros, return_exceptions=True)

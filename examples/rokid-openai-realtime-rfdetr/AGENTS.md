@@ -3,7 +3,7 @@ Real-time, vision-enabled voice assistant example for Rokid Glasses (Android sma
 
 # Technical architecture
 - Android app (`rokid/`) runs two WebRTC sessions: audio to OpenAI Realtime via `/session`, and video to the backend via `/vision/session`.
-- Backend (`backend/`) exposes FastAPI endpoints that broker SDP for both sessions, runs RF-DETR inference on incoming video, stores the latest annotated frame, and pushes it into the OpenAI Realtime conversation over a sideband WebSocket.
+- Backend (`backend/`) exposes FastAPI endpoints that broker SDP for both sessions, pre-warms the RF-DETR model on startup, runs inference on incoming video, stores the latest annotated frame, and pushes it into the OpenAI Realtime conversation over a sideband WebSocket.
 
 # Key files
 ## Android (`./rokid/`)

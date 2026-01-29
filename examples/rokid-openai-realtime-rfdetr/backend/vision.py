@@ -203,6 +203,13 @@ class VisionProcessor:
             )
             return self._model
 
+    async def warmup(self) -> None:
+        try:
+            await self._ensure_model()
+            logger.info("vision: model warmup complete")
+        except Exception:
+            logger.exception("vision: model warmup failed")
+
     def _infer_annotate_and_save(self, model: Any, image: np.ndarray) -> LatestFrame:
         predictions = model.infer(image, confidence=self._confidence)[0]
         detections = sv.Detections.from_inference(predictions)
