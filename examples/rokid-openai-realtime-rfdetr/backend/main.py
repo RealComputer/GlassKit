@@ -127,11 +127,7 @@ vision_peers: set[RTCPeerConnection] = set()
 TURN_END_EVENTS = {
     "input_audio_buffer.committed",
 }
-ITEM_CREATED_EVENTS = {
-    "conversation.item.added",
-    "conversation.item.done",
-    "conversation.item.created",
-}
+ITEM_ADDED_EVENT = "conversation.item.added"
 
 
 @asynccontextmanager
@@ -322,7 +318,7 @@ async def start_sideband(call_id: str) -> None:
                         logger.info("sideband: %s missing item_id", msg_type)
                     continue
 
-                if msg_type in ITEM_CREATED_EVENTS:
+                if msg_type == ITEM_ADDED_EVENT:
                     item = msg.get("item") or {}
                     item_id = item.get("id")
                     if (
