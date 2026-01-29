@@ -50,6 +50,12 @@ RFDETR_HISTORY_LIMIT = _env_int("RFDETR_HISTORY_LIMIT", 200)
 RFDETR_FRAMES_DIR = Path(
     os.getenv("RFDETR_FRAME_DIR", str(Path(__file__).with_name("frames")))
 )
+LABEL_MAP = {
+    "wood panel": "BASE PANEL",
+    "two-board wood panel": "LARGER SIDE PANELS",
+    "plain narrow wood panel": "SHORTER SIDE PIECE",
+    "narrow wood board with cutout": "HANDLE SIDE PIECE",
+}
 
 
 @dataclass(frozen=True)
@@ -226,6 +232,7 @@ class VisionProcessor:
     @staticmethod
     def _format_label(prediction) -> str:
         label = str(getattr(prediction, "class_name", "object"))
+        label = LABEL_MAP.get(label, label)
         confidence = getattr(prediction, "confidence", None)
         if isinstance(confidence, (int, float)):
             return f"{label} {confidence:.2f}"
