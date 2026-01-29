@@ -6,7 +6,6 @@ import io
 import os
 import threading
 import time
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -28,17 +27,6 @@ _INFERENCE_WARNINGS_DISABLED = {
 }
 for name, value in _INFERENCE_WARNINGS_DISABLED.items():
     os.environ.setdefault(name, value)
-
-warnings.filterwarnings(
-    "ignore",
-    category=FutureWarning,
-    message="Importing from timm.models.layers is deprecated.*",
-)
-warnings.filterwarnings(
-    "ignore",
-    category=SyntaxWarning,
-    message="invalid escape sequence.*",
-)
 
 logger = get_logger(__name__)
 
