@@ -527,10 +527,13 @@ class OpenAIRealtimeClient(
         }
 
     private suspend fun waitForIceGatheringComplete(pc: PeerConnection) {
-        if (pc.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) return
-
         val deferred = CompletableDeferred<Unit>()
         iceGatheringDeferred = deferred
+        if (pc.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) {
+            iceGatheringDeferred = null
+            deferred.complete(Unit)
+            return
+        }
         deferred.await()
         iceGatheringDeferred = null
     }
