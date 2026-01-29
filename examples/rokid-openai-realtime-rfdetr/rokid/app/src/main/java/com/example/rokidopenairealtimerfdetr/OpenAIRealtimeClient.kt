@@ -288,8 +288,7 @@ class OpenAIRealtimeClient(
             }
 
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
-                val track = receiver.track()
-                when (track) {
+                when (val track = receiver.track()) {
                     is AudioTrack -> {
                         Log.d(TAG, "Remote audio track added")
                         track.setEnabled(true)
