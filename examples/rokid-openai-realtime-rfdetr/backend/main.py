@@ -125,7 +125,6 @@ vision_store = LatestFrameStore()
 vision_processor = VisionProcessor(vision_store)
 vision_peers: set[RTCPeerConnection] = set()
 TURN_END_EVENTS = {
-    "input_audio_buffer.speech_stopped",
     "input_audio_buffer.committed",
 }
 ITEM_CREATED_EVENTS = {
@@ -330,8 +329,12 @@ async def start_sideband(call_id: str) -> None:
                         isinstance(item_id, str)
                         and item_id
                         and item_id not in sent_images
-                        and (_is_user_audio_item(item) or item_id in pending_turns)
+                        and item_id in pending_turns
                     ):
+                        if item.get("content") and not _is_user_audio_item(item):
+                            logger.info("sideband: skipping non-audio item %s", item_id)
+                            pending_turns.discard(item_id)
+                            continue
                         pending_turns.discard(item_id)
                         sent_images.add(item_id)
                         await _send_latest_frame(ws, item_id)
