@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 import supervision as sv
@@ -166,7 +166,7 @@ class VisionProcessor:
                 break
             await self._maybe_process_frame(frame)
 
-    async def _maybe_process_frame(self, frame) -> None:
+    async def _maybe_process_frame(self, frame: Any) -> None:
         now = time.monotonic()
         if self._processing or (now - self._last_processed) < self._min_interval_s:
             return
@@ -187,7 +187,7 @@ class VisionProcessor:
         finally:
             self._processing = False
 
-    async def _ensure_model(self):
+    async def _ensure_model(self) -> Any:
         if self._model is not None:
             return self._model
         async with self._model_lock:
@@ -203,7 +203,7 @@ class VisionProcessor:
             )
             return self._model
 
-    def _infer_annotate_and_save(self, model, image: np.ndarray) -> LatestFrame:
+    def _infer_annotate_and_save(self, model: Any, image: np.ndarray) -> LatestFrame:
         predictions = model.infer(image, confidence=self._confidence)[0]
         detections = sv.Detections.from_inference(predictions)
 
@@ -230,7 +230,7 @@ class VisionProcessor:
         )
 
     @staticmethod
-    def _format_label(prediction) -> str:
+    def _format_label(prediction: Any) -> str:
         label = str(getattr(prediction, "class_name", "object"))
         label = LABEL_MAP.get(label, label)
         confidence = getattr(prediction, "confidence", None)

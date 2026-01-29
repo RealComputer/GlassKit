@@ -4,13 +4,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 import websockets
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import PlainTextResponse
+from websockets.asyncio.client import ClientConnection
 
 from vision import LatestFrameStore, VisionProcessor, summarize_labels
 
@@ -121,7 +122,7 @@ vision_peers: set[RTCPeerConnection] = set()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
@@ -181,7 +182,7 @@ async def vision_session(request: Request) -> Response:
             vision_peers.discard(pc)
 
     @pc.on("track")
-    def on_track(track) -> None:
+    def on_track(track: MediaStreamTrack) -> None:
         if track.kind == "video":
             task = asyncio.create_task(vision_processor.consume(track))
             task.add_done_callback(_log_task_exception)
@@ -201,7 +202,7 @@ def _extract_call_id(location: str | None) -> str | None:
     return location.rstrip("/").split("/")[-1] or None
 
 
-def _log_task_exception(task: asyncio.Task) -> None:
+def _log_task_exception(task: asyncio.Task[Any]) -> None:
     try:
         task.result()
     except Exception:
@@ -215,7 +216,7 @@ def _is_user_audio_item(item: dict[str, Any]) -> bool:
     return any(part.get("type") == "input_audio" for part in content)
 
 
-async def _send_latest_frame(ws, item_id: str) -> None:
+async def _send_latest_frame(ws: ClientConnection, item_id: str) -> None:
     latest = await vision_store.wait_for(timeout=0.5)
     if not latest:
         logger.warning("vision: no frame available for item %s", item_id)
