@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -114,10 +115,23 @@ session_config = {
     ],
 }
 
-app = FastAPI()
 vision_store = LatestFrameStore()
 vision_processor = VisionProcessor(vision_store)
 vision_peers: set[RTCPeerConnection] = set()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        yield
+    finally:
+        coros = [pc.close() for pc in list(vision_peers)]
+        if coros:
+            await asyncio.gather(*coros, return_exceptions=True)
+        vision_peers.clear()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/health")
@@ -184,14 +198,6 @@ async def vision_session(request: Request) -> Response:
     await pc.setLocalDescription(answer)
 
     return PlainTextResponse(pc.localDescription.sdp)
-
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    coros = [pc.close() for pc in list(vision_peers)]
-    if coros:
-        await asyncio.gather(*coros, return_exceptions=True)
-    vision_peers.clear()
 
 
 def _extract_call_id(location: str | None) -> str | None:
