@@ -128,6 +128,11 @@ TURN_END_EVENTS = {
     "input_audio_buffer.speech_stopped",
     "input_audio_buffer.committed",
 }
+ITEM_CREATED_EVENTS = {
+    "conversation.item.added",
+    "conversation.item.done",
+    "conversation.item.created",
+}
 
 
 @asynccontextmanager
@@ -306,6 +311,10 @@ async def start_sideband(call_id: str) -> None:
                     continue
 
                 msg_type = msg.get("type")
+                if msg_type:
+                    logger.info("sideband: event %s", msg_type)
+                else:
+                    logger.info("sideband: event <missing type>")
                 if msg_type in TURN_END_EVENTS:
                     item_id = msg.get("item_id")
                     if isinstance(item_id, str) and item_id:
@@ -314,7 +323,7 @@ async def start_sideband(call_id: str) -> None:
                         logger.info("sideband: %s missing item_id", msg_type)
                     continue
 
-                if msg_type == "conversation.item.created":
+                if msg_type in ITEM_CREATED_EVENTS:
                     item = msg.get("item") or {}
                     item_id = item.get("id")
                     if (
