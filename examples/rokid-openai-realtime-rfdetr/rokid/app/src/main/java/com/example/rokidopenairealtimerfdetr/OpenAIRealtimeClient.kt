@@ -261,10 +261,6 @@ class OpenAIRealtimeClient(
                         Log.d(TAG, "Remote audio track added")
                         track.setEnabled(true)
                     }
-
-                    is VideoTrack -> {
-                        Log.d(TAG, "Remote video track added (not rendered)")
-                    }
                 }
             }
         }) ?: error("Failed to create PeerConnection")
