@@ -15,8 +15,8 @@ Optional vision overrides:
 
 ## Common commands
 ```sh
-# create env file
-cp .env.example .env
+uv sync # install dependencies
+cp .env.example .env # create env file
 
 # run server with env loaded
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
