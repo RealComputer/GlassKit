@@ -1,0 +1,22 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12.12"
+dependencies = [
+    "aiortc>=1.14.0",
+    "fastapi[standard]>=0.115.14",
+    "inference>=0.64.5",
+    "numpy>=2.3.5",
+    "pillow>=11.3.0",
+    "supervision>=0.27.0",
+    "torch==2.9.1",
+    "websockets>=16.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.14",
+    "ty>=0.0.14",
+]

@@ -1,0 +1,22 @@
+# Parts
+- BASE PANEL × 1: The largest piece, made of three boards. It features two support strips along the shorter sides; these strips will be on the outside and face the ground in the final assembled box. There are labels on the panel surface on the same side as the support strips.
+- LARGER SIDE PANELS × 2: These are the second-largest pieces, each made of two boards joined by corner strips on the shorter sides. They form the long sides of the box. When assembled, the strips face inward toward the inside of the box, and the outer side is smooth and flat.
+- SHORTER SIDE PIECES × 2: Narrow boards without cutouts, used to form the shorter sides of the box in conjunction with the HANDLE SIDE PIECES. These pieces are placed at the bottom short sides of the box, aligned with the BASE PANEL.
+- HANDLE SIDE PIECES × 2: Narrow boards featuring a curved hand-grip cutout in the center. These form the upper short sides of the box, in combination with the SHORTER SIDE PIECES. In the final assembled box, the hand-grip cutout faces toward the BASE PANEL (downward when the box is standing on its base).
+- LONG SCREWS × 4: Used for the BASE PANEL connections to the LARGER SIDE PANELS.
+- SHORT SCREWS × 16: Used for all other connections (SHORTER SIDE PIECES and HANDLE SIDE PIECES).
+
+# Assembly Instructions
+1. Unpack all parts if they are not already unpacked, and lay out all parts.
+2. Place the BASE PANEL, which is the largest piece with two support strips, and one LARGER SIDE PANEL, which is a two-board panel with corner strips, in front of you.
+3. Stand this LARGER SIDE PANEL on its long edge with its corner strips facing inward and hold it upright.
+4. Hold the BASE PANEL with its support strips facing upward and place its long edge on the upper edge of the upright LARGER SIDE PANEL so the two pieces form an inverted ‘L’ shape.
+5. Using the pre-drilled holes in the BASE PANEL, drive two LONG SCREWS downward to secure it to this LARGER SIDE PANEL.
+6. Stand the second LARGER SIDE PANEL on its long edge with its corner strips facing inward, place the opposite long edge of the BASE PANEL on top of it, and use the remaining two LONG SCREWS to secure the connection through the pre-drilled holes.
+7. Place one SHORTER SIDE PIECE, which is a narrow board without a cutout, across one open short side and align its long edge flush with the short edge of the BASE PANEL.
+8. Attach this SHORTER SIDE PIECE using four SHORT SCREWS through the pre-drilled holes.
+9. Place one HANDLE SIDE PIECE, which is a narrow board with a hand-grip cutout, above the installed SHORTER SIDE PIECE with the cutout facing toward the bottom of the box.
+10. Attach this HANDLE SIDE PIECE using four SHORT SCREWS.
+11. Place the second SHORTER SIDE PIECE on the remaining open short side, align it flush with the BASE PANEL, and attach it using four SHORT SCREWS.
+12. Place the second HANDLE SIDE PIECE above it with the hand-grip cutout facing toward the bottom of the box, and attach it using four SHORT SCREWS.
+13. Congratulations! Assembly complete.
