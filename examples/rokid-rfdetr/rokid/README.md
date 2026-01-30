@@ -1,9 +1,8 @@
-The Rokid Glasses Android app streams microphone audio to the OpenAI Realtime session (via the backend) and sends low-rate camera video to the backend for RF-DETR detection. Tap the temple button (DPAD center/Enter) to start or stop the voice + vision link.
+The Rokid Glasses Android app streams camera video to the backend for RF-DETR detection and receives speedrun split updates over a WebRTC data channel. Tap the temple button (DPAD center/Enter) to start the run timer. Use DPAD up/down to step to the next/previous split for debugging.
 
-Configure the backend URLs in `rokid/local.properties` (gitignored):
+Configure the backend URL in `rokid/local.properties` (gitignored):
 
 ```
-SESSION_URL=http://YourBackend:3000/session
 VISION_SESSION_URL=http://YourBackend:3000/vision/session
 ```
 

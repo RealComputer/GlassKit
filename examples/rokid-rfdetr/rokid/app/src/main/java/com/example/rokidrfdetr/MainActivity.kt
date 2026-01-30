@@ -2,63 +2,56 @@ package com.example.rokidrfdetr
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.text.Spannable
 import android.text.SpannableStringBuilder
-import android.text.style.RelativeSizeSpan
+import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.KeyEvent
-import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.rokidrfdetr.databinding.ActivityMainBinding
 import org.webrtc.PeerConnection
-
-class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
+import java.util.Locale
+class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
     private lateinit var binding: ActivityMainBinding
 
-    private val itemsById = mutableMapOf<String, UiItem>()
-    private val orderedIds = mutableListOf<String>()
-    private val pendingText = mutableMapOf<String, String>()
-    private val waitingForPrev = mutableMapOf<String, MutableSet<String>>()
-    private var localSystemCounter = 0
-    private var realtimeClient: OpenAIRealtimeClient? = null
     private var visionClient: BackendVisionClient? = null
+
+    private var speedrunConfig: SpeedrunConfig? = null
+    private var speedrunState = SpeedrunState(RunState.IDLE, 0, 0)
+    private var splitTimes: MutableList<Long?> = mutableListOf()
+    private var lastCompletedCount = 0
+
+    private var runStarted = false
+    private var timerRunning = false
+    private var timerStartMs = 0L
+    private var finalElapsedMs = 0L
+
+    private val timerHandler = Handler(Looper.getMainLooper())
+    private val timerRunnable = object : Runnable {
+        override fun run() {
+            updateTimer()
+            if (timerRunning) {
+                timerHandler.postDelayed(this, 100L)
+            }
+        }
+    }
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
+        private const val LABEL_PAD = 28
     }
 
-    private val sessionUrl: String = BuildConfig.SESSION_URL
     private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
-
-    private val visionListener = object : BackendVisionClient.Listener {
-        override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
-            runOnUiThread {
-                if (state == PeerConnection.IceConnectionState.FAILED ||
-                    state == PeerConnection.IceConnectionState.CLOSED ||
-                    state == PeerConnection.IceConnectionState.DISCONNECTED
-                ) {
-                    appendSystemMessage("Vision link closed ($state).")
-                    visionClient?.release()
-                    visionClient = null
-                }
-            }
-        }
-
-        override fun onError(message: String, throwable: Throwable?) {
-            runOnUiThread {
-                appendSystemMessage("Vision error: $message")
-                visionClient?.release()
-                visionClient = null
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,36 +60,30 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        binding.tvTitle.text = "Assembly Assistant"
-        setStatus("Requesting mic/camera...")
+        setStatus("Requesting camera permission...")
+        binding.tvTimer.text = formatElapsed(0L)
+        binding.tvSplits.text = "Waiting for config..."
 
-        setupAutoScroll(binding.tvConversation, binding.scrollView)
         ensurePermissions()
     }
 
     private fun ensurePermissions() {
-        val needed = listOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
-        ).filter {
+        val needed = listOf(Manifest.permission.CAMERA).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (needed.isEmpty()) {
-            startRealtimeIfNeeded()
+            startVisionIfNeeded()
         } else {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMISSIONS)
         }
     }
 
     private fun hasPermissions(): Boolean {
-        val permissions = listOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
-        )
-        return permissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onRequestPermissionsResult(
@@ -107,10 +94,9 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_PERMISSIONS) {
             if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                startRealtimeIfNeeded()
+                startVisionIfNeeded()
             } else {
-                setStatus("Camera/mic permission denied; app cannot stream.")
-                appendSystemMessage("Camera/mic permission denied; streaming unavailable.")
+                setStatus("Camera permission denied; streaming unavailable.")
             }
         }
     }
@@ -118,315 +104,242 @@ class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroy()
-        stopRealtime()
+        visionClient?.release()
+        visionClient = null
+        stopTimer()
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER -> {
-                toggleRealtime()
+                startRunIfNeeded()
                 true
             }
+
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                visionClient?.sendDebugStep("next")
+                true
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                visionClient?.sendDebugStep("prev")
+                true
+            }
+
             else -> super.onKeyUp(keyCode, event)
         }
     }
 
-    private fun toggleRealtime() {
-        if (realtimeClient == null || visionClient == null) {
-            appendSystemMessage("Starting voice + vision link...")
-            startRealtimeIfNeeded()
-        } else {
-            appendSystemMessage("Stopping voice + vision link...")
-            stopRealtime()
-        }
-    }
-
-    private fun startRealtimeIfNeeded() {
-        if (realtimeClient != null && visionClient != null) return
+    private fun startVisionIfNeeded() {
+        if (visionClient != null) return
         if (!hasPermissions()) {
             ensurePermissions()
             return
         }
+
         setStatus("Connecting...")
-        // appendSystemMessage("Streaming mic to assistant, video to backend...")
-
-        if (realtimeClient == null) {
-            realtimeClient = OpenAIRealtimeClient(
-                context = applicationContext,
-                sessionUrl = sessionUrl,
-                listener = this
-            ).also { it.start() }
-        }
-
-        if (visionClient == null) {
-            visionClient = BackendVisionClient(
-                context = applicationContext,
-                sessionUrl = visionSessionUrl,
-                listener = visionListener
-            ).also { it.start() }
-        }
+        visionClient = BackendVisionClient(
+            context = applicationContext,
+            sessionUrl = visionSessionUrl,
+            listener = this
+        ).also { it.start() }
     }
 
-    private fun stopRealtime() {
-        realtimeClient?.release()
-        realtimeClient = null
-        visionClient?.release()
-        visionClient = null
-        setStatus("Stopped")
+    private fun startRunIfNeeded() {
+        if (runStarted) return
+        runStarted = true
+        finalElapsedMs = 0L
+        startTimer()
+        visionClient?.sendRunStart()
+        setStatus("Run started")
+        renderSplits()
     }
 
-    override fun onConversationItemAdded(
-        itemId: String,
-        role: String,
-        status: String,
-        previousItemId: String?
-    ) {
-        runOnUiThread {
-            upsertItem(itemId, role, status, previousItemId)
-        }
+    private fun startTimer() {
+        if (timerRunning) return
+        timerStartMs = SystemClock.elapsedRealtime()
+        timerRunning = true
+        updateTimer()
+        timerHandler.postDelayed(timerRunnable, 100L)
     }
 
-    override fun onConversationItemDone(
-        itemId: String,
-        role: String,
-        status: String,
-        previousItemId: String?
-    ) {
-        runOnUiThread {
-            upsertItem(itemId, role, status, previousItemId)
-        }
+    private fun stopTimer() {
+        timerRunning = false
+        timerHandler.removeCallbacks(timerRunnable)
     }
 
-    override fun onUserTranscript(itemId: String, transcript: String) {
-        runOnUiThread {
-            attachTranscript(itemId, transcript)
-            setStatus("Heard you")
-        }
-    }
-
-    override fun onAssistantTranscriptFinal(itemId: String, transcript: String) {
-        runOnUiThread {
-            attachTranscript(itemId, transcript)
-            setStatus("Assistant done")
-        }
-    }
-
-    override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
-        runOnUiThread {
-            setStatus("Connection: $state")
-            if (state == PeerConnection.IceConnectionState.FAILED ||
-                state == PeerConnection.IceConnectionState.CLOSED ||
-                state == PeerConnection.IceConnectionState.DISCONNECTED
-            ) {
-                appendSystemMessage("Link closed ($state). Tap to reconnect.")
-                stopRealtime()
-            }
-        }
-    }
-
-    override fun onError(message: String, throwable: Throwable?) {
-        runOnUiThread {
-            appendSystemMessage("Error: $message")
-            setStatus("Error: $message")
-            stopRealtime()
-        }
-    }
-
-    private fun upsertItem(
-        itemId: String,
-        role: String,
-        status: String,
-        previousItemId: String?
-    ) {
-        val itemRole = parseRole(role)
-        val itemStatus = parseStatus(status)
-        val existing = itemsById[itemId]
-        val resolvedPrevId = if (previousItemId == null && existing != null) {
-            existing.prevId
+    private fun updateTimer() {
+        val elapsed = if (timerRunning) {
+            SystemClock.elapsedRealtime() - timerStartMs
         } else {
-            previousItemId
+            finalElapsedMs
         }
-        val uiItem = existing ?: UiItem(
-            id = itemId,
-            role = itemRole,
-            status = itemStatus,
-            prevId = resolvedPrevId,
-            text = ""
-        )
-        uiItem.role = itemRole
-        uiItem.status = itemStatus
-        uiItem.prevId = resolvedPrevId
-        itemsById[itemId] = uiItem
-        if (existing == null || previousItemId != null) {
-            upsertOrder(itemId, resolvedPrevId)
-        }
-        applyPendingText(itemId)
-        renderConversation()
+        binding.tvTimer.text = formatElapsed(elapsed)
     }
 
-    private fun attachTranscript(itemId: String, transcript: String) {
-        val item = itemsById[itemId]
-        if (item != null) {
-            item.text = transcript
-            renderConversation()
+    private fun currentElapsedMs(): Long {
+        return if (timerRunning) {
+            SystemClock.elapsedRealtime() - timerStartMs
         } else {
-            pendingText[itemId] = transcript
+            finalElapsedMs
         }
     }
 
-    private fun applyPendingText(itemId: String) {
-        val pending = pendingText.remove(itemId) ?: return
-        val item = itemsById[itemId] ?: return
-        item.text = pending
-    }
-
-    private fun upsertOrder(itemId: String, previousItemId: String?) {
-        orderedIds.remove(itemId)
-        if (previousItemId == null) {
-            orderedIds.add(0, itemId)
-        } else {
-            val prevIndex = orderedIds.indexOf(previousItemId)
-            if (prevIndex >= 0) {
-                orderedIds.add(prevIndex + 1, itemId)
-            } else {
-                val waiters = waitingForPrev.getOrPut(previousItemId) { mutableSetOf() }
-                waiters.add(itemId)
-                orderedIds.add(itemId)
-            }
-        }
-
-        val waiters = waitingForPrev.remove(itemId) ?: return
-        for (waiter in waiters) {
-            val waiterItem = itemsById[waiter] ?: continue
-            upsertOrder(waiter, waiterItem.prevId)
-        }
-    }
-
-    private fun appendSystemMessage(msg: String) {
-        val id = "local-system-${localSystemCounter++}"
-        val item = UiItem(
-            id = id,
-            role = MessageRole.SYSTEM,
-            status = ItemStatus.COMPLETED,
-            prevId = null,
-            text = msg
-        )
-        itemsById[id] = item
-        orderedIds.add(id)
-        renderConversation()
-    }
-
-    private fun renderConversation() {
-        val builder = SpannableStringBuilder()
-
-        orderedIds
-            .mapNotNull { itemsById[it] }
-            .filter { it.text.isNotBlank() }
-            .forEach { message ->
-                if (builder.isNotEmpty()) builder.append("\n")
-
-                val prefix = when (message.role) {
-                    MessageRole.USER -> "User:"
-                    MessageRole.ASSISTANT -> "Assistant:"
-                    MessageRole.SYSTEM -> "[System]"
-                    MessageRole.TOOL -> "Tool:"
-                }
-
-                val start = builder.length
-                builder.append(prefix)
-                val end = builder.length
-
-                if (message.role != MessageRole.SYSTEM && end > start) {
-                    builder.setSpan(
-                        StyleSpan(Typeface.BOLD),
-                        start,
-                        end,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                    builder.setSpan(
-                        RelativeSizeSpan(1.2f),
-                        start,
-                        end,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-
-                builder.append("\n")
-                val contentStart = builder.length
-                builder.append(message.text)
-                val contentEnd = builder.length
-                // Only style non-empty content to avoid zero-length span errors.
-                if (contentEnd > contentStart) {
-                    // Keep content size aligned with the role label for readability.
-                    builder.setSpan(
-                        RelativeSizeSpan(1.2f),
-                        contentStart,
-                        contentEnd,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-            }
-
-        binding.tvConversation.text = builder
+    private fun formatElapsed(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        val centis = (ms % 1000) / 10
+        return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, centis)
     }
 
     private fun setStatus(text: String) {
         binding.tvStatus.text = text
     }
 
-    private fun setupAutoScroll(textView: TextView, scrollView: android.widget.ScrollView) {
-        textView.viewTreeObserver.addOnGlobalLayoutListener(
-            object : ViewTreeObserver.OnGlobalLayoutListener {
-                override fun onGlobalLayout() {
-                    scrollView.post {
-                        scrollView.fullScroll(android.view.View.FOCUS_DOWN)
-                    }
-                }
+    override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
+        runOnUiThread {
+            setStatus("Connection: $state")
+        }
+    }
+
+    override fun onError(message: String, throwable: Throwable?) {
+        runOnUiThread {
+            setStatus("Error: $message")
+        }
+    }
+
+    override fun onConfig(config: SpeedrunConfig) {
+        runOnUiThread {
+            speedrunConfig = config
+            splitTimes = MutableList(config.totalSplits) { null }
+            lastCompletedCount = 0
+            renderSplits()
+        }
+    }
+
+    override fun onStateUpdate(state: SpeedrunState) {
+        runOnUiThread {
+            applyState(state)
+            renderSplits()
+        }
+    }
+
+    override fun onSplitCompleted(splitIndex: Int, state: SpeedrunState) {
+        runOnUiThread {
+            applyState(state)
+            recordSplitTime(splitIndex)
+            renderSplits()
+        }
+    }
+
+    private fun applyState(state: SpeedrunState) {
+        speedrunState = state
+        if (state.completedCount < lastCompletedCount) {
+            for (i in state.completedCount until splitTimes.size) {
+                splitTimes[i] = null
             }
-        )
-    }
-
-    private fun parseRole(role: String): MessageRole {
-        return when (role.lowercase()) {
-            "user" -> MessageRole.USER
-            "assistant" -> MessageRole.ASSISTANT
-            "system" -> MessageRole.SYSTEM
-            "tool" -> MessageRole.TOOL
-            else -> MessageRole.SYSTEM
+        }
+        lastCompletedCount = state.completedCount
+        if (state.runState == RunState.FINISHED) {
+            if (timerRunning) {
+                finalElapsedMs = currentElapsedMs()
+                stopTimer()
+                updateTimer()
+            }
         }
     }
 
-    private fun parseStatus(status: String): ItemStatus {
-        return when (status.lowercase()) {
-            "in_progress" -> ItemStatus.IN_PROGRESS
-            "completed" -> ItemStatus.COMPLETED
-            "cancelled" -> ItemStatus.CANCELLED
-            "incomplete" -> ItemStatus.INCOMPLETE
-            else -> ItemStatus.UNKNOWN
+    private fun recordSplitTime(splitIndex: Int) {
+        if (splitIndex < 0 || splitIndex >= splitTimes.size) return
+        if (!runStarted) return
+        splitTimes[splitIndex] = currentElapsedMs()
+    }
+
+    private fun renderSplits() {
+        val config = speedrunConfig
+        if (config == null) {
+            binding.tvSplits.text = "Waiting for config..."
+            return
         }
-    }
 
-    private data class UiItem(
-        val id: String,
-        var role: MessageRole,
-        var status: ItemStatus,
-        var prevId: String?,
-        var text: String
-    )
+        val builder = SpannableStringBuilder()
+        var flatIndex = 0
+        val activeColor = Color.parseColor("#00E676")
+        val completeColor = Color.parseColor("#BBBBBB")
 
-    private enum class MessageRole {
-        USER,
-        ASSISTANT,
-        SYSTEM,
-        TOOL
-    }
+        for (group in config.groups) {
+            if (builder.isNotEmpty()) builder.append("\n")
+            val groupStart = builder.length
+            builder.append(group.name)
+            val groupEnd = builder.length
+            builder.setSpan(
+                StyleSpan(Typeface.BOLD),
+                groupStart,
+                groupEnd,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            builder.append("\n")
 
-    private enum class ItemStatus {
-        IN_PROGRESS,
-        COMPLETED,
-        CANCELLED,
-        INCOMPLETE,
-        UNKNOWN
+            for (split in group.splits) {
+                val isActive = speedrunState.runState != RunState.FINISHED &&
+                    flatIndex == speedrunState.activeIndex
+                val isComplete = flatIndex < speedrunState.completedCount
+
+                val prefix = when {
+                    isActive -> ">"
+                    isComplete -> "x"
+                    else -> "-"
+                }
+
+                val label = split.label.padEnd(LABEL_PAD)
+                val timeText = if (isComplete) {
+                    splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) } ?: "--:--.--"
+                } else {
+                    ""
+                }
+
+                val line = if (timeText.isNotEmpty()) {
+                    "  $prefix $label  $timeText"
+                } else {
+                    "  $prefix $label"
+                }
+
+                val lineStart = builder.length
+                builder.append(line)
+                val lineEnd = builder.length
+
+                if (isActive) {
+                    builder.setSpan(
+                        ForegroundColorSpan(activeColor),
+                        lineStart,
+                        lineEnd,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    builder.setSpan(
+                        StyleSpan(Typeface.BOLD),
+                        lineStart,
+                        lineEnd,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                } else if (isComplete) {
+                    builder.setSpan(
+                        ForegroundColorSpan(completeColor),
+                        lineStart,
+                        lineEnd,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+
+                builder.append("\n")
+                flatIndex += 1
+            }
+        }
+
+        if (builder.isNotEmpty() && builder.last() == '\n') {
+            builder.delete(builder.length - 1, builder.length)
+        }
+        binding.tvSplits.text = builder
     }
 }

@@ -1,17 +1,18 @@
-Backend service for the Rokid real-time assistant. It brokers WebRTC sessions, runs RF-DETR inference on incoming video, and feeds the latest annotated frame into the OpenAI Realtime conversation.
+Backend service for a vision-driven speedrun HUD. It brokers a WebRTC video stream from the glasses, runs RF-DETR inference on the latest frame, saves annotated frames, and advances speedrun splits based on detections. State updates are sent over a WebRTC data channel.
 
 ## Endpoints
-- `POST /session`: SDP broker for the OpenAI Realtime (audio) session.
-- `POST /vision/session`: SDP broker for the inbound vision WebRTC stream.
+- `POST /vision/session`: SDP broker for the inbound vision WebRTC stream (video + data channel).
 
 ## Environment
 Required:
-- `OPENAI_API_KEY`
 - `ROBOFLOW_API_KEY`
 
 Optional vision overrides:
-- `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`, `RFDETR_MIN_INTERVAL_S`
+- `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`
 - `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`
+
+Speedrun config:
+- `speedrun_config.json` in this directory defines groups/splits and the detection class for completion.
 
 ## Common commands
 ```sh

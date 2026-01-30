@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import io
 import os
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Awaitable, Callable
 
 import numpy as np
 import supervision as sv
@@ -55,55 +54,51 @@ def _env_int(name: str, default: int) -> int:
 
 RFDETR_MODEL_ID = os.getenv("RFDETR_MODEL_ID", "test2-abpsp/4")
 RFDETR_CONFIDENCE = _env_float("RFDETR_CONFIDENCE", 0.8)
-RFDETR_MIN_INTERVAL_S = _env_float("RFDETR_MIN_INTERVAL_S", 0.4)
 RFDETR_JPEG_QUALITY = _env_int("RFDETR_JPEG_QUALITY", 85)
 RFDETR_HISTORY_LIMIT = _env_int("RFDETR_HISTORY_LIMIT", 1000)
 RFDETR_FRAMES_DIR = Path(
     os.getenv("RFDETR_FRAME_DIR", str(Path(__file__).with_name("frames")))
 )
-LABEL_MAP = {
-    "wood panel with label": "BASE PANEL",
-    "two-board wood panel": "LARGER SIDE PANELS",
-    "plain narrow wood panel": "SHORTER SIDE PIECE",
-    "narrow wood board with cutout": "HANDLE SIDE PIECE",
-}
 
 
 @dataclass(frozen=True)
-class LatestFrame:
-    data_uri: str
+class DetectionResult:
+    detected_classes: set[str]
+    labels: list[str]
     jpeg_bytes: bytes
     timestamp: float
-    labels: list[str]
     path: Path | None
 
 
-class LatestFrameStore:
+class LatestFrameBuffer:
     def __init__(self) -> None:
         self._condition = asyncio.Condition()
-        self._latest: LatestFrame | None = None
+        self._latest: tuple[int, Any] | None = None
+        self._counter = 0
+        self._closed = False
 
-    async def update(self, frame: LatestFrame) -> None:
+    async def update(self, frame: Any) -> None:
         async with self._condition:
-            self._latest = frame
+            if self._closed:
+                return
+            self._counter += 1
+            self._latest = (self._counter, frame)
             self._condition.notify_all()
 
-    async def get_latest(self) -> LatestFrame | None:
+    async def wait_for(self, last_id: int | None) -> tuple[int, Any] | None:
         async with self._condition:
-            return self._latest
-
-    async def wait_for(self, timeout: float | None = None) -> LatestFrame | None:
-        async with self._condition:
-            if self._latest is not None:
-                return self._latest
-            if timeout is None:
+            while not self._closed:
+                if self._latest is not None and (
+                    last_id is None or self._latest[0] != last_id
+                ):
+                    return self._latest
                 await self._condition.wait()
-                return self._latest
-            try:
-                await asyncio.wait_for(self._condition.wait(), timeout)
-            except asyncio.TimeoutError:
-                return self._latest
-            return self._latest
+            return None
+
+    async def close(self) -> None:
+        async with self._condition:
+            self._closed = True
+            self._condition.notify_all()
 
 
 class FrameSaver:
@@ -146,53 +141,65 @@ class FrameSaver:
 class VisionProcessor:
     def __init__(
         self,
-        store: LatestFrameStore,
+        on_result: Callable[[DetectionResult], Awaitable[None]] | None = None,
         model_id: str = RFDETR_MODEL_ID,
         confidence: float = RFDETR_CONFIDENCE,
-        min_interval_s: float = RFDETR_MIN_INTERVAL_S,
         jpeg_quality: int = RFDETR_JPEG_QUALITY,
         frames_dir: Path = RFDETR_FRAMES_DIR,
         history_limit: int = RFDETR_HISTORY_LIMIT,
     ) -> None:
-        self._store = store
+        self._on_result = on_result
         self._model_id = model_id
         self._confidence = confidence
-        self._min_interval_s = min_interval_s
         self._jpeg_quality = jpeg_quality
-        self._processing = False
-        self._last_processed = 0.0
         self._model_lock = asyncio.Lock()
-        self._model = None
+        self._model: Any | None = None
         self._box_annotator = sv.BoxAnnotator()
         self._label_annotator = sv.LabelAnnotator()
         self._frame_saver = FrameSaver(frames_dir, history_limit)
+        self._processing = False
 
     async def consume(self, track: MediaStreamTrack) -> None:
         logger.info("vision: track started")
-        while True:
-            try:
+        frame_buffer = LatestFrameBuffer()
+        process_task = asyncio.create_task(self._process_loop(frame_buffer))
+
+        try:
+            while True:
                 frame = await track.recv()
-            except Exception:
-                logger.info("vision: track ended")
-                break
-            await self._maybe_process_frame(frame)
+                await frame_buffer.update(frame)
+        except Exception:
+            logger.info("vision: track ended")
+        finally:
+            await frame_buffer.close()
+            await process_task
 
-    async def _maybe_process_frame(self, frame: Any) -> None:
-        now = time.monotonic()
-        if self._processing or (now - self._last_processed) < self._min_interval_s:
+    async def _process_loop(self, frame_buffer: LatestFrameBuffer) -> None:
+        last_id: int | None = None
+        while True:
+            item = await frame_buffer.wait_for(last_id)
+            if item is None:
+                return
+            frame_id, frame = item
+            if frame_id == last_id:
+                continue
+            last_id = frame_id
+            await self._process_frame(frame)
+
+    async def _process_frame(self, frame: Any) -> None:
+        if self._processing:
             return
-
         self._processing = True
-        self._last_processed = now
         try:
             image = frame.to_ndarray(format="bgr24")
             model = await self._ensure_model()
-            latest = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self._infer_annotate_and_save,
                 model,
                 image,
             )
-            await self._store.update(latest)
+            if self._on_result:
+                await self._on_result(result)
         except Exception:
             logger.exception("vision: processing failed")
         finally:
@@ -223,9 +230,15 @@ class VisionProcessor:
         except Exception:
             logger.exception("vision: model warmup failed")
 
-    def _infer_annotate_and_save(self, model: Any, image: np.ndarray) -> LatestFrame:
+    def _infer_annotate_and_save(self, model: Any, image: np.ndarray) -> DetectionResult:
         predictions = model.infer(image, confidence=self._confidence)[0]
         detections = sv.Detections.from_inference(predictions)
+
+        detected_classes = {
+            str(getattr(prediction, "class_name", ""))
+            for prediction in getattr(predictions, "predictions", [])
+            if getattr(prediction, "class_name", None)
+        }
 
         labels = [
             self._format_label(prediction)
@@ -240,19 +253,17 @@ class VisionProcessor:
         jpeg_bytes = _encode_jpeg(rgb, quality=self._jpeg_quality)
         path = self._frame_saver.save(jpeg_bytes)
 
-        data_uri = _to_data_uri(jpeg_bytes)
-        return LatestFrame(
-            data_uri=data_uri,
+        return DetectionResult(
+            detected_classes=detected_classes,
+            labels=labels,
             jpeg_bytes=jpeg_bytes,
             timestamp=time.time(),
-            labels=labels,
             path=path,
         )
 
     @staticmethod
     def _format_label(prediction: Any) -> str:
         label = str(getattr(prediction, "class_name", "object"))
-        label = LABEL_MAP.get(label, label)
         confidence = getattr(prediction, "confidence", None)
         if isinstance(confidence, (int, float)):
             return f"{label} {confidence:.2f}"
@@ -264,15 +275,3 @@ def _encode_jpeg(rgb: np.ndarray, quality: int) -> bytes:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
-
-
-def _to_data_uri(jpeg_bytes: bytes) -> str:
-    payload = base64.b64encode(jpeg_bytes).decode("ascii")
-    return f"data:image/jpeg;base64,{payload}"
-
-
-def summarize_labels(labels: Iterable[str]) -> str:
-    items = list(labels)
-    if not items:
-        return "no detections"
-    return ", ".join(items)

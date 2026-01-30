@@ -15,7 +15,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import org.webrtc.Camera2Enumerator
+import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -32,12 +35,14 @@ import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
+import java.nio.ByteBuffer
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
  * Establishes a WebRTC session via the backend `/vision/session` SDP broker and streams
- * low-rate camera video for server-side object detection.
+ * low-rate camera video for server-side object detection. A data channel carries
+ * speedrun config + state updates.
  */
 class BackendVisionClient(
     private val context: Context,
@@ -48,10 +53,14 @@ class BackendVisionClient(
     interface Listener {
         fun onConnectionStateChanged(state: PeerConnection.IceConnectionState)
         fun onError(message: String, throwable: Throwable? = null)
+        fun onConfig(config: SpeedrunConfig)
+        fun onStateUpdate(state: SpeedrunState)
+        fun onSplitCompleted(splitIndex: Int, state: SpeedrunState)
     }
 
     companion object {
         private const val TAG = "BackendVisionClient"
+        private const val DATA_CHANNEL_LABEL = "vision-events"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -68,6 +77,9 @@ class BackendVisionClient(
     private var localVideoTrack: VideoTrack? = null
     private var localVideoCapturer: VideoCapturer? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
+
+    private var dataChannel: DataChannel? = null
+    private val pendingMessages = ArrayDeque<String>()
 
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
 
@@ -103,6 +115,37 @@ class BackendVisionClient(
         eglBase.release()
     }
 
+    fun sendRunStart() {
+        sendClientMessage(JSONObject().put("type", "run.start"))
+    }
+
+    fun sendDebugStep(direction: String) {
+        sendClientMessage(
+            JSONObject()
+                .put("type", "debug.step")
+                .put("direction", direction)
+        )
+    }
+
+    private fun sendClientMessage(payload: JSONObject) {
+        val message = payload.toString()
+        val channel = dataChannel
+        if (channel != null && channel.state() == DataChannel.State.OPEN) {
+            channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
+        } else {
+            pendingMessages.addLast(message)
+        }
+    }
+
+    private fun flushPendingMessages() {
+        val channel = dataChannel ?: return
+        if (channel.state() != DataChannel.State.OPEN) return
+        while (pendingMessages.isNotEmpty()) {
+            val message = pendingMessages.removeFirst()
+            channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
+        }
+    }
+
     private fun createPeerConnectionFactory(): PeerConnectionFactory {
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
@@ -127,6 +170,7 @@ class BackendVisionClient(
         peerConnection = pc
 
         createAndAddVideoTrack(pc)
+        setupDataChannel(pc)
 
         val offer = createOffer(pc)
         setLocalDescription(pc, offer)
@@ -164,6 +208,10 @@ class BackendVisionClient(
         localVideoTrack = null
         localVideoSource?.dispose()
         localVideoSource = null
+
+        dataChannel?.close()
+        dataChannel = null
+        pendingMessages.clear()
 
         peerConnection?.close()
         peerConnection?.dispose()
@@ -218,7 +266,7 @@ class BackendVisionClient(
                 Log.d(TAG, "onRemoveStream: $stream")
             }
 
-            override fun onDataChannel(dc: org.webrtc.DataChannel) {
+            override fun onDataChannel(dc: DataChannel) {
                 Log.d(TAG, "onDataChannel: ${dc.label()}")
             }
 
@@ -254,7 +302,7 @@ class BackendVisionClient(
             adaptOutputFormat(
                 1024,
                 768,
-                2
+                5
             )
         }
         localVideoSource?.let { source ->
@@ -263,13 +311,117 @@ class BackendVisionClient(
                 context,
                 source.capturerObserver
             )
-            videoCapturer.startCapture(1024, 768, 2)
+            videoCapturer.startCapture(1024, 768, 5)
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
             localVideoTrack?.let { track ->
                 val sender = pc.addTrack(track)
                 configureVideoSender(sender)
             }
+        }
+    }
+
+    private fun setupDataChannel(pc: PeerConnection) {
+        val init = DataChannel.Init()
+        val dc = pc.createDataChannel(DATA_CHANNEL_LABEL, init)
+        dataChannel = dc
+
+        dc.registerObserver(object : DataChannel.Observer {
+            override fun onBufferedAmountChange(previousAmount: Long) {}
+
+            override fun onStateChange() {
+                Log.d(TAG, "DataChannel state: ${dc.state()}")
+                if (dc.state() == DataChannel.State.OPEN) {
+                    flushPendingMessages()
+                }
+            }
+
+            override fun onMessage(buffer: DataChannel.Buffer) {
+                if (buffer.binary) {
+                    Log.w(TAG, "Ignoring binary message on $DATA_CHANNEL_LABEL")
+                    return
+                }
+                val data = ByteArray(buffer.data.remaining())
+                buffer.data.get(data)
+                val jsonText = String(data, Charsets.UTF_8)
+                handleServerEvent(jsonText)
+            }
+        })
+    }
+
+    private fun handleServerEvent(jsonText: String) {
+        try {
+            val json = JSONObject(jsonText)
+            when (json.optString("type")) {
+                "config" -> {
+                    val config = parseConfig(json)
+                    if (config != null) {
+                        listener.onConfig(config)
+                    }
+                }
+
+                "state" -> {
+                    val state = parseState(json)
+                    if (state != null) {
+                        listener.onStateUpdate(state)
+                    }
+                }
+
+                "split_completed" -> {
+                    val splitIndex = json.optInt("split_index", -1)
+                    if (splitIndex >= 0) {
+                        val state = parseState(json)
+                        if (state != null) {
+                            listener.onSplitCompleted(splitIndex, state)
+                        }
+                    }
+                }
+
+                else -> {
+                    // ignore
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to parse server event: $jsonText", t)
+        }
+    }
+
+    private fun parseConfig(json: JSONObject): SpeedrunConfig? {
+        val groupsJson = json.optJSONArray("groups") ?: return null
+        val groups = mutableListOf<SpeedrunGroup>()
+        for (i in 0 until groupsJson.length()) {
+            val groupObj = groupsJson.optJSONObject(i) ?: continue
+            val name = groupObj.optString("name", "").trim()
+            val splitsJson = groupObj.optJSONArray("splits") ?: JSONArray()
+            val splits = mutableListOf<SpeedrunSplit>()
+            for (j in 0 until splitsJson.length()) {
+                val splitObj = splitsJson.optJSONObject(j) ?: continue
+                val label = splitObj.optString("label", "").trim()
+                if (label.isNotEmpty()) {
+                    splits.add(SpeedrunSplit(label))
+                }
+            }
+            if (name.isNotEmpty() && splits.isNotEmpty()) {
+                groups.add(SpeedrunGroup(name, splits))
+            }
+        }
+        if (groups.isEmpty()) return null
+        return SpeedrunConfig(groups)
+    }
+
+    private fun parseState(json: JSONObject): SpeedrunState? {
+        val runState = parseRunState(json.optString("run_state", "")) ?: return null
+        val activeIndex = json.optInt("active_split_index", 0)
+        val completedCount = json.optInt("completed_count", 0)
+        return SpeedrunState(runState, activeIndex, completedCount)
+    }
+
+    private fun parseRunState(raw: String): RunState? {
+        return when (raw.lowercase()) {
+            "idle" -> RunState.IDLE
+            "running" -> RunState.RUNNING
+            "finished" -> RunState.FINISHED
+            else -> null
         }
     }
 
