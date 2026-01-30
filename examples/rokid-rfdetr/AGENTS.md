@@ -16,7 +16,7 @@ Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The Androi
 - `main.py`: FastAPI app, `/vision/session`, data channel handling.
 - `vision.py`: RF-DETR inference loop, annotated frame saving.
 - `speedrun.py`: speedrun config loader + state machine.
-- `speedrun_config.json`: groups/splits and detection class mapping.
+- `speedrun_config.json`: speedrun name, groups/splits, and detection class mapping.
 - `.env.example`: env template for required keys.
 
 # Configuration

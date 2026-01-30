@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setStatus("Requesting camera permission...")
+        binding.tvTitle.text = "Loading speedrun..."
         binding.tvTimer.text = formatElapsed(0L)
         binding.tvSplits.text = "Waiting for config..."
 
@@ -228,6 +229,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     override fun onConfig(config: SpeedrunConfig) {
         runOnUiThread {
             speedrunConfig = config
+            binding.tvTitle.text = config.name
             splitTimes = MutableList(config.totalSplits) { null }
             lastCompletedCount = 0
             renderSplits()

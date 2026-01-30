@@ -25,6 +25,7 @@ class Group:
 
 @dataclass(frozen=True)
 class SpeedrunConfig:
+    name: str
     groups: list[Group]
 
     @property
@@ -40,6 +41,7 @@ class SpeedrunConfig:
     def client_payload(self) -> dict[str, Any]:
         return {
             "type": "config",
+            "name": self.name,
             "groups": [
                 {
                     "name": group.name,
@@ -159,16 +161,21 @@ class SpeedrunController:
 def load_speedrun_config(path: Path) -> SpeedrunConfig:
     raw = path.read_text(encoding="utf-8")
     data = json.loads(raw)
-    if not isinstance(data, list):
-        raise ValueError("Speedrun config root must be an array")
+    if not isinstance(data, dict):
+        raise ValueError("Speedrun config root must be an object")
+
+    config_name = str(data.get("name") or "").strip() or "Speedrun"
+    groups_data = data.get("groups")
+    if not isinstance(groups_data, list):
+        raise ValueError("Speedrun config groups must be an array")
 
     groups: list[Group] = []
-    for group in data:
+    for group in groups_data:
         if not isinstance(group, dict):
             continue
-        name = str(group.get("name") or "").strip()
+        group_name = str(group.get("name") or "").strip()
         splits_data = group.get("splits")
-        if not name or not isinstance(splits_data, list):
+        if not group_name or not isinstance(splits_data, list):
             continue
         splits: list[Split] = []
         for split in splits_data:
@@ -180,14 +187,15 @@ def load_speedrun_config(path: Path) -> SpeedrunConfig:
                 continue
             splits.append(Split(label=label, complete_on_class=complete_on))
         if splits:
-            groups.append(Group(name=name, splits=splits))
+            groups.append(Group(name=group_name, splits=splits))
 
     if not groups:
         raise ValueError("Speedrun config has no valid groups")
 
     logger.info(
-        "Loaded %s groups with %s splits",
+        "Loaded speedrun '%s' with %s groups and %s splits",
+        config_name,
         len(groups),
         sum(len(g.splits) for g in groups),
     )
-    return SpeedrunConfig(groups=groups)
+    return SpeedrunConfig(name=config_name, groups=groups)

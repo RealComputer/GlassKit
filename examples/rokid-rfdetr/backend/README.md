@@ -12,7 +12,7 @@ Optional vision overrides:
 - `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`
 
 Speedrun config:
-- `speedrun_config.json` in this directory defines groups/splits and the detection class for completion.
+- `speedrun_config.json` in this directory defines the speedrun name, groups/splits, and the detection class for completion.
 
 ## Common commands
 ```sh

@@ -4,7 +4,7 @@ data class SpeedrunSplit(val label: String)
 
 data class SpeedrunGroup(val name: String, val splits: List<SpeedrunSplit>)
 
-data class SpeedrunConfig(val groups: List<SpeedrunGroup>) {
+data class SpeedrunConfig(val name: String, val groups: List<SpeedrunGroup>) {
     val totalSplits: Int
         get() = groups.sumOf { it.splits.size }
 }

@@ -394,6 +394,7 @@ class BackendVisionClient(
     }
 
     private fun parseConfig(json: JSONObject): SpeedrunConfig? {
+        val configNameRaw = json.optString("name", "").trim()
         val groupsJson = json.optJSONArray("groups") ?: return null
         val groups = mutableListOf<SpeedrunGroup>()
         for (i in 0 until groupsJson.length()) {
@@ -413,7 +414,8 @@ class BackendVisionClient(
             }
         }
         if (groups.isEmpty()) return null
-        return SpeedrunConfig(groups)
+        val configName = if (configNameRaw.isNotEmpty()) configNameRaw else "Speedrun"
+        return SpeedrunConfig(configName, groups)
     }
 
     private fun parseState(json: JSONObject): SpeedrunState? {
