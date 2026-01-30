@@ -9,7 +9,7 @@ Real-time, vision-enabled voice assistant example for Rokid Glasses (Android sma
 ## Android (`./rokid/`)
 - `MainActivity.kt`: permissions, start/stop, conversation UI, keypress toggle.
 - `OpenAIRealtimeClient.kt`: WebRTC audio session, data channel event parsing.
-- `BackendVisionClient.kt`: WebRTC camera capture + low-FPS video stream.
+- `BackendVisionClient.kt`: WebRTC camera capture + video stream.
 - `build.gradle.kts`: BuildConfig for `SESSION_URL` and `VISION_SESSION_URL` sourced from `rokid/local.properties`.
 
 ## Backend (`./backend/`)
