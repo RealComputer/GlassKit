@@ -199,7 +199,11 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
     override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
         runOnUiThread {
-            setStatus("Connection: $state")
+            if (state == PeerConnection.IceConnectionState.CONNECTED) {
+                setStatus("")
+            } else {
+                setStatus("Connection: $state")
+            }
             if (state == PeerConnection.IceConnectionState.FAILED ||
                 state == PeerConnection.IceConnectionState.CLOSED ||
                 state == PeerConnection.IceConnectionState.DISCONNECTED
@@ -302,12 +306,6 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                     flatIndex == speedrunState.activeIndex
                 val isComplete = flatIndex < speedrunState.completedCount
 
-                val prefix = when {
-                    isActive -> ">"
-                    isComplete -> "x"
-                    else -> "-"
-                }
-
                 val label = split.label.padEnd(LABEL_PAD)
                 val timeText = if (isComplete) {
                     splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) } ?: "--:--.--"
@@ -315,26 +313,23 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                     ""
                 }
 
-                val line = if (timeText.isNotEmpty()) {
-                    "  $prefix $label  $timeText"
-                } else {
-                    "  $prefix $label"
+                builder.append("  ")
+                val labelStart = builder.length
+                builder.append(label)
+                val labelEnd = builder.length
+                if (timeText.isNotEmpty()) {
+                    builder.append("  ")
+                    builder.append(timeText)
                 }
-
-                val lineStart = builder.length
-                builder.append(line)
-                val lineEnd = builder.length
 
                 if (isActive) {
                     builder.setSpan(
-                        StyleSpan(Typeface.BOLD),
-                        lineStart,
-                        lineEnd,
+                        StyleSpan(Typeface.BOLD_ITALIC),
+                        labelStart,
+                        labelEnd,
                         Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 } else if (isComplete) {
-                    val labelStart = lineStart + 4
-                    val labelEnd = labelStart + label.length
                     builder.setSpan(
                         StrikethroughSpan(),
                         labelStart,
