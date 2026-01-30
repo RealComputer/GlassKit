@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     private var finalElapsedMs = 0L
 
     private val timerHandler = Handler(Looper.getMainLooper())
+    private val reconnectHandler = Handler(Looper.getMainLooper())
     private val timerRunnable = object : Runnable {
         override fun run() {
             updateTimer()
@@ -107,6 +108,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         visionClient?.release()
         visionClient = null
         stopTimer()
+        reconnectHandler.removeCallbacksAndMessages(null)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
@@ -201,6 +203,19 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
         runOnUiThread {
             setStatus("Connection: $state")
+            if (state == PeerConnection.IceConnectionState.FAILED ||
+                state == PeerConnection.IceConnectionState.CLOSED ||
+                state == PeerConnection.IceConnectionState.DISCONNECTED
+            ) {
+                visionClient?.release()
+                visionClient = null
+                setStatus("Connection: $state (reconnecting)")
+                reconnectHandler.removeCallbacksAndMessages(null)
+                reconnectHandler.postDelayed(
+                    { if (!isFinishing && !isDestroyed) startVisionIfNeeded() },
+                    1000L
+                )
+            }
         }
     }
 

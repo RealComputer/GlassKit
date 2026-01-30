@@ -80,6 +80,7 @@ class BackendVisionClient(
 
     private var dataChannel: DataChannel? = null
     private val pendingMessages = ArrayDeque<String>()
+    private val pendingLock = Any()
 
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
 
@@ -133,15 +134,19 @@ class BackendVisionClient(
         if (channel != null && channel.state() == DataChannel.State.OPEN) {
             channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
         } else {
-            pendingMessages.addLast(message)
+            synchronized(pendingLock) {
+                pendingMessages.addLast(message)
+            }
         }
     }
 
     private fun flushPendingMessages() {
         val channel = dataChannel ?: return
         if (channel.state() != DataChannel.State.OPEN) return
-        while (pendingMessages.isNotEmpty()) {
-            val message = pendingMessages.removeFirst()
+        while (true) {
+            val message = synchronized(pendingLock) {
+                if (pendingMessages.isEmpty()) null else pendingMessages.removeFirst()
+            } ?: break
             channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
         }
     }
@@ -211,7 +216,9 @@ class BackendVisionClient(
 
         dataChannel?.close()
         dataChannel = null
-        pendingMessages.clear()
+        synchronized(pendingLock) {
+            pendingMessages.clear()
+        }
 
         peerConnection?.close()
         peerConnection?.dispose()
