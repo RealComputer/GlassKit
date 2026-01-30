@@ -15,13 +15,13 @@ val visionSessionUrl = localProperties.getProperty("VISION_SESSION_URL")
     ?: error("VISION_SESSION_URL is required in rokid/local.properties")
 
 android {
-    namespace = "com.example.rokidopenairealtimerfdetr"
+    namespace = "com.example.rokidrfdetr"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.rokidopenairealtimerfdetr"
+        applicationId = "com.example.rokidrfdetr"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

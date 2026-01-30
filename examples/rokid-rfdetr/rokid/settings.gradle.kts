@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "rokid openai realtime rfdetr"
+rootProject.name = "rokid rfdetr"
 include(":app")

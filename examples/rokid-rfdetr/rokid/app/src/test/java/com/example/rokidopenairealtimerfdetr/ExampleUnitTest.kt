@@ -1,4 +1,4 @@
-package com.example.rokidopenairealtimerfdetr
+package com.example.rokidrfdetr
 
 import org.junit.Test
 

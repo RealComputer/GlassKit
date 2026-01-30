@@ -1,4 +1,4 @@
-package com.example.rokidopenairealtimerfdetr
+package com.example.rokidrfdetr
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -15,7 +15,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.rokidopenairealtimerfdetr.databinding.ActivityMainBinding
+import com.example.rokidrfdetr.databinding.ActivityMainBinding
 import org.webrtc.PeerConnection
 
 class MainActivity : AppCompatActivity(), OpenAIRealtimeClient.Listener {
