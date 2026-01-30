@@ -230,7 +230,9 @@ class VisionProcessor:
         except Exception:
             logger.exception("vision: model warmup failed")
 
-    def _infer_annotate_and_save(self, model: Any, image: np.ndarray) -> DetectionResult:
+    def _infer_annotate_and_save(
+        self, model: Any, image: np.ndarray
+    ) -> DetectionResult:
         predictions = model.infer(image, confidence=self._confidence)[0]
         detections = sv.Detections.from_inference(predictions)
 

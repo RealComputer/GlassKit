@@ -99,6 +99,7 @@ async def vision_session(request: Request) -> Response:
         if channel.readyState == "open":
             asyncio.create_task(_send_initial(channel))
         else:
+
             @channel.on("open")
             def on_open() -> None:
                 asyncio.create_task(_send_initial(channel))

@@ -185,5 +185,9 @@ def load_speedrun_config(path: Path) -> SpeedrunConfig:
     if not groups:
         raise ValueError("Speedrun config has no valid groups")
 
-    logger.info("Loaded %s groups with %s splits", len(groups), sum(len(g.splits) for g in groups))
+    logger.info(
+        "Loaded %s groups with %s splits",
+        len(groups),
+        sum(len(g.splits) for g in groups),
+    )
     return SpeedrunConfig(groups=groups)
