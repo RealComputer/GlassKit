@@ -25,10 +25,10 @@ Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The Androi
 - Optional backend overrides: `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`, `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`.
 
 # Commands
-## Android (always run after Android changes)
+## Android (ALWAYS run after Android changes)
 - `cd rokid && ./gradlew :app:assembleDebug`
 
-## Backend (always run after backend changes)
+## Backend (ALWAYS run after backend changes)
 - `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`
 
 ## Backend utilities
