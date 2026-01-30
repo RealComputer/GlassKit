@@ -2,7 +2,6 @@ package com.example.rokidrfdetr
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
@@ -10,8 +9,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.text.Spannable
 import android.text.SpannableStringBuilder
-import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.text.style.StrikethroughSpan
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
@@ -105,8 +104,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroy()
-        visionClient?.release()
-        visionClient = null
+        releaseVisionClientAsync()
         stopTimer()
         reconnectHandler.removeCallbacksAndMessages(null)
     }
@@ -206,8 +204,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                 state == PeerConnection.IceConnectionState.CLOSED ||
                 state == PeerConnection.IceConnectionState.DISCONNECTED
             ) {
-                visionClient?.release()
-                visionClient = null
+                releaseVisionClientAsync()
                 setStatus("Connection: $state (reconnecting)")
                 reconnectHandler.removeCallbacksAndMessages(null)
                 reconnectHandler.postDelayed(
@@ -271,6 +268,12 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         splitTimes[splitIndex] = currentElapsedMs()
     }
 
+    private fun releaseVisionClientAsync() {
+        val client = visionClient ?: return
+        visionClient = null
+        Thread { client.release() }.start()
+    }
+
     private fun renderSplits() {
         val config = speedrunConfig
         if (config == null) {
@@ -280,8 +283,6 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
         val builder = SpannableStringBuilder()
         var flatIndex = 0
-        val activeColor = Color.parseColor("#00E676")
-        val completeColor = Color.parseColor("#BBBBBB")
 
         for (group in config.groups) {
             if (builder.isNotEmpty()) builder.append("\n")
@@ -326,22 +327,18 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
                 if (isActive) {
                     builder.setSpan(
-                        ForegroundColorSpan(activeColor),
-                        lineStart,
-                        lineEnd,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                    builder.setSpan(
                         StyleSpan(Typeface.BOLD),
                         lineStart,
                         lineEnd,
                         Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 } else if (isComplete) {
+                    val labelStart = lineStart + 4
+                    val labelEnd = labelStart + label.length
                     builder.setSpan(
-                        ForegroundColorSpan(completeColor),
-                        lineStart,
-                        lineEnd,
+                        StrikethroughSpan(),
+                        labelStart,
+                        labelEnd,
                         Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 }

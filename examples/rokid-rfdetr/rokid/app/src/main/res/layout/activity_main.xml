@@ -15,7 +15,6 @@
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#88FFFFFF"
             android:textSize="12sp"
             android:paddingBottom="8dp" />
 
