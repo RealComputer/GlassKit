@@ -1,5 +1,5 @@
 # Project overview
-Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The Android client streams camera video to the backend over WebRTC and receives split/state updates over a data channel. The backend runs RF-DETR object detection, advances splits with a two-hit confirmation rule, and saves annotated frames for inspection.
+Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The HUD is monochrome, so UI styling should rely on typography instead of color. The Android client streams camera video to the backend over WebRTC and receives split/state updates over a data channel. The backend runs RF-DETR object detection, advances splits with a two-hit confirmation rule, and saves annotated frames for inspection.
 
 # Technical architecture
 - Android app (`rokid/`) runs a single WebRTC session to `/vision/session` for video + data channel messaging.
