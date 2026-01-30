@@ -10,20 +10,14 @@
     "name": "Cucumber Maki",
     "splits": [
       { "label": "Lay nori", "complete_on_class": "maki_nori_on_makisu" },
-      {
-        "label": "Add rice and cucumber",
-        "complete_on_class": "maki_ready_with_rice_cucumber"
-      },
+      { "label": "Add rice and cucumber", "complete_on_class": "maki_ready_with_rice_cucumber" },
       { "label": "Roll and cut", "complete_on_class": "maki_piece_on_plate" }
     ]
   },
   {
     "name": "Ikura Gunkan",
     "splits": [
-      {
-        "label": "Form rice, wrap nori",
-        "complete_on_class": "gunkan_rice_nori_base_ready"
-      },
+      { "label": "Form rice, wrap nori", "complete_on_class": "gunkan_rice_nori_base_ready" },
       { "label": "Top with ikura", "complete_on_class": "gunkan_ikura_on_plate" }
     ]
   }
