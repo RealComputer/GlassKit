@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     companion object {
         private const val REQ_PERMISSIONS = 1001
         private const val LABEL_PAD = 28
+        private const val TIME_PLACEHOLDER = "--:--.--"
     }
 
     private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
@@ -152,7 +153,6 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         finalElapsedMs = 0L
         startTimer()
         visionClient?.sendRunStart()
-        setStatus("Run started")
         renderSplits()
     }
 
@@ -200,7 +200,9 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
     override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
         runOnUiThread {
-            if (state == PeerConnection.IceConnectionState.CONNECTED) {
+            if (state == PeerConnection.IceConnectionState.CONNECTED ||
+                state == PeerConnection.IceConnectionState.COMPLETED
+            ) {
                 setStatus("")
             } else {
                 setStatus("Connection: $state")
@@ -287,6 +289,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
             return
         }
 
+        val labelWidth = computeLabelWidth()
         val builder = SpannableStringBuilder()
         var flatIndex = 0
 
@@ -308,21 +311,17 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                     flatIndex == speedrunState.activeIndex
                 val isComplete = flatIndex < speedrunState.completedCount
 
-                val label = split.label.padEnd(LABEL_PAD)
-                val timeText = if (isComplete) {
-                    splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) } ?: "--:--.--"
-                } else {
-                    ""
-                }
+                val prefix = if (isActive) "> " else "  "
+                val label = split.label.take(labelWidth).padEnd(labelWidth)
+                val timeText = splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) }
+                    ?: TIME_PLACEHOLDER
 
-                builder.append("  ")
                 val labelStart = builder.length
+                builder.append(prefix)
                 builder.append(label)
                 val labelEnd = builder.length
-                if (timeText.isNotEmpty()) {
-                    builder.append("  ")
-                    builder.append(timeText)
-                }
+                builder.append("  ")
+                builder.append(timeText)
 
                 if (isActive) {
                     builder.setSpan(
@@ -349,5 +348,16 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
             builder.delete(builder.length - 1, builder.length)
         }
         binding.tvSplits.text = builder
+    }
+
+    private fun computeLabelWidth(): Int {
+        val widthPx = binding.tvSplits.width
+        if (widthPx <= 0) return LABEL_PAD
+        val charWidth = binding.tvSplits.paint.measureText("0")
+        if (charWidth <= 0f) return LABEL_PAD
+        val totalCols = (widthPx / charWidth).toInt()
+        val reserved = 2 + 2 + TIME_PLACEHOLDER.length
+        val available = totalCols - reserved
+        return available.coerceAtLeast(1)
     }
 }
