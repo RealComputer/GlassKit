@@ -52,8 +52,8 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-RFDETR_MODEL_ID = os.getenv("RFDETR_MODEL_ID", "test2-abpsp/4")
-RFDETR_CONFIDENCE = _env_float("RFDETR_CONFIDENCE", 0.8)
+RFDETR_MODEL_ID = os.getenv("RFDETR_MODEL_ID", "sushi-3usqw/2")
+RFDETR_CONFIDENCE = _env_float("RFDETR_CONFIDENCE", 0.7)
 RFDETR_JPEG_QUALITY = _env_int("RFDETR_JPEG_QUALITY", 85)
 RFDETR_HISTORY_LIMIT = _env_int("RFDETR_HISTORY_LIMIT", 1000)
 RFDETR_FRAMES_DIR = Path(
