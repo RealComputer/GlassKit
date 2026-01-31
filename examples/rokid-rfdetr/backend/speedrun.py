@@ -107,6 +107,12 @@ class SpeedrunController:
 
         return []
 
+    async def reset(self) -> None:
+        async with self._lock:
+            self._run_state = "idle"
+            self._active_index = 0
+            self._consecutive_hits = 0
+
     def _handle_run_start(self) -> list[dict[str, Any]]:
         if self._run_state != "idle":
             return []

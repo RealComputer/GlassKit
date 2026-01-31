@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
     private val timerHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
+    private var isForeground = false
     private val timerRunnable = object : Runnable {
         override fun run() {
             updateTimer()
@@ -109,6 +110,20 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         releaseVisionClientAsync()
         stopTimer()
         reconnectHandler.removeCallbacksAndMessages(null)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isForeground = true
+        startVisionIfNeeded()
+    }
+
+    override fun onStop() {
+        isForeground = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        releaseVisionClientAsync()
+        resetLocalState()
+        super.onStop()
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
@@ -212,12 +227,16 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                 state == PeerConnection.IceConnectionState.DISCONNECTED
             ) {
                 releaseVisionClientAsync()
-                setStatus("Connection: $state (reconnecting)")
-                reconnectHandler.removeCallbacksAndMessages(null)
-                reconnectHandler.postDelayed(
-                    { if (!isFinishing && !isDestroyed) startVisionIfNeeded() },
-                    1000L
-                )
+                if (isForeground) {
+                    setStatus("Connection: $state (reconnecting)")
+                    reconnectHandler.removeCallbacksAndMessages(null)
+                    reconnectHandler.postDelayed(
+                        { if (!isFinishing && !isDestroyed) startVisionIfNeeded() },
+                        1000L
+                    )
+                } else {
+                    setStatus("Connection: $state")
+                }
             }
         }
     }
@@ -280,6 +299,23 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         val client = visionClient ?: return
         visionClient = null
         Thread { client.release() }.start()
+    }
+
+    private fun resetLocalState() {
+        stopTimer()
+        runStarted = false
+        timerStartMs = 0L
+        finalElapsedMs = 0L
+        speedrunState = SpeedrunState(RunState.IDLE, 0, 0)
+        lastCompletedCount = 0
+        splitTimes = speedrunConfig?.let { MutableList(it.totalSplits) { null } } ?: mutableListOf()
+        binding.tvTimer.text = formatElapsed(0L)
+        if (speedrunConfig == null) {
+            binding.tvTitle.text = "Loading speedrun..."
+            binding.tvSplits.text = "Waiting for config..."
+        } else {
+            renderSplits()
+        }
     }
 
     private fun renderSplits() {

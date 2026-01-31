@@ -64,6 +64,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post("/vision/session")
 async def vision_session(request: Request) -> Response:
+    await _reset_vision_state()
     sdp_bytes = await request.body()
     sdp = sdp_bytes.decode()
 
@@ -118,6 +119,16 @@ async def vision_session(request: Request) -> Response:
     await pc.setLocalDescription(answer)
 
     return PlainTextResponse(pc.localDescription.sdp)
+
+
+async def _reset_vision_state() -> None:
+    await speedrun_controller.reset()
+    if vision_peers:
+        coros = [pc.close() for pc in list(vision_peers)]
+        if coros:
+            await asyncio.gather(*coros, return_exceptions=True)
+        vision_peers.clear()
+    data_channels.clear()
 
 
 async def _send_initial(channel: RTCDataChannel) -> None:
