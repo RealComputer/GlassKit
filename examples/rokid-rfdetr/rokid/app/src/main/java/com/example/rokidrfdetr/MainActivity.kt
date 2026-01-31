@@ -112,7 +112,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_CENTER -> {
+            KeyEvent.KEYCODE_ENTER -> {
                 startRunIfNeeded()
                 true
             }

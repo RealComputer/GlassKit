@@ -1,4 +1,4 @@
-The Rokid Glasses Android app streams camera video to the backend for RF-DETR detection and receives speedrun split updates over a WebRTC data channel. Tap the temple button (DPAD center) to start the run timer. Use DPAD up/down to step to the next/previous split for debugging.
+The Rokid Glasses Android app streams camera video to the backend for RF-DETR detection and receives speedrun split updates over a WebRTC data channel. Tap the temple button (Enter) to start the run timer. Use DPAD up/down to step to the next/previous split for debugging.
 
 Configure the backend URL in `rokid/local.properties` (gitignored):
 

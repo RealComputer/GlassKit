@@ -7,7 +7,7 @@ Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The HUD is
 
 # Key files
 ## Android (`./rokid/`)
-- `MainActivity.kt`: HUD rendering, timer management, DPAD controls.
+- `MainActivity.kt`: HUD rendering, timer management, key event controls.
 - `BackendVisionClient.kt`: WebRTC camera capture + data channel messaging.
 - `SpeedrunModels.kt`: config/state data classes.
 - `build.gradle.kts`: BuildConfig for `VISION_SESSION_URL` sourced from `rokid/local.properties`.
