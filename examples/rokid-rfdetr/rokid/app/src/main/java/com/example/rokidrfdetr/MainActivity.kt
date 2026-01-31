@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         override fun run() {
             updateTimer()
             if (timerRunning) {
-                timerHandler.postDelayed(this, 100L)
+                timerHandler.postDelayed(this, TIMER_TICK_MS)
             }
         }
     }
@@ -50,7 +50,8 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
     companion object {
         private const val REQ_PERMISSIONS = 1001
         private const val LABEL_PAD = 28
-        private const val TIME_PLACEHOLDER = "--:--.--"
+        private const val TIMER_TICK_MS = 100L
+        private const val TIME_TEXT_WIDTH = 8
     }
 
     private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
@@ -176,7 +177,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         timerStartMs = SystemClock.elapsedRealtime()
         timerRunning = true
         updateTimer()
-        timerHandler.postDelayed(timerRunnable, 100L)
+        timerHandler.postDelayed(timerRunnable, TIMER_TICK_MS)
     }
 
     private fun stopTimer() {
@@ -190,7 +191,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         } else {
             finalElapsedMs
         }
-        binding.tvTimer.text = formatElapsed(elapsed)
+        binding.tvTimer.text = formatTimerText(elapsed)
     }
 
     private fun currentElapsedMs(): Long {
@@ -207,6 +208,15 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         val seconds = totalSeconds % 60
         val centis = (ms % 1000) / 10
         return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, centis)
+    }
+
+    private fun formatTimerText(ms: Long): String {
+        val elapsed = formatElapsed(ms)
+        return if (speedrunState.runState == RunState.FINISHED && !timerRunning && runStarted) {
+            "< $elapsed >"
+        } else {
+            elapsed
+        }
     }
 
     private fun setStatus(text: String) {
@@ -328,6 +338,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         val labelWidth = computeLabelWidth()
         val builder = SpannableStringBuilder()
         var flatIndex = 0
+        val blankTime = " ".repeat(TIME_TEXT_WIDTH)
 
         for (group in config.groups) {
             if (builder.isNotEmpty()) builder.append("\n")
@@ -350,7 +361,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
                 val prefix = if (isActive) "> " else "  "
                 val label = split.label.take(labelWidth).padEnd(labelWidth)
                 val timeText = splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) }
-                    ?: TIME_PLACEHOLDER
+                    ?: blankTime
 
                 val labelStart = builder.length
                 builder.append(prefix)
@@ -392,7 +403,7 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         val charWidth = binding.tvSplits.paint.measureText("0")
         if (charWidth <= 0f) return LABEL_PAD
         val totalCols = (widthPx / charWidth).toInt()
-        val reserved = 2 + 2 + TIME_PLACEHOLDER.length
+        val reserved = 2 + 2 + TIME_TEXT_WIDTH
         val available = totalCols - reserved
         return available.coerceAtLeast(1)
     }
