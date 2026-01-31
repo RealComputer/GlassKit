@@ -4,8 +4,8 @@
     {
       "name": "Tuna Nigiri",
       "splits": [
-        { "label": "Pick up rice", "complete_on_class": "nigiri_rice_in_hand" },
-        { "label": "Top with tuna", "complete_on_class": "nigiri_on_plate" }
+        { "label": "Pick up rice", "complete_on_class": "rice_in_hand" },
+        { "label": "Top with tuna", "complete_on_class": "nigiri_on_board" }
       ]
     },
     {
@@ -13,7 +13,7 @@
       "splits": [
         { "label": "Lay nori", "complete_on_class": "maki_nori_on_makisu" },
         { "label": "Add rice and cucumber", "complete_on_class": "maki_ready_with_rice_cucumber" },
-        { "label": "Roll and cut", "complete_on_class": "maki_piece_on_plate" }
+        { "label": "Roll and cut", "complete_on_class": "maki_piece_on_board" }
       ]
     },
     {
