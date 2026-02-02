@@ -1,4 +1,4 @@
-# Example: Rokid Glasses + Object Detection
+# Example: Rokid Glasses x Object Detection
 
 This is an example Rokid Glasses app that uses object-detection models. Feel free to modify and experiment with it!
 
