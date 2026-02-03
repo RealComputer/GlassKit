@@ -10,7 +10,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
 
 | IKEA assembly assistant | Sushi speedrun HUD | Privacy filter |
 | --- | --- | --- |
-| https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc | https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da | https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa |
+| <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc"></video> | <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da"></video> | <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa"></video> |
 | Start here (two variants):<br>[Rokid x OpenAI Realtime API](examples/rokid-openai-realtime/README.md)<br>[Realtime + RF-DETR](examples/rokid-openai-realtime-rfdetr/README.md)<br><br>Realtime voice assistant that sees progress, answers questions, and guides step-by-step. | Start here:<br>[Rokid x Object Detection (RF-DETR)](examples/rokid-rfdetr/README.md)<br><br>Vision-only speedrun template: HUD, timers, and hands-free split detection. | Start here:<br>[Privacy Filter](archive/privacy-filter/README.md)<br><br>Offline, real-time face anonymization + consent detection for camera-based apps. |
 
 ## Why GlassKit
