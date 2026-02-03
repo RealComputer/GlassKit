@@ -30,7 +30,6 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
       </td>
     </tr>
-
     <tr>
       <td width="33%" valign="top">
         <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
@@ -38,13 +37,11 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <br><br>
         Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps. The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding.
       </td>
-
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code ➡️</a>
         <br><br>
         Real-world speedrun HUD for Rokid Glasses. Uses RF-DETR for automatic, hands-free split completion, based on a configured route.
       </td>
-
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code ➡️</a>
         <br><br>
