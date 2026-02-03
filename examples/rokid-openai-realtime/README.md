@@ -4,7 +4,7 @@ Real-time, vision-enabled voice assistant demo for Rokid Glasses. The glasses st
 
 An IKEA wooden box assembly instruction is set up for reference. Feel free to modify and experiment with it!
 
-<FIXME: I'll insert a demo video here later.>
+[demo.webm](https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc)
 
 ## Features
 - End-to-end example: Rokid Glasses connect to the OpenAI Realtime API via WebRTC.
