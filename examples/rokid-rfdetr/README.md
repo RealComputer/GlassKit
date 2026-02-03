@@ -4,7 +4,7 @@ This is an example Rokid Glasses app that uses object-detection models. Feel fre
 
 To demonstrate the template, this repo includes a vision-driven speedrun HUD for Rokid Glasses. You can run a speedrun in the real world, in your own scenario. A sushi speedrun is included for reference.
 
-<FIXME: I'll insert a demo video here later.>
+[demo.webm](https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da)
 
 ## Features
 - End-to-end example: glasses HUD + backend object-detection workflow.
