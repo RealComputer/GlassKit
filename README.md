@@ -10,10 +10,49 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
 
 ## Example Projects
 
-| IKEA assembly assistant | Sushi speedrun HUD | Privacy filter |
-| --- | --- | --- |
-| <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc"></video> | <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da"></video> | <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa"></video> |
-| [Code ➡️](examples/rokid-openai-realtime) · [Code (+ RF-DETR) ➡️](examples/rokid-openai-realtime-rfdetr)<br><br>Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps. The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding. | [Code ➡️](examples/rokid-rfdetr)<br><br>Real-world speedrun HUD for Rokid Glasses. Uses RF-DETR for automatic, hands-free split completion, based on a configured route. | [Code ➡️](archive/privacy-filter)<br><br>Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support. |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="33%">IKEA assembly assistant</th>
+      <th width="33%">Sushi speedrun HUD</th>
+      <th width="33%">Privacy filter</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc" width="260" controls></video>
+      </td>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da" width="260" controls></video>
+      </td>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
+      </td>
+    </tr>
+
+    <tr>
+      <td width="33%" valign="top">
+        <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
+        <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
+        <br><br>
+        Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps. The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding.
+      </td>
+
+      <td width="33%" valign="top">
+        <a href="examples/rokid-rfdetr">Code ➡️</a>
+        <br><br>
+        Real-world speedrun HUD for Rokid Glasses. Uses RF-DETR for automatic, hands-free split completion, based on a configured route.
+      </td>
+
+      <td width="33%" valign="top">
+        <a href="archive/privacy-filter">Code ➡️</a>
+        <br><br>
+        Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support.
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## Why GlassKit
 
