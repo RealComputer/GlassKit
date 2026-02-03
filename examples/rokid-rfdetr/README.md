@@ -28,7 +28,7 @@ See [AGENTS.md](./AGENTS.md) for dev workflow.
 - Rokid Glasses + dev cable
 - Android Studio with `adb`
 - Python 3.12 with `uv`
-- Roboflow API key (`ROBOFLOW_API_KEY`) if you use a private Roboflow-hosted model.
+- Roboflow API key (`ROBOFLOW_API_KEY`) if you use Roboflow-hosted weights (see "How to prepare the model" for details and alternatives).
 
 ## Configuration
 Fill out `rokid/local.properties`:
@@ -40,7 +40,7 @@ Create the backend env file:
 ```
 cd backend
 cp .env.example .env
-# set ROBOFLOW_API_KEY in .env
+# set ROBOFLOW_API_KEY
 ```
 
 Speedrun configuration lives in `backend/speedrun_config.json` (name, groups/splits, object-detection class mapping).
@@ -64,7 +64,7 @@ adb shell cmd wifi set-wifi-enabled enabled
 adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
 adb shell cmd wifi status # confirm the connection
 
-# Optional:
+# Optional (wireless ADB):
 adb shell ip -f inet addr show wlan0 # check the glasses' IP
 ping -c 5 -W 3 <IP> # check connectivity: first ping may time out
 adb tcpip 5555 # prepare for remote adb connection for convenience
@@ -80,6 +80,8 @@ For each speedrun config, you need to fine-tune an object detection model. See h
 1. Record your example runs without the app using the standard Rokid Glasses video recording feature.
 2. Use that footage to train the model.
 3. Create a speedrun config file for your run.
+
+This backend uses the `inference` library with Roboflow-hosted weights by default. `ROBOFLOW_API_KEY` is only used to download weights to the backend once; inference runs locally after download. To avoid relying on the Roboflow platform, train/export weights anywhere (for example, Colab) and switch the backend to the `rfdetr` library to load those weights directly, which removes the need for `ROBOFLOW_API_KEY`.
 
 ## Roadmap
 - Enable Wi-Fi from the glasses app so no manual `adb` is necessary.

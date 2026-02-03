@@ -58,7 +58,7 @@ adb shell cmd wifi set-wifi-enabled enabled
 adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
 adb shell cmd wifi status # confirm the connection
 
-# Optional:
+# Optional (wireless ADB):
 adb shell ip -f inet addr show wlan0 # check the glasses' IP
 ping -c 5 -W 3 <IP> # check connectivity: first ping may time out
 adb tcpip 5555 # prepare for remote adb connection for convenience
