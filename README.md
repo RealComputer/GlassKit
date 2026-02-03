@@ -94,6 +94,7 @@ GlassKit is early and under active development, but the examples are usable toda
 
 - **Current focus:** end-to-end templates you can clone and adapt
 - **Coming next:** reusable SDKs + production-ready backends
+- **Developer experience:** demo video recording tooling; observability + debuggability tools
 - **Platform support today:** Rokid Glasses
 - **Planned support:** Meta glasses, Android XR, Mentra, and more
 
