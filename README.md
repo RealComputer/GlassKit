@@ -2,13 +2,18 @@
 
 Build *smart* AI apps for *smart glasses*, fast.
 
-GlassKit is an open-source dev suite for building vision-enabled smart glasses apps. It provides SDKs and backends that turn real-time camera and microphone streams into specialized AI responses and actions, tailored to your workflow. **For now, this repository focuses on end-to-end examples you can adapt.**
+**GlassKit is an open-source dev suite for building vision-enabled smart glasses apps.** It provides SDKs and backends that turn real-time camera and microphone streams into specialized AI responses and actions, tailored to your workflow.
+
+**Today:** this repository focuses on end-to-end examples you can adapt.
+**Next:** reusable SDKs + a production-ready backend are coming up.
 
 <div align="center">
+
 https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKhPNP
+
 </div>
 
-## Example Projects
+## Examples/Templates you can use
 
 <table width="100%">
   <thead>
@@ -35,12 +40,14 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
         <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
         <br><br>
-        Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps. The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding.
+        Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps.
+        <br><br>
+        The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code ➡️</a>
         <br><br>
-        Real-world speedrun HUD for Rokid Glasses. Uses RF-DETR for automatic, hands-free split completion, based on a configured route.
+        Real-world speedrun HUD for Rokid Glasses. Streams video over WebRTC with a data channel to the backend, which runs a fine-tuned RF-DETR object detector for automatic, hands-free split completion based on a configured route.
       </td>
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code ➡️</a>
@@ -53,15 +60,19 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
 
 ## Why GlassKit
 
-Smart glasses apps are hard. Generic vision-capable LLMs often fail at real-world task support, and each glasses brand has different hardware, form factors, and frameworks.
+Smart glasses apps are hard.
+
+- Generic vision-capable LLMs often fail at real-world task support.
+- Each glasses brand has different hardware, form factors, and frameworks.
+- Real-time camera + mic streaming is non-trivial to build correctly and ergonomically.
 
 GlassKit is built around:
 
-- Vision model orchestration: choose the right mix of multimodal LLMs and object detectors for the job.
-- Visual context management: define what the AI should know and how it's represented.
-- Real-time streaming: camera + mic in, responses out, with sane developer ergonomics.
+- **Vision model orchestration:** choose the right mix of multimodal LLMs and object detectors for the job.
+- **Visual context management:** define what the AI should know and how it is represented.
+- **Real-time streaming:** camera + mic in, responses out, with sane developer ergonomics.
 
-## The Idea
+## How it works
 
 You define your AI with visual/textual context and your business logic. Then your app works like this:
 
@@ -71,9 +82,21 @@ You define your AI with visual/textual context and your business logic. Then you
 
 You handle the app logic. GlassKit handles the glasses-to-AI pipeline.
 
-## Status
+## Getting started
+
+1. **Pick an example** from `examples/`
+2. **Open its README** and follow the setup steps
+3. **Run it**, then modify for your workflow
+
+## Status and roadmap
 
 GlassKit is early and under active development, but the examples are usable today.
 
-- The SDKs and production-ready backends are coming. Stay tuned!
-- Platform support is currently focused on Rokid Glasses; broader platform support is planned (Meta glasses, Android XR, Mentra, and more).
+- **Current focus:** end-to-end templates you can clone and adapt
+- **Coming next:** reusable SDKs + production-ready backends
+- **Platform support today:** Rokid Glasses
+- **Planned support:** Meta glasses, Android XR, Mentra, and more
+
+## Contributing
+
+Contributions are welcome!
