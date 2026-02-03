@@ -4,7 +4,9 @@ Build *smart* AI apps for *smart glasses*, fast.
 
 GlassKit is an open-source dev suite for building vision-enabled smart glasses apps. This provides SDKs and backends that turns real-time camera and mic streams into specialized AI responses and actions, tailored to your workflow. Today, this repository mainly consists of end-to-end examples you can adapt.
 
+<div align="center">
 https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKhPNP
+</div>
 
 ## Example Projects
 
