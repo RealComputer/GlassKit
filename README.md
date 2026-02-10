@@ -100,4 +100,6 @@ GlassKit is early and under active development, but the examples are usable toda
 
 ## Contributing
 
-Contributions are welcome!
+**Contributions are welcome!**
+
+By submitting a pull request, you agree that your contribution is licensed under the MIT License of this project (see LICENSE), and you confirm that you have the right to submit it under those terms.
