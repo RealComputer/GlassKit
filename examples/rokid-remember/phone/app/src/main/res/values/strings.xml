@@ -10,6 +10,7 @@
     <string name="storage_path_placeholder">Save location: Downloads/RokidRemember</string>
     <string name="last_error_none">Last error: none</string>
     <string name="last_error_value">Last error: %1$s</string>
+    <string name="last_error_storage_permission">Last error: grant storage permission to start server</string>
     <string name="notification_title">Remember Phone server</string>
     <string name="notification_text">Listening on %1$s</string>
     <string name="notification_channel_name">Upload server</string>

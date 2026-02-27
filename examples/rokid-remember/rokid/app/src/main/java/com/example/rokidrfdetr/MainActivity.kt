@@ -197,9 +197,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                networkAvailable = hasInternet && validated
+                networkAvailable = hasUsableNetwork(networkCapabilities)
                 renderUi()
             }
         }
@@ -217,8 +215,13 @@ class MainActivity : AppCompatActivity() {
     private fun hasUsableNetwork(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        return hasUsableNetwork(capabilities)
+    }
+
+    private fun hasUsableNetwork(capabilities: NetworkCapabilities): Boolean {
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 
     private fun startHealthPolling() {

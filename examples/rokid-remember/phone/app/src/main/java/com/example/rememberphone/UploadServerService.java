@@ -18,6 +18,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class UploadServerService extends Service {
@@ -147,6 +148,10 @@ public class UploadServerService extends Service {
     }
 
     private static String resolveLocalIpv4Address() {
+        String preferredLanAddress = null;
+        String fallbackSiteLocalAddress = null;
+        String fallbackAddress = null;
+
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces != null && interfaces.hasMoreElements()) {
@@ -155,16 +160,47 @@ public class UploadServerService extends Service {
                     continue;
                 }
 
+                String interfaceName = networkInterface.getName().toLowerCase(Locale.US);
+                boolean wifiLikeInterface = interfaceName.startsWith("wlan")
+                        || interfaceName.startsWith("swlan")
+                        || interfaceName.startsWith("ap");
+
                 Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress address = addresses.nextElement();
                     if (address instanceof Inet4Address && !address.isLoopbackAddress()) {
-                        return address.getHostAddress();
+                        String hostAddress = address.getHostAddress();
+                        if (hostAddress == null || hostAddress.isBlank()) {
+                            continue;
+                        }
+
+                        if (wifiLikeInterface && address.isSiteLocalAddress()) {
+                            return hostAddress;
+                        }
+                        if (address.isSiteLocalAddress() && fallbackSiteLocalAddress == null) {
+                            fallbackSiteLocalAddress = hostAddress;
+                        }
+                        if (fallbackAddress == null) {
+                            fallbackAddress = hostAddress;
+                        }
+                        if (preferredLanAddress == null && !interfaceName.startsWith("rmnet")) {
+                            preferredLanAddress = hostAddress;
+                        }
                     }
                 }
             }
         } catch (Exception ignored) {
             // Fallback below.
+        }
+
+        if (fallbackSiteLocalAddress != null) {
+            return fallbackSiteLocalAddress;
+        }
+        if (preferredLanAddress != null) {
+            return preferredLanAddress;
+        }
+        if (fallbackAddress != null) {
+            return fallbackAddress;
         }
         return "0.0.0.0";
     }

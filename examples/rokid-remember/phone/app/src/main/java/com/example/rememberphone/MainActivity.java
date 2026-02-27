@@ -17,6 +17,8 @@ import androidx.core.content.ContextCompat;
 import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
+    private boolean pendingStartAfterPermission;
+
     private final Handler statusHandler = new Handler(Looper.getMainLooper());
     private final Runnable statusTicker = new Runnable() {
         @Override
@@ -29,7 +31,15 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> notificationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> updateStatus());
     private final ActivityResultLauncher<String> legacyStoragePermissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> updateStatus());
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted && pendingStartAfterPermission && canStartServerNow()) {
+                    pendingStartAfterPermission = false;
+                    startServer();
+                } else if (!granted) {
+                    pendingStartAfterPermission = false;
+                }
+                updateStatus();
+            });
 
     private TextView statusView;
     private TextView urlView;
@@ -51,9 +61,13 @@ public class MainActivity extends AppCompatActivity {
         stopButton = findViewById(R.id.stopButton);
 
         startButton.setOnClickListener(view -> {
-            maybeRequestRuntimePermissions();
-            ContextCompat.startForegroundService(this, UploadServerService.newStartIntent(this));
-            updateStatus();
+            if (!canStartServerNow()) {
+                pendingStartAfterPermission = true;
+                maybeRequestRuntimePermissions();
+                updateStatus();
+                return;
+            }
+            startServer();
         });
 
         stopButton.setOnClickListener(view -> {
@@ -89,6 +103,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean canStartServerNow() {
+        return Build.VERSION.SDK_INT > Build.VERSION_CODES.P
+                || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void startServer() {
+        ContextCompat.startForegroundService(this, UploadServerService.newStartIntent(this));
+        updateStatus();
+    }
+
     private void updateStatus() {
         boolean running = UploadServerService.isRunning();
         statusView.setText(running ? R.string.server_running : R.string.server_stopped);
@@ -99,7 +123,9 @@ public class MainActivity extends AppCompatActivity {
         storagePathView.setText(getString(R.string.storage_path_value, getStorageDisplayPath()));
 
         String lastError = UploadServerService.getLastError();
-        if (lastError == null || lastError.isBlank()) {
+        if (!canStartServerNow()) {
+            lastErrorView.setText(R.string.last_error_storage_permission);
+        } else if (lastError == null || lastError.isBlank()) {
             lastErrorView.setText(R.string.last_error_none);
         } else {
             lastErrorView.setText(getString(R.string.last_error_value, lastError));
