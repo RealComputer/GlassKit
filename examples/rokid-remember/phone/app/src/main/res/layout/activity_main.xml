@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/screen_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,28 +15,36 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/server_stopped"
-            android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+            android:textAppearance="?attr/textAppearanceHeadlineSmall"
+            android:textColor="@color/primary_text" />
 
         <TextView
             android:id="@+id/serverUrl"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/server_url_placeholder" />
+            android:background="@color/server_url_background"
+            android:fontFamily="monospace"
+            android:padding="12dp"
+            android:text="@string/server_url_placeholder"
+            android:textColor="@color/server_url_foreground"
+            android:textIsSelectable="true" />
 
         <TextView
             android:id="@+id/storagePath"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/storage_path_placeholder" />
+            android:text="@string/storage_path_placeholder"
+            android:textColor="@color/secondary_text" />
 
         <TextView
             android:id="@+id/lastError"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/last_error_none" />
+            android:text="@string/last_error_none"
+            android:textColor="@color/secondary_text" />
 
         <Button
             android:id="@+id/startButton"
