@@ -172,10 +172,6 @@ class MainActivity : AppCompatActivity() {
         if (startedLoops) return
         startedLoops = true
 
-        startService(
-            Intent(this, RecordingService::class.java).setAction(RecordingService.ACTION_INIT)
-        )
-
         startNetworkMonitoring()
         startHealthPolling()
         uiHandler.post(uiTickRunnable)
