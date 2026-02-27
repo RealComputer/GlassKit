@@ -263,6 +263,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderUi() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            uiHandler.post {
+                if (!isFinishing && !isDestroyed) {
+                    renderUi()
+                }
+            }
+            return
+        }
+        if (isFinishing || isDestroyed) return
+
         val state = RecordingService.snapshotState()
 
         if (state.isRecording) {
