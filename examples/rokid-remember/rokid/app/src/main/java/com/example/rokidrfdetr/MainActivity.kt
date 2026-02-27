@@ -1,60 +1,59 @@
 package com.example.rokidrfdetr
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Typeface
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
-import android.text.Spannable
-import android.text.SpannableStringBuilder
-import android.text.style.StyleSpan
-import android.text.style.StrikethroughSpan
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.rokidrfdetr.databinding.ActivityMainBinding
-import org.webrtc.PeerConnection
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.Locale
-class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
 
-    private lateinit var binding: ActivityMainBinding
-
-    private var visionClient: BackendVisionClient? = null
-
-    private var speedrunConfig: SpeedrunConfig? = null
-    private var speedrunState = SpeedrunState(RunState.IDLE, 0, 0)
-    private var splitTimes: MutableList<Long?> = mutableListOf()
-    private var lastCompletedCount = 0
-
-    private var runStarted = false
-    private var timerRunning = false
-    private var timerStartMs = 0L
-    private var finalElapsedMs = 0L
-
-    private val timerHandler = Handler(Looper.getMainLooper())
-    private val reconnectHandler = Handler(Looper.getMainLooper())
-    private var isForeground = false
-    private val timerRunnable = object : Runnable {
-        override fun run() {
-            updateTimer()
-            if (timerRunning) {
-                timerHandler.postDelayed(this, TIMER_TICK_MS)
-            }
-        }
-    }
+class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
-        private const val LABEL_PAD = 28
-        private const val TIMER_TICK_MS = 100L
-        private const val TIME_TEXT_WIDTH = 8
+        private const val UI_TICK_MS = 500L
     }
 
-    private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
+    private lateinit var binding: ActivityMainBinding
+
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
+
+    private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL.trim().trimEnd('/')
+
+    private var startedLoops = false
+    private var networkAvailable = false
+    private var backendHealthy = false
+
+    private var healthJob: Job? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    private val uiTickRunnable = object : Runnable {
+        override fun run() {
+            renderUi()
+            uiHandler.postDelayed(this, UI_TICK_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,84 +62,56 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        setStatus("Requesting camera permission...")
-        binding.tvTitle.text = "Loading speedrun..."
-        binding.tvTimer.text = formatElapsed(0L)
-        binding.tvSplits.text = "Waiting for config..."
-
+        renderUi()
         ensurePermissions()
-    }
-
-    private fun ensurePermissions() {
-        val needed = listOf(Manifest.permission.CAMERA).filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (needed.isEmpty()) {
-            startVisionIfNeeded()
-        } else {
-            ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMISSIONS)
-        }
-    }
-
-    private fun hasPermissions(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_PERMISSIONS) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                startVisionIfNeeded()
-            } else {
-                setStatus("Camera permission denied; streaming unavailable.")
-            }
-        }
     }
 
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        uiHandler.removeCallbacksAndMessages(null)
+        healthJob?.cancel()
+        stopNetworkMonitoring()
+        activityScope.cancel()
         super.onDestroy()
-        releaseVisionClientAsync()
-        stopTimer()
-        reconnectHandler.removeCallbacksAndMessages(null)
     }
 
-    override fun onStart() {
-        super.onStart()
-        isForeground = true
-        startVisionIfNeeded()
+    override fun onResume() {
+        super.onResume()
+        if (startedLoops) {
+            uiHandler.removeCallbacks(uiTickRunnable)
+            uiHandler.post(uiTickRunnable)
+        }
     }
 
-    override fun onStop() {
-        isForeground = false
-        reconnectHandler.removeCallbacksAndMessages(null)
-        releaseVisionClientAsync()
-        resetLocalState()
-        super.onStop()
+    override fun onPause() {
+        uiHandler.removeCallbacks(uiTickRunnable)
+        super.onPause()
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        val state = RecordingService.snapshotState()
         return when (keyCode) {
-            KeyEvent.KEYCODE_ENTER -> {
-                startRunIfNeeded()
-                true
-            }
-
             KeyEvent.KEYCODE_DPAD_UP -> {
-                visionClient?.sendDebugStep("next")
+                if (!state.isRecording) {
+                    sendSetModeIntent(RecorderMode.VIDEO)
+                }
                 true
             }
 
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                visionClient?.sendDebugStep("prev")
+                if (!state.isRecording) {
+                    sendSetModeIntent(RecorderMode.AUDIO)
+                }
+                true
+            }
+
+            KeyEvent.KEYCODE_ENTER -> {
+                if (state.isRecording) {
+                    sendStopIntent()
+                } else if (isReadyToRecord()) {
+                    sendStartIntent()
+                }
+                renderUi()
                 true
             }
 
@@ -148,263 +119,198 @@ class MainActivity : AppCompatActivity(), BackendVisionClient.Listener {
         }
     }
 
-    private fun startVisionIfNeeded() {
-        if (visionClient != null) return
-        if (!hasPermissions()) {
-            ensurePermissions()
+    private fun ensurePermissions() {
+        val missing = (criticalPermissions() + optionalPermissions()).filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isEmpty()) {
+            startLoopsIfNeeded()
             return
         }
 
-        setStatus("Connecting...")
-        visionClient = BackendVisionClient(
-            context = applicationContext,
-            sessionUrl = visionSessionUrl,
-            listener = this
-        ).also { it.start() }
+        ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERMISSIONS)
     }
 
-    private fun startRunIfNeeded() {
-        if (runStarted) return
-        runStarted = true
-        finalElapsedMs = 0L
-        startTimer()
-        visionClient?.sendRunStart()
-        renderSplits()
+    private fun criticalPermissions(): List<String> {
+        return listOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+        )
     }
 
-    private fun startTimer() {
-        if (timerRunning) return
-        timerStartMs = SystemClock.elapsedRealtime()
-        timerRunning = true
-        updateTimer()
-        timerHandler.postDelayed(timerRunnable, TIMER_TICK_MS)
-    }
-
-    private fun stopTimer() {
-        timerRunning = false
-        timerHandler.removeCallbacks(timerRunnable)
-    }
-
-    private fun updateTimer() {
-        val elapsed = if (timerRunning) {
-            SystemClock.elapsedRealtime() - timerStartMs
-        } else {
-            finalElapsedMs
+    private fun optionalPermissions(): List<String> {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        binding.tvTimer.text = formatTimerText(elapsed)
+        return permissions
     }
 
-    private fun currentElapsedMs(): Long {
-        return if (timerRunning) {
-            SystemClock.elapsedRealtime() - timerStartMs
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQ_PERMISSIONS) return
+
+        val criticalSet = criticalPermissions().toSet()
+        val deniedCriticalPermission = permissions.indices.any { index ->
+            grantResults.getOrNull(index) != PackageManager.PERMISSION_GRANTED &&
+                criticalSet.contains(permissions[index])
+        }
+
+        if (!deniedCriticalPermission) {
+            startLoopsIfNeeded()
         } else {
-            finalElapsedMs
+            renderUi()
         }
     }
 
-    private fun formatElapsed(ms: Long): String {
-        val totalSeconds = ms / 1000
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        val centis = (ms % 1000) / 10
-        return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, centis)
+    private fun startLoopsIfNeeded() {
+        if (startedLoops) return
+        startedLoops = true
+
+        startService(
+            Intent(this, RecordingService::class.java).setAction(RecordingService.ACTION_INIT)
+        )
+
+        startNetworkMonitoring()
+        startHealthPolling()
+        uiHandler.post(uiTickRunnable)
     }
 
-    private fun formatTimerText(ms: Long): String {
-        val elapsed = formatElapsed(ms)
-        return if (speedrunState.runState == RunState.FINISHED && !timerRunning && runStarted) {
-            "< $elapsed >"
-        } else {
-            elapsed
-        }
-    }
+    private fun startNetworkMonitoring() {
+        if (networkCallback != null) return
 
-    private fun setStatus(text: String) {
-        binding.tvStatus.text = text
-    }
+        networkAvailable = hasUsableNetwork()
 
-    override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
-        runOnUiThread {
-            if (state == PeerConnection.IceConnectionState.CONNECTED ||
-                state == PeerConnection.IceConnectionState.COMPLETED
-            ) {
-                setStatus("")
-            } else {
-                setStatus("Connection: $state")
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                networkAvailable = true
+                renderUi()
             }
-            if (state == PeerConnection.IceConnectionState.FAILED ||
-                state == PeerConnection.IceConnectionState.CLOSED ||
-                state == PeerConnection.IceConnectionState.DISCONNECTED
-            ) {
-                releaseVisionClientAsync()
-                if (isForeground) {
-                    setStatus("Connection: $state (reconnecting)")
-                    reconnectHandler.removeCallbacksAndMessages(null)
-                    reconnectHandler.postDelayed(
-                        { if (!isFinishing && !isDestroyed) startVisionIfNeeded() },
-                        1000L
-                    )
+
+            override fun onLost(network: Network) {
+                networkAvailable = hasUsableNetwork()
+                if (!networkAvailable) {
+                    backendHealthy = false
+                }
+                renderUi()
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                networkAvailable = hasInternet && validated
+                renderUi()
+            }
+        }
+
+        connectivityManager.registerDefaultNetworkCallback(callback)
+        networkCallback = callback
+    }
+
+    private fun stopNetworkMonitoring() {
+        val callback = networkCallback ?: return
+        connectivityManager.unregisterNetworkCallback(callback)
+        networkCallback = null
+    }
+
+    private fun hasUsableNetwork(): Boolean {
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    private fun startHealthPolling() {
+        healthJob?.cancel()
+        healthJob = activityScope.launch {
+            while (isActive) {
+                backendHealthy = if (networkAvailable) {
+                    BackendApiClient.checkHealth(backendBaseUrl)
                 } else {
-                    setStatus("Connection: $state")
+                    false
                 }
+                renderUi()
+                delay(if (backendHealthy) 5_000 else 1_500)
             }
         }
     }
 
-    override fun onError(message: String, throwable: Throwable?) {
-        runOnUiThread {
-            setStatus("Error: $message")
+    private fun sendSetModeIntent(mode: RecorderMode) {
+        val intent = Intent(this, RecordingService::class.java)
+            .setAction(RecordingService.ACTION_SET_MODE)
+            .putExtra(RecordingService.EXTRA_MODE, mode.wireValue)
+        startService(intent)
+    }
+
+    private fun sendStartIntent() {
+        val intent = Intent(this, RecordingService::class.java)
+            .setAction(RecordingService.ACTION_START_RECORDING)
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun sendStopIntent() {
+        val intent = Intent(this, RecordingService::class.java)
+            .setAction(RecordingService.ACTION_STOP_RECORDING)
+        startService(intent)
+    }
+
+    private fun isReadyToRecord(): Boolean {
+        val hasPermissions = criticalPermissions().all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
+        return hasPermissions && networkAvailable && backendHealthy
     }
 
-    override fun onConfig(config: SpeedrunConfig) {
-        runOnUiThread {
-            speedrunConfig = config
-            binding.tvTitle.text = config.name
-            splitTimes = MutableList(config.totalSplits) { null }
-            lastCompletedCount = 0
-            renderSplits()
-        }
-    }
+    private fun renderUi() {
+        val state = RecordingService.snapshotState()
 
-    override fun onStateUpdate(state: SpeedrunState) {
-        runOnUiThread {
-            applyState(state)
-            renderSplits()
-        }
-    }
+        if (state.isRecording) {
+            val start = state.activeSegmentStartUnix ?: (System.currentTimeMillis() / 1000)
+            val elapsed = (System.currentTimeMillis() / 1000 - start).coerceAtLeast(0)
 
-    override fun onSplitCompleted(splitIndex: Int, state: SpeedrunState) {
-        runOnUiThread {
-            applyState(state)
-            recordSplitTime(splitIndex)
-            renderSplits()
-        }
-    }
+            binding.tvMain.text = "REC ${state.mode.wireValue} ${formatElapsed(elapsed)}"
+            binding.tvHint.text = "ENTER: stop"
+            binding.tvHint.alpha = 0.7f
 
-    private fun applyState(state: SpeedrunState) {
-        speedrunState = state
-        if (state.completedCount < lastCompletedCount) {
-            for (i in state.completedCount until splitTimes.size) {
-                splitTimes[i] = null
-            }
-        }
-        lastCompletedCount = state.completedCount
-        if (state.runState == RunState.FINISHED) {
-            if (timerRunning) {
-                finalElapsedMs = currentElapsedMs()
-                stopTimer()
-                updateTimer()
-            }
-        }
-    }
-
-    private fun recordSplitTime(splitIndex: Int) {
-        if (splitIndex < 0 || splitIndex >= splitTimes.size) return
-        if (!runStarted) return
-        splitTimes[splitIndex] = currentElapsedMs()
-    }
-
-    private fun releaseVisionClientAsync() {
-        val client = visionClient ?: return
-        visionClient = null
-        Thread { client.release() }.start()
-    }
-
-    private fun resetLocalState() {
-        stopTimer()
-        runStarted = false
-        timerStartMs = 0L
-        finalElapsedMs = 0L
-        speedrunState = SpeedrunState(RunState.IDLE, 0, 0)
-        lastCompletedCount = 0
-        splitTimes = speedrunConfig?.let { MutableList(it.totalSplits) { null } } ?: mutableListOf()
-        binding.tvTimer.text = formatElapsed(0L)
-        if (speedrunConfig == null) {
-            binding.tvTitle.text = "Loading speedrun..."
-            binding.tvSplits.text = "Waiting for config..."
-        } else {
-            renderSplits()
-        }
-    }
-
-    private fun renderSplits() {
-        val config = speedrunConfig
-        if (config == null) {
-            binding.tvSplits.text = "Waiting for config..."
+            val topParts = mutableListOf("pending uploads: ${state.pendingUploads}")
+            state.lastError?.takeIf { it.isNotBlank() }?.let(topParts::add)
+            binding.tvTop.text = topParts.joinToString(" | ")
+            binding.tvTop.alpha = 0.7f
             return
         }
 
-        val labelWidth = computeLabelWidth()
-        val builder = SpannableStringBuilder()
-        var flatIndex = 0
-        val blankTime = " ".repeat(TIME_TEXT_WIDTH)
-
-        for (group in config.groups) {
-            if (builder.isNotEmpty()) builder.append("\n")
-            val groupStart = builder.length
-            builder.append(group.name)
-            val groupEnd = builder.length
-            builder.setSpan(
-                StyleSpan(Typeface.BOLD),
-                groupStart,
-                groupEnd,
-                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            builder.append("\n")
-
-            for (split in group.splits) {
-                val isActive = speedrunState.runState != RunState.FINISHED &&
-                    flatIndex == speedrunState.activeIndex
-                val isComplete = flatIndex < speedrunState.completedCount
-
-                val prefix = if (isActive) "> " else "  "
-                val label = split.label.take(labelWidth).padEnd(labelWidth)
-                val timeText = splitTimes.getOrNull(flatIndex)?.let { formatElapsed(it) }
-                    ?: blankTime
-
-                val labelStart = builder.length
-                builder.append(prefix)
-                builder.append(label)
-                val labelEnd = builder.length
-                builder.append("  ")
-                builder.append(timeText)
-
-                if (isActive) {
-                    builder.setSpan(
-                        StyleSpan(Typeface.BOLD_ITALIC),
-                        labelStart,
-                        labelEnd,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                } else if (isComplete) {
-                    builder.setSpan(
-                        StrikethroughSpan(),
-                        labelStart,
-                        labelEnd,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-
-                builder.append("\n")
-                flatIndex += 1
-            }
+        val readiness = when {
+            !hasAllPermissionsGranted() -> "grant camera/mic permissions"
+            !networkAvailable -> "waiting for network"
+            !backendHealthy -> "waiting for $backendBaseUrl/health"
+            else -> "ready"
         }
 
-        if (builder.isNotEmpty() && builder.last() == '\n') {
-            builder.delete(builder.length - 1, builder.length)
-        }
-        binding.tvSplits.text = builder
+        binding.tvMain.text = "mode: ${state.mode.wireValue}\n$readiness"
+        binding.tvHint.text = "UP: video  DOWN: audio  ENTER: start"
+        binding.tvHint.alpha = 1.0f
+
+        val topParts = mutableListOf("pending uploads: ${state.pendingUploads}")
+        state.lastError?.takeIf { it.isNotBlank() }?.let(topParts::add)
+        binding.tvTop.text = topParts.joinToString(" | ")
+        binding.tvTop.alpha = 1.0f
     }
 
-    private fun computeLabelWidth(): Int {
-        val widthPx = binding.tvSplits.width
-        if (widthPx <= 0) return LABEL_PAD
-        val charWidth = binding.tvSplits.paint.measureText("0")
-        if (charWidth <= 0f) return LABEL_PAD
-        val totalCols = (widthPx / charWidth).toInt()
-        val reserved = 2 + 2 + TIME_TEXT_WIDTH
-        val available = totalCols - reserved
-        return available.coerceAtLeast(1)
+    private fun hasAllPermissionsGranted(): Boolean {
+        return criticalPermissions().all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun formatElapsed(totalSeconds: Long): String {
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
     }
 }

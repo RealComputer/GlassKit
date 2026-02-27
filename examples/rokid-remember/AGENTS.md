@@ -1,28 +1,25 @@
 # Project overview
-Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The HUD is monochrome, so UI styling should rely on typography instead of color. The Android client streams camera video to the backend over WebRTC and receives split/state updates over a data channel. The backend runs RF-DETR object detection, advances splits with a two-hit confirmation rule, and saves annotated frames for inspection.
+Long-duration recorder for Rokid Glasses. The app records either video+audio or audio-only, splits recordings into 10-minute segments, uploads completed segments to the backend, and retries failed uploads without deleting local files until upload succeeds.
 
 # Technical architecture
-- Android app (`rokid/`) runs a single WebRTC session to `/vision/session` for video + data channel messaging.
-- Backend (`backend/`) exposes FastAPI `/vision/session`, runs RF-DETR inference on the latest frame, maintains speedrun state, and publishes config/state/split events over the data channel.
+- Android app (`rokid/`) uses a foreground service for recording continuity and uploads completed segments to the backend.
+- Backend (`backend/`) exposes `GET /health` and `POST /upload`, and saves uploaded files to disk.
 
 # Key files
 ## Android (`./rokid/`)
-- `MainActivity.kt`: HUD rendering, timer management, key event controls.
-- `BackendVisionClient.kt`: WebRTC camera capture + data channel messaging.
-- `SpeedrunModels.kt`: config/state data classes.
-- `build.gradle.kts`: BuildConfig for `VISION_SESSION_URL` sourced from `rokid/local.properties`.
+- `MainActivity.kt`: minimal HUD, network/health readiness checks, key controls.
+- `RecordingService.kt`: segmented recording, foreground notification, upload retry loop.
+- `BackendApiClient.kt`: `/health` and `/upload` HTTP client.
+- `RecorderMode.kt`: recording mode enum.
+- `build.gradle.kts`: BuildConfig for `BACKEND_BASE_URL` sourced from `rokid/local.properties`.
 
 ## Backend (`./backend/`)
-- `main.py`: FastAPI app, `/vision/session`, data channel handling.
-- `vision.py`: RF-DETR inference loop, annotated frame saving.
-- `speedrun.py`: speedrun config loader + state machine.
-- `speedrun_config.json`: speedrun name, groups/splits, and detection class mapping.
-- `.env.example`: env template for required keys.
+- `main.py`: FastAPI app with `/health` and `/upload`.
+- `.env.example`: optional `UPLOAD_DIR` override.
 
 # Configuration
-- `rokid/local.properties`: must set `VISION_SESSION_URL` (backend `/vision/session`).
-- `backend/.env`: must set `ROBOFLOW_API_KEY`.
-- Optional backend overrides: `RFDETR_MODEL_ID`, `RFDETR_CONFIDENCE`, `RFDETR_FRAME_DIR`, `RFDETR_HISTORY_LIMIT`, `RFDETR_JPEG_QUALITY`.
+- `rokid/local.properties`: set `BACKEND_BASE_URL` (legacy `VISION_SESSION_URL` is still accepted and converted).
+- `backend/.env`: optional `UPLOAD_DIR`.
 
 # Commands
 ## Android (ALWAYS run after Android changes)
@@ -32,6 +29,5 @@ Vision-driven speedrun HUD for Rokid Glasses (Android smart glasses). The HUD is
 - `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`
 
 ## Backend utilities
-- `cd backend && uv run --env-file .env foo.py` (run a script with env loaded)
-- `cd backend && uv run -- python -c "print('hello')"` (run a one-off Python command)
-- `cd backend && uv add <package>` (add a package)
+- `cd backend && uv sync`
+- `cd backend && uv run --env-file .env fastapi dev main.py --host 0.0.0.0`

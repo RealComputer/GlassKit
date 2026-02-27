@@ -9,8 +9,11 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
-val visionSessionUrl = localProperties.getProperty("VISION_SESSION_URL")
-    ?: error("VISION_SESSION_URL is required in rokid/local.properties")
+
+val backendBaseUrl = localProperties.getProperty("BACKEND_BASE_URL")
+    ?: localProperties.getProperty("VISION_SESSION_URL")
+        ?.removeSuffix("/vision/session")
+    ?: error("BACKEND_BASE_URL (or legacy VISION_SESSION_URL) is required in rokid/local.properties")
 
 android {
     namespace = "com.example.rokidrfdetr"
@@ -26,7 +29,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "VISION_SESSION_URL", "\"$visionSessionUrl\"")
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }
 
     buildTypes {
@@ -54,7 +57,6 @@ dependencies {
     implementation(libs.material)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("io.getstream:stream-webrtc-android:1.3.10")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
