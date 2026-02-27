@@ -5,7 +5,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).with_name("uploads")))
+_upload_dir_raw = (os.getenv("UPLOAD_DIR") or "").strip()
+UPLOAD_DIR = (
+    Path(_upload_dir_raw) if _upload_dir_raw else Path(__file__).with_name("uploads")
+)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 _ALLOWED_MODE_TO_EXT = {
