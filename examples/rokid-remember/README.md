@@ -29,6 +29,9 @@ Uploaded files are saved as:
 - Backend (`backend/`):
   - `GET /health` returns `{ "status": "ok" }`
   - `POST /upload` accepts multipart upload and saves to disk
+- Android phone backend (`phone/`):
+  - Foreground service hosting `GET /health` and `POST /upload`
+  - Saves uploads under `Downloads/RokidRemember` for USB transfer
 
 ## Requirements
 - Rokid Glasses + dev cable
@@ -54,6 +57,13 @@ cd backend
 uv sync
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 ```
+
+## Run phone backend (Android app)
+```sh
+cd phone
+./gradlew :app:assembleDebug
+```
+Install and open the app on your phone, tap `Start server`, then set `rokid/local.properties` to the shown server URL (for example `http://192.168.1.10:8000`).
 
 ## Run the glasses app
 ```sh

@@ -1,3 +1,17 @@
 <resources>
-    <string name="app_name">rememberphone</string>
+    <string name="app_name">Remember Phone</string>
+    <string name="start_server">Start server</string>
+    <string name="stop_server">Stop server</string>
+    <string name="server_running">Server is running</string>
+    <string name="server_stopped">Server is stopped</string>
+    <string name="server_url_value">Server URL: %1$s</string>
+    <string name="server_url_placeholder">Server URL: not started</string>
+    <string name="storage_path_value">Save location: %1$s</string>
+    <string name="storage_path_placeholder">Save location: Downloads/RokidRemember</string>
+    <string name="last_error_none">Last error: none</string>
+    <string name="last_error_value">Last error: %1$s</string>
+    <string name="notification_title">Remember Phone server</string>
+    <string name="notification_text">Listening on %1$s</string>
+    <string name="notification_channel_name">Upload server</string>
+    <string name="notification_channel_description">Foreground service for /health and /upload</string>
 </resources>
