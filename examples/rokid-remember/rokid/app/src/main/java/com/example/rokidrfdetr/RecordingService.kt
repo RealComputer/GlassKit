@@ -586,14 +586,16 @@ private class VideoSegmentRecorder(
         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
         val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
         val sizes = map?.getOutputSizes(MediaRecorder::class.java) ?: emptyArray()
+        val preferred = Size(768, 1024)
 
         if (sizes.isEmpty()) {
-            return Size(1280, 720)
+            return preferred
         }
 
-        sizes.firstOrNull { it.width == 1280 && it.height == 720 }?.let { return it }
+        sizes.firstOrNull { it.width == preferred.width && it.height == preferred.height }
+            ?.let { return it }
 
-        val maxArea = 1280 * 720
+        val maxArea = preferred.width * preferred.height
         val underLimit = sizes
             .filter { it.width * it.height <= maxArea }
             .maxByOrNull { it.width * it.height }
