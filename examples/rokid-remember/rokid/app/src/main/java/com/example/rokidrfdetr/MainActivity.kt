@@ -279,11 +279,14 @@ class MainActivity : AppCompatActivity() {
             val start = state.activeSegmentStartUnix ?: (System.currentTimeMillis() / 1000)
             val elapsed = (System.currentTimeMillis() / 1000 - start).coerceAtLeast(0)
 
-            binding.tvMain.text = "REC ${state.mode.wireValue} ${formatElapsed(elapsed)}"
+            binding.tvMain.text = ""
             binding.tvHint.text = "ENTER: stop"
             binding.tvHint.alpha = 0.7f
 
-            val topParts = mutableListOf("pending uploads: ${state.pendingUploads}")
+            val topParts = mutableListOf(
+                "REC ${state.mode.wireValue} ${formatElapsed(elapsed)}",
+                "pending uploads: ${state.pendingUploads}",
+            )
             state.lastError?.takeIf { it.isNotBlank() }?.let(topParts::add)
             binding.tvTop.text = topParts.joinToString(" | ")
             binding.tvTop.alpha = 0.7f
@@ -297,11 +300,15 @@ class MainActivity : AppCompatActivity() {
             else -> "ready"
         }
 
-        binding.tvMain.text = "mode: ${state.mode.wireValue}\n$readiness"
+        binding.tvMain.text = ""
         binding.tvHint.text = "UP: video  DOWN: audio  ENTER: start"
         binding.tvHint.alpha = 1.0f
 
-        val topParts = mutableListOf("pending uploads: ${state.pendingUploads}")
+        val topParts = mutableListOf(
+            "mode: ${state.mode.wireValue}",
+            "pending uploads: ${state.pendingUploads}",
+            readiness,
+        )
         state.lastError?.takeIf { it.isNotBlank() }?.let(topParts::add)
         binding.tvTop.text = topParts.joinToString(" | ")
         binding.tvTop.alpha = 1.0f
