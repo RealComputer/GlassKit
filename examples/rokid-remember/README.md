@@ -41,12 +41,6 @@ Fill out `rokid/local.properties`:
 BACKEND_BASE_URL=http://<YOUR_BACKEND>:8000
 ```
 
-Legacy fallback is also supported:
-```
-VISION_SESSION_URL=http://<YOUR_BACKEND>:8000/vision/session
-```
-(when this is set, the app derives `BACKEND_BASE_URL` automatically)
-
 Backend optional env file:
 ```
 cd backend

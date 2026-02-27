@@ -11,9 +11,7 @@ if (localPropertiesFile.exists()) {
 }
 
 val backendBaseUrl = localProperties.getProperty("BACKEND_BASE_URL")
-    ?: localProperties.getProperty("VISION_SESSION_URL")
-        ?.removeSuffix("/vision/session")
-    ?: error("BACKEND_BASE_URL (or legacy VISION_SESSION_URL) is required in rokid/local.properties")
+    ?: error("BACKEND_BASE_URL is required in rokid/local.properties")
 
 android {
     namespace = "com.example.rokidrfdetr"

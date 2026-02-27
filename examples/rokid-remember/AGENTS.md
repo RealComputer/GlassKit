@@ -18,7 +18,7 @@ Long-duration recorder for Rokid Glasses. The app records either video+audio or 
 - `.env.example`: optional `UPLOAD_DIR` override.
 
 # Configuration
-- `rokid/local.properties`: set `BACKEND_BASE_URL` (legacy `VISION_SESSION_URL` is still accepted and converted).
+- `rokid/local.properties`: set `BACKEND_BASE_URL`.
 - `backend/.env`: optional `UPLOAD_DIR`.
 
 # Commands
