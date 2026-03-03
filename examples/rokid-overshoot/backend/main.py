@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager, suppress
@@ -13,9 +14,7 @@ import websockets
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from logging_utils import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
 DEFAULT_PROMPT = "Describe what you see"
