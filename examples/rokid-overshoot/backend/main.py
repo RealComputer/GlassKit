@@ -313,15 +313,40 @@ class OvershootSessionManager:
             return
         try:
             response = await self._http.delete(f"/streams/{stream_id}")
-            if not response.is_success:
-                logger.warning(
-                    "failed to close stream_id=%s status=%s body=%s",
-                    stream_id,
-                    response.status_code,
-                    _response_text(response),
-                )
+            if response.is_success:
+                return
+            if _is_stream_not_found(response):
+                logger.info("stream_id=%s already closed on Overshoot", stream_id)
+                return
+            logger.warning(
+                "failed to close stream_id=%s status=%s body=%s",
+                stream_id,
+                response.status_code,
+                _response_text(response),
+            )
         except Exception:
             logger.exception("failed to close stream_id=%s", stream_id)
+
+
+def _is_stream_not_found(response: httpx.Response) -> bool:
+    if response.status_code != 404:
+        return False
+
+    body_text = _response_text(response)
+    if "stream_not_found" in body_text:
+        return True
+
+    try:
+        payload = response.json()
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+
+    return any(
+        str(payload.get(key) or "").strip() == "stream_not_found"
+        for key in ("error", "message")
+    )
 
 
 def _parse_positive_int(value: Any) -> int | None:
