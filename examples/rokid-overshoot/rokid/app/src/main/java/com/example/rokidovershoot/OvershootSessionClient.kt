@@ -435,40 +435,15 @@ class OvershootSessionClient(
         val enumerator = Camera2Enumerator(context)
         val deviceNames = enumerator.deviceNames
 
-        val preferred = selectPreferredCameraName(enumerator, deviceNames)
-        if (preferred != null) {
-            enumerator.createCapturer(preferred, null)?.let { capturer ->
-                Log.d(TAG, "Using camera: $preferred")
-                return capturer
-            }
-            Log.w(TAG, "Failed to open preferred camera $preferred, falling back")
-        }
-
         for (name in deviceNames) {
             enumerator.createCapturer(name, null)?.let { capturer ->
-                Log.d(TAG, "Using fallback camera: $name")
+                Log.d(TAG, "Using camera: $name")
                 return capturer
             }
         }
 
         Log.e(TAG, "No camera found")
         return null
-    }
-
-    private fun selectPreferredCameraName(
-        enumerator: Camera2Enumerator,
-        deviceNames: Array<String>
-    ): String? {
-        var fallback: String? = null
-        for (name in deviceNames) {
-            if (!enumerator.isFrontFacing(name)) {
-                return name
-            }
-            if (fallback == null) {
-                fallback = name
-            }
-        }
-        return fallback
     }
 
     private suspend fun createSession(offerSdp: String): SessionCreateResponse =
