@@ -201,16 +201,10 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
             return
         }
 
-        for (line in normalizedLines) {
-            val formattedLine = if (line.startsWith(BULLET_PREFIX)) {
-                line
-            } else {
-                "$BULLET_PREFIX$line"
-            }
-            resultLines.addLast(formattedLine)
-            while (resultLines.size > MAX_RESULT_LINES) {
-                resultLines.removeFirst()
-            }
+        val messageBlock = normalizedLines.joinToString("\n")
+        resultLines.addLast(messageBlock)
+        while (resultLines.size > MAX_RESULT_LINES) {
+            resultLines.removeFirst()
         }
 
         renderResultLog()
@@ -240,7 +234,6 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
     companion object {
         private const val REQ_PERMISSIONS = 1001
         private const val MAX_RESULT_LINES = 180
-        private const val BULLET_PREFIX = "\u2022 "
         private const val STATUS_READY = "Tap temple to start"
         private const val STATUS_STARTING = "Starting..."
         private const val STATUS_LIVE = "Live"
