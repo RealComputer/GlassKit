@@ -19,6 +19,10 @@ logger = logging.getLogger("uvicorn.error")
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
 DEFAULT_PROMPT = "Describe what you see"
 DEFAULT_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS = 8
+OVERSHOOT_WS_RETRY_BASE_SECONDS = 1.0
+OVERSHOOT_WS_RETRY_MAX_SECONDS = 15.0
+OVERSHOOT_WS_NON_RETRYABLE_CLOSE_CODES = {1008}
 DEFAULT_PROCESSING = {
     "target_fps": 6,
     "clip_length_seconds": 0.5,
@@ -237,31 +241,83 @@ class OvershootSessionManager:
 
         logger.info("session=%s connecting overshoot ws=%s", session.session_id, ws_url)
 
-        try:
-            async with websockets.connect(
-                ws_url,
-                ping_interval=20,
-                ping_timeout=20,
-                close_timeout=5,
-            ) as overshoot_ws:
-                await overshoot_ws.send(json.dumps({"api_key": self._api_key}))
-                async for message in overshoot_ws:
+        attempt = 0
+        while not session.shutdown_event.is_set():
+            try:
+                async with websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    close_timeout=5,
+                ) as overshoot_ws:
+                    await overshoot_ws.send(json.dumps({"api_key": self._api_key}))
+                    async for message in overshoot_ws:
+                        if session.shutdown_event.is_set():
+                            return
+                        attempt = 0
+                        if isinstance(message, str):
+                            await self._handle_overshoot_message(session, message)
+                        else:
+                            logger.info(
+                                "session=%s ignoring binary overshoot message bytes=%s",
+                                session.session_id,
+                                len(message),
+                            )
+
                     if session.shutdown_event.is_set():
                         return
-                    if isinstance(message, str):
-                        await self._handle_overshoot_message(session, message)
-                    else:
-                        logger.info(
-                            "session=%s ignoring binary overshoot message bytes=%s",
-                            session.session_id,
-                            len(message),
-                        )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception(
-                "session=%s overshoot websocket failed", session.session_id
-            )
+
+                    attempt += 1
+                    should_retry, close_code = _is_retryable_overshoot_disconnect(None)
+                    if (
+                        not should_retry
+                        or attempt > OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS
+                    ):
+                        break
+
+                    wait_seconds = _overshoot_reconnect_backoff(attempt)
+                    logger.warning(
+                        "session=%s overshoot websocket closed without error code=%s "
+                        "attempt=%s/%s retry_in=%.1fs",
+                        session.session_id,
+                        close_code,
+                        attempt,
+                        OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
+                        wait_seconds,
+                    )
+                    await _wait_or_shutdown(session.shutdown_event, wait_seconds)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if session.shutdown_event.is_set():
+                    return
+
+                attempt += 1
+                should_retry, close_code = _is_retryable_overshoot_disconnect(exc)
+                if not should_retry or attempt > OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS:
+                    logger.exception(
+                        "session=%s overshoot websocket failed "
+                        "retryable=%s close_code=%s attempt=%s/%s",
+                        session.session_id,
+                        should_retry,
+                        close_code,
+                        attempt,
+                        OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
+                    )
+                    break
+
+                wait_seconds = _overshoot_reconnect_backoff(attempt)
+                logger.warning(
+                    "session=%s overshoot websocket disconnected "
+                    "retryable=%s close_code=%s attempt=%s/%s retry_in=%.1fs",
+                    session.session_id,
+                    should_retry,
+                    close_code,
+                    attempt,
+                    OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
+                    wait_seconds,
+                )
+                await _wait_or_shutdown(session.shutdown_event, wait_seconds)
 
         if not session.shutdown_event.is_set():
             await self.close_session(
@@ -347,6 +403,56 @@ def _is_stream_not_found(response: httpx.Response) -> bool:
         str(payload.get(key) or "").strip() == "stream_not_found"
         for key in ("error", "message")
     )
+
+
+def _overshoot_reconnect_backoff(attempt: int) -> float:
+    return min(
+        OVERSHOOT_WS_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
+        OVERSHOOT_WS_RETRY_MAX_SECONDS,
+    )
+
+
+def _is_retryable_overshoot_disconnect(
+    exc: Exception | None,
+) -> tuple[bool, int | None]:
+    if exc is None:
+        return True, None
+
+    if isinstance(exc, websockets.exceptions.ConnectionClosed):
+        close_code = _extract_close_code(exc)
+        if close_code is None:
+            return True, None
+        return close_code not in OVERSHOOT_WS_NON_RETRYABLE_CLOSE_CODES, close_code
+
+    retryable_network_errors = (
+        OSError,
+        TimeoutError,
+        websockets.exceptions.WebSocketException,
+    )
+    if isinstance(exc, retryable_network_errors):
+        return True, None
+
+    return False, None
+
+
+def _extract_close_code(exc: websockets.exceptions.ConnectionClosed) -> int | None:
+    received = getattr(exc, "rcvd", None)
+    code = getattr(received, "code", None)
+    if isinstance(code, int):
+        return code
+
+    legacy_code = getattr(exc, "code", None)
+    if isinstance(legacy_code, int):
+        return legacy_code
+
+    return None
+
+
+async def _wait_or_shutdown(shutdown_event: asyncio.Event, seconds: float) -> None:
+    try:
+        await asyncio.wait_for(shutdown_event.wait(), timeout=seconds)
+    except TimeoutError:
+        pass
 
 
 def _parse_positive_int(value: Any) -> int | None:
