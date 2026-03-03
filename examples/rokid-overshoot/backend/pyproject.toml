@@ -5,13 +5,13 @@ description = "Rokid Overshoot signaling and event bridge"
 readme = "README.md"
 requires-python = ">=3.12.12"
 dependencies = [
-    "fastapi[standard]>=0.115.14",
+    "fastapi[standard]>=0.135.1",
     "httpx>=0.28.1",
     "websockets>=16.0",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.14",
-    "ty>=0.0.14",
+    "ruff>=0.15.4",
+    "ty>=0.0.20",
 ]
