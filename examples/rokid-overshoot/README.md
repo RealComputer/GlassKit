@@ -2,6 +2,8 @@
 
 This example app streams live camera video from Rokid Glasses to [Overshoot](https://overshoot.ai/) and displays live inference text on the glasses HUD.
 
+[demo.webm](https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b)
+
 ## What It Does
 
 - Tap the temple area to start streaming.
