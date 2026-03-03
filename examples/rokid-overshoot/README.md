@@ -41,14 +41,16 @@ cp .env.example .env
 # Set OVERSHOOT_API_KEY
 ```
 
-Optional backend overrides (defaults shown):
+Optional backend overrides:
 
-- `OVERSHOOT_API_URL=https://api.overshoot.ai/v0.2`
-- `OVERSHOOT_PROMPT=Describe what you see`
-- `OVERSHOOT_MODEL=Qwen/Qwen3-VL-30B-A3B-Instruct`
-- `OVERSHOOT_PROCESSING_TARGET_FPS=6`
-- `OVERSHOOT_PROCESSING_CLIP_LENGTH_SECONDS=0.5`
-- `OVERSHOOT_PROCESSING_DELAY_SECONDS=0.5`
+- `OVERSHOOT_API_URL`
+- `OVERSHOOT_PROMPT`
+- `OVERSHOOT_MODEL`
+- `OVERSHOOT_PROCESSING_TARGET_FPS`
+- `OVERSHOOT_PROCESSING_CLIP_LENGTH_SECONDS`
+- `OVERSHOOT_PROCESSING_DELAY_SECONDS`
+
+For current default values, see `backend/main.py`.
 
 ## Run Backend
 
