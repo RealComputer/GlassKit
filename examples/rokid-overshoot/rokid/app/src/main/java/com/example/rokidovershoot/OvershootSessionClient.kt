@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -55,6 +56,9 @@ class OvershootSessionClient(
 
     companion object {
         private const val TAG = "OvershootSessionClient"
+        private const val ICE_GATHERING_TIMEOUT_MS = 15_000L
+        private const val OVERSHOOT_TURN_USERNAME = "overshoot"
+        private const val OVERSHOOT_TURN_CREDENTIAL = "overshoot"
     }
 
     private data class SessionCreateResponse(
@@ -301,7 +305,10 @@ class OvershootSessionClient(
 
     private fun createPeerConnection(): PeerConnection {
         val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+            createTurnIceServer("turn:turn.overshoot.ai:3478?transport=udp"),
+            createTurnIceServer("turn:turn.overshoot.ai:3478?transport=tcp"),
+            createTurnIceServer("turns:turn.overshoot.ai:443?transport=udp"),
+            createTurnIceServer("turns:turn.overshoot.ai:443?transport=tcp")
         )
 
         val config = PeerConnection.RTCConfiguration(iceServers).apply {
@@ -362,6 +369,13 @@ class OvershootSessionClient(
                 }
             }
         }) ?: error("Failed to create PeerConnection")
+    }
+
+    private fun createTurnIceServer(uri: String): PeerConnection.IceServer {
+        return PeerConnection.IceServer.builder(uri)
+            .setUsername(OVERSHOOT_TURN_USERNAME)
+            .setPassword(OVERSHOOT_TURN_CREDENTIAL)
+            .createIceServer()
     }
 
     private fun createAndAddVideoTrack(pc: PeerConnection) {
@@ -583,7 +597,17 @@ class OvershootSessionClient(
             return
         }
 
-        deferred.await()
+        val completed = withTimeoutOrNull(ICE_GATHERING_TIMEOUT_MS) {
+            deferred.await()
+            true
+        } ?: false
+
         iceGatheringDeferred = null
+        if (!completed) {
+            Log.w(
+                TAG,
+                "Timed out waiting ${ICE_GATHERING_TIMEOUT_MS}ms for ICE gathering; proceeding with partial candidates"
+            )
+        }
     }
 }
