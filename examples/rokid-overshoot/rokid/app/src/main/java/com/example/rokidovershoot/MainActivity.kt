@@ -20,7 +20,7 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
 
     private val resultLines = ArrayDeque<String>()
 
-    private val visionSessionUrl: String = BuildConfig.VISION_SESSION_URL
+    private val visionEndpointUrl: String = BuildConfig.VISION_SESSION_URL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,7 +110,7 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
 
         sessionClient = OvershootSessionClient(
             context = applicationContext,
-            sessionUrl = visionSessionUrl,
+            endpointUrl = visionEndpointUrl,
             listener = this
         ).also { it.start() }
     }

@@ -31,7 +31,7 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 
 # Configuration
 
-- `rokid/local.properties`: must define `VISION_SESSION_URL` (backend `/vision/session` URL).
+- `rokid/local.properties`: must define `VISION_SESSION_URL` (backend base URL, for example `http://<HOST>:8000`; session paths are appended by the app).
 - `backend/.env`: must define `OVERSHOOT_API_KEY`.
 
 # Commands

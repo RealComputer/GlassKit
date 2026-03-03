@@ -9,7 +9,7 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
-val visionSessionUrl = localProperties.getProperty("VISION_SESSION_URL")
+val visionEndpointUrl = localProperties.getProperty("VISION_SESSION_URL")
     ?: error("VISION_SESSION_URL is required in rokid/local.properties")
 
 android {
@@ -26,7 +26,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "VISION_SESSION_URL", "\"$visionSessionUrl\"")
+        buildConfigField("String", "VISION_SESSION_URL", "\"$visionEndpointUrl\"")
     }
 
     buildTypes {

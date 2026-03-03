@@ -42,7 +42,7 @@ import kotlin.coroutines.resumeWithException
 
 class OvershootSessionClient(
     private val context: Context,
-    private val sessionUrl: String,
+    private val endpointUrl: String,
     private val listener: Listener
 ) {
 
@@ -59,6 +59,7 @@ class OvershootSessionClient(
         private const val ICE_GATHERING_TIMEOUT_MS = 15_000L
         private const val OVERSHOOT_TURN_USERNAME = "overshoot"
         private const val OVERSHOOT_TURN_CREDENTIAL = "overshoot"
+        private const val SESSION_COLLECTION_PATH = "/vision/session"
     }
 
     private data class SessionCreateResponse(
@@ -87,6 +88,8 @@ class OvershootSessionClient(
     private var hasNotifiedStopped = false
 
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
+
+    private val sessionCollectionUrl: String by lazy { buildSessionCollectionUrl() }
 
     private val mediaConstraints = MediaConstraints().apply {
         mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
@@ -268,7 +271,7 @@ class OvershootSessionClient(
     }
 
     private fun buildEventsWsUrl(sessionId: String): String {
-        val eventsHttpUrl = "${sessionUrl.trimEnd('/')}/$sessionId/events"
+        val eventsHttpUrl = "${sessionCollectionUrl.trimEnd('/')}/$sessionId/events"
         return when {
             eventsHttpUrl.startsWith("https://") -> {
                 eventsHttpUrl.replaceFirst("https://", "wss://")
@@ -281,6 +284,19 @@ class OvershootSessionClient(
             else -> {
                 throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
             }
+        }
+    }
+
+    private fun buildSessionCollectionUrl(): String {
+        val normalizedBaseUrl = endpointUrl.trim().trimEnd('/')
+        if (!normalizedBaseUrl.startsWith("http://") && !normalizedBaseUrl.startsWith("https://")) {
+            throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
+        }
+
+        return if (normalizedBaseUrl.endsWith(SESSION_COLLECTION_PATH)) {
+            normalizedBaseUrl
+        } else {
+            "$normalizedBaseUrl$SESSION_COLLECTION_PATH"
         }
     }
 
@@ -468,7 +484,7 @@ class OvershootSessionClient(
             val body = bodyJson.toRequestBody(mediaType)
 
             val request = Request.Builder()
-                .url(sessionUrl)
+                .url(sessionCollectionUrl)
                 .post(body)
                 .build()
 
@@ -513,7 +529,7 @@ class OvershootSessionClient(
 
     private suspend fun stopSession(sessionId: String) = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("${sessionUrl.trimEnd('/')}/$sessionId")
+            .url("${sessionCollectionUrl.trimEnd('/')}/$sessionId")
             .delete()
             .build()
 

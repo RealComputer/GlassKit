@@ -30,8 +30,10 @@ See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
 Set the backend URL in `rokid/local.properties`:
 
 ```properties
-VISION_SESSION_URL=http://<YOUR_BACKEND>/vision/session
+VISION_SESSION_URL=http://<YOUR_BACKEND>
 ```
+
+The app will automatically call backend session routes (for example, `/vision/session`).
 
 Create the backend environment file:
 
