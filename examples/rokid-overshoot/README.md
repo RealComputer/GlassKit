@@ -50,7 +50,7 @@ Optional backend overrides:
 - `OVERSHOOT_PROCESSING_CLIP_LENGTH_SECONDS`
 - `OVERSHOOT_PROCESSING_DELAY_SECONDS`
 
-For current default values, see `backend/main.py`.
+For current default values, see `backend/session_manager.py`.
 
 ## Run Backend
 
