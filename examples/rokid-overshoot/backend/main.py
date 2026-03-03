@@ -95,7 +95,7 @@ class OvershootSessionManager:
 
         data = response.json()
         stream_id = str(data.get("stream_id") or "").strip()
-        answer_sdp = str((data.get("webrtc") or {}).get("sdp") or "").strip()
+        answer_sdp = _normalize_sdp((data.get("webrtc") or {}).get("sdp"))
         ttl_seconds = _parse_positive_int((data.get("lease") or {}).get("ttl_seconds"))
 
         if not stream_id or not answer_sdp:
@@ -321,6 +321,21 @@ def _parse_positive_int(value: Any) -> int | None:
         ivalue = int(value)
         return ivalue if ivalue > 0 else None
     return None
+
+
+def _normalize_sdp(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    has_actual_newlines = ("\n" in text) or ("\r" in text)
+    if not has_actual_newlines:
+        if "\\r\\n" in text:
+            text = text.replace("\\r\\n", "\r\n")
+        elif "\\n" in text:
+            text = text.replace("\\n", "\n")
+
+    return text
 
 
 def _response_text(response: httpx.Response) -> str:

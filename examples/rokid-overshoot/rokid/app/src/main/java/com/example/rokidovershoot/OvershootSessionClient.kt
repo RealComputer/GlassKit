@@ -468,7 +468,7 @@ class OvershootSessionClient(
 
                 val json = JSONObject(responseBody)
                 val sessionId = json.optString("session_id", "").trim()
-                val answerSdp = json.optString("answer_sdp", "").trim()
+                val answerSdp = normalizeSdp(json.optString("answer_sdp", ""))
 
                 if (sessionId.isEmpty() || answerSdp.isEmpty()) {
                     throw IllegalStateException("Session response missing session_id or answer_sdp")
@@ -477,6 +477,22 @@ class OvershootSessionClient(
                 SessionCreateResponse(sessionId = sessionId, answerSdp = answerSdp)
             }
         }
+
+    private fun normalizeSdp(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+
+        val hasActualNewlines = trimmed.contains('\n') || trimmed.contains('\r')
+        if (hasActualNewlines) {
+            return trimmed
+        }
+
+        return when {
+            trimmed.contains("\\r\\n") -> trimmed.replace("\\r\\n", "\r\n")
+            trimmed.contains("\\n") -> trimmed.replace("\\n", "\n")
+            else -> trimmed
+        }
+    }
 
     private suspend fun stopSession(sessionId: String) = withContext(Dispatchers.IO) {
         val request = Request.Builder()
