@@ -8,7 +8,7 @@ Rokid Overshoot is a vision streaming demo for Rokid Glasses. The app streams li
 
 # Key files
 ## Android (`./rokid/`)
-- `app/src/main/java/com/example/rokidovershoot/MainActivity.kt`: enter-to-start/stop controls and rolling result log UI.
+- `app/src/main/java/com/example/rokidovershoot/MainActivity.kt`: temple-tap start/stop controls and rolling result log UI.
 - `app/src/main/java/com/example/rokidovershoot/OvershootSessionClient.kt`: WebRTC offer/answer flow and backend websocket handling.
 - `app/src/main/res/layout/activity_main.xml`: monochrome HUD layout with auto-scrolling log.
 - `app/build.gradle.kts`: `VISION_SESSION_URL` BuildConfig value from `rokid/local.properties`.

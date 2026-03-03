@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding.tvTitle.text = getString(R.string.app_name)
-        setStatus("Requesting camera permission...")
+        setStatus("Checking camera...")
         renderResultLog()
 
         ensurePermissions()
@@ -68,7 +68,7 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         }
 
         if (needed.isEmpty()) {
-            setStatus("Press ENTER to start")
+            setStatus(STATUS_READY)
         } else {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMISSIONS)
         }
@@ -90,9 +90,9 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         if (requestCode != REQ_PERMISSIONS) return
 
         if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            setStatus("Press ENTER to start")
+            setStatus(STATUS_READY)
         } else {
-            setStatus("Camera permission denied")
+            setStatus("Camera permission required")
         }
     }
 
@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
 
         clearResultLog()
         isRunning = true
-        setStatus("Starting stream... (ENTER to stop)")
+        setStatus(STATUS_STARTING)
 
         sessionClient = OvershootSessionClient(
             context = applicationContext,
@@ -118,11 +118,11 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
     private fun stopStreaming() {
         isRunning = false
         val activeClient = sessionClient ?: run {
-            setStatus("Stopped. Press ENTER to start")
+            setStatus(STATUS_STOPPED)
             return
         }
 
-        setStatus("Stopping stream...")
+        setStatus(STATUS_STOPPING)
         sessionClient = null
         Thread { activeClient.release() }.start()
     }
@@ -138,8 +138,19 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         runOnUiThread {
             if (!isRunning) return@runOnUiThread
 
-            val readable = state.name.lowercase().replace('_', ' ')
-            setStatus("Connection: $readable (ENTER to stop)")
+            val statusText = when (state) {
+                PeerConnection.IceConnectionState.NEW,
+                PeerConnection.IceConnectionState.CHECKING -> STATUS_STARTING
+
+                PeerConnection.IceConnectionState.CONNECTED,
+                PeerConnection.IceConnectionState.COMPLETED -> STATUS_LIVE
+
+                PeerConnection.IceConnectionState.DISCONNECTED,
+                PeerConnection.IceConnectionState.FAILED -> "Connection lost"
+
+                PeerConnection.IceConnectionState.CLOSED -> STATUS_STOPPED
+            }
+            setStatus(statusText)
         }
     }
 
@@ -151,24 +162,31 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
 
     override fun onStatus(message: String) {
         runOnUiThread {
-            if (isRunning) {
-                setStatus("$message (ENTER to stop)")
+            if (!isRunning) return@runOnUiThread
+
+            val normalizedMessage = message.lowercase()
+            val statusText = if (
+                "streaming" in normalizedMessage ||
+                "receiving results" in normalizedMessage
+            ) {
+                STATUS_LIVE
             } else {
-                setStatus("$message")
+                STATUS_STARTING
             }
+            setStatus(statusText)
         }
     }
 
     override fun onError(message: String, throwable: Throwable?) {
         runOnUiThread {
-            setStatus("Error: $message")
+            setStatus("Connection issue. Tap temple to retry")
         }
     }
 
     override fun onSessionStopped() {
         runOnUiThread {
             isRunning = false
-            setStatus("Stopped. Press ENTER to start")
+            setStatus(STATUS_STOPPED)
         }
     }
 
@@ -184,7 +202,12 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         }
 
         for (line in normalizedLines) {
-            resultLines.addLast(line)
+            val formattedLine = if (line.startsWith(BULLET_PREFIX)) {
+                line
+            } else {
+                "$BULLET_PREFIX$line"
+            }
+            resultLines.addLast(formattedLine)
             while (resultLines.size > MAX_RESULT_LINES) {
                 resultLines.removeFirst()
             }
@@ -200,9 +223,9 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
 
     private fun renderResultLog() {
         binding.tvLog.text = if (resultLines.isEmpty()) {
-            "Waiting for results..."
+            ""
         } else {
-            resultLines.joinToString("\n")
+            resultLines.joinToString("\n\n")
         }
 
         binding.svLog.post {
@@ -217,5 +240,11 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
     companion object {
         private const val REQ_PERMISSIONS = 1001
         private const val MAX_RESULT_LINES = 180
+        private const val BULLET_PREFIX = "\u2022 "
+        private const val STATUS_READY = "Tap temple to start"
+        private const val STATUS_STARTING = "Starting..."
+        private const val STATUS_LIVE = "Live"
+        private const val STATUS_STOPPING = "Stopping..."
+        private const val STATUS_STOPPED = "Stopped. Tap temple to start"
     }
 }
