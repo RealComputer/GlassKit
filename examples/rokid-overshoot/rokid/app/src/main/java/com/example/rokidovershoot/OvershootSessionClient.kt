@@ -2,7 +2,6 @@ package com.example.rokidovershoot
 
 import android.content.Context
 import android.util.Log
-import android.util.Base64
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -142,9 +141,8 @@ class OvershootSessionClient(
         val createResponse = createSession(localSdp)
         currentSessionId = createResponse.sessionId
 
-                val answerSdp = normalizeSdp(createResponse.answerSdp)
-                val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
-                setRemoteDescription(pc, answer)
+        val answer = SessionDescription(SessionDescription.Type.ANSWER, createResponse.answerSdp)
+        setRemoteDescription(pc, answer)
 
         connectEventsWebSocket(createResponse.sessionId)
 
@@ -484,27 +482,7 @@ class OvershootSessionClient(
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return trimmed
 
-        var text = trimmed
-
-        // If a backend accidentally forwards a JSON object/string here, unwrap it.
-        if (text.startsWith("{") && text.contains("\"sdp\"")) {
-            runCatching { JSONObject(text).optString("sdp", text) }
-                .onSuccess { text = it }
-        }
-
-        // Fallback for a base64-encoded SDP payload.
-        if (!text.contains("v=") && text.matches(Regex("^[A-Za-z0-9+/=]+$"))) {
-            runCatching {
-                val decoded = Base64.decode(text, Base64.DEFAULT)
-                String(decoded, Charsets.UTF_8)
-            }.onSuccess { decoded ->
-                if (decoded.contains("v=")) {
-                    text = decoded
-                }
-            }
-        }
-
-        text = text
+        val text = trimmed
             .replace("\\r\\n", "\n")
             .replace("\\n", "\n")
             .replace("\r\n", "\n")
