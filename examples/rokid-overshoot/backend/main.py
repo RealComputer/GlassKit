@@ -19,6 +19,12 @@ logger = logging.getLogger("uvicorn.error")
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
 DEFAULT_PROMPT = "Describe what you see"
 DEFAULT_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+DEFAULT_PROCESSING = {
+    "target_fps": 6,
+    "clip_length_seconds": 0.5,
+    "delay_seconds": 0.5,
+}
+
 OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS = 8
 OVERSHOOT_WS_RETRY_BASE_SECONDS = 1.0
 OVERSHOOT_WS_RETRY_MAX_SECONDS = 15.0
@@ -30,11 +36,6 @@ OVERSHOOT_STREAM_STOP_REASONS = {
     "livekit_disconnected",
     "lease_expired",
     "insufficient_credits",
-}
-DEFAULT_PROCESSING = {
-    "target_fps": 6,
-    "clip_length_seconds": 0.5,
-    "delay_seconds": 0.5,
 }
 
 
@@ -63,9 +64,19 @@ class VisionSession:
 
 
 class OvershootSessionManager:
-    def __init__(self, api_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        api_url: str,
+        api_key: str,
+        prompt: str,
+        model: str,
+        processing: dict[str, int | float],
+    ) -> None:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
+        self._prompt = prompt
+        self._model = model
+        self._processing = dict(processing)
         self._http = httpx.AsyncClient(
             base_url=self._api_url,
             timeout=httpx.Timeout(20.0),
@@ -85,11 +96,11 @@ class OvershootSessionManager:
         payload = {
             "source": {"type": "webrtc", "sdp": offer_sdp},
             "mode": "clip",
-            "processing": DEFAULT_PROCESSING,
+            "processing": self._processing,
             "inference": {
-                "prompt": DEFAULT_PROMPT,
+                "prompt": self._prompt,
                 "backend": "overshoot",
-                "model": DEFAULT_MODEL,
+                "model": self._model,
             },
         }
 
@@ -518,7 +529,73 @@ def _parse_positive_int(value: Any) -> int | None:
     if isinstance(value, (int, float)):
         ivalue = int(value)
         return ivalue if ivalue > 0 else None
+    if isinstance(value, str):
+        try:
+            ivalue = int(value)
+        except ValueError:
+            return None
+        return ivalue if ivalue > 0 else None
     return None
+
+
+def _parse_positive_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        fvalue = float(value)
+        return fvalue if fvalue > 0 else None
+    if isinstance(value, str):
+        try:
+            fvalue = float(value)
+        except ValueError:
+            return None
+        return fvalue if fvalue > 0 else None
+    return None
+
+
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    normalized = value.strip()
+    return normalized if normalized else default
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    parsed = _parse_positive_int(value)
+    if parsed is None:
+        return default
+    return parsed
+
+
+def _env_positive_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    parsed = _parse_positive_float(value)
+    if parsed is None:
+        return default
+    return parsed
+
+
+def _load_processing_config() -> dict[str, int | float]:
+    target_fps_default = int(DEFAULT_PROCESSING["target_fps"])
+    clip_default = float(DEFAULT_PROCESSING["clip_length_seconds"])
+    delay_default = float(DEFAULT_PROCESSING["delay_seconds"])
+    return {
+        "target_fps": _env_positive_int(
+            "OVERSHOOT_PROCESSING_TARGET_FPS",
+            target_fps_default,
+        ),
+        "clip_length_seconds": _env_positive_float(
+            "OVERSHOOT_PROCESSING_CLIP_LENGTH_SECONDS",
+            clip_default,
+        ),
+        "delay_seconds": _env_positive_float(
+            "OVERSHOOT_PROCESSING_DELAY_SECONDS",
+            delay_default,
+        ),
+    }
 
 
 def _extract_answer_sdp(webrtc_payload: Any) -> str:
@@ -583,8 +660,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not api_key:
         raise RuntimeError("Set OVERSHOOT_API_KEY in backend/.env")
 
-    api_url = os.getenv("OVERSHOOT_API_URL", DEFAULT_OVERSHOOT_API_URL).strip()
-    session_manager = OvershootSessionManager(api_url=api_url, api_key=api_key)
+    api_url = _env_or_default("OVERSHOOT_API_URL", DEFAULT_OVERSHOOT_API_URL)
+    prompt = _env_or_default("OVERSHOOT_PROMPT", DEFAULT_PROMPT)
+    model = _env_or_default("OVERSHOOT_MODEL", DEFAULT_MODEL)
+    processing = _load_processing_config()
+
+    session_manager = OvershootSessionManager(
+        api_url=api_url,
+        api_key=api_key,
+        prompt=prompt,
+        model=model,
+        processing=processing,
+    )
 
     try:
         yield

@@ -26,13 +26,14 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 ## Backend (`./backend/`)
 
 - `main.py`: FastAPI signaling endpoints, Overshoot REST calls, keepalive loop, websocket passthrough, and bounded reconnect/backoff for transient Overshoot websocket restarts.
-- `.env.example`: environment template (`OVERSHOOT_API_KEY`).
+- `.env.example`: environment template (`OVERSHOOT_API_KEY` and optional Overshoot inference/processing overrides).
 - `pyproject.toml`: backend dependencies and tooling.
 
 # Configuration
 
 - `rokid/local.properties`: must define `BACKEND_BASE_URL` (backend base URL, for example `http://<HOST>:8000`).
 - `backend/.env`: must define `OVERSHOOT_API_KEY`.
+- Optional backend `.env` overrides are documented in `README.md`.
 
 # Commands
 
