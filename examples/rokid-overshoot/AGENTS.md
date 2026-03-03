@@ -33,7 +33,6 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 
 - `rokid/local.properties`: must define `BACKEND_BASE_URL` (backend base URL, for example `http://<HOST>:8000`).
 - `backend/.env`: must define `OVERSHOOT_API_KEY`.
-- Optional backend `.env` overrides are documented in `README.md`.
 
 # Commands
 
