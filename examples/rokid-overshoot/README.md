@@ -33,8 +33,6 @@ Set the backend URL in `rokid/local.properties`:
 VISION_SESSION_URL=http://<YOUR_BACKEND>
 ```
 
-The app will automatically call backend session routes (for example, `/vision/session`).
-
 Create the backend environment file:
 
 ```bash
