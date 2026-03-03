@@ -293,11 +293,7 @@ class OvershootSessionClient(
             throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
         }
 
-        return if (normalizedBaseUrl.endsWith(SESSION_COLLECTION_PATH)) {
-            normalizedBaseUrl
-        } else {
-            "$normalizedBaseUrl$SESSION_COLLECTION_PATH"
-        }
+        return "$normalizedBaseUrl$SESSION_COLLECTION_PATH"
     }
 
     private fun createPeerConnectionFactory(): PeerConnectionFactory {
