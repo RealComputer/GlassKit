@@ -6,25 +6,17 @@ This example app streams live camera video from Rokid Glasses to Overshoot and d
 
 - Tap the temple area to start streaming.
 - Tap the temple area again to stop.
-- While running, inference result text is appended to the bottom of the screen and auto-scrolls.
-- Old log lines are trimmed automatically.
-- Starting a new run clears the previous log.
+- While running, you see live result text appear on the glasses display.
+- New lines are added at the bottom and the view auto-scrolls.
+- Each new run starts with a clean screen.
 
 ## Architecture
 
-- Android app (`rokid/`)
-  - Captures camera video.
-  - Creates a local WebRTC offer.
-  - Sends the offer to the backend `/vision/session` endpoint.
-  - Applies the returned Overshoot answer SDP.
-  - Opens the backend WebSocket `/vision/session/{session_id}/events` and renders incoming result text.
-- Backend (`backend/`)
-  - Calls Overshoot `POST /streams` with `source.type="webrtc"` and Android SDP.
-  - Returns Overshoot answer SDP to Android.
-  - Connects to the Overshoot WebSocket (`/ws/streams/{stream_id}`), authenticates with the API key, and relays result text to the Android WebSocket.
-  - Maintains stream keepalive and closes streams on stop/disconnect.
+- The Android app captures camera video and starts a live session.
+- The backend connects that session to Overshoot and handles stream lifecycle.
+- Inference text is relayed back to the Android app and rendered on the glasses HUD in real time.
 
-Also see [AGENTS.md](./AGENTS.md) for details.
+See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
 
 ## Requirements
 
