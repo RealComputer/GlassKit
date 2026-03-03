@@ -16,7 +16,7 @@ from fastapi import HTTPException, WebSocket
 logger = logging.getLogger("uvicorn.error")
 
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
-DEFAULT_PROMPT = "Describe what you see"
+DEFAULT_PROMPT = "You are observing a first-person POV. Describe the scene in second person. Write at most three short sentences."
 DEFAULT_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 DEFAULT_PROCESSING = {
     "target_fps": 6,
