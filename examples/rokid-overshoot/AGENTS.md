@@ -1,14 +1,14 @@
 # Overview
 
-This project demonstrates Rokid Glasses using Overshoot. The Rokid Glasses app streams live camera feed to Overshoot and renders the responses to the display.
+This project demonstrates Rokid Glasses integrated with Overshoot. The app streams a live camera feed to Overshoot and renders inference responses on the glasses display.
 
-- Rokid Glassses is an Android-based smart glasses with camera, monochrome HUD, mic, and speaker.
-- Overshoot is a Vison Language Model inference API for live video.
+- Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, mic, and speaker.
+- Overshoot is a Vision Language Model inference API for live video.
 
 # Architecture
 
 - Android app (`rokid/`) creates a WebRTC offer and sends it to backend.
-- Backend (`backend/`) creates an Overshoot stream via an Overshoot API, returns Overshoot answer SDP, and manages stream lifecycle.
+- Backend (`backend/`) creates an Overshoot stream via the Overshoot API, returns the Overshoot answer SDP, and manages stream lifecycle.
 - Overshoot inference results arrive over Overshoot WebSocket, and backend relays result text to Android.
 
 # Key files
@@ -45,8 +45,8 @@ This project demonstrates Rokid Glasses using Overshoot. The Rokid Glasses app s
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: ALWAYS run after backend changes
 - `uv run --env-file .env fastapi dev main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --env-file .env foo.py`: run a script with env loaded)
-- `uv run -- python -c "print('hello')"`: run a one-off Python command (note that the direct `python` command without uv might not not available.)
+- `uv run --env-file .env foo.py`: run a script with env loaded
+- `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
 - `uv add <package>`: add a package
 
 # Commit Guidelines
