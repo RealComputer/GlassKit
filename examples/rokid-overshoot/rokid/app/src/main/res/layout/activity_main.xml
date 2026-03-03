@@ -15,11 +15,13 @@
             android:id="@+id/tvTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-black"
+            android:fontFamily="sans-serif"
             android:gravity="center_horizontal"
             android:paddingBottom="6dp"
             android:textColor="#FFFFFF"
-            android:textSize="16sp" />
+            android:textFontWeight="900"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvStatus"
