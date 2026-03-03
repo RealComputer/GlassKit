@@ -403,7 +403,7 @@ class OvershootSessionClient(
         )
 
         localVideoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
-            adaptOutputFormat(1024, 768, 5)
+            adaptOutputFormat(1280, 960, 15)
         }
 
         localVideoSource?.let { source ->
@@ -412,7 +412,7 @@ class OvershootSessionClient(
                 context,
                 source.capturerObserver
             )
-            videoCapturer.startCapture(1024, 768, 5)
+            videoCapturer.startCapture(1280, 960, 15)
 
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
