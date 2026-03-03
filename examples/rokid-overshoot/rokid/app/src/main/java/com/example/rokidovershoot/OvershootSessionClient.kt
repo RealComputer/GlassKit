@@ -60,8 +60,8 @@ class OvershootSessionClient(
         private const val OVERSHOOT_TURN_USERNAME = "overshoot"
         private const val OVERSHOOT_TURN_CREDENTIAL = "overshoot"
         private const val SESSION_COLLECTION_PATH = "/vision/session"
-        private const val CAPTURE_WIDTH = 1280
-        private const val CAPTURE_HEIGHT = 960
+        private const val CAPTURE_WIDTH = 1024
+        private const val CAPTURE_HEIGHT = 768
         private const val CAPTURE_FPS = 15
     }
 
