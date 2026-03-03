@@ -35,3 +35,6 @@ Rokid Overshoot is a vision streaming demo for Rokid Glasses. The app streams li
 - `cd backend && uv run --env-file .env fastapi dev main.py --host 0.0.0.0`
 - `cd backend && uv run -- python -c "print('hello')"`
 - `cd backend && uv add <package>`
+
+# Git Commit Guidelines
+- Start message with "overshoot: "
