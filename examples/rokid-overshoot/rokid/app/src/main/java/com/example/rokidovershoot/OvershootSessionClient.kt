@@ -1,4 +1,4 @@
-package com.example.rokidrfdetr
+package com.example.rokidovershoot
 
 import android.content.Context
 import android.util.Log
@@ -15,10 +15,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONObject
 import org.webrtc.Camera2Enumerator
-import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -27,24 +28,18 @@ import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpReceiver
 import org.webrtc.RtpParameters
+import org.webrtc.RtpReceiver
 import org.webrtc.RtpSender
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
-import java.nio.ByteBuffer
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/**
- * Establishes a WebRTC session via the backend `/vision/session` SDP broker and streams
- * low-rate camera video for server-side object detection. A data channel carries
- * speedrun config + state updates.
- */
-class BackendVisionClient(
+class OvershootSessionClient(
     private val context: Context,
     private val sessionUrl: String,
     private val listener: Listener
@@ -52,16 +47,20 @@ class BackendVisionClient(
 
     interface Listener {
         fun onConnectionStateChanged(state: PeerConnection.IceConnectionState)
+        fun onResultText(text: String)
+        fun onStatus(message: String)
         fun onError(message: String, throwable: Throwable? = null)
-        fun onConfig(config: SpeedrunConfig)
-        fun onStateUpdate(state: SpeedrunState)
-        fun onSplitCompleted(splitIndex: Int, state: SpeedrunState)
+        fun onSessionStopped()
     }
 
     companion object {
-        private const val TAG = "BackendVisionClient"
-        private const val DATA_CHANNEL_LABEL = "vision-events"
+        private const val TAG = "OvershootSessionClient"
     }
+
+    private data class SessionCreateResponse(
+        val sessionId: String,
+        val answerSdp: String
+    )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val okHttp = OkHttpClient()
@@ -78,9 +77,10 @@ class BackendVisionClient(
     private var localVideoCapturer: VideoCapturer? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
 
-    private var dataChannel: DataChannel? = null
-    private val pendingMessages = ArrayDeque<String>()
-    private val pendingLock = Any()
+    private var eventsWebSocket: WebSocket? = null
+    private var currentSessionId: String? = null
+    private var stopping = false
+    private var hasNotifiedStopped = false
 
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
 
@@ -95,103 +95,76 @@ class BackendVisionClient(
                 Log.d(TAG, "Already started")
                 return@launch
             }
+            stopping = false
+            hasNotifiedStopped = false
+
             try {
                 startInternal()
             } catch (t: Throwable) {
-                Log.e(TAG, "Failed to start vision session", t)
-                listener.onError("Failed to start vision session", t)
-                stopInternal()
+                Log.e(TAG, "Failed to start session", t)
+                listener.onError("Failed to start session", t)
+                stopInternal(notifyStopped = true)
             }
         }
     }
 
     fun stop() {
-        scope.launch { stopInternal() }
+        scope.launch {
+            stopInternal(notifyStopped = true)
+        }
     }
 
     fun release() {
-        runBlocking { stopInternal() }
+        runBlocking { stopInternal(notifyStopped = true) }
         scope.cancel()
         peerConnectionFactory.dispose()
         eglBase.release()
     }
 
-    fun sendRunStart() {
-        sendClientMessage(JSONObject().put("type", "run.start"))
-    }
-
-    fun sendDebugStep(direction: String) {
-        sendClientMessage(
-            JSONObject()
-                .put("type", "debug.step")
-                .put("direction", direction)
-        )
-    }
-
-    private fun sendClientMessage(payload: JSONObject) {
-        val message = payload.toString()
-        val channel = dataChannel
-        if (channel != null && channel.state() == DataChannel.State.OPEN) {
-            channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
-        } else {
-            synchronized(pendingLock) {
-                pendingMessages.addLast(message)
-            }
-        }
-    }
-
-    private fun flushPendingMessages() {
-        val channel = dataChannel ?: return
-        if (channel.state() != DataChannel.State.OPEN) return
-        while (true) {
-            val message = synchronized(pendingLock) {
-                if (pendingMessages.isEmpty()) null else pendingMessages.removeFirst()
-            } ?: break
-            channel.send(DataChannel.Buffer(ByteBuffer.wrap(message.toByteArray()), false))
-        }
-    }
-
-    private fun createPeerConnectionFactory(): PeerConnectionFactory {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(context)
-                .createInitializationOptions()
-        )
-
-        val encoderFactory = DefaultVideoEncoderFactory(
-            eglBase.eglBaseContext,
-            /* enableIntelVp8Encoder = */ true,
-            /* enableH264HighProfile = */ true
-        )
-        val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
-
-        return PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
-            .createPeerConnectionFactory()
-    }
-
     private suspend fun startInternal() = withContext(Dispatchers.Default) {
+        listener.onStatus("Preparing camera")
+
         val pc = createPeerConnection()
         peerConnection = pc
 
         createAndAddVideoTrack(pc)
-        setupDataChannel(pc)
 
+        listener.onStatus("Creating offer")
         val offer = createOffer(pc)
         setLocalDescription(pc, offer)
-
         waitForIceGatheringComplete(pc)
 
-        val localSdp = pc.localDescription ?: error("LocalDescription is null")
-        val answerSdp = sendOfferAndGetAnswer(localSdp.description)
+        val localSdp = pc.localDescription?.description
+            ?: error("LocalDescription is null")
 
-        val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
+        listener.onStatus("Creating Overshoot stream")
+        val createResponse = createSession(localSdp)
+        currentSessionId = createResponse.sessionId
+
+        val answer = SessionDescription(SessionDescription.Type.ANSWER, createResponse.answerSdp)
         setRemoteDescription(pc, answer)
 
-        Log.d(TAG, "Vision WebRTC negotiation complete")
+        connectEventsWebSocket(createResponse.sessionId)
+
+        Log.d(TAG, "WebRTC negotiation complete")
+        listener.onStatus("Streaming")
     }
 
-    private suspend fun stopInternal() = withContext(Dispatchers.Default) {
+    private suspend fun stopInternal(notifyStopped: Boolean) = withContext(Dispatchers.Default) {
+        stopping = true
+
+        eventsWebSocket?.close(1000, "client stop")
+        eventsWebSocket = null
+
+        currentSessionId?.let { sessionId ->
+            try {
+                stopSession(sessionId)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to stop backend session $sessionId", t)
+            }
+        }
+        currentSessionId = null
+
         try {
             localVideoCapturer?.let { capturer ->
                 try {
@@ -214,17 +187,116 @@ class BackendVisionClient(
         localVideoSource?.dispose()
         localVideoSource = null
 
-        dataChannel?.close()
-        dataChannel = null
-        synchronized(pendingLock) {
-            pendingMessages.clear()
-        }
-
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null
 
-        Log.d(TAG, "Stopped vision WebRTC resources")
+        if (notifyStopped) {
+            notifySessionStopped()
+        }
+
+        Log.d(TAG, "Stopped session resources")
+    }
+
+    private fun notifySessionStopped() {
+        if (hasNotifiedStopped) {
+            return
+        }
+        hasNotifiedStopped = true
+        listener.onSessionStopped()
+    }
+
+    private fun connectEventsWebSocket(sessionId: String) {
+        val wsUrl = buildEventsWsUrl(sessionId)
+        val request = Request.Builder()
+            .url(wsUrl)
+            .build()
+
+        eventsWebSocket = okHttp.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                listener.onStatus("Receiving results")
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val payload = JSONObject(text)
+                    when (payload.optString("type")) {
+                        "result" -> {
+                            val resultText = payload.optString("text", "").trim()
+                            if (resultText.isNotEmpty()) {
+                                listener.onResultText(resultText)
+                            }
+                        }
+
+                        "error" -> {
+                            val errorMessage = payload.optString("message", "Unknown session error")
+                            listener.onError(errorMessage)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Failed to parse websocket message: $text", t)
+                }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(code, reason)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (!stopping) {
+                    listener.onError("Events websocket closed: $code $reason")
+                    scope.launch {
+                        stopInternal(notifyStopped = true)
+                    }
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (!stopping) {
+                    Log.e(TAG, "Events websocket failed", t)
+                    listener.onError("Events websocket failed", t)
+                    scope.launch {
+                        stopInternal(notifyStopped = true)
+                    }
+                }
+            }
+        })
+    }
+
+    private fun buildEventsWsUrl(sessionId: String): String {
+        val eventsHttpUrl = "${sessionUrl.trimEnd('/')}/$sessionId/events"
+        return when {
+            eventsHttpUrl.startsWith("https://") -> {
+                eventsHttpUrl.replaceFirst("https://", "wss://")
+            }
+
+            eventsHttpUrl.startsWith("http://") -> {
+                eventsHttpUrl.replaceFirst("http://", "ws://")
+            }
+
+            else -> {
+                throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
+            }
+        }
+    }
+
+    private fun createPeerConnectionFactory(): PeerConnectionFactory {
+        PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions.builder(context)
+                .createInitializationOptions()
+        )
+
+        val encoderFactory = DefaultVideoEncoderFactory(
+            eglBase.eglBaseContext,
+            true,
+            true
+        )
+        val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
+
+        return PeerConnectionFactory.builder()
+            .setVideoEncoderFactory(encoderFactory)
+            .setVideoDecoderFactory(decoderFactory)
+            .createPeerConnectionFactory()
     }
 
     private fun createPeerConnection(): PeerConnection {
@@ -247,7 +319,7 @@ class BackendVisionClient(
             }
 
             override fun onIceConnectionReceivingChange(receiving: Boolean) {
-                Log.d(TAG, "ICE connection receiving: $receiving")
+                Log.d(TAG, "ICE receiving: $receiving")
             }
 
             override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState) {
@@ -258,34 +330,34 @@ class BackendVisionClient(
             }
 
             override fun onIceCandidate(candidate: IceCandidate) {
-                Log.d(TAG, "onIceCandidate: $candidate")
+                Log.d(TAG, "ICE candidate: $candidate")
             }
 
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>) {
-                Log.d(TAG, "onIceCandidatesRemoved: ${candidates.size}")
+                Log.d(TAG, "ICE candidates removed: ${candidates.size}")
             }
 
             override fun onAddStream(stream: MediaStream) {
-                Log.d(TAG, "onAddStream: $stream")
+                Log.d(TAG, "Remote stream added: $stream")
             }
 
             override fun onRemoveStream(stream: MediaStream) {
-                Log.d(TAG, "onRemoveStream: $stream")
+                Log.d(TAG, "Remote stream removed: $stream")
             }
 
-            override fun onDataChannel(dc: DataChannel) {
-                Log.d(TAG, "onDataChannel: ${dc.label()}")
+            override fun onDataChannel(dc: org.webrtc.DataChannel) {
+                Log.d(TAG, "Ignoring incoming data channel: ${dc.label()}")
             }
 
             override fun onRenegotiationNeeded() {
-                Log.d(TAG, "onRenegotiationNeeded")
+                Log.d(TAG, "Renegotiation needed")
             }
 
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
                 when (val track = receiver.track()) {
                     is VideoTrack -> {
-                        Log.d(TAG, "Remote video track added (ignored)")
                         track.setEnabled(true)
+                        Log.d(TAG, "Remote video track added")
                     }
                 }
             }
@@ -295,23 +367,19 @@ class BackendVisionClient(
     private fun createAndAddVideoTrack(pc: PeerConnection) {
         val videoCapturer = createCameraCapturer()
         if (videoCapturer == null) {
-            Log.e(TAG, "No camera capturer available; skipping video")
-            return
+            throw IllegalStateException("No camera capturer available")
         }
         localVideoCapturer = videoCapturer
 
         surfaceTextureHelper = SurfaceTextureHelper.create(
-            "VisionCaptureThread",
+            "OvershootCaptureThread",
             eglBase.eglBaseContext
         )
 
         localVideoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
-            adaptOutputFormat(
-                1024,
-                768,
-                5
-            )
+            adaptOutputFormat(1024, 768, 5)
         }
+
         localVideoSource?.let { source ->
             videoCapturer.initialize(
                 surfaceTextureHelper,
@@ -319,118 +387,14 @@ class BackendVisionClient(
                 source.capturerObserver
             )
             videoCapturer.startCapture(1024, 768, 5)
+
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
+
             localVideoTrack?.let { track ->
                 val sender = pc.addTrack(track)
                 configureVideoSender(sender)
             }
-        }
-    }
-
-    private fun setupDataChannel(pc: PeerConnection) {
-        val init = DataChannel.Init()
-        val dc = pc.createDataChannel(DATA_CHANNEL_LABEL, init)
-        dataChannel = dc
-
-        dc.registerObserver(object : DataChannel.Observer {
-            override fun onBufferedAmountChange(previousAmount: Long) {}
-
-            override fun onStateChange() {
-                Log.d(TAG, "DataChannel state: ${dc.state()}")
-                if (dc.state() == DataChannel.State.OPEN) {
-                    flushPendingMessages()
-                }
-            }
-
-            override fun onMessage(buffer: DataChannel.Buffer) {
-                if (buffer.binary) {
-                    Log.w(TAG, "Ignoring binary message on $DATA_CHANNEL_LABEL")
-                    return
-                }
-                val data = ByteArray(buffer.data.remaining())
-                buffer.data.get(data)
-                val jsonText = String(data, Charsets.UTF_8)
-                handleServerEvent(jsonText)
-            }
-        })
-    }
-
-    private fun handleServerEvent(jsonText: String) {
-        try {
-            val json = JSONObject(jsonText)
-            when (json.optString("type")) {
-                "config" -> {
-                    val config = parseConfig(json)
-                    if (config != null) {
-                        listener.onConfig(config)
-                    }
-                }
-
-                "state" -> {
-                    val state = parseState(json)
-                    if (state != null) {
-                        listener.onStateUpdate(state)
-                    }
-                }
-
-                "split_completed" -> {
-                    val splitIndex = json.optInt("split_index", -1)
-                    if (splitIndex >= 0) {
-                        val state = parseState(json)
-                        if (state != null) {
-                            listener.onSplitCompleted(splitIndex, state)
-                        }
-                    }
-                }
-
-                else -> {
-                    // ignore
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to parse server event: $jsonText", t)
-        }
-    }
-
-    private fun parseConfig(json: JSONObject): SpeedrunConfig? {
-        val configNameRaw = json.optString("name", "").trim()
-        val groupsJson = json.optJSONArray("groups") ?: return null
-        val groups = mutableListOf<SpeedrunGroup>()
-        for (i in 0 until groupsJson.length()) {
-            val groupObj = groupsJson.optJSONObject(i) ?: continue
-            val name = groupObj.optString("name", "").trim()
-            val splitsJson = groupObj.optJSONArray("splits") ?: JSONArray()
-            val splits = mutableListOf<SpeedrunSplit>()
-            for (j in 0 until splitsJson.length()) {
-                val splitObj = splitsJson.optJSONObject(j) ?: continue
-                val label = splitObj.optString("label", "").trim()
-                if (label.isNotEmpty()) {
-                    splits.add(SpeedrunSplit(label))
-                }
-            }
-            if (name.isNotEmpty() && splits.isNotEmpty()) {
-                groups.add(SpeedrunGroup(name, splits))
-            }
-        }
-        if (groups.isEmpty()) return null
-        val configName = if (configNameRaw.isNotEmpty()) configNameRaw else "Speedrun"
-        return SpeedrunConfig(configName, groups)
-    }
-
-    private fun parseState(json: JSONObject): SpeedrunState? {
-        val runState = parseRunState(json.optString("run_state", "")) ?: return null
-        val activeIndex = json.optInt("active_split_index", 0)
-        val completedCount = json.optInt("completed_count", 0)
-        return SpeedrunState(runState, activeIndex, completedCount)
-    }
-
-    private fun parseRunState(raw: String): RunState? {
-        return when (raw.lowercase()) {
-            "idle" -> RunState.IDLE
-            "running" -> RunState.RUNNING
-            "finished" -> RunState.FINISHED
-            else -> null
         }
     }
 
@@ -465,9 +429,6 @@ class BackendVisionClient(
         return null
     }
 
-    /**
-     * Prefer a back/outward camera when available; otherwise use the first device found.
-     */
     private fun selectPreferredCameraName(
         enumerator: Camera2Enumerator,
         deviceNames: Array<String>
@@ -477,9 +438,60 @@ class BackendVisionClient(
             if (!enumerator.isFrontFacing(name)) {
                 return name
             }
-            if (fallback == null) fallback = name
+            if (fallback == null) {
+                fallback = name
+            }
         }
         return fallback
+    }
+
+    private suspend fun createSession(offerSdp: String): SessionCreateResponse =
+        withContext(Dispatchers.IO) {
+            val mediaType = "application/json".toMediaType()
+            val bodyJson = JSONObject()
+                .put("offer_sdp", offerSdp)
+                .toString()
+            val body = bodyJson.toRequestBody(mediaType)
+
+            val request = Request.Builder()
+                .url(sessionUrl)
+                .post(body)
+                .build()
+
+            okHttp.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val msg = "Session request failed: HTTP ${response.code} ${response.message}"
+                    Log.e(TAG, "$msg body=$responseBody")
+                    throw IllegalStateException(msg)
+                }
+
+                val json = JSONObject(responseBody)
+                val sessionId = json.optString("session_id", "").trim()
+                val answerSdp = json.optString("answer_sdp", "").trim()
+
+                if (sessionId.isEmpty() || answerSdp.isEmpty()) {
+                    throw IllegalStateException("Session response missing session_id or answer_sdp")
+                }
+
+                SessionCreateResponse(sessionId = sessionId, answerSdp = answerSdp)
+            }
+        }
+
+    private suspend fun stopSession(sessionId: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${sessionUrl.trimEnd('/')}/$sessionId")
+            .delete()
+            .build()
+
+        okHttp.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                Log.w(
+                    TAG,
+                    "Stop session failed: HTTP ${response.code} ${response.message} body=${response.body?.string()}"
+                )
+            }
+        }
     }
 
     private suspend fun createOffer(pc: PeerConnection): SessionDescription =
@@ -545,33 +557,14 @@ class BackendVisionClient(
     private suspend fun waitForIceGatheringComplete(pc: PeerConnection) {
         val deferred = CompletableDeferred<Unit>()
         iceGatheringDeferred = deferred
+
         if (pc.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) {
             iceGatheringDeferred = null
             deferred.complete(Unit)
             return
         }
+
         deferred.await()
         iceGatheringDeferred = null
     }
-
-    private suspend fun sendOfferAndGetAnswer(offerSdp: String): String =
-        withContext(Dispatchers.IO) {
-            val mediaType = "application/sdp".toMediaType()
-            val body = offerSdp.toRequestBody(mediaType)
-
-            val request = Request.Builder()
-                .url(sessionUrl)
-                .post(body)
-                .build()
-
-            okHttp.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorBody = response.body?.string()
-                    val msg = "Vision session request failed: HTTP ${response.code} ${response.message}"
-                    Log.e(TAG, "$msg body=$errorBody")
-                    throw IllegalStateException(msg)
-                }
-                response.body?.string() ?: throw IllegalStateException("Empty SDP answer")
-            }
-        }
 }

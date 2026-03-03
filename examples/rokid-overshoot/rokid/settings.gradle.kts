@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "rokid rfdetr"
+rootProject.name = "rokid overshoot"
 include(":app")

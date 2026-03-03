@@ -16,39 +16,44 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
+            android:paddingBottom="6dp"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
-            android:textStyle="bold"
-            android:paddingBottom="6dp" />
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:paddingBottom="10dp"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:paddingBottom="8dp" />
+            android:textSize="12sp" />
 
-        <TextView
-            android:id="@+id/tvSplits"
+        <ScrollView
+            android:id="@+id/svLog"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:lineSpacingExtra="4dp"
-            android:fontFamily="monospace" />
-    </LinearLayout>
+            android:fillViewport="true">
 
-    <TextView
-        android:id="@+id/tvTimer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:padding="16dp"
-        android:text="00:00.00"
-        android:textColor="#FFFFFF"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:fontFamily="monospace" />
+            <TextView
+                android:id="@+id/tvLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="4dp"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </ScrollView>
+
+        <TextView
+            android:id="@+id/tvControls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="10dp"
+            android:text="ENTER: start / stop"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </FrameLayout>

@@ -1,203 +1,404 @@
+from __future__ import annotations
+
 import asyncio
 import json
+import os
+import uuid
 from contextlib import asynccontextmanager, suppress
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
-from aiortc import (
-    MediaStreamTrack,
-    RTCPeerConnection,
-    RTCRtpReceiver,
-    RTCSessionDescription,
-)
-from aiortc.rtcdatachannel import RTCDataChannel
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import PlainTextResponse
+import httpx
+import websockets
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from logging_utils import get_logger
-from speedrun import SpeedrunController, load_speedrun_config
-from vision import DetectionResult, VisionProcessor
 
 logger = get_logger(__name__)
 
-SPEEDRUN_CONFIG_PATH = Path(__file__).with_name("speedrun_config.json")
-
-speedrun_controller = SpeedrunController(load_speedrun_config(SPEEDRUN_CONFIG_PATH))
-vision_processor: VisionProcessor | None = None
-vision_peers: set[RTCPeerConnection] = set()
-data_channels: set[RTCDataChannel] = set()
-
-
-async def _handle_detection(result: DetectionResult) -> None:
-    event = await speedrun_controller.on_detection(result.detected_classes)
-    if event:
-        await _broadcast(event)
+DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
+DEFAULT_PROMPT = "Describe what you see"
+DEFAULT_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+DEFAULT_PROCESSING = {
+    "target_fps": 6,
+    "clip_length_seconds": 0.5,
+    "delay_seconds": 0.5,
+}
 
 
-def _ensure_vision_processor() -> VisionProcessor:
-    global vision_processor
-    if vision_processor is None:
-        vision_processor = VisionProcessor(on_result=_handle_detection)
-    return vision_processor
+class VisionSessionCreateRequest(BaseModel):
+    offer_sdp: str
+
+
+class VisionSessionCreateResponse(BaseModel):
+    session_id: str
+    answer_sdp: str
+
+
+class StatusResponse(BaseModel):
+    status: str
+
+
+@dataclass
+class VisionSession:
+    session_id: str
+    stream_id: str
+    lease_ttl_seconds: int | None
+    android_ws: WebSocket | None = None
+    shutdown_event: asyncio.Event = field(default_factory=asyncio.Event)
+    overshoot_ws_task: asyncio.Task[None] | None = None
+    keepalive_task: asyncio.Task[None] | None = None
+
+
+class OvershootSessionManager:
+    def __init__(self, api_url: str, api_key: str) -> None:
+        self._api_url = api_url.rstrip("/")
+        self._api_key = api_key
+        self._http = httpx.AsyncClient(
+            base_url=self._api_url,
+            timeout=httpx.Timeout(20.0),
+            headers={"Authorization": f"Bearer {self._api_key}"},
+        )
+        self._sessions: dict[str, VisionSession] = {}
+        self._sessions_lock = asyncio.Lock()
+
+    async def close(self) -> None:
+        async with self._sessions_lock:
+            session_ids = list(self._sessions.keys())
+        for session_id in session_ids:
+            await self.close_session(session_id, reason="server shutdown")
+        await self._http.aclose()
+
+    async def create_session(self, offer_sdp: str) -> VisionSessionCreateResponse:
+        payload = {
+            "source": {"type": "webrtc", "sdp": offer_sdp},
+            "mode": "clip",
+            "processing": DEFAULT_PROCESSING,
+            "inference": {
+                "prompt": DEFAULT_PROMPT,
+                "backend": "overshoot",
+                "model": DEFAULT_MODEL,
+            },
+        }
+
+        response = await self._http.post("/streams", json=payload)
+        if not response.is_success:
+            detail = _response_text(response)
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Failed to create Overshoot stream "
+                    f"(HTTP {response.status_code}): {detail}"
+                ),
+            )
+
+        data = response.json()
+        stream_id = str(data.get("stream_id") or "").strip()
+        answer_sdp = str((data.get("webrtc") or {}).get("sdp") or "").strip()
+        ttl_seconds = _parse_positive_int((data.get("lease") or {}).get("ttl_seconds"))
+
+        if not stream_id or not answer_sdp:
+            if stream_id:
+                await self._close_overshoot_stream(stream_id)
+            raise HTTPException(
+                status_code=502,
+                detail="Overshoot response missing stream_id or WebRTC answer SDP",
+            )
+
+        session_id = str(uuid.uuid4())
+        session = VisionSession(
+            session_id=session_id,
+            stream_id=stream_id,
+            lease_ttl_seconds=ttl_seconds,
+        )
+
+        async with self._sessions_lock:
+            self._sessions[session_id] = session
+
+        session.overshoot_ws_task = asyncio.create_task(
+            self._run_overshoot_ws(session),
+            name=f"overshoot-ws-{session_id}",
+        )
+        if ttl_seconds:
+            session.keepalive_task = asyncio.create_task(
+                self._run_keepalive(session),
+                name=f"overshoot-keepalive-{session_id}",
+            )
+
+        logger.info(
+            "session=%s created stream_id=%s ttl=%s",
+            session_id,
+            stream_id,
+            ttl_seconds,
+        )
+        return VisionSessionCreateResponse(session_id=session_id, answer_sdp=answer_sdp)
+
+    async def attach_android_ws(self, session_id: str, websocket: WebSocket) -> bool:
+        async with self._sessions_lock:
+            session = self._sessions.get(session_id)
+        if session is None:
+            return False
+
+        existing_ws = session.android_ws
+        if existing_ws is not None:
+            with suppress(Exception):
+                await existing_ws.close(code=1000, reason="superseded by new client")
+        session.android_ws = websocket
+        return True
+
+    async def close_session(self, session_id: str, reason: str) -> None:
+        current_task = asyncio.current_task()
+
+        async with self._sessions_lock:
+            session = self._sessions.pop(session_id, None)
+        if session is None:
+            return
+
+        session.shutdown_event.set()
+
+        tasks_to_cancel: list[asyncio.Task[None]] = []
+        for task in (session.overshoot_ws_task, session.keepalive_task):
+            if task is None or task is current_task:
+                continue
+            if not task.done():
+                task.cancel()
+            tasks_to_cancel.append(task)
+
+        ws = session.android_ws
+        if ws is not None:
+            with suppress(Exception):
+                await ws.close(code=1000, reason=reason[:120])
+
+        if tasks_to_cancel:
+            with suppress(Exception):
+                await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+
+        await self._close_overshoot_stream(session.stream_id)
+        logger.info("session=%s closed reason=%s", session_id, reason)
+
+    async def _run_keepalive(self, session: VisionSession) -> None:
+        ttl_seconds = session.lease_ttl_seconds
+        if ttl_seconds is None:
+            return
+
+        interval_seconds = max(ttl_seconds / 2.0, 5.0)
+        logger.info(
+            "session=%s keepalive started interval=%.1fs",
+            session.session_id,
+            interval_seconds,
+        )
+
+        try:
+            while not session.shutdown_event.is_set():
+                try:
+                    await asyncio.wait_for(
+                        session.shutdown_event.wait(),
+                        timeout=interval_seconds,
+                    )
+                    return
+                except TimeoutError:
+                    pass
+
+                response = await self._http.post(
+                    f"/streams/{session.stream_id}/keepalive"
+                )
+                if not response.is_success:
+                    logger.error(
+                        "session=%s keepalive failed status=%s body=%s",
+                        session.session_id,
+                        response.status_code,
+                        _response_text(response),
+                    )
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("session=%s keepalive task crashed", session.session_id)
+
+        if not session.shutdown_event.is_set():
+            await self.close_session(session.session_id, reason="keepalive failed")
+
+    async def _run_overshoot_ws(self, session: VisionSession) -> None:
+        ws_base = self._api_url.replace("http://", "ws://").replace(
+            "https://", "wss://"
+        )
+        ws_url = f"{ws_base}/ws/streams/{session.stream_id}"
+
+        logger.info("session=%s connecting overshoot ws=%s", session.session_id, ws_url)
+
+        try:
+            async with websockets.connect(
+                ws_url,
+                ping_interval=20,
+                ping_timeout=20,
+                close_timeout=5,
+            ) as overshoot_ws:
+                await overshoot_ws.send(json.dumps({"api_key": self._api_key}))
+                async for message in overshoot_ws:
+                    if session.shutdown_event.is_set():
+                        return
+                    if isinstance(message, str):
+                        await self._handle_overshoot_message(session, message)
+                    else:
+                        logger.info(
+                            "session=%s ignoring binary overshoot message bytes=%s",
+                            session.session_id,
+                            len(message),
+                        )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "session=%s overshoot websocket failed", session.session_id
+            )
+
+        if not session.shutdown_event.is_set():
+            await self.close_session(
+                session.session_id, reason="overshoot websocket closed"
+            )
+
+    async def _handle_overshoot_message(
+        self, session: VisionSession, raw_text: str
+    ) -> None:
+        logger.info(
+            "session=%s stream=%s overshoot_message=%s",
+            session.session_id,
+            session.stream_id,
+            raw_text,
+        )
+
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError:
+            logger.warning("session=%s invalid JSON from Overshoot", session.session_id)
+            return
+        if not isinstance(payload, dict):
+            return
+
+        result_text = str(payload.get("result") or "").strip()
+        if not result_text:
+            return
+
+        await self._send_result_to_android(session, result_text)
+
+    async def _send_result_to_android(self, session: VisionSession, text: str) -> None:
+        websocket = session.android_ws
+        if websocket is None:
+            return
+
+        try:
+            await websocket.send_json({"type": "result", "text": text})
+        except Exception:
+            logger.exception(
+                "session=%s failed to send result to Android", session.session_id
+            )
+            await self.close_session(
+                session.session_id,
+                reason="android websocket send failed",
+            )
+
+    async def _close_overshoot_stream(self, stream_id: str) -> None:
+        if not stream_id:
+            return
+        try:
+            response = await self._http.delete(f"/streams/{stream_id}")
+            if not response.is_success:
+                logger.warning(
+                    "failed to close stream_id=%s status=%s body=%s",
+                    stream_id,
+                    response.status_code,
+                    _response_text(response),
+                )
+        except Exception:
+            logger.exception("failed to close stream_id=%s", stream_id)
+
+
+def _parse_positive_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        ivalue = int(value)
+        return ivalue if ivalue > 0 else None
+    return None
+
+
+def _response_text(response: httpx.Response) -> str:
+    try:
+        return response.text.strip()
+    except Exception:
+        return "<unreadable response body>"
+
+
+session_manager: OvershootSessionManager | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    processor = _ensure_vision_processor()
-    warmup_task = asyncio.create_task(processor.warmup())
+    global session_manager
+
+    api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Set OVERSHOOT_API_KEY in backend/.env")
+
+    api_url = os.getenv("OVERSHOOT_API_URL", DEFAULT_OVERSHOOT_API_URL).strip()
+    session_manager = OvershootSessionManager(api_url=api_url, api_key=api_key)
+
     try:
         yield
     finally:
-        if not warmup_task.done():
-            warmup_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await warmup_task
-        coros = [pc.close() for pc in list(vision_peers)]
-        if coros:
-            await asyncio.gather(*coros, return_exceptions=True)
-        vision_peers.clear()
-        data_channels.clear()
+        manager = session_manager
+        session_manager = None
+        if manager is not None:
+            await manager.close()
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-@app.post("/vision/session")
-async def vision_session(request: Request) -> Response:
-    await _reset_vision_state()
-    sdp_bytes = await request.body()
-    sdp = sdp_bytes.decode()
+@app.post("/vision/session", response_model=VisionSessionCreateResponse)
+async def create_vision_session(
+    payload: VisionSessionCreateRequest,
+) -> VisionSessionCreateResponse:
+    manager = _require_manager()
 
-    offer = RTCSessionDescription(sdp=sdp, type="offer")
-    pc = RTCPeerConnection()
-    transceiver = pc.addTransceiver("video", direction="recvonly")
-    _prefer_video_codec(transceiver, "video/H264")
-    vision_peers.add(pc)
+    offer_sdp = payload.offer_sdp.strip()
+    if not offer_sdp:
+        raise HTTPException(status_code=422, detail="offer_sdp must not be empty")
 
-    @pc.on("connectionstatechange")
-    async def on_connection_state_change() -> None:
-        logger.info("vision: connection state %s", pc.connectionState)
-        if pc.connectionState in {"failed", "closed", "disconnected"}:
-            await pc.close()
-            vision_peers.discard(pc)
-
-    @pc.on("datachannel")
-    def on_datachannel(channel: RTCDataChannel) -> None:
-        logger.info("vision: data channel opened %s", channel.label)
-        data_channels.add(channel)
-
-        @channel.on("message")
-        def on_message(message: Any) -> None:
-            if isinstance(message, str):
-                asyncio.create_task(_handle_client_message(message))
-            else:
-                logger.info("vision: ignoring non-text data channel message")
-
-        @channel.on("close")
-        def on_close() -> None:
-            data_channels.discard(channel)
-
-        if channel.readyState == "open":
-            asyncio.create_task(_send_initial(channel))
-        else:
-
-            @channel.on("open")
-            def on_open() -> None:
-                asyncio.create_task(_send_initial(channel))
-
-    @pc.on("track")
-    def on_track(track: MediaStreamTrack) -> None:
-        if track.kind == "video":
-            processor = _ensure_vision_processor()
-            task = asyncio.create_task(processor.consume(track))
-            task.add_done_callback(_log_task_exception)
-        else:
-            logger.info("vision: ignoring track kind=%s", track.kind)
-
-    await pc.setRemoteDescription(offer)
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    return PlainTextResponse(pc.localDescription.sdp)
+    return await manager.create_session(offer_sdp)
 
 
-async def _reset_vision_state() -> None:
-    await speedrun_controller.reset()
-    if vision_peers:
-        coros = [pc.close() for pc in list(vision_peers)]
-        if coros:
-            await asyncio.gather(*coros, return_exceptions=True)
-        vision_peers.clear()
-    data_channels.clear()
+@app.websocket("/vision/session/{session_id}/events")
+async def vision_session_events(websocket: WebSocket, session_id: str) -> None:
+    manager = _require_manager()
 
+    await websocket.accept()
+    attached = await manager.attach_android_ws(session_id, websocket)
+    if not attached:
+        await websocket.send_json({"type": "error", "message": "session not found"})
+        await websocket.close(code=1008, reason="session not found")
+        return
 
-async def _send_initial(channel: RTCDataChannel) -> None:
-    await _send_channel_json(channel, speedrun_controller.config.client_payload())
-    await _send_channel_json(channel, speedrun_controller.state_payload())
+    logger.info("session=%s android websocket connected", session_id)
 
-
-async def _handle_client_message(raw_text: str) -> None:
     try:
-        payload = json.loads(raw_text)
-    except json.JSONDecodeError:
-        logger.info("vision: failed to parse message %s", raw_text)
-        return
-    if not isinstance(payload, dict):
-        return
-
-    events = await speedrun_controller.on_client_message(payload)
-    for event in events:
-        await _broadcast(event)
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await manager.close_session(session_id, reason="android websocket disconnected")
 
 
-async def _broadcast(payload: dict[str, Any]) -> None:
-    if not data_channels:
-        return
-    message = json.dumps(payload)
-    for channel in list(data_channels):
-        if channel.readyState != "open":
-            data_channels.discard(channel)
-            continue
-        try:
-            channel.send(message)
-        except Exception:
-            logger.exception("vision: failed to send data channel message")
-            data_channels.discard(channel)
+@app.delete("/vision/session/{session_id}", response_model=StatusResponse)
+async def stop_vision_session(session_id: str) -> StatusResponse:
+    manager = _require_manager()
+    await manager.close_session(session_id, reason="client requested stop")
+    return StatusResponse(status="ok")
 
 
-async def _send_channel_json(channel: RTCDataChannel, payload: dict[str, Any]) -> None:
-    if channel.readyState != "open":
-        return
-    try:
-        channel.send(json.dumps(payload))
-    except Exception:
-        logger.exception("vision: failed to send initial state")
-
-
-def _prefer_video_codec(transceiver: Any, mime_type: str) -> None:
-    try:
-        capabilities = RTCRtpReceiver.getCapabilities("video")
-    except Exception:
-        logger.exception("vision: failed to read video capabilities")
-        return
-    if capabilities is None:
-        logger.warning("vision: no video capabilities; using default codec order")
-        return
-
-    mime_type = mime_type.lower()
-    preferences = [
-        codec for codec in capabilities.codecs if codec.mimeType.lower() == mime_type
-    ]
-    if not preferences:
-        logger.warning("vision: %s not available; using default codec order", mime_type)
-        return
-
-    transceiver.setCodecPreferences(preferences)
-    logger.info("vision: preferring %s for inbound video", mime_type)
-
-
-def _log_task_exception(task: asyncio.Task[Any]) -> None:
-    try:
-        task.result()
-    except Exception:
-        logger.exception("vision task failed")
+def _require_manager() -> OvershootSessionManager:
+    if session_manager is None:
+        raise RuntimeError("Session manager is not initialized")
+    return session_manager
