@@ -22,7 +22,15 @@ DEFAULT_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS = 8
 OVERSHOOT_WS_RETRY_BASE_SECONDS = 1.0
 OVERSHOOT_WS_RETRY_MAX_SECONDS = 15.0
-OVERSHOOT_WS_NON_RETRYABLE_CLOSE_CODES = {1008}
+OVERSHOOT_WS_RETRYABLE_CLOSE_CODES = {1012, 1013}
+OVERSHOOT_WS_TERMINAL_CLOSE_CODES = {1001, 1008}
+OVERSHOOT_STREAM_STOP_REASONS = {
+    "client_requested",
+    "webrtc_disconnected",
+    "livekit_disconnected",
+    "lease_expired",
+    "insufficient_credits",
+}
 DEFAULT_PROCESSING = {
     "target_fps": 6,
     "clip_length_seconds": 0.5,
@@ -268,7 +276,11 @@ class OvershootSessionManager:
                         return
 
                     attempt += 1
-                    should_retry, close_code = _is_retryable_overshoot_disconnect(None)
+                    close_code = overshoot_ws.close_code
+                    close_reason = overshoot_ws.close_reason
+                    should_retry = _is_retryable_overshoot_close(
+                        close_code, close_reason
+                    )
                     if (
                         not should_retry
                         or attempt > OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS
@@ -278,9 +290,10 @@ class OvershootSessionManager:
                     wait_seconds = _overshoot_reconnect_backoff(attempt)
                     logger.warning(
                         "session=%s overshoot websocket closed without error code=%s "
-                        "attempt=%s/%s retry_in=%.1fs",
+                        "reason=%s attempt=%s/%s retry_in=%.1fs",
                         session.session_id,
                         close_code,
+                        close_reason,
                         attempt,
                         OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
                         wait_seconds,
@@ -293,14 +306,19 @@ class OvershootSessionManager:
                     return
 
                 attempt += 1
-                should_retry, close_code = _is_retryable_overshoot_disconnect(exc)
+                (
+                    should_retry,
+                    close_code,
+                    close_reason,
+                ) = _is_retryable_overshoot_disconnect(exc)
                 if not should_retry or attempt > OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS:
                     logger.exception(
                         "session=%s overshoot websocket failed "
-                        "retryable=%s close_code=%s attempt=%s/%s",
+                        "retryable=%s close_code=%s close_reason=%s attempt=%s/%s",
                         session.session_id,
                         should_retry,
                         close_code,
+                        close_reason,
                         attempt,
                         OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
                     )
@@ -309,10 +327,12 @@ class OvershootSessionManager:
                 wait_seconds = _overshoot_reconnect_backoff(attempt)
                 logger.warning(
                     "session=%s overshoot websocket disconnected "
-                    "retryable=%s close_code=%s attempt=%s/%s retry_in=%.1fs",
+                    "retryable=%s close_code=%s close_reason=%s attempt=%s/%s "
+                    "retry_in=%.1fs",
                     session.session_id,
                     should_retry,
                     close_code,
+                    close_reason,
                     attempt,
                     OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
                     wait_seconds,
@@ -414,25 +434,47 @@ def _overshoot_reconnect_backoff(attempt: int) -> float:
 
 def _is_retryable_overshoot_disconnect(
     exc: Exception | None,
-) -> tuple[bool, int | None]:
+) -> tuple[bool, int | None, str | None]:
     if exc is None:
-        return True, None
+        return True, None, None
 
     if isinstance(exc, websockets.exceptions.ConnectionClosed):
         close_code = _extract_close_code(exc)
-        if close_code is None:
-            return True, None
-        return close_code not in OVERSHOOT_WS_NON_RETRYABLE_CLOSE_CODES, close_code
+        close_reason = _extract_close_reason(exc)
+        return (
+            _is_retryable_overshoot_close(close_code, close_reason),
+            close_code,
+            close_reason,
+        )
 
-    retryable_network_errors = (
+    retryable_connect_errors = (
         OSError,
         TimeoutError,
-        websockets.exceptions.WebSocketException,
+        websockets.exceptions.InvalidStatus,
     )
-    if isinstance(exc, retryable_network_errors):
-        return True, None
+    if isinstance(exc, retryable_connect_errors):
+        return True, None, None
 
-    return False, None
+    return False, None, None
+
+
+def _is_retryable_overshoot_close(code: int | None, reason: str | None) -> bool:
+    if code is None:
+        return True
+
+    if code in OVERSHOOT_WS_RETRYABLE_CLOSE_CODES:
+        return True
+
+    if code in OVERSHOOT_WS_TERMINAL_CLOSE_CODES:
+        return False
+
+    normalized_reason = (reason or "").strip().lower()
+    if normalized_reason.startswith("stream ended:"):
+        stop_reason = normalized_reason.removeprefix("stream ended:").strip()
+        if stop_reason in OVERSHOOT_STREAM_STOP_REASONS:
+            return False
+
+    return False
 
 
 def _extract_close_code(exc: websockets.exceptions.ConnectionClosed) -> int | None:
@@ -444,6 +486,21 @@ def _extract_close_code(exc: websockets.exceptions.ConnectionClosed) -> int | No
     legacy_code = getattr(exc, "code", None)
     if isinstance(legacy_code, int):
         return legacy_code
+
+    return None
+
+
+def _extract_close_reason(exc: websockets.exceptions.ConnectionClosed) -> str | None:
+    received = getattr(exc, "rcvd", None)
+    reason = getattr(received, "reason", None)
+    if isinstance(reason, str):
+        normalized = reason.strip()
+        return normalized or None
+
+    legacy_reason = getattr(exc, "reason", None)
+    if isinstance(legacy_reason, str):
+        normalized = legacy_reason.strip()
+        return normalized or None
 
     return None
 
