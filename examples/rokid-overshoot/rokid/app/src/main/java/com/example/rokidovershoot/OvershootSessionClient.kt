@@ -2,6 +2,7 @@ package com.example.rokidovershoot
 
 import android.content.Context
 import android.util.Log
+import android.util.Base64
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -141,8 +142,9 @@ class OvershootSessionClient(
         val createResponse = createSession(localSdp)
         currentSessionId = createResponse.sessionId
 
-        val answer = SessionDescription(SessionDescription.Type.ANSWER, createResponse.answerSdp)
-        setRemoteDescription(pc, answer)
+                val answerSdp = normalizeSdp(createResponse.answerSdp)
+                val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
+                setRemoteDescription(pc, answer)
 
         connectEventsWebSocket(createResponse.sessionId)
 
@@ -482,16 +484,39 @@ class OvershootSessionClient(
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return trimmed
 
-        val hasActualNewlines = trimmed.contains('\n') || trimmed.contains('\r')
-        if (hasActualNewlines) {
-            return trimmed
+        var text = trimmed
+
+        // If a backend accidentally forwards a JSON object/string here, unwrap it.
+        if (text.startsWith("{") && text.contains("\"sdp\"")) {
+            runCatching { JSONObject(text).optString("sdp", text) }
+                .onSuccess { text = it }
         }
 
-        return when {
-            trimmed.contains("\\r\\n") -> trimmed.replace("\\r\\n", "\r\n")
-            trimmed.contains("\\n") -> trimmed.replace("\\n", "\n")
-            else -> trimmed
+        // Fallback for a base64-encoded SDP payload.
+        if (!text.contains("v=") && text.matches(Regex("^[A-Za-z0-9+/=]+$"))) {
+            runCatching {
+                val decoded = Base64.decode(text, Base64.DEFAULT)
+                String(decoded, Charsets.UTF_8)
+            }.onSuccess { decoded ->
+                if (decoded.contains("v=")) {
+                    text = decoded
+                }
+            }
         }
+
+        text = text
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+
+        val lines = text
+            .split('\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return ""
+
+        return lines.joinToString("\r\n", postfix = "\r\n")
     }
 
     private suspend fun stopSession(sessionId: String) = withContext(Dispatchers.IO) {

@@ -95,7 +95,7 @@ class OvershootSessionManager:
 
         data = response.json()
         stream_id = str(data.get("stream_id") or "").strip()
-        answer_sdp = _normalize_sdp((data.get("webrtc") or {}).get("sdp"))
+        answer_sdp = _extract_answer_sdp(data.get("webrtc"))
         ttl_seconds = _parse_positive_int((data.get("lease") or {}).get("ttl_seconds"))
 
         if not stream_id or not answer_sdp:
@@ -104,6 +104,17 @@ class OvershootSessionManager:
             raise HTTPException(
                 status_code=502,
                 detail="Overshoot response missing stream_id or WebRTC answer SDP",
+            )
+
+        if not answer_sdp.startswith("v="):
+            if stream_id:
+                await self._close_overshoot_stream(stream_id)
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Overshoot answer SDP has unexpected format: "
+                    f"{_sdp_diagnostics(answer_sdp)}"
+                ),
             )
 
         session_id = str(uuid.uuid4())
@@ -323,19 +334,48 @@ def _parse_positive_int(value: Any) -> int | None:
     return None
 
 
+def _extract_answer_sdp(webrtc_payload: Any) -> str:
+    if isinstance(webrtc_payload, dict):
+        return _normalize_sdp(webrtc_payload.get("sdp"))
+    if isinstance(webrtc_payload, str):
+        raw = webrtc_payload.strip()
+        parsed = _parse_json(raw)
+        if isinstance(parsed, dict):
+            return _normalize_sdp(parsed.get("sdp"))
+        return _normalize_sdp(raw)
+    return ""
+
+
+def _parse_json(raw: str) -> Any | None:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
 def _normalize_sdp(value: Any) -> str:
-    text = str(value or "").strip()
+    if not isinstance(value, str):
+        return ""
+
+    text = value.strip()
     if not text:
         return ""
 
-    has_actual_newlines = ("\n" in text) or ("\r" in text)
-    if not has_actual_newlines:
-        if "\\r\\n" in text:
-            text = text.replace("\\r\\n", "\r\n")
-        elif "\\n" in text:
-            text = text.replace("\\n", "\n")
+    # Convert escaped newlines if the payload is still escaped.
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
+    # Normalize all newline variants and then restore canonical SDP CRLF.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if not lines:
+        return ""
+    return "\r\n".join(lines) + "\r\n"
 
-    return text
+
+def _sdp_diagnostics(sdp: str) -> str:
+    normalized = sdp.replace("\r\n", "\n")
+    line_count = len([line for line in normalized.split("\n") if line])
+    preview = normalized[:80].replace("\n", "\\n")
+    return f"len={len(sdp)} lines={line_count} preview='{preview}'"
 
 
 def _response_text(response: httpx.Response) -> str:
