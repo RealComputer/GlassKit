@@ -1,6 +1,6 @@
 # Example: Rokid Overshoot
 
-This example app streams live camera video from Rokid Glasses to Overshoot and displays live inference text on the glasses HUD.
+This example app streams live camera video from Rokid Glasses to [Overshoot](https://overshoot.ai/) and displays live inference text on the glasses HUD.
 
 ## What It Does
 
