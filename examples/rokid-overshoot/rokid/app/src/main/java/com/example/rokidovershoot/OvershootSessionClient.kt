@@ -60,6 +60,9 @@ class OvershootSessionClient(
         private const val OVERSHOOT_TURN_USERNAME = "overshoot"
         private const val OVERSHOOT_TURN_CREDENTIAL = "overshoot"
         private const val SESSION_COLLECTION_PATH = "/vision/session"
+        private const val CAPTURE_WIDTH = 1280
+        private const val CAPTURE_HEIGHT = 960
+        private const val CAPTURE_FPS = 15
     }
 
     private data class SessionCreateResponse(
@@ -403,7 +406,7 @@ class OvershootSessionClient(
         )
 
         localVideoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
-            adaptOutputFormat(1280, 960, 15)
+            adaptOutputFormat(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
         }
 
         localVideoSource?.let { source ->
@@ -412,7 +415,7 @@ class OvershootSessionClient(
                 context,
                 source.capturerObserver
             )
-            videoCapturer.startCapture(1280, 960, 15)
+            videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
 
             localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
             localVideoTrack?.setEnabled(true)
