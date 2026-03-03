@@ -472,15 +472,37 @@ class OvershootSessionClient(
 
                 val json = JSONObject(responseBody)
                 val sessionId = json.optString("session_id", "").trim()
-                val answerSdp = json.optString("answer_sdp", "").trim()
+                val answerSdp = normalizeSdp(json.optString("answer_sdp", ""))
 
                 if (sessionId.isEmpty() || answerSdp.isEmpty()) {
                     throw IllegalStateException("Session response missing session_id or answer_sdp")
+                }
+                if (!answerSdp.startsWith("v=")) {
+                    throw IllegalStateException("Session response answer_sdp has unexpected format")
                 }
 
                 SessionCreateResponse(sessionId = sessionId, answerSdp = answerSdp)
             }
         }
+
+    private fun normalizeSdp(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+
+        val text = trimmed
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+
+        val lines = text
+            .split('\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return ""
+
+        return lines.joinToString("\r\n", postfix = "\r\n")
+    }
 
     private suspend fun stopSession(sessionId: String) = withContext(Dispatchers.IO) {
         val request = Request.Builder()
