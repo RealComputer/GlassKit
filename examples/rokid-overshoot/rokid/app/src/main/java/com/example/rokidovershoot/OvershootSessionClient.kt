@@ -42,7 +42,7 @@ import kotlin.coroutines.resumeWithException
 
 class OvershootSessionClient(
     private val context: Context,
-    private val endpointUrl: String,
+    private val backendBaseUrl: String,
     private val listener: Listener
 ) {
 
@@ -282,15 +282,15 @@ class OvershootSessionClient(
             }
 
             else -> {
-                throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
+                throw IllegalArgumentException("BACKEND_BASE_URL must start with http:// or https://")
             }
         }
     }
 
     private fun buildSessionCollectionUrl(): String {
-        val normalizedBaseUrl = endpointUrl.trim().trimEnd('/')
+        val normalizedBaseUrl = backendBaseUrl.trim().trimEnd('/')
         if (!normalizedBaseUrl.startsWith("http://") && !normalizedBaseUrl.startsWith("https://")) {
-            throw IllegalArgumentException("VISION_SESSION_URL must start with http:// or https://")
+            throw IllegalArgumentException("BACKEND_BASE_URL must start with http:// or https://")
         }
 
         return "$normalizedBaseUrl$SESSION_COLLECTION_PATH"

@@ -21,7 +21,7 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 - `app/src/main/java/com/example/rokidovershoot/MainActivity.kt`: temple-tap start/stop controls and rolling result log UI.
 - `app/src/main/java/com/example/rokidovershoot/OvershootSessionClient.kt`: WebRTC offer/answer flow and backend websocket handling.
 - `app/src/main/res/layout/activity_main.xml`: monochrome HUD layout with auto-scrolling log.
-- `app/build.gradle.kts`: `VISION_SESSION_URL` BuildConfig value from `rokid/local.properties`.
+- `app/build.gradle.kts`: `BACKEND_BASE_URL` BuildConfig value from `rokid/local.properties`.
 
 ## Backend (`./backend/`)
 
@@ -31,7 +31,7 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 
 # Configuration
 
-- `rokid/local.properties`: must define `VISION_SESSION_URL` (backend base URL, for example `http://<HOST>:8000`).
+- `rokid/local.properties`: must define `BACKEND_BASE_URL` (backend base URL, for example `http://<HOST>:8000`).
 - `backend/.env`: must define `OVERSHOOT_API_KEY`.
 
 # Commands

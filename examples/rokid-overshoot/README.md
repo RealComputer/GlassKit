@@ -30,7 +30,7 @@ See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
 Set the backend URL in `rokid/local.properties`:
 
 ```properties
-VISION_SESSION_URL=http://<YOUR_BACKEND>
+BACKEND_BASE_URL=http://<YOUR_BACKEND>
 ```
 
 Create the backend environment file:

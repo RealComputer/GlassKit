@@ -9,8 +9,8 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
-val visionEndpointUrl = localProperties.getProperty("VISION_SESSION_URL")
-    ?: error("VISION_SESSION_URL is required in rokid/local.properties")
+val backendBaseUrl = localProperties.getProperty("BACKEND_BASE_URL")
+    ?: error("BACKEND_BASE_URL is required in rokid/local.properties")
 
 android {
     namespace = "com.example.rokidovershoot"
@@ -26,7 +26,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "VISION_SESSION_URL", "\"$visionEndpointUrl\"")
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }
 
     buildTypes {
