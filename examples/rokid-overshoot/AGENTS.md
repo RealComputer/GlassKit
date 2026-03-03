@@ -5,20 +5,12 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, mic, and speaker.
 - Overshoot is a Vision Language Model inference API for live video.
 
-# What It Does
-
-- Tap the temple area to start streaming.
-- Tap the temple area again to stop.
-- While running, you see live result text appear on the glasses display.
-- New lines are added at the bottom and the view auto-scrolls.
-- Each new run starts with a clean screen.
-
 # Architecture
 
 - User starts or stops streaming with a temple tap in the Android app (`rokid/`).
 - Android captures camera video, creates a WebRTC offer, and sends signaling data to the backend (`backend/`).
 - Backend creates and manages the Overshoot stream, then returns the answer SDP to Android.
-- Android applies the answer and sends live media over WebRTC.
+- Android applies the answer and streams live media directly to Overshoot over WebRTC.
 - Backend listens to Overshoot stream events and relays inference result text to Android over a backend WebSocket.
 - Android app appends each result line to a rolling HUD log and auto-scrolls while the session is active.
 
