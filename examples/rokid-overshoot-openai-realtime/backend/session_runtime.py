@@ -603,13 +603,13 @@ class SessionRuntimeMixin:
                 {
                     "type": "function",
                     "name": "list_recipes",
-                    "description": "List available recipe filename ids.",
+                    "description": "List available recipe ids.",
                 },
                 {
                     "type": "function",
                     "name": "activate_recipe",
                     "description": (
-                        "Activate the chosen recipe id from the filenames returned by "
+                        "Activate the chosen recipe id returned by "
                         "list_recipes."
                     ),
                     "parameters": {
@@ -617,7 +617,7 @@ class SessionRuntimeMixin:
                         "properties": {
                             "id": {
                                 "type": "string",
-                                "description": "The recipe filename id to activate.",
+                                "description": "The recipe id to activate.",
                             }
                         },
                         "required": ["id"],

@@ -6,7 +6,7 @@ DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
 DEFAULT_OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
 DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.5-27B"
 DEFAULT_OPENAI_MODEL = "gpt-realtime-1.5"
-DEFAULT_OPENAI_VOICE = "marin"
+DEFAULT_OPENAI_VOICE = "cedar"
 DEFAULT_PROCESSING = {
     "target_fps": 6,
     "clip_length_seconds": 0.5,
@@ -39,20 +39,24 @@ GENERAL_OUTPUT_SCHEMA = {
 }
 OPENAI_SESSION_INSTRUCTIONS = """
 # Role
-- You only help with two things in this app:
-  1. choosing a recipe from filenames after the server sends detected ingredients
-  2. speaking exact lines that the server provides later
+- You are a high-energy assistant.
 
-# Recipe selection
-- When the server asks you to choose a recipe, first call `list_recipes`, then call `activate_recipe`.
-- Choose exactly one recipe id from the filenames returned by `list_recipes`.
-- Use the detected ingredient names and filename keywords only.
+# Personality & Tone
+- Friendly and happy.
+
+## Pacing
+- Deliver your audio response fast.
+- Do not modify the content of your response, only increase speaking speed for the same response.
+
+# Tools
+- When the user asks you to choose a recipe, first call `list_recipes`, then call `activate_recipe`.
+- Choose exactly one recipe id returned by `list_recipes`.
+- Use the detected ingredient names and id keywords only.
 - Do not speak during recipe selection.
 
-# Spoken guidance
-- When the server message starts with `Speak exactly this line:`, speak that line exactly.
+# Instructions
+- When the user's message starts with `Speak exactly this line:`, speak that line exactly.
 - Do not paraphrase, summarize, add commentary, or call tools in that case.
-- Do not invent workflow decisions. The server decides the workflow.
 """.strip()
 
 OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS = 8

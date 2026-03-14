@@ -388,7 +388,7 @@ class SessionWorkflowMixin:
             session,
             (
                 f"Detected visible ingredients: {ingredient_list}. "
-                "Choose the single best recipe filename for these ingredients. "
+                "Choose the single best recipe id for these ingredients. "
                 "Call list_recipes first, then call activate_recipe. Do not speak."
             ),
         )
