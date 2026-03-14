@@ -36,6 +36,7 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `Backend <-> Overshoot` (WebSocket): live inference result delivery plus keepalive traffic for the active stream.
 - `Rokid <-> OpenAI Realtime` (WebRTC audio + data): direct audio playback and transcript delivery after backend setup.
 - `Backend <-> OpenAI Realtime` (WebSocket sideband): server-side control for recipe selection and exact speech playback. The backend handles tools and can cancel or replace speech when server decisions change.
+  - Realtime events should be observable from both OpenAI paths: Rokid can receive them over the WebRTC data channel, and the backend can receive them over the sideband WebSocket.
 
 ## End-to-end session flow
 
