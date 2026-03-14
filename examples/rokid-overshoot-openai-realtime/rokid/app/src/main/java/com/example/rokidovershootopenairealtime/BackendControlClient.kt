@@ -138,8 +138,8 @@ class BackendControlClient(
             )
         }
 
-        val recipeName = payload.optString("recipe_name").takeIf { it.isNotBlank() }
-        val activeTaskId = payload.optString("active_task_id").takeIf { it.isNotBlank() }
+        val recipeName = payload.optNullableString("recipe_name")
+        val activeTaskId = payload.optNullableString("active_task_id")
         return HudState(
             screen = payload.optString("screen", "start"),
             phase = payload.optString("phase", "WAITING_FOR_START"),
@@ -165,5 +165,10 @@ class BackendControlClient(
                 throw IllegalArgumentException("BACKEND_BASE_URL must start with http:// or https://")
             }
         }
+    }
+
+    private fun JSONObject.optNullableString(name: String): String? {
+        if (isNull(name)) return null
+        return optString(name, "").takeIf { it.isNotBlank() && it != "null" }
     }
 }
