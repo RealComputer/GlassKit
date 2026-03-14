@@ -24,9 +24,11 @@ import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
+import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
+import org.webrtc.RtpTransceiver
 import org.webrtc.SessionDescription
 import org.webrtc.audio.JavaAudioDeviceModule
 import java.nio.charset.Charset
@@ -149,6 +151,7 @@ class OpenAIRealtimeClient(
         val pc = createPeerConnection()
         peerConnection = pc
 
+        addReceiveOnlyAudioTransceiver(pc)
         setupDataChannel(pc)
 
         val offer = createOffer(pc)
@@ -156,6 +159,7 @@ class OpenAIRealtimeClient(
         waitForIceGatheringComplete(pc)
 
         val localSdp = pc.localDescription?.description ?: error("LocalDescription is null")
+        requireAudioMediaSection(localSdp)
         val answerSdp = createRealtimeSession(localSdp)
         val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
         setRemoteDescription(pc, answer)
@@ -232,6 +236,24 @@ class OpenAIRealtimeClient(
                 handleServerEvent(String(data, Charset.forName("UTF-8")))
             }
         })
+    }
+
+    private fun addReceiveOnlyAudioTransceiver(pc: PeerConnection) {
+        val init = RtpTransceiver.RtpTransceiverInit(
+            RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
+        )
+        val transceiver = pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, init)
+            ?: error("Failed to add receive-only audio transceiver")
+        transceiver.receiver.track()?.setEnabled(true)
+    }
+
+    private fun requireAudioMediaSection(sdp: String) {
+        if (sdp.contains("\r\nm=audio ") || sdp.startsWith("m=audio ")) {
+            Log.d(TAG, "Realtime offer ready with audio section (${sdp.length} chars)")
+            return
+        }
+        Log.e(TAG, "Realtime offer missing m=audio section: $sdp")
+        error("Realtime offer missing audio media section")
     }
 
     private fun handleServerEvent(jsonText: String) {
