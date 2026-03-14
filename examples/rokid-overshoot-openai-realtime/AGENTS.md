@@ -32,7 +32,8 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `Rokid <-> Backend` (`WebSocket`): persistent control channel for session lifecycle, HUD updates, and debug gestures.
 - `Rokid -> Backend` (`HTTP`): setup path for both media links. The glasses send SDP offers to the backend, and the backend returns the answers for the Overshoot and OpenAI Realtime sessions.
 - `Rokid <-> Overshoot` (`WebRTC` video): direct camera stream for live vision after backend setup.
-- `Backend <-> Overshoot` (`HTTP` + `WebSocket`): stream management plus live inference results. The backend creates and maintains the stream, updates prompts, and receives structured outputs.
+- `Backend -> Overshoot` (`HTTP`): stream creation and prompt updates. The backend creates and manages the stream lifecycle through the Overshoot HTTP API.
+- `Backend <-> Overshoot` (`WebSocket`): live inference result delivery plus keepalive traffic for the active stream.
 - `Rokid <-> OpenAI Realtime` (`WebRTC` audio + data): direct audio playback and transcript delivery after backend setup.
 - `Backend <-> OpenAI Realtime` (`WebSocket` sideband): server-side control for recipe selection and exact speech playback. The backend handles tools and can cancel or replace speech when server decisions change.
 
