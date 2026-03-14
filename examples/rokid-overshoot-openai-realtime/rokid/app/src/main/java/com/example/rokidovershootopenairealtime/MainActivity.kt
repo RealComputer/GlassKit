@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StrikethroughSpan
@@ -17,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.example.rokidovershootopenairealtime.BackendControlClient.HudState
 import com.example.rokidovershootopenairealtime.BackendControlClient.HudTask
 import com.example.rokidovershootopenairealtime.databinding.ActivityMainBinding
+import kotlin.random.Random
 import org.webrtc.PeerConnection
 
 class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
@@ -35,8 +38,32 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     private var isRunning = false
     private var idleMessage = ""
     private var mediaClientGeneration = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var isTranscriptBlinking = false
+    private var transcriptBlinkScheduled = false
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL
+    private val transcriptBlinkRunnable = object : Runnable {
+        override fun run() {
+            if (!shouldAnimateTranscriptFace()) {
+                stopTranscriptBlinking()
+                renderTranscript()
+                return
+            }
+
+            isTranscriptBlinking = !isTranscriptBlinking
+            transcriptBlinkScheduled = true
+            mainHandler.postDelayed(
+                this,
+                if (isTranscriptBlinking) {
+                    TRANSCRIPT_BLINK_CLOSED_MS
+                } else {
+                    nextTranscriptBlinkDelayMillis()
+                }
+            )
+            renderTranscript()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -268,6 +295,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     }
 
     private fun disconnectControl() {
+        stopTranscriptBlinking()
         controlClient?.close()
         pendingStart = false
         isRunning = false
@@ -340,7 +368,6 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
         binding.tvRecipe.visibility = if (showStart || !showRecipe) View.GONE else View.VISIBLE
         binding.tvTasks.visibility = if (showStart) View.GONE else View.VISIBLE
-        binding.tvTranscript.visibility = if (showStart) View.GONE else View.VISIBLE
 
         if (showStart) {
             renderIdleState(getString(R.string.start_hint))
@@ -359,10 +386,11 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private fun renderIdleState(message: String) {
         idleMessage = message
+        stopTranscriptBlinking()
         showHint(message)
         binding.tvRecipe.visibility = View.GONE
         binding.tvTasks.visibility = View.GONE
-        binding.tvTranscript.visibility = View.GONE
+        binding.transcriptContainer.visibility = View.GONE
     }
 
     private fun showHint(message: String) {
@@ -375,12 +403,65 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     }
 
     private fun renderTranscript() {
-        binding.tvTranscript.text = currentTranscript.trim()
-        if (binding.tvTranscript.text.isNullOrEmpty()) {
-            binding.tvTranscript.visibility = View.GONE
-        } else if (currentHudState?.screen == "running") {
-            binding.tvTranscript.visibility = View.VISIBLE
+        val transcript = currentTranscript.trim()
+        val state = currentHudState
+        if (transcript.isEmpty() || state?.screen != "running") {
+            stopTranscriptBlinking()
+            binding.transcriptContainer.visibility = View.GONE
+            binding.tvFace.text = ""
+            binding.tvTranscript.text = ""
+            return
         }
+
+        binding.tvFace.text = transcriptFace(state.phase)
+        binding.tvTranscript.text = "\"$transcript\""
+        binding.transcriptContainer.visibility = View.VISIBLE
+
+        if (state.phase == "COMPLETED") {
+            stopTranscriptBlinking()
+        } else {
+            ensureTranscriptBlinking()
+        }
+    }
+
+    private fun transcriptFace(phase: String): String {
+        val eyes = when {
+            phase == "COMPLETED" -> "^^"
+            isTranscriptBlinking -> "--"
+            else -> "oo"
+        }
+        return "  ____\n / $eyes \\\n \\____/--"
+    }
+
+    private fun ensureTranscriptBlinking() {
+        if (!shouldAnimateTranscriptFace() || transcriptBlinkScheduled) {
+            return
+        }
+        transcriptBlinkScheduled = true
+        mainHandler.postDelayed(
+            transcriptBlinkRunnable,
+            nextTranscriptBlinkDelayMillis()
+        )
+    }
+
+    private fun shouldAnimateTranscriptFace(): Boolean {
+        val state = currentHudState ?: return false
+        return state.screen == "running" &&
+            state.phase != "COMPLETED" &&
+            currentTranscript.trim().isNotEmpty()
+    }
+
+    private fun stopTranscriptBlinking() {
+        mainHandler.removeCallbacks(transcriptBlinkRunnable)
+        transcriptBlinkScheduled = false
+        isTranscriptBlinking = false
+    }
+
+    private fun nextTranscriptBlinkDelayMillis(): Long {
+        return Random.nextLong(
+            TRANSCRIPT_BLINK_OPEN_MIN_MS,
+            TRANSCRIPT_BLINK_OPEN_MAX_MS + 1
+        )
     }
 
     private fun renderTasks(tasks: List<HudTask>, activeTaskId: String?): SpannableStringBuilder {
@@ -429,5 +510,8 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
+        private const val TRANSCRIPT_BLINK_CLOSED_MS = 180L
+        private const val TRANSCRIPT_BLINK_OPEN_MIN_MS = 2500L
+        private const val TRANSCRIPT_BLINK_OPEN_MAX_MS = 4200L
     }
 }

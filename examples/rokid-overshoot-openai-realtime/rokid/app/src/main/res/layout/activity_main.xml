@@ -54,14 +54,34 @@
             android:textSize="15sp"
             android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/tvTranscript"
+        <LinearLayout
+            android:id="@+id/transcriptContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="sans-serif"
-            android:lineSpacingExtra="4dp"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:visibility="gone" />
+            android:gravity="top"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvFace"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:includeFontPadding="false"
+                android:lineSpacingExtra="2dp"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvTranscript"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium"
+                android:lineSpacingExtra="2dp"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>
