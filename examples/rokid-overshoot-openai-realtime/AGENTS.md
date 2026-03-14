@@ -29,33 +29,12 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 
 ## Connection graph
 
-- `Rokid -> Backend` over a control WebSocket at `/session/control`
-  - How: standard websocket, opened during app startup once camera permission is available
-  - Why: the backend is authoritative for session lifecycle, HUD state, and debug gestures
-
-- `Rokid -> Backend` over `POST /session/{session_id}/vision`
-  - How: the glasses send a WebRTC SDP offer to the backend, and the backend returns the SDP answer for the Overshoot video session
-  - Why: the backend owns the Overshoot API key, creates the stream, chooses the initial prompt and output schema, and keeps the `stream_id` so it can patch prompts later
-
-- `Rokid <-> Overshoot` over WebRTC media after that SDP exchange
-  - How: once the backend brokers the offer/answer, camera video flows directly between the glasses and Overshoot
-  - Why: video should stay low-latency and should not be proxied frame-by-frame through FastAPI
-
-- `Backend <-> Overshoot` over REST plus websocket
-  - How: REST to create streams, send keepalives, delete streams, and patch prompts; websocket to receive `StreamInferenceResult` events
-  - Why: the backend must switch detectors, discard stale prompt results, and drive the workflow from structured vision outputs
-
-- `Rokid -> Backend` over `POST /session/{session_id}/realtime`
-  - How: the glasses send a WebRTC SDP offer to the backend, and the backend returns the SDP answer for the OpenAI Realtime session
-  - Why: the backend owns the OpenAI API key and must create the realtime call so it also gets the `call_id` for sideband control
-
-- `Rokid <-> OpenAI Realtime` over WebRTC media and data channel after that SDP exchange
-  - How: remote audio and transcript events travel directly between the glasses and OpenAI Realtime
-  - Why: this keeps speech playback low-latency and lets the client show transcript deltas without the backend relaying them line-by-line
-
-- `Backend <-> OpenAI Realtime` over a sideband websocket tied to the `call_id`
-  - How: the backend opens `wss://api.openai.com/v1/realtime?call_id=...`
-  - Why: the backend must issue tool-call responses, cancel and replace speech, and keep workflow decisions on the server instead of in the model
+- `Rokid <-> Backend` (`WebSocket`): persistent control channel for session lifecycle, HUD updates, and debug gestures.
+- `Rokid -> Backend` (`HTTP`): setup path for both media links. The glasses send SDP offers to the backend, and the backend returns the answers for the Overshoot and OpenAI Realtime sessions.
+- `Rokid <-> Overshoot` (`WebRTC` video): direct camera stream for live vision after backend setup.
+- `Backend <-> Overshoot` (`HTTP` + `WebSocket`): stream management plus live inference results. The backend creates and maintains the stream, updates prompts, and receives structured outputs.
+- `Rokid <-> OpenAI Realtime` (`WebRTC` audio + data): direct audio playback and transcript delivery after backend setup.
+- `Backend <-> OpenAI Realtime` (`WebSocket` sideband): server-side control for recipe selection and exact speech playback. The backend handles tools and can cancel or replace speech when server decisions change.
 
 ## End-to-end session flow
 
