@@ -388,17 +388,14 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         val numberWidth = tasks.size.toString().length
         tasks.forEachIndexed { index, task ->
             val stepNumber = (index + 1).toString().padStart(numberWidth, ' ')
-            val prefix = when {
-                task.id == activeTaskId -> "> $stepNumber. "
-                else -> "  $stepNumber. "
-            }
+            val prefix = "$stepNumber. "
             val start = builder.length
             builder.append(prefix).append(task.text)
             val end = builder.length
             if (task.id == activeTaskId) {
                 builder.setSpan(
-                    StyleSpan(Typeface.ITALIC),
-                    start + prefix.length,
+                    StyleSpan(Typeface.BOLD_ITALIC),
+                    start,
                     end,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
