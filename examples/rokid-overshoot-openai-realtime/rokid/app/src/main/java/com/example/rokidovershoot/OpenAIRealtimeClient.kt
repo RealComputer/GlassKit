@@ -1,6 +1,7 @@
 package com.example.rokidovershoot
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import org.webrtc.Camera2Enumerator
+import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -25,18 +26,14 @@ import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpParameters
 import org.webrtc.RtpReceiver
-import org.webrtc.RtpSender
 import org.webrtc.SessionDescription
-import org.webrtc.SurfaceTextureHelper
-import org.webrtc.VideoCapturer
-import org.webrtc.VideoSource
-import org.webrtc.VideoTrack
+import org.webrtc.audio.JavaAudioDeviceModule
+import java.nio.charset.Charset
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class OvershootSessionClient(
+class OpenAIRealtimeClient(
     private val context: Context,
     private val backendBaseUrl: String,
     private val sessionId: String,
@@ -44,37 +41,59 @@ class OvershootSessionClient(
 ) {
 
     interface Listener {
+        fun onTranscriptDelta(itemId: String, delta: String)
+        fun onTranscriptDone(itemId: String, transcript: String)
         fun onConnectionStateChanged(state: PeerConnection.IceConnectionState)
         fun onError(message: String, throwable: Throwable? = null)
     }
 
     companion object {
-        private const val TAG = "OvershootSessionClient"
-        private const val OVERSHOOT_TURN_USERNAME = "overshoot"
-        private const val OVERSHOOT_TURN_CREDENTIAL = "overshoot"
-        private const val CAPTURE_WIDTH = 1024
-        private const val CAPTURE_HEIGHT = 768
-        private const val CAPTURE_FPS = 15
+        private const val TAG = "OpenAIRealtimeClient"
+        private const val DATA_CHANNEL_LABEL = "oai-events"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val okHttp = OkHttpClient()
     private val eglBase: EglBase = EglBase.create()
+    private val seenEventIds = HashSet<String>()
+
+    private val audioDeviceModule by lazy {
+        JavaAudioDeviceModule.builder(context)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .setUseStereoInput(false)
+            .setUseStereoOutput(false)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .createAudioDeviceModule().apply {
+                setSpeakerMute(false)
+            }
+    }
 
     private val peerConnectionFactory: PeerConnectionFactory by lazy {
         createPeerConnectionFactory()
     }
 
     private var peerConnection: PeerConnection? = null
-    private var localVideoSource: VideoSource? = null
-    private var localVideoTrack: VideoTrack? = null
-    private var localVideoCapturer: VideoCapturer? = null
-    private var surfaceTextureHelper: SurfaceTextureHelper? = null
+    private var dataChannel: DataChannel? = null
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
+    private var activeTranscriptItemId: String? = null
+    private var speechEpoch: Int = 0
 
     private val mediaConstraints = MediaConstraints().apply {
-        mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
+        mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
         mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
+    }
+
+    fun setSpeechEpoch(epoch: Int) {
+        if (epoch != speechEpoch) {
+            speechEpoch = epoch
+            activeTranscriptItemId = null
+        }
     }
 
     fun start() {
@@ -86,8 +105,8 @@ class OvershootSessionClient(
             try {
                 startInternal()
             } catch (t: Throwable) {
-                Log.e(TAG, "Failed to start vision session", t)
-                listener.onError("Failed to start vision session", t)
+                Log.e(TAG, "Failed to start realtime session", t)
+                listener.onError("Failed to start realtime session", t)
                 stopInternal()
             }
         }
@@ -96,52 +115,9 @@ class OvershootSessionClient(
     fun release() {
         runBlocking { stopInternal() }
         scope.cancel()
+        audioDeviceModule.release()
         peerConnectionFactory.dispose()
         eglBase.release()
-    }
-
-    private suspend fun startInternal() = withContext(Dispatchers.Default) {
-        val pc = createPeerConnection()
-        peerConnection = pc
-
-        createAndAddVideoTrack(pc)
-
-        val offer = createOffer(pc)
-        setLocalDescription(pc, offer)
-        waitForIceGatheringComplete(pc)
-
-        val localSdp = pc.localDescription?.description ?: error("LocalDescription is null")
-        val answerSdp = createVisionSession(localSdp)
-        val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
-        setRemoteDescription(pc, answer)
-    }
-
-    private suspend fun stopInternal() = withContext(Dispatchers.Default) {
-        try {
-            localVideoCapturer?.let { capturer ->
-                try {
-                    capturer.stopCapture()
-                } catch (e: InterruptedException) {
-                    Log.w(TAG, "stopCapture interrupted", e)
-                }
-                capturer.dispose()
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Error stopping video capturer", t)
-        }
-        localVideoCapturer = null
-
-        surfaceTextureHelper?.dispose()
-        surfaceTextureHelper = null
-
-        localVideoTrack?.dispose()
-        localVideoTrack = null
-        localVideoSource?.dispose()
-        localVideoSource = null
-
-        peerConnection?.close()
-        peerConnection?.dispose()
-        peerConnection = null
     }
 
     private fun createPeerConnectionFactory(): PeerConnectionFactory {
@@ -158,17 +134,40 @@ class OvershootSessionClient(
         val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
 
         return PeerConnectionFactory.builder()
+            .setAudioDeviceModule(audioDeviceModule)
             .setVideoEncoderFactory(encoderFactory)
             .setVideoDecoderFactory(decoderFactory)
             .createPeerConnectionFactory()
     }
 
+    private suspend fun startInternal() = withContext(Dispatchers.Default) {
+        val pc = createPeerConnection()
+        peerConnection = pc
+
+        setupDataChannel(pc)
+
+        val offer = createOffer(pc)
+        setLocalDescription(pc, offer)
+        waitForIceGatheringComplete(pc)
+
+        val localSdp = pc.localDescription?.description ?: error("LocalDescription is null")
+        val answerSdp = createRealtimeSession(localSdp)
+        val answer = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
+        setRemoteDescription(pc, answer)
+    }
+
+    private suspend fun stopInternal() = withContext(Dispatchers.Default) {
+        dataChannel?.close()
+        dataChannel = null
+
+        peerConnection?.close()
+        peerConnection?.dispose()
+        peerConnection = null
+    }
+
     private fun createPeerConnection(): PeerConnection {
         val iceServers = listOf(
-            createTurnIceServer("turn:turn.overshoot.ai:3478?transport=udp"),
-            createTurnIceServer("turn:turn.overshoot.ai:3478?transport=tcp"),
-            createTurnIceServer("turns:turn.overshoot.ai:443?transport=udp"),
-            createTurnIceServer("turns:turn.overshoot.ai:443?transport=tcp")
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
         )
 
         val config = PeerConnection.RTCConfiguration(iceServers).apply {
@@ -198,103 +197,108 @@ class OvershootSessionClient(
 
             override fun onRemoveStream(stream: MediaStream) {}
 
-            override fun onDataChannel(dc: org.webrtc.DataChannel) {}
+            override fun onDataChannel(dc: DataChannel) {}
 
             override fun onRenegotiationNeeded() {}
 
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
-                when (val track = receiver.track()) {
-                    is VideoTrack -> track.setEnabled(true)
-                }
+                receiver.track()?.setEnabled(true)
             }
         }) ?: error("Failed to create PeerConnection")
     }
 
-    private fun createTurnIceServer(uri: String): PeerConnection.IceServer {
-        return PeerConnection.IceServer.builder(uri)
-            .setUsername(OVERSHOOT_TURN_USERNAME)
-            .setPassword(OVERSHOOT_TURN_CREDENTIAL)
-            .createIceServer()
+    private fun setupDataChannel(pc: PeerConnection) {
+        val dc = pc.createDataChannel(DATA_CHANNEL_LABEL, DataChannel.Init())
+        dataChannel = dc
+
+        dc.registerObserver(object : DataChannel.Observer {
+            override fun onBufferedAmountChange(previousAmount: Long) {}
+
+            override fun onStateChange() {
+                Log.d(TAG, "DataChannel state: ${dc.state()}")
+            }
+
+            override fun onMessage(buffer: DataChannel.Buffer) {
+                if (buffer.binary) {
+                    return
+                }
+                val data = ByteArray(buffer.data.remaining())
+                buffer.data.get(data)
+                handleServerEvent(String(data, Charset.forName("UTF-8")))
+            }
+        })
     }
 
-    private fun createAndAddVideoTrack(pc: PeerConnection) {
-        val videoCapturer = createCameraCapturer()
-            ?: throw IllegalStateException("No camera capturer available")
-        localVideoCapturer = videoCapturer
-
-        surfaceTextureHelper = SurfaceTextureHelper.create(
-            "OvershootCaptureThread",
-            eglBase.eglBaseContext
-        )
-
-        localVideoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
-            adaptOutputFormat(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
+    private fun handleServerEvent(jsonText: String) {
+        val json = try {
+            JSONObject(jsonText)
+        } catch (_: Throwable) {
+            return
         }
+        if (shouldIgnoreEvent(json)) return
 
-        localVideoSource?.let { source ->
-            videoCapturer.initialize(
-                surfaceTextureHelper,
-                context,
-                source.capturerObserver
-            )
-            videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
-            localVideoTrack = peerConnectionFactory.createVideoTrack("video0", source)
-            localVideoTrack?.setEnabled(true)
-            localVideoTrack?.let { track ->
-                val sender = pc.addTrack(track)
-                configureVideoSender(sender)
+        when (json.optString("type")) {
+            "response.output_audio_transcript.delta" -> {
+                val itemId = json.optString("item_id", "")
+                val delta = json.optString("delta", "")
+                if (itemId.isNotBlank() && delta.isNotEmpty() && shouldAcceptItem(itemId)) {
+                    listener.onTranscriptDelta(itemId, delta)
+                }
+            }
+
+            "response.output_audio_transcript.done" -> {
+                val itemId = json.optString("item_id", "")
+                val transcript = json.optString("transcript", "")
+                if (itemId.isNotBlank() && shouldAcceptItem(itemId)) {
+                    listener.onTranscriptDone(itemId, transcript)
+                }
             }
         }
     }
 
-    private fun configureVideoSender(sender: RtpSender?) {
-        if (sender == null) return
-        val params = sender.parameters ?: return
-        params.degradationPreference = RtpParameters.DegradationPreference.DISABLED
-        sender.parameters = params
-    }
-
-    private fun createCameraCapturer(): VideoCapturer? {
-        val enumerator = Camera2Enumerator(context)
-        val deviceNames = enumerator.deviceNames
-        val preferred = deviceNames.firstOrNull { !enumerator.isFrontFacing(it) }
-            ?: deviceNames.firstOrNull()
-        if (preferred == null) {
-            return null
+    private fun shouldIgnoreEvent(json: JSONObject): Boolean {
+        val eventId = json.optString("event_id", "")
+        if (eventId.isBlank()) return false
+        synchronized(seenEventIds) {
+            if (seenEventIds.contains(eventId)) return true
+            seenEventIds.add(eventId)
         }
-        return enumerator.createCapturer(preferred, null)
+        return false
     }
 
-    private suspend fun createVisionSession(offerSdp: String): String =
+    private fun shouldAcceptItem(itemId: String): Boolean {
+        val current = activeTranscriptItemId
+        if (current == null) {
+            activeTranscriptItemId = itemId
+            return true
+        }
+        return current == itemId
+    }
+
+    private suspend fun createRealtimeSession(offerSdp: String): String =
         withContext(Dispatchers.IO) {
-            val mediaType = "application/json".toMediaType()
-            val body = JSONObject()
-                .put("offer_sdp", offerSdp)
-                .toString()
-                .toRequestBody(mediaType)
             val request = Request.Builder()
-                .url(buildVisionSessionUrl())
-                .post(body)
+                .url(buildRealtimeSessionUrl())
+                .post(offerSdp.toRequestBody("application/sdp".toMediaType()))
                 .build()
 
             okHttp.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val msg = "Vision session request failed: HTTP ${response.code} ${response.message}"
-                    Log.e(TAG, "$msg body=$responseBody")
+                    val errorBody = response.body?.string()
+                    val msg = "Realtime session request failed: HTTP ${response.code} ${response.message}"
+                    Log.e(TAG, "$msg body=$errorBody")
                     throw IllegalStateException(msg)
                 }
-                val json = JSONObject(responseBody)
-                normalizeSdp(json.optString("answer_sdp", ""))
+                normalizeSdp(response.body?.string().orEmpty())
             }
         }
 
-    private fun buildVisionSessionUrl(): String {
+    private fun buildRealtimeSessionUrl(): String {
         val normalizedBaseUrl = backendBaseUrl.trim().trimEnd('/')
         if (!normalizedBaseUrl.startsWith("http://") && !normalizedBaseUrl.startsWith("https://")) {
             throw IllegalArgumentException("BACKEND_BASE_URL must start with http:// or https://")
         }
-        return "$normalizedBaseUrl/session/$sessionId/vision"
+        return "$normalizedBaseUrl/session/$sessionId/realtime"
     }
 
     private fun normalizeSdp(raw: String): String {

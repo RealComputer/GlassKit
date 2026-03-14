@@ -2,23 +2,38 @@ package com.example.rokidovershoot
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.rokidovershoot.BackendControlClient.HudState
+import com.example.rokidovershoot.BackendControlClient.HudTask
 import com.example.rokidovershoot.databinding.ActivityMainBinding
 import org.webrtc.PeerConnection
 
-class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
+class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private lateinit var binding: ActivityMainBinding
-    private var sessionClient: OvershootSessionClient? = null
-    private var isRunning = false
 
-    private val resultLines = ArrayDeque<String>()
+    private var controlClient: BackendControlClient? = null
+    private var overshootClient: OvershootSessionClient? = null
+    private var realtimeClient: OpenAIRealtimeClient? = null
+
+    private var currentSessionId: String? = null
+    private var currentHudState: HudState? = null
+    private var currentTranscript = ""
+    private var currentSpeechEpoch = 0
+    private var pendingStart = false
+    private var isRunning = false
+    private var idleMessage = ""
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL
 
@@ -30,20 +45,20 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding.tvTitle.text = getString(R.string.app_name)
-        setStatus("Checking camera...")
-        renderResultLog()
-
+        renderIdleState(getString(R.string.connecting_backend))
         ensurePermissions()
     }
 
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroy()
-        releaseSessionClientAsync()
+        stopMediaClients()
+        controlClient?.close()
+        controlClient = null
     }
 
     override fun onStop() {
-        stopStreaming()
+        stopWorkflow()
         super.onStop()
     }
 
@@ -51,9 +66,23 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         return when (keyCode) {
             KeyEvent.KEYCODE_ENTER -> {
                 if (isRunning) {
-                    stopStreaming()
+                    stopWorkflow()
                 } else {
-                    startStreaming()
+                    startWorkflow()
+                }
+                true
+            }
+
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (isRunning) {
+                    controlClient?.sendDebugStep("forward")
+                }
+                true
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (isRunning) {
+                    controlClient?.sendDebugStep("backward")
                 }
                 true
             }
@@ -66,9 +95,8 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         val needed = listOf(Manifest.permission.CAMERA).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
         if (needed.isEmpty()) {
-            setStatus(STATUS_READY)
+            connectControlIfNeeded()
         } else {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMISSIONS)
         }
@@ -90,154 +118,276 @@ class MainActivity : AppCompatActivity(), OvershootSessionClient.Listener {
         if (requestCode != REQ_PERMISSIONS) return
 
         if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            setStatus(STATUS_READY)
+            connectControlIfNeeded()
+            if (pendingStart) {
+                startWorkflow()
+            }
         } else {
-            setStatus("Camera permission required")
+            renderIdleState("Camera permission required")
         }
     }
 
-    private fun startStreaming() {
-        if (sessionClient != null) return
+    private fun connectControlIfNeeded() {
+        if (controlClient != null) return
 
+        controlClient = BackendControlClient(
+            backendBaseUrl = backendBaseUrl,
+            listener = this
+        ).also { it.connect() }
+    }
+
+    private fun startWorkflow() {
         if (!hasPermissions()) {
+            pendingStart = true
             ensurePermissions()
             return
         }
 
-        clearResultLog()
-        isRunning = true
-        setStatus(STATUS_STARTING)
+        connectControlIfNeeded()
+        val sessionId = currentSessionId
+        if (sessionId.isNullOrBlank()) {
+            pendingStart = true
+            renderIdleState(getString(R.string.connecting_backend))
+            return
+        }
+        if (isRunning) return
 
-        sessionClient = OvershootSessionClient(
+        pendingStart = false
+        isRunning = true
+        controlClient?.sendStart()
+        startMediaClients(sessionId)
+    }
+
+    private fun stopWorkflow() {
+        pendingStart = false
+        if (!isRunning) return
+        isRunning = false
+        controlClient?.sendStop()
+        stopMediaClients()
+    }
+
+    private fun startMediaClients(sessionId: String) {
+        stopMediaClients()
+
+        overshootClient = OvershootSessionClient(
             context = applicationContext,
             backendBaseUrl = backendBaseUrl,
-            listener = this
+            sessionId = sessionId,
+            listener = object : OvershootSessionClient.Listener {
+                override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
+                    runOnUiThread {
+                        if (state == PeerConnection.IceConnectionState.FAILED ||
+                            state == PeerConnection.IceConnectionState.CLOSED ||
+                            state == PeerConnection.IceConnectionState.DISCONNECTED
+                        ) {
+                            binding.tvHint.text = "Video link: $state"
+                        }
+                    }
+                }
+
+                override fun onError(message: String, throwable: Throwable?) {
+                    runOnUiThread {
+                        binding.tvHint.text = "Video error: $message"
+                    }
+                }
+            }
         ).also { it.start() }
-    }
 
-    private fun stopStreaming() {
-        isRunning = false
-        val activeClient = sessionClient ?: run {
-            setStatus(STATUS_STOPPED)
-            return
-        }
+        realtimeClient = OpenAIRealtimeClient(
+            context = applicationContext,
+            backendBaseUrl = backendBaseUrl,
+            sessionId = sessionId,
+            listener = object : OpenAIRealtimeClient.Listener {
+                override fun onTranscriptDelta(itemId: String, delta: String) {
+                    runOnUiThread {
+                        currentTranscript += delta
+                        renderTranscript()
+                    }
+                }
 
-        setStatus(STATUS_STOPPING)
-        sessionClient = null
-        Thread { activeClient.release() }.start()
-    }
+                override fun onTranscriptDone(itemId: String, transcript: String) {
+                    runOnUiThread {
+                        currentTranscript = transcript
+                        renderTranscript()
+                    }
+                }
 
-    private fun releaseSessionClientAsync() {
-        val activeClient = sessionClient ?: return
-        sessionClient = null
-        isRunning = false
-        Thread { activeClient.release() }.start()
-    }
+                override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
+                    runOnUiThread {
+                        if (state == PeerConnection.IceConnectionState.FAILED ||
+                            state == PeerConnection.IceConnectionState.CLOSED ||
+                            state == PeerConnection.IceConnectionState.DISCONNECTED
+                        ) {
+                            binding.tvHint.text = "Audio link: $state"
+                        }
+                    }
+                }
 
-    override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
-        runOnUiThread {
-            if (!isRunning) return@runOnUiThread
-
-            val statusText = when (state) {
-                PeerConnection.IceConnectionState.NEW,
-                PeerConnection.IceConnectionState.CHECKING -> STATUS_STARTING
-
-                PeerConnection.IceConnectionState.CONNECTED,
-                PeerConnection.IceConnectionState.COMPLETED -> STATUS_LIVE
-
-                PeerConnection.IceConnectionState.DISCONNECTED,
-                PeerConnection.IceConnectionState.FAILED -> "Connection lost"
-
-                PeerConnection.IceConnectionState.CLOSED -> STATUS_STOPPED
+                override fun onError(message: String, throwable: Throwable?) {
+                    runOnUiThread {
+                        binding.tvHint.text = "Audio error: $message"
+                    }
+                }
             }
-            setStatus(statusText)
+        ).also {
+            it.setSpeechEpoch(currentSpeechEpoch)
+            it.start()
         }
     }
 
-    override fun onResultText(text: String) {
-        runOnUiThread {
-            appendResultText(text)
+    private fun stopMediaClients() {
+        val activeOvershoot = overshootClient
+        overshootClient = null
+        if (activeOvershoot != null) {
+            Thread { activeOvershoot.release() }.start()
+        }
+
+        val activeRealtime = realtimeClient
+        realtimeClient = null
+        if (activeRealtime != null) {
+            Thread { activeRealtime.release() }.start()
         }
     }
 
-    override fun onStatus(message: String) {
+    override fun onSessionReady(sessionId: String) {
         runOnUiThread {
-            if (!isRunning) return@runOnUiThread
-
-            val normalizedMessage = message.lowercase()
-            val statusText = if (
-                "streaming" in normalizedMessage ||
-                "receiving results" in normalizedMessage
-            ) {
-                STATUS_LIVE
-            } else {
-                STATUS_STARTING
+            currentSessionId = sessionId
+            if (!isRunning) {
+                renderIdleState(getString(R.string.start_hint))
             }
-            setStatus(statusText)
+            if (pendingStart) {
+                startWorkflow()
+            }
         }
     }
 
-    override fun onError(message: String, throwable: Throwable?) {
+    override fun onHudState(state: HudState) {
         runOnUiThread {
-            setStatus("Connection issue. Tap temple to retry")
+            currentHudState = state
+            if (state.speechEpoch != currentSpeechEpoch) {
+                currentSpeechEpoch = state.speechEpoch
+                currentTranscript = ""
+                realtimeClient?.setSpeechEpoch(state.speechEpoch)
+                renderTranscript()
+            }
+
+            if (state.phase == "ERROR") {
+                isRunning = false
+                stopMediaClients()
+            }
+            if (state.phase == "WAITING_FOR_START") {
+                isRunning = false
+            }
+
+            renderHud(state)
         }
     }
 
-    override fun onSessionStopped() {
+    override fun onHudError(message: String) {
         runOnUiThread {
             isRunning = false
-            setStatus(STATUS_STOPPED)
+            stopMediaClients()
+            renderIdleState(message)
         }
     }
 
-    private fun appendResultText(text: String) {
-        val normalizedLines = text
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toList()
+    override fun onControlClosed(message: String) {
+        runOnUiThread {
+            isRunning = false
+            currentSessionId = null
+            currentHudState = null
+            stopMediaClients()
+            controlClient = null
+            renderIdleState(message)
+        }
+    }
 
-        if (normalizedLines.isEmpty()) {
+    private fun renderHud(state: HudState) {
+        if (state.phase == "ERROR") {
+            renderIdleState(idleMessage.ifBlank { "Something went wrong. Tap to restart." })
+            return
+        }
+        val showStart = state.screen == "start"
+
+        binding.tvRecipe.visibility = if (showStart) View.GONE else View.VISIBLE
+        binding.tvTasks.visibility = if (showStart) View.GONE else View.VISIBLE
+        binding.tvTranscript.visibility = if (showStart) View.GONE else View.VISIBLE
+
+        if (showStart) {
+            renderIdleState(getString(R.string.start_hint))
             return
         }
 
-        val messageBlock = normalizedLines.joinToString("\n")
-        resultLines.addLast(messageBlock)
-        while (resultLines.size > MAX_RESULT_LINES) {
-            resultLines.removeFirst()
-        }
-
-        renderResultLog()
+        binding.tvHint.text = phaseLabel(state.phase)
+        binding.tvRecipe.text = state.recipeName ?: "Scanning ingredients..."
+        binding.tvTasks.text = renderTasks(state.tasks, state.activeTaskId)
+        renderTranscript()
     }
 
-    private fun clearResultLog() {
-        resultLines.clear()
-        renderResultLog()
+    private fun renderIdleState(message: String) {
+        idleMessage = message
+        binding.tvHint.text = message
+        binding.tvRecipe.visibility = View.GONE
+        binding.tvTasks.visibility = View.GONE
+        binding.tvTranscript.visibility = View.GONE
     }
 
-    private fun renderResultLog() {
-        binding.tvLog.text = if (resultLines.isEmpty()) {
-            ""
-        } else {
-            resultLines.joinToString("\n\n")
-        }
-
-        binding.svLog.post {
-            binding.svLog.fullScroll(View.FOCUS_DOWN)
+    private fun renderTranscript() {
+        binding.tvTranscript.text = currentTranscript.trim()
+        if (binding.tvTranscript.text.isNullOrEmpty()) {
+            binding.tvTranscript.visibility = View.GONE
+        } else if (currentHudState?.screen == "running") {
+            binding.tvTranscript.visibility = View.VISIBLE
         }
     }
 
-    private fun setStatus(text: String) {
-        binding.tvStatus.text = text
+    private fun renderTasks(tasks: List<HudTask>, activeTaskId: String?): SpannableStringBuilder {
+        val builder = SpannableStringBuilder()
+        tasks.forEachIndexed { index, task ->
+            val prefix = when {
+                task.completed -> "✓ "
+                task.id == activeTaskId -> "› "
+                else -> "· "
+            }
+            val start = builder.length
+            builder.append(prefix).append(task.text)
+            val end = builder.length
+            if (task.id == activeTaskId) {
+                builder.setSpan(
+                    StyleSpan(Typeface.BOLD),
+                    start,
+                    end,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            if (task.completed) {
+                builder.setSpan(
+                    StrikethroughSpan(),
+                    start + prefix.length,
+                    end,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            if (index < tasks.lastIndex) {
+                builder.append('\n')
+            }
+        }
+        return builder
+    }
+
+    private fun phaseLabel(phase: String): String {
+        return when (phase) {
+            "CONNECTING" -> "Connecting..."
+            "INVENTORY_SCAN" -> "Scanning ingredients..."
+            "RECIPE_SELECTION" -> "Choosing recipe..."
+            "GUIDING" -> "Guiding..."
+            "COMPLETED" -> "Finished"
+            "ERROR" -> "Something went wrong"
+            else -> getString(R.string.start_hint)
+        }
     }
 
     companion object {
         private const val REQ_PERMISSIONS = 1001
-        private const val MAX_RESULT_LINES = 180
-        private const val STATUS_READY = "Tap temple to start"
-        private const val STATUS_STARTING = "Starting..."
-        private const val STATUS_LIVE = "Live"
-        private const val STATUS_STOPPING = "Stopping..."
-        private const val STATUS_STOPPED = "Stopped. Tap temple to start"
     }
 }

@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">Rokid Overshoot</string>
+    <string name="app_name">Mocktail Coach</string>
+    <string name="start_hint">Look at the ingredients and tap to start</string>
+    <string name="connecting_backend">Connecting backend...</string>
 </resources>

@@ -1,24 +1,27 @@
-# Example: Rokid Overshoot
+# Example: Mocktail Coach for Rokid Glasses
 
-This example app streams live camera video from Rokid Glasses to [Overshoot](https://overshoot.ai/) and displays live inference text on the glasses HUD.
+This example turns Rokid Glasses into a guided mocktail coach. The glasses stream camera video to [Overshoot](https://overshoot.ai/) for live scene understanding, receive spoken instructions from OpenAI Realtime, and render a minimal HUD showing the current recipe task and latest transcript only.
 
-[demo.webm](https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b)
+## What it does
 
-## What It Does
-
-- Tap the temple area to start streaming.
-- Tap the temple area again to stop.
-- While running, you see live result text appear on the glasses display.
-- New lines are added at the bottom and the view auto-scrolls.
-- Each new run starts with a clean screen.
+- Shows a simple start screen: `Mocktail Coach` and `Look at the ingredients and tap to start`
+- Runs a hardcoded inventory scan first
+- Chooses the most likely recipe from recipe filenames
+- Loads that recipe JSON on the backend
+- Guides the user step by step with spoken instructions and HUD task highlighting
+- Supports debug step navigation from Rokid swipe gestures
 
 ## Architecture
 
-- The Android app captures camera video and starts a live session.
-- The backend connects that session to Overshoot and handles stream lifecycle.
-- Inference text is relayed back to the Android app and rendered on the glasses HUD in real time.
-
-See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
+- Android app:
+  - control WebSocket to the backend
+  - WebRTC video stream to Overshoot through the backend
+  - WebRTC audio output and transcript events from OpenAI Realtime through the backend SDP broker
+- Backend:
+  - authoritative per-session workflow engine
+  - recipe loading from `backend/recipes/`
+  - Overshoot prompt switching on the active stream
+  - OpenAI Realtime sideband for recipe-selection tool calls and exact speech playback
 
 ## Requirements
 
@@ -26,8 +29,9 @@ See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
 - Android Studio with `adb`
 - Python 3.12 with `uv`
 - Overshoot API key (`OVERSHOOT_API_KEY`)
+- OpenAI API key (`OPENAI_API_KEY`)
 
-## Setup
+## Configuration
 
 Set the backend URL in `rokid/local.properties`:
 
@@ -35,52 +39,61 @@ Set the backend URL in `rokid/local.properties`:
 BACKEND_BASE_URL=http://<YOUR_BACKEND>
 ```
 
-Create the backend environment file:
+Create the backend env file:
 
 ```bash
 cd backend
 cp .env.example .env
-# Set OVERSHOOT_API_KEY
+# set OVERSHOOT_API_KEY and OPENAI_API_KEY
 ```
 
 Optional backend overrides:
 
 - `OVERSHOOT_API_URL`
-- `OVERSHOOT_PROMPT`
 - `OVERSHOOT_MODEL`
-- `OVERSHOOT_PROCESSING_TARGET_FPS`
-- `OVERSHOOT_PROCESSING_CLIP_LENGTH_SECONDS`
-- `OVERSHOOT_PROCESSING_DELAY_SECONDS`
+- `OPENAI_REALTIME_MODEL`
 
-For current default values, see `backend/session_manager.py`.
+## Gestures
 
-## Run Backend
+- Tap: `KeyEvent.KEYCODE_ENTER`
+- Swipe forward: `KeyEvent.KEYCODE_DPAD_UP`
+- Swipe backward: `KeyEvent.KEYCODE_DPAD_DOWN`
+
+## Run backend
 
 ```bash
 cd backend
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 ```
 
-## Run Glasses App
+## Run glasses app
 
-Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB (see below), then run the Android app from `rokid/` in Android Studio.
+Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi on the glasses, then run the Android app from `rokid/` in Android Studio.
 
 Useful ADB commands:
 
 ```bash
-adb devices # confirm your device is visible
-adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
-adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
-adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"' # set network
-adb shell cmd wifi status # confirm the connection
+adb devices
+adb shell cmd wifi status
+adb shell cmd wifi set-wifi-enabled enabled
+adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
+adb shell cmd wifi status
 ```
 
 Optional wireless ADB:
 
 ```bash
-adb shell ip -f inet addr show wlan0 # check the glasses IP
-ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
-adb tcpip 5555 # enable remote ADB mode
-adb connect <IP> # connect to the glasses over remote ADB
-adb devices # verify the remote connection (you can unplug the cable afterward)
+adb shell ip -f inet addr show wlan0
+ping -c 5 -W 3 <IP>
+adb tcpip 5555
+adb connect <IP>
+adb devices
 ```
+
+## Recipe files
+
+- Recipes live in `backend/recipes/`
+- Filename keywords are used during recipe selection, so keep ingredient names in the filename
+- The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
+
+See [AGENTS.md](./AGENTS.md) for development workflow and architecture notes.

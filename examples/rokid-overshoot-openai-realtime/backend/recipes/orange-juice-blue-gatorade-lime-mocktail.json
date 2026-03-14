@@ -1,0 +1,138 @@
+{
+  "id": "orange-juice-blue-gatorade-lime-mocktail",
+  "display_name": "Orange Blue Mocktail",
+  "start_step_id": "pick_orange_bottle",
+  "tasks": [
+    {
+      "id": "orange_juice",
+      "text": "Add orange juice to halfway"
+    },
+    {
+      "id": "ice",
+      "text": "Add a few scoops of ice"
+    },
+    {
+      "id": "gatorade",
+      "text": "Fill with Gatorade"
+    },
+    {
+      "id": "lime",
+      "text": "Top with a lime wheel"
+    }
+  ],
+  "detectors": {
+    "bottle_color": {
+      "field": "color",
+      "prompt": "Return JSON with a single `color` field set to one of `orange`, `red`, `blue`, or `unknown`. Use `orange`, `red`, or `blue` only when a hand is clearly holding that bottle in the air right now. If the bottle color or holding action is unclear, return `unknown`. Do not add explanation."
+    },
+    "orange_fill_level": {
+      "field": "level",
+      "prompt": "Return JSON with a single `level` field. Use an integer from 0 to 10 only when orange juice is clearly pouring into the glass on the table right now. Use `unknown` when pouring is not clearly visible or the fill level cannot be judged. Do not add explanation."
+    },
+    "ice_contact": {
+      "field": "flag",
+      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only when ice from a scoop or spoon is visibly falling into the glass right now. Otherwise set it to false. Do not add explanation."
+    },
+    "blue_pour_state": {
+      "field": "state",
+      "prompt": "Return JSON with a single `state` field set to exactly one of `no`, `pouring`, or `pouring_nearly_full`. Use `pouring` only when liquid from the blue bottle is visibly entering the glass right now and the glass is not nearly full. Use `pouring_nearly_full` only when the blue bottle is clearly pouring into the glass and the glass appears close to the rim, about 90 percent full or more. Otherwise use `no`. Do not add explanation."
+    },
+    "lime_insert": {
+      "field": "flag",
+      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only at the exact moment a lime slice or wheel is being placed onto or into the finished drink. Otherwise set it to false. Do not add explanation."
+    }
+  },
+  "steps": [
+    {
+      "id": "pick_orange_bottle",
+      "task_id": "orange_juice",
+      "evaluation_mode": "match_value",
+      "detector_key": "bottle_color",
+      "expected_value": "orange",
+      "ignored_values": [
+        "unknown"
+      ],
+      "speak_on_observation_change_only": true,
+      "on_enter_speech": "Let's make a mocktail. Start with orange juice. Pick up the orange bottle.",
+      "mismatch_speech": "That's the wrong bottle. Pick up the orange bottle.",
+      "success_speech": "Good. Pour the orange juice into the glass.",
+      "next_step_id": "pour_orange_juice"
+    },
+    {
+      "id": "pour_orange_juice",
+      "task_id": "orange_juice",
+      "evaluation_mode": "numeric_threshold_with_progress_once",
+      "detector_key": "orange_fill_level",
+      "ignore_values": [
+        "unknown"
+      ],
+      "progress_condition": {
+        "gte": 1,
+        "lt": 5
+      },
+      "progress_once_speech": "Keep pouring until I tell you to stop.",
+      "complete_condition": {
+        "gte": 5
+      },
+      "complete_speech": "Stop there. That's enough orange juice. Now add two scoops of ice cubes to the glass.",
+      "next_step_id": "add_ice"
+    },
+    {
+      "id": "add_ice",
+      "task_id": "ice",
+      "evaluation_mode": "count_rising_edges_true",
+      "detector_key": "ice_contact",
+      "target_count": 2,
+      "count_edge": "false_to_true",
+      "rearm_condition": "false_seen",
+      "milestones": [
+        {
+          "count": 1,
+          "speech": "One scoop in. Add one more."
+        },
+        {
+          "count": 2,
+          "speech": "That's enough ice. Next, pick up the blue bottle.",
+          "next_step_id": "pick_blue_bottle"
+        }
+      ]
+    },
+    {
+      "id": "pick_blue_bottle",
+      "task_id": "gatorade",
+      "evaluation_mode": "match_value",
+      "detector_key": "bottle_color",
+      "expected_value": "blue",
+      "ignored_values": [
+        "unknown"
+      ],
+      "speak_on_observation_change_only": true,
+      "mismatch_speech": "That's the wrong bottle. Pick up the blue bottle.",
+      "success_speech": "Good. Pour the blue drink slowly into the glass.",
+      "next_step_id": "pour_gatorade"
+    },
+    {
+      "id": "pour_gatorade",
+      "task_id": "gatorade",
+      "evaluation_mode": "enum_progress_once_then_complete",
+      "detector_key": "blue_pour_state",
+      "ignore_values": [
+        "no"
+      ],
+      "progress_value": "pouring",
+      "progress_once_speech": "A little more. Keep going.",
+      "complete_value": "pouring_nearly_full",
+      "complete_speech": "Stop there. The drink is done. Place the lime wheel on top to finish.",
+      "next_step_id": "add_lime"
+    },
+    {
+      "id": "add_lime",
+      "task_id": "lime",
+      "evaluation_mode": "momentary_true_complete",
+      "detector_key": "lime_insert",
+      "complete_on": true,
+      "complete_speech": "Perfect. Your mocktail is finished.",
+      "next_step_id": null
+    }
+  ]
+}
