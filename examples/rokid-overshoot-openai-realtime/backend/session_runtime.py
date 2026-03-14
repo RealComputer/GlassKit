@@ -37,6 +37,15 @@ from session_types import ControlSession, SessionEvent
 logger = logging.getLogger("uvicorn.error")
 
 
+def _compact_json(value: Any) -> str:
+    try:
+        return json.dumps(
+            value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        )
+    except TypeError:
+        return repr(value)
+
+
 class SessionRuntimeMixin:
     if TYPE_CHECKING:
         _overshoot_api_url: str
@@ -365,6 +374,11 @@ class SessionRuntimeMixin:
                                 "session=%s overshoot bad json=%s", session_id, raw_text
                             )
                             continue
+                        logger.info(
+                            "session=%s overshoot payload=%s",
+                            session_id,
+                            _compact_json(payload),
+                        )
 
                         current = await self._get_session_if_current(
                             session_id, generation, "vision"

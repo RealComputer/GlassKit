@@ -30,6 +30,15 @@ from session_types import ControlSession, SessionEvent, StepRuntimeState
 logger = logging.getLogger("uvicorn.error")
 
 
+def _compact_json(value: Any) -> str:
+    try:
+        return json.dumps(
+            value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        )
+    except TypeError:
+        return repr(value)
+
+
 class SessionWorkflowMixin:
     if TYPE_CHECKING:
         _recipes: Any
@@ -175,24 +184,54 @@ class SessionWorkflowMixin:
         session: ControlSession,
         payload: dict[str, Any],
     ) -> None:
-        if payload.get("generation") != session.vision_generation:
+        generation = payload.get("generation")
+        if generation != session.vision_generation:
+            logger.info(
+                "session=%s ignoring overshoot result due to stale generation result_generation=%s current_generation=%s",
+                session.session_id,
+                generation,
+                session.vision_generation,
+            )
             return
         if session.overshoot_stream_id is None:
+            logger.info(
+                "session=%s ignoring overshoot result because no active stream",
+                session.session_id,
+            )
             return
         if not payload.get("ok", False):
             logger.warning(
-                "session=%s overshoot error=%s",
+                "session=%s overshoot error=%s payload=%s",
                 session.session_id,
                 payload.get("error"),
+                _compact_json(payload),
             )
             return
 
         prompt = str(payload.get("prompt") or "")
         if prompt != session.active_prompt_text:
+            logger.info(
+                "session=%s ignoring overshoot result due to prompt mismatch active_prompt=%s result_prompt=%s",
+                session.session_id,
+                _compact_json(session.active_prompt_text),
+                _compact_json(prompt),
+            )
             return
         parsed = parse_structured_result(payload.get("result"))
         if parsed is None:
+            logger.info(
+                "session=%s ignoring overshoot result because result is not structured json raw_result=%s",
+                session.session_id,
+                _compact_json(payload.get("result")),
+            )
             return
+        logger.info(
+            "session=%s overshoot structured_result phase=%s detector=%s result=%s",
+            session.session_id,
+            session.phase,
+            session.active_detector_key,
+            _compact_json(parsed),
+        )
 
         if session.phase == PHASE_INVENTORY:
             await self._handle_inventory_result(session, parsed)
@@ -207,6 +246,11 @@ class SessionWorkflowMixin:
     ) -> None:
         ingredients = result.get("ingredients")
         if not isinstance(ingredients, list):
+            logger.info(
+                "session=%s inventory scan missing ingredients list result=%s",
+                session.session_id,
+                _compact_json(result),
+            )
             return
 
         normalized = tuple(
@@ -219,6 +263,11 @@ class SessionWorkflowMixin:
             )
         )
         if not normalized:
+            logger.info(
+                "session=%s inventory scan empty after normalization raw_ingredients=%s",
+                session.session_id,
+                _compact_json(ingredients),
+            )
             return
 
         if normalized == session.inventory_signature:
@@ -226,11 +275,24 @@ class SessionWorkflowMixin:
         else:
             session.inventory_signature = normalized
             session.inventory_hits = 1
+        logger.info(
+            "session=%s inventory scan raw_ingredients=%s normalized=%s hits=%s stable=%s",
+            session.session_id,
+            _compact_json(ingredients),
+            _compact_json(normalized),
+            session.inventory_hits,
+            session.inventory_hits >= 2,
+        )
 
         if session.inventory_hits < 2:
             return
 
         session.inventory_items = list(normalized)
+        logger.info(
+            "session=%s inventory scan stabilized inventory_items=%s",
+            session.session_id,
+            _compact_json(session.inventory_items),
+        )
         session.phase = PHASE_RECIPE_SELECTION
         session.selecting_recipe = True
         await self._publish_hud_state(session)
