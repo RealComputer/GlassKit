@@ -263,6 +263,9 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     override fun onHudState(state: HudState) {
         runOnUiThread {
+            if (isRunning && state.phase == "WAITING_FOR_START") {
+                return@runOnUiThread
+            }
             currentHudState = state
             if (state.speechEpoch != currentSpeechEpoch) {
                 currentSpeechEpoch = state.speechEpoch
@@ -274,9 +277,6 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             if (state.phase == "ERROR") {
                 isRunning = false
                 stopMediaClients()
-            }
-            if (state.phase == "WAITING_FOR_START") {
-                isRunning = false
             }
 
             renderHud(state)

@@ -56,6 +56,8 @@ class OpenAIRealtimeClient(
     private val okHttp = OkHttpClient()
     private val eglBase: EglBase = EglBase.create()
     private val seenEventIds = HashSet<String>()
+    private val transcriptLock = Any()
+    private val ignoredTranscriptItemIds = HashSet<String>()
 
     private val audioDeviceModule by lazy {
         JavaAudioDeviceModule.builder(context)
@@ -91,8 +93,11 @@ class OpenAIRealtimeClient(
 
     fun setSpeechEpoch(epoch: Int) {
         if (epoch != speechEpoch) {
-            speechEpoch = epoch
-            activeTranscriptItemId = null
+            synchronized(transcriptLock) {
+                speechEpoch = epoch
+                activeTranscriptItemId?.let { ignoredTranscriptItemIds.add(it) }
+                activeTranscriptItemId = null
+            }
         }
     }
 
@@ -267,12 +272,19 @@ class OpenAIRealtimeClient(
     }
 
     private fun shouldAcceptItem(itemId: String): Boolean {
-        val current = activeTranscriptItemId
-        if (current == null) {
-            activeTranscriptItemId = itemId
-            return true
+        synchronized(transcriptLock) {
+            if (ignoredTranscriptItemIds.contains(itemId)) {
+                return false
+            }
+
+            val current = activeTranscriptItemId
+            if (current == null) {
+                activeTranscriptItemId = itemId
+                return true
+            }
+
+            return current == itemId
         }
-        return current == itemId
     }
 
     private suspend fun createRealtimeSession(offerSdp: String): String =

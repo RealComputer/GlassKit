@@ -380,27 +380,38 @@ class MocktailSessionManager:
                 detail="Overshoot response missing a valid stream_id or answer SDP",
             )
 
-        session.overshoot_stream_id = stream_id
-        session.overshoot_lease_ttl_seconds = ttl_seconds
-        session.vision_ready = True
-        session.active_prompt_text = INVENTORY_SCAN_PROMPT
-        session.active_detector_key = "inventory_scan"
-        session.overshoot_ws_task = asyncio.create_task(
-            self._run_overshoot_ws(session.session_id, stream_id, generation),
-            name=f"overshoot-ws-{session.session_id}-{generation}",
+        current = await self._get_session_if_current(session_id, generation, "vision")
+        if current is None:
+            await self._close_overshoot_stream(stream_id)
+            logger.info(
+                "session=%s dropping stale vision stream_id=%s generation=%s",
+                session_id,
+                stream_id,
+                generation,
+            )
+            raise HTTPException(status_code=409, detail="session no longer active")
+
+        current.overshoot_stream_id = stream_id
+        current.overshoot_lease_ttl_seconds = ttl_seconds
+        current.vision_ready = True
+        current.active_prompt_text = INVENTORY_SCAN_PROMPT
+        current.active_detector_key = "inventory_scan"
+        current.overshoot_ws_task = asyncio.create_task(
+            self._run_overshoot_ws(current.session_id, stream_id, generation),
+            name=f"overshoot-ws-{current.session_id}-{generation}",
         )
         if ttl_seconds:
-            session.overshoot_keepalive_task = asyncio.create_task(
+            current.overshoot_keepalive_task = asyncio.create_task(
                 self._run_overshoot_keepalive(
-                    session.session_id, stream_id, ttl_seconds, generation
+                    current.session_id, stream_id, ttl_seconds, generation
                 ),
-                name=f"overshoot-keepalive-{session.session_id}-{generation}",
+                name=f"overshoot-keepalive-{current.session_id}-{generation}",
             )
 
-        await session.queue.put(SessionEvent(kind="vision.ready"))
+        await current.queue.put(SessionEvent(kind="vision.ready"))
         logger.info(
             "session=%s vision_ready stream_id=%s generation=%s",
-            session.session_id,
+            current.session_id,
             stream_id,
             generation,
         )
@@ -437,14 +448,24 @@ class MocktailSessionManager:
                 detail="OpenAI realtime response missing call_id or valid answer SDP",
             )
 
-        session.openai_call_id = call_id
-        session.openai_sideband_task = asyncio.create_task(
-            self._run_openai_sideband(session.session_id, call_id, generation),
-            name=f"openai-sideband-{session.session_id}-{generation}",
+        current = await self._get_session_if_current(session_id, generation, "realtime")
+        if current is None:
+            logger.info(
+                "session=%s dropping stale realtime call_id=%s generation=%s",
+                session_id,
+                call_id,
+                generation,
+            )
+            raise HTTPException(status_code=409, detail="session no longer active")
+
+        current.openai_call_id = call_id
+        current.openai_sideband_task = asyncio.create_task(
+            self._run_openai_sideband(current.session_id, call_id, generation),
+            name=f"openai-sideband-{current.session_id}-{generation}",
         )
         logger.info(
             "session=%s realtime_answered call_id=%s generation=%s",
-            session.session_id,
+            current.session_id,
             call_id,
             generation,
         )
