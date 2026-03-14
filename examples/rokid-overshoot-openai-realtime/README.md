@@ -1,6 +1,6 @@
 # Example: Mocktail Coach for Rokid Glasses
 
-This example turns Rokid Glasses into a guided mocktail-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API for low-latency spoken guidance and transcript streaming. You look at the ingredients on the table, tap once to start, and the glasses coach you through the drink with a minimal HUD and spoken instructions.
+This example turns Rokid Glasses into a guided mocktail-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
 
 ## What the app does
 
@@ -73,26 +73,26 @@ uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 
 ## Run The Glasses App
 
-Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi on the glasses, then run the Android app from `rokid/` in Android Studio.
+Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB (see below), then run the Android app from `rokid/` in Android Studio.
 
 Useful ADB commands:
 
 ```bash
-adb devices
-adb shell cmd wifi status
-adb shell cmd wifi set-wifi-enabled enabled
-adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
-adb shell cmd wifi status
+adb devices # confirm your device is visible
+adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
+adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
+adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"' # set network
+adb shell cmd wifi status # confirm the connection
 ```
 
 Optional wireless ADB:
 
 ```bash
-adb shell ip -f inet addr show wlan0
-ping -c 5 -W 3 <IP>
-adb tcpip 5555
-adb connect <IP>
-adb devices
+adb shell ip -f inet addr show wlan0 # check the glasses IP
+ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
+adb tcpip 5555 # enable remote ADB mode
+adb connect <IP> # connect to the glasses over remote ADB
+adb devices # verify the remote connection (you can unplug the cable afterward)
 ```
 
 ## Recipe files
@@ -100,5 +100,3 @@ adb devices
 - Recipes live in `backend/recipes/`
 - Filename keywords are used during recipe selection, so keep ingredient names in the filename
 - The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
-
-See [AGENTS.md](./AGENTS.md) for the source-of-truth technical overview, architecture details, configuration contracts, and development workflow.

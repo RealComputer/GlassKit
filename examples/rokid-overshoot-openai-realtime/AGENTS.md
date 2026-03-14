@@ -1,9 +1,3 @@
-# Purpose
-
-This file is the source of truth for the technical architecture, workflow contracts, configuration, key files, and developer execution requirements for this example.
-
-Keep `README.md` user-facing and high-level. When technical behavior changes, update this file first and keep the README summary aligned with it.
-
 # Project Overview
 
 This project is a server-authoritative mocktail coach for Rokid Glasses. The glasses stream camera video to Overshoot for live vision inference, receive spoken guidance from OpenAI Realtime API, and render a minimal HUD driven by the backend.
@@ -143,14 +137,6 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `uv run --env-file .env foo.py`: run a script with env loaded
 - `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
 - `uv add <package>`: add a package
-
-# Definition of Done
-
-- If Android source changes, run `cd rokid && ./gradlew :app:assembleDebug`.
-- If backend source changes, run `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`.
-- If routes, env vars, workflow behavior, gesture mappings, commands, or key files change, update this `AGENTS.md`.
-- If README technical summary changes, keep it shorter than this file and consistent with this file.
-- Commit every completed change set with the required prefix and useful context in the body.
 
 # Commit Guidelines
 
