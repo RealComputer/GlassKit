@@ -495,7 +495,17 @@ class SessionRuntimeMixin:
                         return
 
                     message_type = payload.get("type")
-                    if message_type == "response.created":
+                    if message_type == "response.output_audio_transcript.done":
+                        transcript = str(payload.get("transcript") or "").strip()
+                        item_id = str(payload.get("item_id") or "").strip()
+                        if transcript:
+                            logger.info(
+                                "session=%s realtime transcript done item_id=%s transcript=%s",
+                                session_id,
+                                item_id,
+                                _compact_json(transcript),
+                            )
+                    elif message_type == "response.created":
                         await current.queue.put(
                             SessionEvent(
                                 kind="openai.response.created",
