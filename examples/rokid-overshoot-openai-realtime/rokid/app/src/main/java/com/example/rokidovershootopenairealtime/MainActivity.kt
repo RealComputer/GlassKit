@@ -387,16 +387,15 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         val builder = SpannableStringBuilder()
         tasks.forEachIndexed { index, task ->
             val prefix = when {
-                task.completed -> "✓ "
-                task.id == activeTaskId -> "› "
-                else -> "· "
+                task.id == activeTaskId -> "> "
+                else -> ""
             }
             val start = builder.length
             builder.append(prefix).append(task.text)
             val end = builder.length
             if (task.id == activeTaskId) {
                 builder.setSpan(
-                    StyleSpan(Typeface.BOLD),
+                    StyleSpan(Typeface.ITALIC),
                     start,
                     end,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
