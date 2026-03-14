@@ -117,15 +117,26 @@ class SessionWorkflowMixin:
         if event.kind == "realtime.closed":
             await self._handle_realtime_closed(session, event.payload)
             return
+        if event.kind == "openai.response.created":
+            self._handle_openai_response_created(session, event.payload)
+            return
         if event.kind == "openai.response.done":
             await self._handle_openai_response_done(session, event.payload)
             return
         if event.kind == "openai.error":
-            logger.error(
-                "session=%s openai error=%s",
-                session.session_id,
-                event.payload.get("message"),
-            )
+            message = event.payload.get("message")
+            code = ""
+            if isinstance(message, dict):
+                code = str(message.get("code") or "").strip()
+            if code == "response_cancel_not_active":
+                session.openai_response_active = False
+                logger.info(
+                    "session=%s ignoring benign openai cancel error=%s",
+                    session.session_id,
+                    message,
+                )
+                return
+            logger.error("session=%s openai error=%s", session.session_id, message)
             if session.phase not in {PHASE_WAITING, PHASE_ERROR}:
                 await self._fail_session(
                     session, "OpenAI sideband disconnected. Tap to restart."
@@ -337,6 +348,15 @@ class SessionWorkflowMixin:
         )
         await self._send_openai_event(session, {"type": "response.create"})
 
+    def _handle_openai_response_created(
+        self,
+        session: ControlSession,
+        payload: dict[str, Any],
+    ) -> None:
+        if payload.get("generation") != session.realtime_generation:
+            return
+        session.openai_response_active = True
+
     async def _handle_openai_response_done(
         self,
         session: ControlSession,
@@ -344,6 +364,7 @@ class SessionWorkflowMixin:
     ) -> None:
         if payload.get("generation") != session.realtime_generation:
             return
+        session.openai_response_active = False
 
         response = payload.get("response") or {}
         output_items = response.get("output") or []
@@ -726,6 +747,7 @@ class SessionWorkflowMixin:
         session.step_index_by_id.clear()
         session.current_step_id = None
         session.step_state = StepRuntimeState()
+        session.openai_response_active = False
         session.speech_epoch = 0
         session.current_speech_text = None
         session.selecting_recipe = False

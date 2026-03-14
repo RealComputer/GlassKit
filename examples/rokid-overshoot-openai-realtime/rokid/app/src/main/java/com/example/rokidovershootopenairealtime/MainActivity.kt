@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     private var pendingStart = false
     private var isRunning = false
     private var idleMessage = ""
+    private var mediaClientGeneration = 0
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL
 
@@ -182,6 +183,8 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private fun startMediaClients(sessionId: String) {
         stopMediaClients()
+        mediaClientGeneration += 1
+        val generation = mediaClientGeneration
 
         overshootClient = OvershootSessionClient(
             context = applicationContext,
@@ -190,10 +193,8 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             listener = object : OvershootSessionClient.Listener {
                 override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
                     runOnUiThread {
-                        if (state == PeerConnection.IceConnectionState.FAILED ||
-                            state == PeerConnection.IceConnectionState.CLOSED ||
-                            state == PeerConnection.IceConnectionState.DISCONNECTED
-                        ) {
+                        if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
+                        if (state == PeerConnection.IceConnectionState.FAILED) {
                             binding.tvHint.text = "Video link: $state"
                         }
                     }
@@ -201,6 +202,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
                 override fun onError(message: String, throwable: Throwable?) {
                     runOnUiThread {
+                        if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
                         binding.tvHint.text = "Video error: $message"
                     }
                 }
@@ -214,6 +216,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             listener = object : OpenAIRealtimeClient.Listener {
                 override fun onTranscriptDelta(itemId: String, delta: String) {
                     runOnUiThread {
+                        if (generation != mediaClientGeneration) return@runOnUiThread
                         currentTranscript += delta
                         renderTranscript()
                     }
@@ -221,6 +224,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
                 override fun onTranscriptDone(itemId: String, transcript: String) {
                     runOnUiThread {
+                        if (generation != mediaClientGeneration) return@runOnUiThread
                         currentTranscript = transcript
                         renderTranscript()
                     }
@@ -228,10 +232,8 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
                 override fun onConnectionStateChanged(state: PeerConnection.IceConnectionState) {
                     runOnUiThread {
-                        if (state == PeerConnection.IceConnectionState.FAILED ||
-                            state == PeerConnection.IceConnectionState.CLOSED ||
-                            state == PeerConnection.IceConnectionState.DISCONNECTED
-                        ) {
+                        if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
+                        if (state == PeerConnection.IceConnectionState.FAILED) {
                             binding.tvHint.text = "Audio link: $state"
                         }
                     }
@@ -239,6 +241,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
                 override fun onError(message: String, throwable: Throwable?) {
                     runOnUiThread {
+                        if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
                         binding.tvHint.text = "Audio error: $message"
                     }
                 }
@@ -250,6 +253,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     }
 
     private fun stopMediaClients() {
+        mediaClientGeneration += 1
         val activeOvershoot = overshootClient
         overshootClient = null
         if (activeOvershoot != null) {

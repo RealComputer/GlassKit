@@ -213,6 +213,7 @@ class SessionRuntimeMixin:
     async def _stop_realtime_runtime(self, session: ControlSession) -> None:
         session.realtime_generation += 1
         session.realtime_ready = False
+        session.openai_response_active = False
         ws = session.openai_ws
         session.openai_ws = None
         task = session.openai_sideband_task
@@ -238,7 +239,9 @@ class SessionRuntimeMixin:
         line = text.strip()
         if not line:
             return
-        await self._send_openai_event(session, {"type": "response.cancel"})
+        if session.openai_response_active:
+            await self._send_openai_event(session, {"type": "response.cancel"})
+            session.openai_response_active = False
         session.speech_epoch += 1
         session.current_speech_text = line
         await self._publish_hud_state(session)
@@ -290,6 +293,8 @@ class SessionRuntimeMixin:
     ) -> None:
         if session.openai_ws is None:
             return
+        if payload.get("type") == "response.create":
+            session.openai_response_active = True
         await session.openai_ws.send(json.dumps(payload))
 
     async def _run_overshoot_keepalive(
@@ -490,7 +495,14 @@ class SessionRuntimeMixin:
                         return
 
                     message_type = payload.get("type")
-                    if message_type == "response.done":
+                    if message_type == "response.created":
+                        await current.queue.put(
+                            SessionEvent(
+                                kind="openai.response.created",
+                                payload={"generation": generation},
+                            )
+                        )
+                    elif message_type == "response.done":
                         await current.queue.put(
                             SessionEvent(
                                 kind="openai.response.done",

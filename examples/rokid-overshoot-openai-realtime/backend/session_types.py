@@ -46,6 +46,7 @@ class ControlSession:
     openai_call_id: str | None = None
     openai_ws: ClientConnection | None = None
     openai_sideband_task: asyncio.Task[None] | None = None
+    openai_response_active: bool = False
     active_prompt_text: str | None = None
     active_detector_key: str | None = None
     inventory_signature: tuple[str, ...] | None = None
