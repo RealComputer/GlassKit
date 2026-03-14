@@ -50,12 +50,6 @@ cp .env.example .env
 # set OVERSHOOT_API_KEY and OPENAI_API_KEY
 ```
 
-Optional backend overrides:
-
-- `OVERSHOOT_API_URL`
-- `OVERSHOOT_MODEL`
-- `OPENAI_REALTIME_MODEL`
-
 ## Run The Backend
 
 ```bash
