@@ -617,9 +617,9 @@ backend/recipes/orange-blue-mocktail.json
         "unknown"
       ],
       "speak_on_observation_change_only": true,
-      "on_enter_speech": "Let's make a mocktail! Start with orange juice. Pick up the orange bottle.",
-      "mismatch_speech": "That's the wrong bottle. Pick up the orange bottle.",
-      "success_speech": "Good. Pour the orange juice into the glass.",
+      "on_enter_speech": "Let's make a mocktail! Grab the orange bottle to get us started.",
+      "mismatch_speech": "Almost. Grab the orange bottle.",
+      "success_speech": "Nice. Pour the orange juice into the glass.",
       "next_step_id": "pour_orange_juice"
     },
     {
@@ -635,11 +635,11 @@ backend/recipes/orange-blue-mocktail.json
         "gte": 1,
         "lt": 5
       },
-      "progress_once_speech": "Keep pouring until I tell you to stop.",
+      "progress_once_speech": "Nice pour. Keep going until I tell you to stop.",
       "complete_condition": {
         "gte": 5
       },
-      "complete_speech": "Stop there! That's enough orange juice. Now add two scoops of ice cubes to the glass.",
+      "complete_speech": "And stop there! Great start. Add two scoops of ice cubes to the glass.",
       "next_step_id": "add_ice"
     },
     {
@@ -653,11 +653,11 @@ backend/recipes/orange-blue-mocktail.json
       "milestones": [
         {
           "count": 1,
-          "speech": "One scoop in. Add one more."
+          "speech": "Nice. One scoop in, one more to go."
         },
         {
           "count": 2,
-          "speech": "That's enough ice. Next, pick up the blue bottle.",
+          "speech": "Perfect. That's enough ice. Now grab the blue bottle.",
           "next_step_id": "pick_blue_bottle"
         }
       ]
@@ -672,8 +672,8 @@ backend/recipes/orange-blue-mocktail.json
         "unknown"
       ],
       "speak_on_observation_change_only": true,
-      "mismatch_speech": "That's the wrong bottle. Pick up the blue bottle.",
-      "success_speech": "Good. Pour the Gatorade slowly into the glass.",
+      "mismatch_speech": "Almost. Grab the blue bottle.",
+      "success_speech": "Yes. Pour the Gatorade in slowly.",
       "next_step_id": "pour_gatorade"
     },
     {
@@ -685,9 +685,9 @@ backend/recipes/orange-blue-mocktail.json
         "no"
       ],
       "progress_value": "pouring",
-      "progress_once_speech": "A little more. Keep going.",
+      "progress_once_speech": "Looking good. Just a little more.",
       "complete_value": "pouring_nearly_full",
-      "complete_speech": "Stop there! The drink is done. Place the lime wheel on top to finish.",
+      "complete_speech": "And stop there! That looks great. Top it with the lime wheel.",
       "next_step_id": "add_lime"
     },
     {
@@ -696,7 +696,7 @@ backend/recipes/orange-blue-mocktail.json
       "evaluation_mode": "momentary_true_complete",
       "detector_key": "lime_insert",
       "complete_on": true,
-      "complete_speech": "Perfect. Your mocktail is finished. Congratulations!",
+      "complete_speech": "Beautiful. Your mocktail is finished!",
       "next_step_id": null
     }
   ]
