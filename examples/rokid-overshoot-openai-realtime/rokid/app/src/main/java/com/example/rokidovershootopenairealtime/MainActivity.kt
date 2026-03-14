@@ -385,10 +385,12 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private fun renderTasks(tasks: List<HudTask>, activeTaskId: String?): SpannableStringBuilder {
         val builder = SpannableStringBuilder()
+        val numberWidth = tasks.size.toString().length
         tasks.forEachIndexed { index, task ->
+            val stepNumber = (index + 1).toString().padStart(numberWidth, ' ')
             val prefix = when {
-                task.id == activeTaskId -> "> "
-                else -> "  "
+                task.id == activeTaskId -> "> $stepNumber. "
+                else -> "  $stepNumber. "
             }
             val start = builder.length
             builder.append(prefix).append(task.text)
