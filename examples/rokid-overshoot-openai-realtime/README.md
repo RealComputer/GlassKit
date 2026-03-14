@@ -1,27 +1,30 @@
-# Example: Mocktail Coach for Rokid Glasses (Overshoot x OpenAI Realtime API)
+# Example: Mocktail Coach for Rokid Glasses
 
-This example turns Rokid Glasses into a guided mocktail coach. The glasses stream camera video to [Overshoot](https://overshoot.ai/) for live scene understanding, receive spoken instructions from OpenAI Realtime, and render a minimal HUD showing the current recipe task and latest transcript only.
+This example turns Rokid Glasses into a guided mocktail-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API for low-latency spoken guidance and transcript streaming. You look at the ingredients on the table, tap once to start, and the glasses coach you through the drink with a minimal HUD and spoken instructions.
 
-## What it does
+## What the app does
 
 - Shows a simple start screen: `Mocktail Coach` and `Look at the ingredients and tap to start`
-- Runs a hardcoded inventory scan first
-- Chooses the most likely recipe from recipe filenames
-- Loads that recipe JSON on the backend
-- Guides the user step by step with spoken instructions and HUD task highlighting
+- Scans the visible ingredients first
+- Chooses the best matching recipe automatically
+- Watches the table as you work and reacts step by step
+- Guides the user step by step with short spoken instructions
+- Highlights the current task on the HUD and shows only the latest transcript
+- Corrects you if you pick up the wrong bottle or stop at the wrong time
+- Keeps the completed HUD visible at the end
 - Supports debug step navigation from Rokid swipe gestures
 
-## Architecture
+## How it works
 
-- Android app:
-  - control WebSocket to the backend
-  - WebRTC video stream to Overshoot through the backend
-  - WebRTC audio output and transcript events from OpenAI Realtime through the backend SDP broker
-- Backend:
-  - authoritative per-session workflow engine
-  - recipe loading from `backend/recipes/`
-  - Overshoot prompt switching on the active stream
-  - OpenAI Realtime sideband for recipe-selection tool calls and exact speech playback
+At a high level:
+
+- Rokid Glasses stream live camera video into [Overshoot](https://overshoot.ai/) for scene understanding
+- The FastAPI backend is authoritative for recipe choice, workflow state, step transitions, HUD state, and speech timing
+- The backend creates and controls an OpenAI Realtime session for spoken guidance
+- The OpenAI Realtime speaks the backend's exact lines over WebRTC and streams transcript text back to the HUD
+- The Android app stays thin: it renders the HUD, handles gestures, and owns the media connections
+
+Detailed technical architecture, workflow contracts, configuration, and developer workflow live in [AGENTS.md](./AGENTS.md).
 
 ## Requirements
 
@@ -31,7 +34,9 @@ This example turns Rokid Glasses into a guided mocktail coach. The glasses strea
 - Overshoot API key (`OVERSHOOT_API_KEY`)
 - OpenAI API key (`OPENAI_API_KEY`)
 
-## Configuration
+## Developer Setup
+
+### Configuration
 
 Set the backend URL in `rokid/local.properties`:
 
@@ -59,14 +64,14 @@ Optional backend overrides:
 - Swipe forward: `KeyEvent.KEYCODE_DPAD_UP`
 - Swipe backward: `KeyEvent.KEYCODE_DPAD_DOWN`
 
-## Run backend
+## Run The Backend
 
 ```bash
 cd backend
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 ```
 
-## Run glasses app
+## Run The Glasses App
 
 Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi on the glasses, then run the Android app from `rokid/` in Android Studio.
 
@@ -96,4 +101,4 @@ adb devices
 - Filename keywords are used during recipe selection, so keep ingredient names in the filename
 - The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
 
-See [AGENTS.md](./AGENTS.md) for development workflow and architecture notes.
+See [AGENTS.md](./AGENTS.md) for the source-of-truth technical overview, architecture details, configuration contracts, and development workflow.

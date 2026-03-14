@@ -1,20 +1,42 @@
-# Overview
+# Purpose
 
-This project is a server-authoritative mocktail coach for Rokid Glasses. The glasses stream camera video to Overshoot for live vision inference, receive spoken guidance from OpenAI Realtime, and render a minimal HUD driven by the backend.
+This file is the source of truth for the technical architecture, workflow contracts, configuration, key files, and developer execution requirements for this example.
 
-- The Android app is intentionally thin: it owns the HUD, gestures, and the two WebRTC links.
-- The FastAPI backend owns the full workflow state machine, recipe loading, Overshoot prompt switching, and OpenAI sideband control.
-- Recipe selection happens after a hardcoded inventory scan, using detected ingredient names and recipe filenames.
+Keep `README.md` user-facing and high-level. When technical behavior changes, update this file first and keep the README summary aligned with it.
+
+# Project Overview
+
+This project is a server-authoritative mocktail coach for Rokid Glasses. The glasses stream camera video to Overshoot for live vision inference, receive spoken guidance from OpenAI Realtime API, and render a minimal HUD driven by the backend.
 
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, mic, and speaker.
 - Overshoot is a Vision Language Model inference API for live video.
+
+# Implementation Contracts
+
+## Client contract
+
+- The Android client must own only HUD rendering, gesture input, runtime permission handling, and the two WebRTC links.
+- The Android client must not choose recipes, interpret vision results, advance workflow steps, or decide what speech to play.
+- The Android client must render only the latest transcript and must clear stale transcript text when `speech_epoch` changes.
+
+## Backend contract
+
+- The FastAPI backend must remain authoritative for session lifecycle, phases, recipe loading, prompt switching, step progression, HUD state, and exact speech decisions.
+- The backend must serialize per-session workflow through one session event loop.
+- Recipe selection must happen only after the inventory scan stabilizes, using detected ingredient names and recipe filenames.
+
+## External service contract
+
+- Overshoot must provide structured outputs for the active prompt; the backend decides what those outputs mean.
+- OpenAI Realtime must only do two things in this app: choose a recipe from filename ids and speak exact backend-provided lines.
+- OpenAI Realtime must not invent workflow decisions or drive step transitions.
 
 # Architecture
 
 ## Connection graph
 
 - `Rokid -> Backend` over a control WebSocket at `/session/control`
-  - How: standard websocket, opened as soon as the app starts
+  - How: standard websocket, opened during app startup once camera permission is available
   - Why: the backend is authoritative for session lifecycle, HUD state, and debug gestures
 
 - `Rokid -> Backend` over `POST /session/{session_id}/vision`
@@ -43,7 +65,7 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 
 ## End-to-end session flow
 
-1. App launch: Rokid opens the backend control websocket and gets a server-created `session_id`.
+1. App launch: once camera permission is available, Rokid opens the backend control websocket and gets a server-created `session_id`.
 2. User tap: Rokid sends `session.start` on the control socket.
 3. Media setup:
    - Rokid sends the vision SDP offer to `/session/{session_id}/vision`
@@ -66,7 +88,7 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
    - OpenAI Realtime speaks to Rokid over WebRTC
    - Rokid renders only the latest transcript, keyed by `speech_epoch`
 
-# Key files
+# Key Files
 
 ## Rokid (`./rokid/`)
 
@@ -121,6 +143,14 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `uv run --env-file .env foo.py`: run a script with env loaded
 - `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
 - `uv add <package>`: add a package
+
+# Definition of Done
+
+- If Android source changes, run `cd rokid && ./gradlew :app:assembleDebug`.
+- If backend source changes, run `cd backend && uv run ty check && uv run ruff check --fix && uv run ruff format`.
+- If routes, env vars, workflow behavior, gesture mappings, commands, or key files change, update this `AGENTS.md`.
+- If README technical summary changes, keep it shorter than this file and consistent with this file.
+- Commit every completed change set with the required prefix and useful context in the body.
 
 # Commit Guidelines
 
