@@ -55,4 +55,4 @@ This project demonstrates Rokid Glasses integrated with Overshoot. The app strea
 
 # Commit Guidelines
 
-- Start message with "overshoot: "
+- Start message with "example/mocktail: "
