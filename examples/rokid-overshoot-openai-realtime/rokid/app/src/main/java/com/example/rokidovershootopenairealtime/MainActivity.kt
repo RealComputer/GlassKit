@@ -396,7 +396,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             if (task.id == activeTaskId) {
                 builder.setSpan(
                     StyleSpan(Typeface.ITALIC),
-                    start,
+                    start + prefix.length,
                     end,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
