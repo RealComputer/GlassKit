@@ -1,15 +1,14 @@
 # Example: Mocktail Coach for Rokid Glasses
 
-This example turns Rokid Glasses into a guided mocktail-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
+This example turns Rokid Glasses into a guided mocktail-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API as the live LLM layer for low-latency spoken guidance and transcript streaming.
 
 ## What the app does
 
-- Shows a simple start screen: `Mocktail Coach` and `Look at the ingredients and tap to start`
-- Scans the visible ingredients first
+- Scans the visible ingredients at the start
 - Chooses the best matching recipe automatically
 - Watches the table as you work and reacts step by step
-- Guides the user step by step with short spoken instructions
-- On the display, highlights the current task and shows the latest guide transcript
+- Guides you step by step with short spoken instructions
+- Shows the current task and the latest guidance transcript on the display
 - Corrects you if you're not following the recipe
 - (Supports debug step navigation from swipe controls.)
 
@@ -17,10 +16,10 @@ This example turns Rokid Glasses into a guided mocktail-making assistant. It use
 
 At a high level:
 
-- Rokid Glasses stream live camera video into [Overshoot](https://overshoot.ai/) for scene understanding
+- Rokid Glasses stream live camera video into Overshoot for scene understanding
 - The FastAPI backend is authoritative for recipe choice, workflow state, step transitions, HUD state, and speech timing
-- The backend creates and controls an OpenAI Realtime session for spoken guidance
-- The OpenAI Realtime speaks the backend's exact lines over WebRTC and streams transcript text back to the HUD
+- The backend creates and controls an OpenAI Realtime session for live LLM recipe selection and spoken guidance
+- OpenAI Realtime speaks the backend's lines over WebRTC and streams transcript text back to the HUD
 - The Android app stays thin: it renders the HUD, handles gestures, and owns the media connections
 
 Detailed technical architecture, workflow contracts, configuration, and developer workflow live in [AGENTS.md](./AGENTS.md).
