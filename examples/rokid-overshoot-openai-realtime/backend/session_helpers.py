@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from recipe_catalog import RecipeCondition
+from session_constants import INVENTORY_SCAN_PROMPT
 from session_types import ControlSession
 
 
@@ -64,6 +65,46 @@ def parse_structured_result(raw_result: Any) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return data if isinstance(data, dict) else None
+
+
+def matches_overshoot_prompt(expected_prompt: str, result_prompt: str) -> bool:
+    if result_prompt == expected_prompt:
+        return True
+    if not expected_prompt or not result_prompt:
+        return False
+    return result_prompt.startswith(expected_prompt)
+
+
+def detector_key_for_overshoot_prompt(
+    session: ControlSession, prompt: str
+) -> str | None:
+    if session.active_prompt_text and matches_overshoot_prompt(
+        session.active_prompt_text, prompt
+    ):
+        return session.active_detector_key
+    if matches_overshoot_prompt(INVENTORY_SCAN_PROMPT, prompt):
+        return "inventory_scan"
+    if session.recipe is None:
+        return None
+    for detector_key, detector in session.recipe.detectors.items():
+        if matches_overshoot_prompt(detector.prompt, prompt):
+            return detector_key
+    return None
+
+
+def overshoot_payload_for_log(
+    session: ControlSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    prompt = payload.get("prompt")
+    if not isinstance(prompt, str) or not prompt:
+        return payload
+    detector_key = detector_key_for_overshoot_prompt(session, prompt)
+    if detector_key is None:
+        return payload
+    summarized_payload = dict(payload)
+    summarized_payload.pop("prompt", None)
+    summarized_payload["prompt_key"] = detector_key
+    return summarized_payload
 
 
 def parse_arguments(raw_args: Any) -> dict[str, Any]:

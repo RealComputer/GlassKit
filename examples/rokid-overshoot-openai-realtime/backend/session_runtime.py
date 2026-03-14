@@ -29,6 +29,7 @@ from session_helpers import (
     extract_answer_sdp,
     extract_call_id,
     normalize_sdp,
+    overshoot_payload_for_log,
     parse_positive_int,
     response_text,
 )
@@ -379,17 +380,16 @@ class SessionRuntimeMixin:
                                 "session=%s overshoot bad json=%s", session_id, raw_text
                             )
                             continue
-                        logger.info(
-                            "session=%s overshoot payload=%s",
-                            session_id,
-                            _compact_json(payload),
-                        )
-
                         current = await self._get_session_if_current(
                             session_id, generation, "vision"
                         )
                         if current is None:
                             return
+                        logger.info(
+                            "session=%s overshoot payload=%s",
+                            session_id,
+                            _compact_json(overshoot_payload_for_log(current, payload)),
+                        )
                         await current.queue.put(
                             SessionEvent(
                                 kind="overshoot.result",

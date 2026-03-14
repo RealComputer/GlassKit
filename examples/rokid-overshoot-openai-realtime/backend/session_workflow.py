@@ -19,7 +19,9 @@ from session_constants import (
 )
 from session_helpers import (
     completed_task_ids_for_session,
+    detector_key_for_overshoot_prompt,
     extract_result_value,
+    matches_overshoot_prompt,
     matches_condition,
     parse_arguments,
     parse_structured_result,
@@ -37,14 +39,6 @@ def _compact_json(value: Any) -> str:
         )
     except TypeError:
         return repr(value)
-
-
-def _matches_active_prompt(expected_prompt: str, result_prompt: str) -> bool:
-    if result_prompt == expected_prompt:
-        return True
-    if not expected_prompt or not result_prompt:
-        return False
-    return result_prompt.startswith(expected_prompt)
 
 
 class SessionWorkflowMixin:
@@ -229,21 +223,44 @@ class SessionWorkflowMixin:
 
         expected_prompt = session.active_prompt_text or ""
         prompt = str(payload.get("prompt") or "")
-        if not _matches_active_prompt(expected_prompt, prompt):
-            logger.info(
-                "session=%s ignoring overshoot result due to prompt mismatch active_prompt=%s result_prompt=%s",
-                session.session_id,
-                _compact_json(expected_prompt),
-                _compact_json(prompt),
-            )
+        active_detector = (
+            detector_key_for_overshoot_prompt(session, expected_prompt) or "unknown"
+        )
+        result_detector = (
+            detector_key_for_overshoot_prompt(session, prompt) or "unknown"
+        )
+        if not matches_overshoot_prompt(expected_prompt, prompt):
+            if active_detector == "unknown" or result_detector == "unknown":
+                logger.info(
+                    "session=%s ignoring overshoot result due to prompt mismatch active_detector=%s result_detector=%s active_prompt=%s result_prompt=%s",
+                    session.session_id,
+                    active_detector,
+                    result_detector,
+                    _compact_json(expected_prompt),
+                    _compact_json(prompt),
+                )
+            else:
+                logger.info(
+                    "session=%s ignoring overshoot result due to prompt mismatch active_detector=%s result_detector=%s",
+                    session.session_id,
+                    active_detector,
+                    result_detector,
+                )
             return
         if prompt != expected_prompt:
-            logger.info(
-                "session=%s accepting overshoot result with augmented prompt active_prompt=%s result_prompt=%s",
-                session.session_id,
-                _compact_json(expected_prompt),
-                _compact_json(prompt),
-            )
+            if result_detector == "unknown":
+                logger.info(
+                    "session=%s accepting overshoot result with augmented prompt detector=%s result_prompt=%s",
+                    session.session_id,
+                    active_detector,
+                    _compact_json(prompt),
+                )
+            else:
+                logger.info(
+                    "session=%s accepting overshoot result with augmented prompt detector=%s",
+                    session.session_id,
+                    result_detector,
+                )
         parsed = parse_structured_result(payload.get("result"))
         if parsed is None:
             logger.info(
