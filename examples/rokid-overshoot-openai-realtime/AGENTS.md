@@ -11,15 +11,60 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 
 # Architecture
 
-- Android opens a backend control WebSocket at `/session/control`, receives a backend-generated `session_id`, and renders `hud.state` updates.
-- Tap starts a run; the app then opens:
-  - `/session/{session_id}/vision` for Overshoot WebRTC video streaming
-  - `/session/{session_id}/realtime` for OpenAI Realtime WebRTC audio output and transcript events
-- Backend session orchestration lives in `backend/session_manager.py`:
-  - hardcoded inventory scan first
-  - recipe selection via OpenAI sideband tool calls (`list_recipes`, `activate_recipe`)
-  - step engine with prompt switching on the active Overshoot stream
-  - speech epoch handling so only the newest transcript stays visible on-device
+## Connection graph
+
+- `Rokid -> Backend` over a control WebSocket at `/session/control`
+  - How: standard websocket, opened as soon as the app starts
+  - Why: the backend is authoritative for session lifecycle, HUD state, and debug gestures
+
+- `Rokid -> Backend` over `POST /session/{session_id}/vision`
+  - How: the glasses send a WebRTC SDP offer to the backend, and the backend returns the SDP answer for the Overshoot video session
+  - Why: the backend owns the Overshoot API key, creates the stream, chooses the initial prompt and output schema, and keeps the `stream_id` so it can patch prompts later
+
+- `Rokid <-> Overshoot` over WebRTC media after that SDP exchange
+  - How: once the backend brokers the offer/answer, camera video flows directly between the glasses and Overshoot
+  - Why: video should stay low-latency and should not be proxied frame-by-frame through FastAPI
+
+- `Backend <-> Overshoot` over REST plus websocket
+  - How: REST to create streams, send keepalives, delete streams, and patch prompts; websocket to receive `StreamInferenceResult` events
+  - Why: the backend must switch detectors, discard stale prompt results, and drive the workflow from structured vision outputs
+
+- `Rokid -> Backend` over `POST /session/{session_id}/realtime`
+  - How: the glasses send a WebRTC SDP offer to the backend, and the backend returns the SDP answer for the OpenAI Realtime session
+  - Why: the backend owns the OpenAI API key and must create the realtime call so it also gets the `call_id` for sideband control
+
+- `Rokid <-> OpenAI Realtime` over WebRTC media and data channel after that SDP exchange
+  - How: remote audio and transcript events travel directly between the glasses and OpenAI Realtime
+  - Why: this keeps speech playback low-latency and lets the client show transcript deltas without the backend relaying them line-by-line
+
+- `Backend <-> OpenAI Realtime` over a sideband websocket tied to the `call_id`
+  - How: the backend opens `wss://api.openai.com/v1/realtime?call_id=...`
+  - Why: the backend must issue tool-call responses, cancel and replace speech, and keep workflow decisions on the server instead of in the model
+
+## End-to-end session flow
+
+1. App launch: Rokid opens the backend control websocket and gets a server-created `session_id`.
+2. User tap: Rokid sends `session.start` on the control socket.
+3. Media setup:
+   - Rokid sends the vision SDP offer to `/session/{session_id}/vision`
+   - Rokid sends the realtime SDP offer to `/session/{session_id}/realtime`
+4. Stream ownership:
+   - Backend creates the Overshoot stream and starts the Overshoot websocket + keepalive tasks
+   - Backend creates the OpenAI realtime call and opens the sideband websocket
+5. Inventory scan:
+   - Backend waits until both links are ready
+   - Backend keeps the hardcoded inventory detector prompt active on Overshoot
+   - Backend waits for two consecutive identical normalized ingredient arrays
+6. Recipe selection:
+   - Backend asks OpenAI Realtime to choose a recipe from filename ids using `list_recipes` and `activate_recipe`
+   - Backend loads the chosen recipe JSON and switches to the first guided step
+7. Guided workflow:
+   - Backend patches the active Overshoot prompt for each step
+   - Backend evaluates structured results and decides whether to advance, correct, or speak progress
+   - Backend sends `hud.state` updates to Rokid and exact speech instructions to OpenAI sideband
+8. Speech delivery:
+   - OpenAI Realtime speaks to Rokid over WebRTC
+   - Rokid renders only the latest transcript, keyed by `speech_epoch`
 
 # Key files
 
