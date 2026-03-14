@@ -108,7 +108,7 @@
       ],
       "speak_on_observation_change_only": true,
       "mismatch_speech": "That's the wrong bottle. Pick up the blue bottle.",
-      "success_speech": "Good. Pour the blue drink slowly into the glass.",
+      "success_speech": "Good. Pour the Gatorade slowly into the glass.",
       "next_step_id": "pour_gatorade"
     },
     {
