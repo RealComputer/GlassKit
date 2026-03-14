@@ -403,19 +403,26 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     }
 
     private fun renderTranscript() {
-        val transcript = currentTranscript.trim()
         val state = currentHudState
-        if (transcript.isEmpty() || state?.screen != "running") {
+        if (state?.screen != "running") {
             stopTranscriptBlinking()
             binding.transcriptContainer.visibility = View.GONE
             binding.tvFace.text = ""
             binding.tvTranscript.text = ""
+            binding.tvTranscript.visibility = View.GONE
             return
         }
 
+        val transcript = currentTranscript.trim()
         binding.tvFace.text = transcriptFace(state.phase)
-        binding.tvTranscript.text = "\"$transcript\""
         binding.transcriptContainer.visibility = View.VISIBLE
+        if (transcript.isEmpty()) {
+            binding.tvTranscript.text = ""
+            binding.tvTranscript.visibility = View.GONE
+        } else {
+            binding.tvTranscript.text = "\"$transcript\""
+            binding.tvTranscript.visibility = View.VISIBLE
+        }
 
         if (state.phase == "COMPLETED") {
             stopTranscriptBlinking()
@@ -447,8 +454,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     private fun shouldAnimateTranscriptFace(): Boolean {
         val state = currentHudState ?: return false
         return state.screen == "running" &&
-            state.phase != "COMPLETED" &&
-            currentTranscript.trim().isNotEmpty()
+            state.phase != "COMPLETED"
     }
 
     private fun stopTranscriptBlinking() {
