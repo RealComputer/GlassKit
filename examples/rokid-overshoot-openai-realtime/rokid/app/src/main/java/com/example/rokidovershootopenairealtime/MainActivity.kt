@@ -1,4 +1,4 @@
-package com.example.rokidovershoot
+package com.example.rokidovershootopenairealtime
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -14,9 +14,9 @@ import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.rokidovershoot.BackendControlClient.HudState
-import com.example.rokidovershoot.BackendControlClient.HudTask
-import com.example.rokidovershoot.databinding.ActivityMainBinding
+import com.example.rokidovershootopenairealtime.BackendControlClient.HudState
+import com.example.rokidovershootopenairealtime.BackendControlClient.HudTask
+import com.example.rokidovershootopenairealtime.databinding.ActivityMainBinding
 import org.webrtc.PeerConnection
 
 class MainActivity : AppCompatActivity(), BackendControlClient.Listener {

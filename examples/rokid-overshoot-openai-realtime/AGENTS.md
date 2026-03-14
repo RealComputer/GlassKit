@@ -70,10 +70,10 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 
 ## Rokid (`./rokid/`)
 
-- `app/src/main/java/com/example/rokidovershoot/MainActivity.kt`: start/stop flow, gesture handling, HUD rendering, transcript reset on `speech_epoch`.
-- `app/src/main/java/com/example/rokidovershoot/BackendControlClient.kt`: backend control WebSocket and `hud.state` parsing.
-- `app/src/main/java/com/example/rokidovershoot/OvershootSessionClient.kt`: camera -> Overshoot WebRTC brokered through the backend.
-- `app/src/main/java/com/example/rokidovershoot/OpenAIRealtimeClient.kt`: receive-only OpenAI Realtime WebRTC audio plus transcript delta parsing.
+- `app/src/main/java/com/example/rokidovershootopenairealtime/MainActivity.kt`: start/stop flow, gesture handling, HUD rendering, transcript reset on `speech_epoch`.
+- `app/src/main/java/com/example/rokidovershootopenairealtime/BackendControlClient.kt`: backend control WebSocket and `hud.state` parsing.
+- `app/src/main/java/com/example/rokidovershootopenairealtime/OvershootSessionClient.kt`: camera -> Overshoot WebRTC brokered through the backend.
+- `app/src/main/java/com/example/rokidovershootopenairealtime/OpenAIRealtimeClient.kt`: receive-only OpenAI Realtime WebRTC audio plus transcript delta parsing.
 - `app/src/main/res/layout/activity_main.xml`: minimal start screen and running HUD.
 - `app/build.gradle.kts`: `BACKEND_BASE_URL` BuildConfig value from `rokid/local.properties`.
 

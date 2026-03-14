@@ -13,13 +13,13 @@ val backendBaseUrl = localProperties.getProperty("BACKEND_BASE_URL")
     ?: error("BACKEND_BASE_URL is required in rokid/local.properties")
 
 android {
-    namespace = "com.example.rokidovershoot"
+    namespace = "com.example.rokidovershootopenairealtime"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.rokidovershoot"
+        applicationId = "com.example.rokidovershootopenairealtime"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

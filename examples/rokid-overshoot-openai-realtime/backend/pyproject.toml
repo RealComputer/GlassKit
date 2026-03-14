@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Rokid Overshoot signaling and event bridge"
+description = "Rokid Overshoot OpenAI Realtime signaling and event bridge"
 readme = "README.md"
 requires-python = ">=3.12.12"
 dependencies = [
