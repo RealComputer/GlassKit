@@ -13,10 +13,11 @@ DEFAULT_PROCESSING = {
     "delay_seconds": 0.5,
 }
 INVENTORY_SCAN_PROMPT = (
-    "Return the visible ingredient list on the table as an `ingredients` array using "
-    'only these values: "orange juice", "blue drink", "lime", "ice". Include an item '
-    "only if it is clearly visible and available for use in the current scene. Do not "
-    "infer hidden items or items outside the frame."
+    "Return the visible ingredient list on the table as an `ingredients` array "
+    "containing clearly visible ingredient names. Use short lowercase names like "
+    '"orange juice", "blue drink", "lime", or "ice". Include an item only if it is '
+    "clearly visible and available for use in the current scene. Do not infer hidden "
+    "items or items outside the frame."
 )
 GENERAL_OUTPUT_SCHEMA = {
     "type": "object",
