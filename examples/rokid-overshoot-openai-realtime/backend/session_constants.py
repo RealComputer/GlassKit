@@ -21,34 +21,16 @@ GENERAL_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "ingredients": {
-            "anyOf": [
-                {"type": "array", "items": {"type": "string"}},
-                {"type": "null"},
-            ]
+            "type": "array",
+            "items": {"type": "string"},
         },
-        "color": {
-            "anyOf": [
-                {"type": "string"},
-                {"type": "null"},
-            ]
-        },
-        "state": {
-            "anyOf": [
-                {"type": "string"},
-                {"type": "null"},
-            ]
-        },
-        "flag": {
-            "anyOf": [
-                {"type": "boolean"},
-                {"type": "null"},
-            ]
-        },
+        "color": {"type": "string"},
+        "state": {"type": "string"},
+        "flag": {"type": "boolean"},
         "level": {
             "anyOf": [
                 {"type": "integer", "minimum": 0, "maximum": 10},
                 {"type": "string"},
-                {"type": "null"},
             ]
         },
     },
