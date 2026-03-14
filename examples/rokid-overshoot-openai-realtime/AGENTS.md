@@ -6,6 +6,9 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - The FastAPI backend owns the full workflow state machine, recipe loading, Overshoot prompt switching, and OpenAI sideband control.
 - Recipe selection happens after a hardcoded inventory scan, using detected ingredient names and recipe filenames.
 
+- Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, mic, and speaker.
+- Overshoot is a Vision Language Model inference API for live video.
+
 # Architecture
 
 - Android opens a backend control WebSocket at `/session/control`, receives a backend-generated `session_id`, and renders `hud.state` updates.
@@ -17,11 +20,6 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
   - recipe selection via OpenAI sideband tool calls (`list_recipes`, `activate_recipe`)
   - step engine with prompt switching on the active Overshoot stream
   - speech epoch handling so only the newest transcript stays visible on-device
-- Overshoot runs in clip mode with hardcoded processing settings:
-  - `target_fps = 6`
-  - `clip_length_seconds = 0.5`
-  - `delay_seconds = 0.5`
-- Overshoot prompt changes use `PATCH /streams/{stream_id}/config/prompt`; the output schema is fixed at stream creation time.
 
 # Key files
 
@@ -74,11 +72,11 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 `cd backend` then:
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: ALWAYS run after backend changes
-- `uv run --env-file .env fastapi dev main.py --host 0.0.0.0`: start the backend
+- `uv run --env-file .env fastapi dev main.py --host 0.0.0.0`: start server with env loaded
 - `uv run --env-file .env foo.py`: run a script with env loaded
-- `uv run -- python -c "print('hello')"`: run a one-off Python command
+- `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
 - `uv add <package>`: add a package
 
 # Commit Guidelines
 
-- Start message with `example/mocktail: `
+- Start message with "example/mocktail: "
