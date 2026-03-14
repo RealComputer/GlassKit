@@ -101,8 +101,8 @@ async def create_vision_session(
     payload: VisionSessionCreateRequest,
 ) -> dict[str, str]:
     current = require_manager()
-    offer_sdp = payload.offer_sdp.strip()
-    if not offer_sdp:
+    offer_sdp = payload.offer_sdp
+    if not offer_sdp.strip():
         raise HTTPException(status_code=422, detail="offer_sdp must not be empty")
 
     answer_sdp = await current.create_vision_session(session_id, offer_sdp)
@@ -112,8 +112,8 @@ async def create_vision_session(
 @app.post("/session/{session_id}/realtime")
 async def create_realtime_session(session_id: str, request: Request) -> Response:
     current = require_manager()
-    offer_sdp = (await request.body()).decode().strip()
-    if not offer_sdp:
+    offer_sdp = (await request.body()).decode()
+    if not offer_sdp.strip():
         raise HTTPException(status_code=422, detail="offer SDP must not be empty")
 
     answer_sdp = await current.create_realtime_session(session_id, offer_sdp)
