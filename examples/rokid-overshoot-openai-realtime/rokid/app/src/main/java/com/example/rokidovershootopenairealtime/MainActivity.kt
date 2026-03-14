@@ -49,16 +49,26 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         ensurePermissions()
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (hasPermissions()) {
+            connectControlIfNeeded()
+            if (currentSessionId == null) {
+                renderIdleState(getString(R.string.connecting_backend))
+            }
+        }
+    }
+
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        super.onDestroy()
         stopMediaClients()
-        controlClient?.close()
-        controlClient = null
+        disconnectControl()
+        super.onDestroy()
     }
 
     override fun onStop() {
         stopWorkflow()
+        disconnectControl()
         super.onStop()
     }
 
@@ -128,7 +138,11 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     }
 
     private fun connectControlIfNeeded() {
-        if (controlClient != null) return
+        val existing = controlClient
+        if (existing != null) {
+            existing.connect()
+            return
+        }
 
         controlClient = BackendControlClient(
             backendBaseUrl = backendBaseUrl,
@@ -247,6 +261,16 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         if (activeRealtime != null) {
             Thread { activeRealtime.release() }.start()
         }
+    }
+
+    private fun disconnectControl() {
+        controlClient?.close()
+        pendingStart = false
+        isRunning = false
+        currentSessionId = null
+        currentHudState = null
+        currentTranscript = ""
+        currentSpeechEpoch = 0
     }
 
     override fun onSessionReady(sessionId: String) {

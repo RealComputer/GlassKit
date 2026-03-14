@@ -61,12 +61,16 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 8. Speech delivery:
    - OpenAI Realtime speaks to Rokid over WebRTC
    - Rokid renders only the latest transcript, keyed by `speech_epoch`
+9. App background / close:
+   - Rokid stops the workflow and closes the backend control websocket on `onStop`
+   - Backend destroys the control session and tears down Overshoot and OpenAI runtime state
+   - The next foreground reconnect gets a fresh `session_id` and starts from the beginning
 
 # Key Files
 
 ## Rokid (`./rokid/`)
 
-- `app/src/main/java/com/example/rokidovershootopenairealtime/MainActivity.kt`: start/stop flow, gesture handling, HUD rendering, transcript reset on `speech_epoch`.
+- `app/src/main/java/com/example/rokidovershootopenairealtime/MainActivity.kt`: start/stop flow, gesture handling, HUD rendering, transcript reset on `speech_epoch`, and control-session teardown on app background.
 - `app/src/main/java/com/example/rokidovershootopenairealtime/BackendControlClient.kt`: backend control WebSocket and `hud.state` parsing.
 - `app/src/main/java/com/example/rokidovershootopenairealtime/OvershootSessionClient.kt`: camera -> Overshoot WebRTC brokered through the backend.
 - `app/src/main/java/com/example/rokidovershootopenairealtime/OpenAIRealtimeClient.kt`: receive-only OpenAI Realtime WebRTC audio plus transcript delta parsing.
