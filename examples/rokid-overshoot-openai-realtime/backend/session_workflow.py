@@ -30,6 +30,7 @@ from session_helpers import (
 from session_types import ControlSession, SessionEvent, StepRuntimeState
 
 logger = logging.getLogger("uvicorn.error")
+DEBUG_SCAN_INVENTORY_ITEMS = ("orange juice",)
 
 
 def _compact_json(value: Any) -> str:
@@ -158,13 +159,16 @@ class SessionWorkflowMixin:
         session: ControlSession,
         payload: dict[str, Any],
     ) -> None:
+        direction = str(payload.get("direction") or "").strip().lower()
+        if direction not in {"forward", "backward"}:
+            return
+        if session.phase == PHASE_INVENTORY:
+            await self._apply_debug_inventory_scan(session)
+            return
         if (
             session.phase not in {PHASE_GUIDING, PHASE_COMPLETED}
             or session.recipe is None
         ):
-            return
-        direction = str(payload.get("direction") or "").strip().lower()
-        if direction not in {"forward", "backward"}:
             return
         if session.current_step_id is None:
             return
@@ -178,6 +182,31 @@ class SessionWorkflowMixin:
         session.phase = PHASE_GUIDING
         session.current_step_id = session.recipe.steps[next_index].id
         await self._enter_step(session, speak_on_enter=True)
+
+    async def _apply_debug_inventory_scan(self, session: ControlSession) -> None:
+        normalized = tuple(
+            sorted(
+                {
+                    normalize_inventory_name(item)
+                    for item in DEBUG_SCAN_INVENTORY_ITEMS
+                    if normalize_inventory_name(item)
+                }
+            )
+        )
+        if not normalized:
+            return
+        session.inventory_signature = normalized
+        session.inventory_hits = 2
+        session.inventory_items = list(normalized)
+        logger.info(
+            "session=%s debug inventory scan inventory_items=%s",
+            session.session_id,
+            _compact_json(session.inventory_items),
+        )
+        session.phase = PHASE_RECIPE_SELECTION
+        session.selecting_recipe = True
+        await self._publish_hud_state(session)
+        await self._request_recipe_selection(session)
 
     async def _maybe_begin_inventory_scan(self, session: ControlSession) -> None:
         if session.phase != PHASE_CONNECTING:

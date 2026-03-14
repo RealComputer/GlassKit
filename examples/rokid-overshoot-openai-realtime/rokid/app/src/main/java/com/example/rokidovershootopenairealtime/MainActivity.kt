@@ -404,7 +404,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private fun renderTranscript() {
         val state = currentHudState
-        if (state?.screen != "running") {
+        if (state?.screen != "running" || !shouldShowTranscriptFace(state.phase)) {
             stopTranscriptBlinking()
             binding.transcriptContainer.visibility = View.GONE
             binding.tvFace.text = ""
@@ -454,7 +454,12 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
     private fun shouldAnimateTranscriptFace(): Boolean {
         val state = currentHudState ?: return false
         return state.screen == "running" &&
+            shouldShowTranscriptFace(state.phase) &&
             state.phase != "COMPLETED"
+    }
+
+    private fun shouldShowTranscriptFace(phase: String): Boolean {
+        return phase == "GUIDING" || phase == "COMPLETED"
     }
 
     private fun stopTranscriptBlinking() {
