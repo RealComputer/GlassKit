@@ -195,7 +195,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
                     runOnUiThread {
                         if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
                         if (state == PeerConnection.IceConnectionState.FAILED) {
-                            binding.tvHint.text = "Video link: $state"
+                            showHint("Video link: $state")
                         }
                     }
                 }
@@ -203,7 +203,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
                 override fun onError(message: String, throwable: Throwable?) {
                     runOnUiThread {
                         if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
-                        binding.tvHint.text = "Video error: $message"
+                        showHint("Video error: $message")
                     }
                 }
             }
@@ -234,7 +234,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
                     runOnUiThread {
                         if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
                         if (state == PeerConnection.IceConnectionState.FAILED) {
-                            binding.tvHint.text = "Audio link: $state"
+                            showHint("Audio link: $state")
                         }
                     }
                 }
@@ -242,7 +242,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
                 override fun onError(message: String, throwable: Throwable?) {
                     runOnUiThread {
                         if (generation != mediaClientGeneration || !isRunning) return@runOnUiThread
-                        binding.tvHint.text = "Audio error: $message"
+                        showHint("Audio error: $message")
                     }
                 }
             }
@@ -347,7 +347,11 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             return
         }
 
-        binding.tvHint.text = phaseLabel(state.phase)
+        if (state.phase == "GUIDING") {
+            hideHint()
+        } else {
+            showHint(phaseLabel(state.phase))
+        }
         binding.tvRecipe.text = state.recipeName.orEmpty()
         binding.tvTasks.text = renderTasks(state.tasks, state.activeTaskId)
         renderTranscript()
@@ -355,10 +359,19 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
 
     private fun renderIdleState(message: String) {
         idleMessage = message
-        binding.tvHint.text = message
+        showHint(message)
         binding.tvRecipe.visibility = View.GONE
         binding.tvTasks.visibility = View.GONE
         binding.tvTranscript.visibility = View.GONE
+    }
+
+    private fun showHint(message: String) {
+        binding.tvHint.text = message
+        binding.tvHint.visibility = View.VISIBLE
+    }
+
+    private fun hideHint() {
+        binding.tvHint.visibility = View.GONE
     }
 
     private fun renderTranscript() {
