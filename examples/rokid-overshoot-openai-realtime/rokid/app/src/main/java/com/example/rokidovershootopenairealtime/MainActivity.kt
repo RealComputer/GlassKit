@@ -227,11 +227,6 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
                         if (generation != mediaClientGeneration) return@runOnUiThread
                         currentTranscript = transcript
                         renderTranscript()
-                        controlClient?.sendTranscriptDone(
-                            itemId = itemId,
-                            transcript = transcript,
-                            speechEpoch = currentSpeechEpoch
-                        )
                     }
                 }
 

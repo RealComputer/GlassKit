@@ -93,18 +93,6 @@ class BackendControlClient(
         )
     }
 
-    fun sendTranscriptDone(itemId: String, transcript: String, speechEpoch: Int) {
-        if (itemId.isBlank()) return
-        if (transcript.isBlank()) return
-        sendJson(
-            JSONObject()
-                .put("type", "realtime.transcript.done")
-                .put("item_id", itemId)
-                .put("transcript", transcript)
-                .put("speech_epoch", speechEpoch)
-        )
-    }
-
     private fun sendJson(payload: JSONObject) {
         webSocket?.send(payload.toString())
     }
