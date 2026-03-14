@@ -108,6 +108,9 @@ class SessionWorkflowMixin:
         if event.kind == "realtime.ready":
             await self._maybe_begin_inventory_scan(session)
             return
+        if event.kind == "realtime.transcript.done":
+            self._handle_realtime_transcript_done(session, event.payload)
+            return
         if event.kind == "overshoot.result":
             await self._handle_overshoot_result(session, event.payload)
             return
@@ -197,6 +200,24 @@ class SessionWorkflowMixin:
         session.selecting_recipe = False
         await self._publish_hud_state(session)
         await self._switch_prompt(session, "inventory_scan", INVENTORY_SCAN_PROMPT)
+
+    def _handle_realtime_transcript_done(
+        self,
+        session: ControlSession,
+        payload: dict[str, Any],
+    ) -> None:
+        item_id = str(payload.get("item_id") or "").strip()
+        transcript = str(payload.get("transcript") or "").strip()
+        speech_epoch = payload.get("speech_epoch")
+        if not item_id or not transcript:
+            return
+        logger.info(
+            "session=%s realtime transcript done speech_epoch=%s item_id=%s transcript=%s",
+            session.session_id,
+            speech_epoch,
+            item_id,
+            _compact_json(transcript),
+        )
 
     async def _handle_overshoot_result(
         self,
