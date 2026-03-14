@@ -14,11 +14,9 @@ DEFAULT_PROCESSING = {
 }
 INVENTORY_SCAN_PROMPT = (
     "Return the visible ingredient list on the table as an `ingredients` array "
-    "containing up to 4 clearly visible ingredient names. If more than 4 candidates "
-    "are visible, prefer items placed around the center of the screen. Use short "
-    'lowercase names like "orange juice", "blue drink", "lime", or "ice". Include an '
-    "item only if it is clearly visible and available for use in the current scene. Do "
-    "not infer hidden items or items outside the frame."
+    "containing up to 4 clearly visible ingredient names. "
+    "Prefer items placed around the center of the screen. Use short "
+    'lowercase names like "orange juice", "gatorade", or "lime".'
 )
 GENERAL_OUTPUT_SCHEMA = {
     "type": "object",
