@@ -23,23 +23,23 @@
   "detectors": {
     "bottle_color": {
       "field": "color",
-      "prompt": "Return JSON with a single `color` field set to one of `orange`, `red`, `blue`, or `unknown`. Use `orange`, `red`, or `blue` only when a hand is clearly holding that bottle in the air right now. If the bottle color or holding action is unclear, return `unknown`. Do not add explanation."
+      "prompt": "Return JSON with a single `color` field set to one of `orange`, `red`, `blue`, or `unknown`. Use `orange`, `red`, or `blue` only when a hand is clearly holding that bottle in the air right now. If the bottle color or holding action is unclear, return `unknown`."
     },
     "orange_fill_level": {
       "field": "level",
-      "prompt": "Return JSON with a single `level` field. Use an integer from 0 to 10 only when orange juice is clearly pouring into the glass on the table right now. Use `unknown` when pouring is not clearly visible or the fill level cannot be judged. Do not add explanation."
+      "prompt": "Return JSON with a single `level` field. Use an integer from 0 to 10 only when orange juice is clearly pouring into the glass on the table right now. Use `unknown` when pouring is not clearly visible or the fill level cannot be judged."
     },
     "ice_contact": {
       "field": "flag",
-      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only when ice from a scoop or spoon is visibly falling into the glass right now. Otherwise set it to false. Do not add explanation."
+      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only when ice from a scoop or spoon is visibly falling into the glass right now. Otherwise set it to false."
     },
     "blue_pour_state": {
       "field": "state",
-      "prompt": "Return JSON with a single `state` field set to exactly one of `no`, `pouring`, or `pouring_nearly_full`. Use `pouring` only when liquid from the blue bottle is visibly entering the glass right now and the glass is not nearly full. Use `pouring_nearly_full` only when the blue bottle is clearly pouring into the glass and the glass appears close to the rim, about 90 percent full or more. Otherwise use `no`. Do not add explanation."
+      "prompt": "Return JSON with a single `state` field set to exactly one of `no`, `pouring`, or `pouring_nearly_full`. Use `pouring` only when liquid from the blue bottle is visibly entering the glass right now and the glass is not nearly full. Use `pouring_nearly_full` only when the blue bottle is clearly pouring into the glass and the glass appears close to the rim, about 90 percent full or more. Otherwise use `no`."
     },
     "lime_insert": {
       "field": "flag",
-      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only at the exact moment a lime slice or wheel is being placed onto or into the finished drink. Otherwise set it to false. Do not add explanation."
+      "prompt": "Return JSON with a single boolean `flag` field. Set it to true only at the exact moment a lime slice or wheel is being placed onto or into the finished drink. Otherwise set it to false."
     }
   },
   "steps": [

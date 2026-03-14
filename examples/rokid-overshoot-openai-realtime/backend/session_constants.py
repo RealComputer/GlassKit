@@ -15,8 +15,7 @@ DEFAULT_PROCESSING = {
 INVENTORY_SCAN_PROMPT = (
     "Look at the current scene and return JSON with an `ingredients` array containing "
     "up to 3 clearly visible drink bottle or garnish names. Use short lowercase names "
-    'like "orange juice", "blue gatorade", or "lime". Include only visible items. '
-    "Do not infer hidden items. Do not add any explanation."
+    'like "orange juice", "blue gatorade", or "lime". Include only visible items.'
 )
 GENERAL_OUTPUT_SCHEMA = {
     "type": "object",
