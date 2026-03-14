@@ -37,7 +37,7 @@
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:gravity="center_horizontal"
-            android:paddingBottom="10dp"
+            android:paddingBottom="15dp"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
