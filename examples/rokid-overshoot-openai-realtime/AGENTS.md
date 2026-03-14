@@ -37,7 +37,10 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 ## Backend (`./backend/`)
 
 - `main.py`: FastAPI lifecycle and the control / vision / realtime routes.
-- `session_manager.py`: per-session orchestrator, recipe loading, Overshoot/OpenAI integration, and workflow engine.
+- `session_manager.py`: small composition layer that wires the session mixins and shared clients together.
+- `session_workflow.py`: workflow state machine, recipe activation, step evaluation, and HUD publishing.
+- `session_runtime.py`: Overshoot/OpenAI runtime creation, sideband transport, keepalive, and speech/event sending.
+- `recipe_catalog.py`, `session_types.py`, `session_constants.py`, `session_helpers.py`: recipe schemas, session dataclasses, shared constants, and pure helpers used by the orchestrator.
 - `recipes/*.json`: data-driven workflow definitions. Filename keywords matter for recipe selection.
 - `.env.example`: required keys and optional model overrides.
 
