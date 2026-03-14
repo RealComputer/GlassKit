@@ -39,7 +39,7 @@
             android:gravity="center_horizontal"
             android:paddingBottom="10dp"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
@@ -51,7 +51,7 @@
             android:lineSpacingExtra="4dp"
             android:paddingBottom="16dp"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
+            android:textSize="16sp"
             android:visibility="gone" />
 
         <TextView

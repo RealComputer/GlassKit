@@ -352,7 +352,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         } else {
             showHint(phaseLabel(state.phase))
         }
-        binding.tvRecipe.text = state.recipeName.orEmpty()
+        binding.tvRecipe.text = getString(R.string.recipe_label, state.recipeName.orEmpty())
         binding.tvTasks.text = renderTasks(state.tasks, state.activeTaskId)
         renderTranscript()
     }
@@ -388,7 +388,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         tasks.forEachIndexed { index, task ->
             val prefix = when {
                 task.id == activeTaskId -> "> "
-                else -> ""
+                else -> "  "
             }
             val start = builder.length
             builder.append(prefix).append(task.text)
