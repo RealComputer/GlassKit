@@ -51,7 +51,7 @@
             android:lineSpacingExtra="4dp"
             android:paddingBottom="16dp"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:visibility="gone" />
 
         <TextView
