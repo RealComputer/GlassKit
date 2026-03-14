@@ -39,6 +39,14 @@ def _compact_json(value: Any) -> str:
         return repr(value)
 
 
+def _matches_active_prompt(expected_prompt: str, result_prompt: str) -> bool:
+    if result_prompt == expected_prompt:
+        return True
+    if not expected_prompt or not result_prompt:
+        return False
+    return result_prompt.startswith(expected_prompt)
+
+
 class SessionWorkflowMixin:
     if TYPE_CHECKING:
         _recipes: Any
@@ -208,15 +216,23 @@ class SessionWorkflowMixin:
             )
             return
 
+        expected_prompt = session.active_prompt_text or ""
         prompt = str(payload.get("prompt") or "")
-        if prompt != session.active_prompt_text:
+        if not _matches_active_prompt(expected_prompt, prompt):
             logger.info(
                 "session=%s ignoring overshoot result due to prompt mismatch active_prompt=%s result_prompt=%s",
                 session.session_id,
-                _compact_json(session.active_prompt_text),
+                _compact_json(expected_prompt),
                 _compact_json(prompt),
             )
             return
+        if prompt != expected_prompt:
+            logger.info(
+                "session=%s accepting overshoot result with augmented prompt active_prompt=%s result_prompt=%s",
+                session.session_id,
+                _compact_json(expected_prompt),
+                _compact_json(prompt),
+            )
         parsed = parse_structured_result(payload.get("result"))
         if parsed is None:
             logger.info(
