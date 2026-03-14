@@ -9,10 +9,9 @@ This example turns Rokid Glasses into a guided mocktail-making assistant. It use
 - Chooses the best matching recipe automatically
 - Watches the table as you work and reacts step by step
 - Guides the user step by step with short spoken instructions
-- Highlights the current task on the HUD and shows only the latest transcript
-- Corrects you if you pick up the wrong bottle or stop at the wrong time
-- Keeps the completed HUD visible at the end
-- Supports debug step navigation from Rokid swipe gestures
+- On the display, highlights the current task and shows the latest guide transcript
+- Corrects you if you're not following the recipe
+- (Supports debug step navigation from swipe controls.)
 
 ## How it works
 
@@ -58,12 +57,6 @@ Optional backend overrides:
 - `OVERSHOOT_MODEL`
 - `OPENAI_REALTIME_MODEL`
 
-## Gestures
-
-- Tap: `KeyEvent.KEYCODE_ENTER`
-- Swipe forward: `KeyEvent.KEYCODE_DPAD_UP`
-- Swipe backward: `KeyEvent.KEYCODE_DPAD_DOWN`
-
 ## Run The Backend
 
 ```bash
@@ -98,5 +91,4 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 ## Recipe files
 
 - Recipes live in `backend/recipes/`
-- Filename keywords are used during recipe selection, so keep ingredient names in the filename
 - The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
