@@ -336,8 +336,9 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             return
         }
         val showStart = state.screen == "start"
+        val showRecipe = !state.recipeName.isNullOrBlank()
 
-        binding.tvRecipe.visibility = if (showStart) View.GONE else View.VISIBLE
+        binding.tvRecipe.visibility = if (showStart || !showRecipe) View.GONE else View.VISIBLE
         binding.tvTasks.visibility = if (showStart) View.GONE else View.VISIBLE
         binding.tvTranscript.visibility = if (showStart) View.GONE else View.VISIBLE
 
@@ -347,7 +348,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         }
 
         binding.tvHint.text = phaseLabel(state.phase)
-        binding.tvRecipe.text = state.recipeName ?: "Scanning ingredients..."
+        binding.tvRecipe.text = state.recipeName.orEmpty()
         binding.tvTasks.text = renderTasks(state.tasks, state.activeTaskId)
         renderTranscript()
     }
