@@ -40,9 +40,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
         <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
         <br><br>
-        Real-time, vision-enabled voice assistant for Rokid Glasses. Streams mic + camera over WebRTC to the OpenAI Realtime API, plays back speech, and uses tool calls to guide tasks like IKEA assembly steps.
-        <br><br>
-        The RF-DETR variant adds object detection and passes annotated frames to OpenAI for better visual understanding.
+        Vision-enabled voice assistant for Rokid Glasses. Streams mic + camera to the OpenAI Realtime API over WebRTC for spoken IKEA assembly guidance. The RF-DETR variant adds object detection for stronger visual understanding.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code ➡️</a>
