@@ -24,6 +24,8 @@ At a high level:
 - OpenAI Realtime speaks the backend's lines over WebRTC and streams transcript text back to the HUD
 - The Android app stays thin: it renders the HUD, handles gestures, and owns the media connections
 
+If you want the minimal Overshoot-only integration first, see [rokid-overshoot](../rokid-overshoot). It is the simpler implementation example for streaming camera video to Overshoot and rendering live inference text on the HUD.
+
 Detailed technical architecture, workflow contracts, configuration, and developer workflow live in [AGENTS.md](./AGENTS.md).
 
 ## Requirements
