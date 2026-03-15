@@ -57,7 +57,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <th width="33%">Privacy filter</th>
-      <th width="33%">Overshoot HUD</th>
+      <th width="33%">Scene-description HUD</th>
       <th width="33%"></th>
     </tr>
     <tr>
