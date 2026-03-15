@@ -35,7 +35,7 @@
     },
     "blue_pour_state": {
       "field": "state",
-      "prompt": "Return JSON with a single `state` field. Classify the current video clip into exactly one of these states:\n\n- \"no\": liquid from the blue bottle is not visibly touching or entering the inside of the glass on the table.\n- \"pouring\": liquid from the blue bottle has visibly left the bottle and is touching or entering the inside of the glass, but the glass is not nearly full.\n- \"pouring_nearly_full\": a blue bottle is clearly pouring into the glass right now, and the glass appears nearly full, close to the rim, about 90% full or more.\n\nRules:\n- Judge only the current moment.\n- Output \"pouring\" or \"pouring_nearly_full\" only when the liquid stream is visibly connected from the blue bottle to the inside of the glass.\n- The poured liquid may look light blue to transparent.\n- The drink in the glass may be colorful and not a single uniform color."
+      "prompt": "Return JSON with a single `state` field. Classify the current video clip into exactly one of these states:\n\n- \"no\": liquid from the bottle is not visibly entering the inside of the glass on the table.\n- \"pouring\": liquid from the bottle has visibly left the bottle and is entering the inside of the glass, but the glass is not nearly full.\n- \"pouring_nearly_full\": liquid from the bottle has visibly left the bottle and is entering the inside of the glass, and the glass appears nearly full, close to the rim, about 80% full or more.\n\nRules:\n- Judge only the current moment.\n- The poured liquid may look light blue to transparent.\n- The drink in the glass may be colorful and not a single uniform color."
     },
     "lime_insert": {
       "field": "flag",
@@ -68,11 +68,11 @@
       ],
       "progress_condition": {
         "gte": 1,
-        "lt": 5
+        "lt": 6
       },
       "progress_once_speech": "Keep pouring until I tell you to stop.",
       "complete_condition": {
-        "gte": 5
+        "gte": 6
       },
       "complete_speech": "Stop there! Great start. Add two scoops of ice cubes to the glass.",
       "next_step_id": "add_ice"
