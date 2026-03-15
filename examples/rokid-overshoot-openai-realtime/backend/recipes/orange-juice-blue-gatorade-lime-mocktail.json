@@ -31,7 +31,7 @@
     },
     "ice_contact": {
       "field": "flag",
-      "prompt": "Return JSON with a single boolean `flag` field. Return true only when ice from a spoon is visibly falling and entering the orange juice in the glass on the table at this moment; otherwise return false."
+      "prompt": "Return JSON with a single boolean `flag` field. Return true only when a spoon is visibly tilted above the glass of orange juice on the table at this moment; otherwise return false."
     },
     "blue_pour_nearly_full": {
       "field": "flag",
