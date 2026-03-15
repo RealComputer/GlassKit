@@ -609,8 +609,7 @@ class SessionRuntimeMixin:
                     "type": "function",
                     "name": "activate_recipe",
                     "description": (
-                        "Activate the chosen recipe id returned by "
-                        "list_recipes."
+                        "Activate the chosen recipe id returned by list_recipes."
                     ),
                     "parameters": {
                         "type": "object",
