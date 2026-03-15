@@ -35,7 +35,7 @@
     },
     "blue_pour_nearly_full": {
       "field": "flag",
-      "prompt": "Return JSON with a single boolean `flag` field. Determine whether the glass on the table is currently being filled from a bottle. The drink in the glass is expected to be colorful and not a single uniform color. Return true only if a bottle is clearly pouring into the glass right now and the glass appears nearly full, meaning close to the rim or roughly 80% full or more. Otherwise return false."
+      "prompt": "Return JSON with a single boolean `flag` field. Determine whether the glass on the table is currently being filled from a bottle. The drink in the glass is expected to be colorful and not a single uniform color. Return true only if a bottle is clearly pouring into the glass right now and the glass appears nearly full, meaning close to the rim or roughly 97% full or more. Otherwise return false."
     },
     "lime_insert": {
       "field": "flag",
