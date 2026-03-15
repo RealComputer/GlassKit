@@ -33,9 +33,9 @@
       "field": "flag",
       "prompt": "Return JSON with a single boolean `flag` field. Return true only when ice from a spoon is visibly falling and entering the orange juice in the glass on the table at this moment; otherwise return false."
     },
-    "blue_pour_state": {
-      "field": "state",
-      "prompt": "Return JSON with a single `state` field. Classify the current video clip into exactly one of these states:\n\n- \"no\": liquid from the bottle is not visibly entering the inside of the glass on the table.\n- \"pouring\": liquid from the bottle has visibly left the bottle and is entering the inside of the glass, but the glass is not nearly full.\n- \"pouring_nearly_full\": liquid from the bottle has visibly left the bottle and is entering the inside of the glass, and the glass appears nearly full, close to the rim, about 80% full or more.\n\nRules:\n- Judge only the current moment.\n- The poured liquid may look light blue to transparent.\n- The drink in the glass may be colorful and not a single uniform color."
+    "blue_pour_nearly_full": {
+      "field": "flag",
+      "prompt": "Return JSON with a single boolean `flag` field. Determine whether the glass on the table is currently being filled from a bottle. The drink in the glass is expected to be colorful and not a single uniform color. Return true only if a bottle is clearly pouring into the glass right now and the glass appears nearly full, meaning close to the rim or roughly 80% full or more. Otherwise return false."
     },
     "lime_insert": {
       "field": "flag",
@@ -114,14 +114,9 @@
     {
       "id": "pour_gatorade",
       "task_id": "gatorade",
-      "evaluation_mode": "enum_progress_once_then_complete",
-      "detector_key": "blue_pour_state",
-      "ignore_values": [
-        "no"
-      ],
-      "progress_value": "pouring",
-      "progress_once_speech": "Looking good. Just a little more.",
-      "complete_value": "pouring_nearly_full",
+      "evaluation_mode": "momentary_true_complete",
+      "detector_key": "blue_pour_nearly_full",
+      "complete_on": true,
       "complete_speech": "Stop there! That looks great. Top it with the lime wheel.",
       "next_step_id": "add_lime"
     },
