@@ -377,7 +377,12 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
         if (state.phase == "GUIDING") {
             hideHint()
         } else {
-            showHint(phaseLabel(state.phase))
+            val hint = phaseLabel(state.phase)
+            if (hint.isBlank()) {
+                hideHint()
+            } else {
+                showHint(hint)
+            }
         }
         binding.tvRecipe.text = getString(R.string.recipe_label, state.recipeName.orEmpty())
         binding.tvTasks.text = renderTasks(state.tasks, state.activeTaskId)
@@ -513,7 +518,7 @@ class MainActivity : AppCompatActivity(), BackendControlClient.Listener {
             "INVENTORY_SCAN" -> "Scanning ingredients..."
             "RECIPE_SELECTION" -> "Choosing recipe..."
             "GUIDING" -> "Guiding..."
-            "COMPLETED" -> "Finished"
+            "COMPLETED" -> ""
             "ERROR" -> "Something went wrong"
             else -> getString(R.string.start_hint)
         }
