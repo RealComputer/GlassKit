@@ -1,4 +1,4 @@
-# Example: Mocktail Coach for Rokid Glasses (Overshoot × OpenAI Realtime API)
+# Example: Drink-making Coach for Rokid Glasses (Overshoot × OpenAI Realtime API)
 
 This example turns Rokid Glasses into a guided drink-making assistant. It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API as the live LLM layer for low-latency spoken guidance and transcript streaming.
 
