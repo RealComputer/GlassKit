@@ -18,9 +18,9 @@ This example app streams live camera video from Rokid Glasses to [Overshoot](htt
 - The backend connects that session to Overshoot and handles stream lifecycle.
 - Inference text is relayed back to the Android app and rendered on the glasses HUD in real time.
 
-For a more advanced version of this pattern, see [rokid-overshoot-openai-realtime](../rokid-overshoot-openai-realtime). It builds on the same Overshoot foundation and adds OpenAI Realtime for spoken guidance and a richer assistant workflow.
-
 See [AGENTS.md](./AGENTS.md) for detailed flow and implementation notes.
+
+For a more advanced version of this pattern, see [rokid-overshoot-openai-realtime](../rokid-overshoot-openai-realtime). It builds on the same Overshoot foundation and adds OpenAI Realtime for spoken guidance and a richer assistant workflow.
 
 ## Requirements
 

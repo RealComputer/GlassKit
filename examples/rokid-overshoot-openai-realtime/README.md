@@ -24,8 +24,6 @@ At a high level:
 - OpenAI Realtime speaks the backend's lines over WebRTC and streams transcript text back to the HUD
 - The Android app stays thin: it renders the HUD, handles gestures, and owns the media connections
 
-If you want the minimal Overshoot-only integration first, see [rokid-overshoot](../rokid-overshoot). It is the simpler implementation example for streaming camera video to Overshoot and rendering live inference text on the HUD.
-
 Detailed technical architecture, workflow contracts, configuration, and developer workflow live in [AGENTS.md](./AGENTS.md).
 
 ## Requirements
@@ -89,3 +87,8 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 
 - Recipes live in `backend/recipes/`
 - The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
+
+## Related projects
+
+- [rokid-overshoot](../rokid-overshoot/README.md): Minimal Overshoot-only example for streaming camera video to Overshoot and rendering live inference text on the HUD.
+- [rokid-openai-realtime](../rokid-openai-realtime/README.md): Simple OpenAI Realtime API assistant example for Rokid Glasses with real-time audio/video streaming and voice responses.
