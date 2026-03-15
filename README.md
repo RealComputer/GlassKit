@@ -57,14 +57,16 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <th width="33%">Privacy filter</th>
-      <th width="33%"></th>
+      <th width="33%">Overshoot HUD</th>
       <th width="33%"></th>
     </tr>
     <tr>
       <td width="33%" valign="top" align="center">
         <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
       </td>
-      <td width="33%" valign="top" align="center"></td>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b" width="260" controls></video>
+      </td>
       <td width="33%" valign="top" align="center"></td>
     </tr>
     <tr>
@@ -73,7 +75,11 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <br><br>
         Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support.
       </td>
-      <td width="33%" valign="top"></td>
+      <td width="33%" valign="top">
+        <a href="examples/rokid-overshoot">Code ➡️</a>
+        <br><br>
+        Simple Rokid Glasses app that streams camera video to Overshoot and shows live inference text on the HUD.
+      </td>
       <td width="33%" valign="top"></td>
     </tr>
   </tbody>
