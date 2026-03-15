@@ -20,7 +20,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     <tr>
       <th width="33%">IKEA assembly assistant</th>
       <th width="33%">Sushi speedrun HUD</th>
-      <th width="33%">Privacy filter</th>
+      <th width="33%">Drink-making coach</th>
     </tr>
   </thead>
   <tbody>
@@ -32,7 +32,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da" width="260" controls></video>
       </td>
       <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
+        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab" width="260" controls></video>
       </td>
     </tr>
     <tr>
@@ -50,28 +50,28 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         Real-world speedrun HUD for Rokid Glasses. Streams video over WebRTC with a data channel to the backend, which runs a fine-tuned RF-DETR object detector for automatic, hands-free split completion based on a configured route.
       </td>
       <td width="33%" valign="top">
-        <a href="archive/privacy-filter">Code ➡️</a>
+        <a href="examples/rokid-overshoot-openai-realtime">Code ➡️</a>
         <br><br>
-        Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support.
+        Proactive drink-making assistant for Rokid Glasses. Streams live camera video to Overshoot for scene understanding and uses the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
       </td>
     </tr>
     <tr>
-      <th width="33%">Mocktail coach</th>
+      <th width="33%">Privacy filter</th>
       <th width="33%"></th>
       <th width="33%"></th>
     </tr>
     <tr>
       <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab" width="260" controls></video>
+        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
       </td>
       <td width="33%" valign="top" align="center"></td>
       <td width="33%" valign="top" align="center"></td>
     </tr>
     <tr>
       <td width="33%" valign="top">
-        <a href="examples/rokid-overshoot-openai-realtime">Code ➡️</a>
+        <a href="archive/privacy-filter">Code ➡️</a>
         <br><br>
-        Proactive drink-making assistant for Rokid Glasses. Streams live camera video to Overshoot for scene understanding and uses the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
+        Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support.
       </td>
       <td width="33%" valign="top"></td>
       <td width="33%" valign="top"></td>
