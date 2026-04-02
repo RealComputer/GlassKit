@@ -1,0 +1,12 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.RokidFeatureDemo" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">@color/hud_white</item>
+        <item name="colorPrimaryDark">@color/hud_black</item>
+        <item name="colorAccent">@color/hud_white</item>
+        <item name="android:windowBackground">@color/hud_black</item>
+        <item name="android:statusBarColor">@color/hud_black</item>
+        <item name="android:navigationBarColor">@color/hud_black</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+    </style>
+</resources>

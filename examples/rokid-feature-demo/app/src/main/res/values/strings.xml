@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Rokid Feature Demo</string>
+    <string name="menu_label">Menu</string>
+    <string name="camera_label">Camera</string>
+    <string name="audio_label">Audio</string>
+    <string name="microphone_label">Microphone</string>
+    <string name="menu_intro">Choose a device test.</string>
+    <string name="menu_camera">Camera Capture Test</string>
+    <string name="menu_audio">Audio Playback Test</string>
+    <string name="menu_microphone">Microphone Level Test</string>
+    <string name="audio_intro">Moving focus plays the tone immediately.</string>
+    <string name="audio_tone_one">Beep</string>
+    <string name="audio_tone_two">Confirm</string>
+    <string name="audio_tone_three">Alert</string>
+    <string name="camera_loading">Starting rear camera preview...</string>
+    <string name="camera_permission_needed">Camera permission is required for this screen.</string>
+    <string name="camera_unavailable">Camera preview is unavailable on this device.</string>
+    <string name="mic_permission_needed">Microphone permission is required for voice commands and the level meter.</string>
+    <string name="mic_level_template">Input level: %1$d%%</string>
+    <string name="partial_template">Partial: %1$s</string>
+    <string name="partial_idle">Partial: (none)</string>
+    <string name="last_command_template">Last command: %1$s</string>
+    <string name="last_command_idle">Last command: (none)</string>
+    <string name="voice_model_missing">Voice model missing. Run ./scripts/download_vosk_model.sh before building.</string>
+    <string name="voice_model_loading">Loading voice model...</string>
+    <string name="voice_ready">Voice commands ready.</string>
+    <string name="voice_listening">Listening for select, back, next, previous.</string>
+    <string name="voice_permission_waiting">Waiting for microphone permission.</string>
+    <string name="voice_permission_denied">Microphone permission denied.</string>
+    <string name="voice_error_template">Voice error: %1$s</string>
+    <string name="voice_match_template">Recognized: %1$s</string>
+    <string name="control_help_menu">Tap or say SELECT: open focused test\nSwipe forward or say NEXT: move focus down\nSwipe back or say PREVIOUS: move focus up\nDouble tap or say BACK: exit app</string>
+    <string name="control_help_camera">Double tap or say BACK: return to menu</string>
+    <string name="control_help_audio">Tap or say SELECT: replay focused tone\nSwipe forward or say NEXT: move focus right\nSwipe back or say PREVIOUS: move focus left\nDouble tap or say BACK: return to menu</string>
+    <string name="control_help_microphone">Double tap or say BACK: return to menu\nOther voice commands are recognized above.</string>
+</resources>

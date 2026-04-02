@@ -1,0 +1,4 @@
+<resources>
+    <color name="hud_black">#000000</color>
+    <color name="hud_white">#FFFFFF</color>
+</resources>
