@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
@@ -27,10 +28,12 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var breadcrumbView: TextView
     private lateinit var controlHelpView: TextView
+    private lateinit var hudViewportView: View
     private lateinit var microphoneScreenController: MicrophoneScreenController
     private lateinit var screenControllers: Map<DemoScreen, ScreenController>
 
     private var currentScreen = DemoScreen.MENU
+    private var gestureSequenceInViewport = false
     private var voiceRecognizer: VoiceCommandRecognizer? = null
     private var swipeStartX = 0f
     private var swipeStartY = 0f
@@ -126,8 +129,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                gestureSequenceInViewport = isTouchInsideHudViewport(event)
+                if (!gestureSequenceInViewport) {
+                    resetSwipeTracking()
+                }
+            }
+
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> Unit
+        }
+
+        if (!gestureSequenceInViewport) {
+            if (event.actionMasked == MotionEvent.ACTION_CANCEL ||
+                event.actionMasked == MotionEvent.ACTION_UP
+            ) {
+                gestureSequenceInViewport = false
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
         val handledByGestureDetector = gestureDetector.onTouchEvent(event)
         val handledBySwipeFallback = handleSwipeFallback(event)
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL ||
+            event.actionMasked == MotionEvent.ACTION_UP
+        ) {
+            gestureSequenceInViewport = false
+        }
         return handledByGestureDetector || handledBySwipeFallback || super.dispatchTouchEvent(event)
     }
 
@@ -176,6 +204,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindChromeViews() {
+        hudViewportView = findViewById(R.id.hudViewport)
         breadcrumbView = findViewById(R.id.breadcrumbView)
         controlHelpView = findViewById(R.id.controlHelpView)
     }
@@ -260,6 +289,19 @@ class MainActivity : AppCompatActivity() {
     private fun resetSwipeTracking() {
         isSwipeTracking = false
         swipeHandledByFling = false
+    }
+
+    private fun isTouchInsideHudViewport(event: MotionEvent): Boolean {
+        val location = IntArray(2)
+        hudViewportView.getLocationOnScreen(location)
+        val left = location[0].toFloat()
+        val top = location[1].toFloat()
+        val right = left + hudViewportView.width
+        val bottom = top + hudViewportView.height
+        return event.rawX >= left &&
+            event.rawX <= right &&
+            event.rawY >= top &&
+            event.rawY <= bottom
     }
 
     private fun isHorizontalSwipe(deltaX: Float, deltaY: Float): Boolean {
