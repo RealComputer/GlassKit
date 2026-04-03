@@ -2,6 +2,7 @@ package com.example.rokidfeaturedemo
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.DisplayMetrics
 import android.view.View
 import android.view.View.MeasureSpec
 import android.widget.FrameLayout
@@ -14,11 +15,12 @@ class RokidHudViewportLayout @JvmOverloads constructor(
 ) : FrameLayout(context, attrs) {
 
     companion object {
-        // The Rokid HUD is designed for a 240dp x 320dp portrait canvas, which is
-        // a 480x640 surface on an xhdpi device such as the emulator reference config.
-        private const val HUD_DESIGN_WIDTH_DP = 240f
-        private const val HUD_DESIGN_HEIGHT_DP = 320f
-        private const val HUD_ASPECT_RATIO = HUD_DESIGN_WIDTH_DP / HUD_DESIGN_HEIGHT_DP
+        // Verified on a connected Rokid device via `adb shell wm size` and
+        // `adb shell wm density`: 480x640 physical pixels at 240 dpi.
+        private const val HUD_REFERENCE_WIDTH_PX = 480f
+        private const val HUD_REFERENCE_HEIGHT_PX = 640f
+        private const val HUD_REFERENCE_DENSITY_DPI = 240f
+        private const val HUD_ASPECT_RATIO = HUD_REFERENCE_WIDTH_PX / HUD_REFERENCE_HEIGHT_PX
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -41,9 +43,8 @@ class RokidHudViewportLayout @JvmOverloads constructor(
             measuredHeight = (measuredWidth / HUD_ASPECT_RATIO).roundToInt()
         }
 
-        val density = resources.displayMetrics.density
-        val designWidthPx = (HUD_DESIGN_WIDTH_DP * density).roundToInt()
-        val designHeightPx = (HUD_DESIGN_HEIGHT_DP * density).roundToInt()
+        val designWidthPx = designWidthPx()
+        val designHeightPx = designHeightPx()
         val childWidthSpec = MeasureSpec.makeMeasureSpec(designWidthPx, MeasureSpec.EXACTLY)
         val childHeightSpec = MeasureSpec.makeMeasureSpec(designHeightPx, MeasureSpec.EXACTLY)
 
@@ -57,9 +58,8 @@ class RokidHudViewportLayout @JvmOverloads constructor(
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        val density = resources.displayMetrics.density
-        val designWidthPx = (HUD_DESIGN_WIDTH_DP * density).roundToInt()
-        val designHeightPx = (HUD_DESIGN_HEIGHT_DP * density).roundToInt()
+        val designWidthPx = designWidthPx()
+        val designHeightPx = designHeightPx()
         val scale = min(width.toFloat() / designWidthPx, height.toFloat() / designHeightPx)
         val translationX = (width - designWidthPx * scale) / 2f
         val translationY = (height - designHeightPx * scale) / 2f
@@ -76,5 +76,18 @@ class RokidHudViewportLayout @JvmOverloads constructor(
             child.translationX = translationX
             child.translationY = translationY
         }
+    }
+
+    private fun designWidthPx(): Int {
+        return referencePixelsToCurrentPixels(HUD_REFERENCE_WIDTH_PX).roundToInt()
+    }
+
+    private fun designHeightPx(): Int {
+        return referencePixelsToCurrentPixels(HUD_REFERENCE_HEIGHT_PX).roundToInt()
+    }
+
+    private fun referencePixelsToCurrentPixels(referencePixels: Float): Float {
+        val referenceDp = referencePixels * DisplayMetrics.DENSITY_DEFAULT / HUD_REFERENCE_DENSITY_DPI
+        return referenceDp * resources.displayMetrics.density
     }
 }
