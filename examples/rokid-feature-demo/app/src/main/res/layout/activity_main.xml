@@ -3,7 +3,7 @@
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/hud_black">
+    android:background="@color/hud_letterbox_gray">
 
     <com.example.rokidfeaturedemo.RokidHudViewportLayout
         android:id="@+id/hudViewport"
