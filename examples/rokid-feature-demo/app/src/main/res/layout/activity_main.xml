@@ -1,56 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/hud_black"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@color/hud_letterbox_gray">
 
-    <TextView
-        android:id="@+id/titleView"
+    <com.example.rokidfeaturedemo.RokidHudViewportLayout
+        android:id="@+id/hudViewport"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="@string/app_name"
-        android:textColor="@color/hud_white"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:layout_height="match_parent"
+        android:layout_gravity="center">
 
-    <TextView
-        android:id="@+id/breadcrumbView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="monospace"
-        android:gravity="center"
-        android:paddingTop="4dp"
-        android:textColor="@color/hud_white"
-        android:textSize="12sp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/hud_black"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-    <FrameLayout
-        android:id="@+id/contentFrame"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:layout_weight="1">
+            <TextView
+                android:id="@+id/titleView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/app_name"
+                android:textColor="@color/hud_white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-        <include layout="@layout/screen_menu" />
+            <TextView
+                android:id="@+id/breadcrumbView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:gravity="center"
+                android:paddingTop="4dp"
+                android:textColor="@color/hud_white"
+                android:textSize="12sp" />
 
-        <include layout="@layout/screen_camera" />
+            <FrameLayout
+                android:id="@+id/contentFrame"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp"
+                android:layout_weight="1">
 
-        <include layout="@layout/screen_audio" />
+                <include layout="@layout/screen_menu" />
 
-        <include layout="@layout/screen_microphone" />
-    </FrameLayout>
+                <include layout="@layout/screen_camera" />
 
-    <TextView
-        android:id="@+id/controlHelpView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="monospace"
-        android:lineSpacingExtra="2dp"
-        android:textColor="@color/hud_white"
-        android:textSize="10sp" />
+                <include layout="@layout/screen_audio" />
 
-</LinearLayout>
+                <include layout="@layout/screen_microphone" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/controlHelpView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp"
+                android:textColor="@color/hud_white"
+                android:textSize="10sp" />
+
+        </LinearLayout>
+    </com.example.rokidfeaturedemo.RokidHudViewportLayout>
+
+</FrameLayout>

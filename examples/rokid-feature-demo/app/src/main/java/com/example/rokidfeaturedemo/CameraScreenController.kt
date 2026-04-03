@@ -41,6 +41,7 @@ internal class CameraScreenController(
     private var isEntered = false
 
     init {
+        cameraPreviewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         cameraPreviewView.scaleType = PreviewView.ScaleType.FIT_CENTER
     }
 
