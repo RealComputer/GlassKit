@@ -25,6 +25,7 @@ Rokid Glasses are Android-based smart glasses with a camera, a monochrome HUD, m
 - `app/src/main/java/com/example/rokidfeaturedemo/VoiceCommandRecognizer.kt`: Vosk model unpacking, endpoint tuning, `AudioRecord` loop, partial/final parsing, and command dispatch.
 - `app/src/main/res/layout/activity_main.xml`: shared HUD chrome that includes the per-screen layouts.
 - `app/src/main/res/layout/screen_menu.xml`, `screen_camera.xml`, `screen_audio.xml`, `screen_microphone.xml`: individual screen panel layouts.
+- `README.md`: setup
 
 # Commands
 
