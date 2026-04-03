@@ -4,6 +4,8 @@ Rokid Feature Demo is a Rokid Glasses app for testing device features and common
 
 See [AGENTS.md](./AGENTS.md) for project details.
 
+https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92
+
 ## Control Mapping
 
 | Intent                       | Rokid Glasses touchpad (`KeyEvent`) | Voice command | Android touchscreen |
