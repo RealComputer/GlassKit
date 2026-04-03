@@ -1,6 +1,6 @@
 # Rokid Feature Demo
 
-Rokid Feature Demo is a Rokid Glasses app for testing device features and common implementation patterns, including voice commands and touchscreen-based testing on Android phones and emulators.
+Rokid Feature Demo is a Rokid Glasses app for testing device features and common implementation patterns, including voice commands. For development without Rokid Glasses, it also supports touchscreen-based controls on Android phones and emulators.
 
 See [AGENTS.md](./AGENTS.md) for project details.
 
@@ -13,9 +13,9 @@ See [AGENTS.md](./AGENTS.md) for project details.
 | Move focus to the right/down | Swipe forward (`KEYCODE_DPAD_DOWN`) | `next`        | Swipe right         |
 | Move focus to the left/up    | Swipe back (`KEYCODE_DPAD_UP`)      | `previous`    | Swipe left          |
 
-`Android touchscreen` applies to Android phones and the Android emulator, where a Rokid-style touchpad is not available.
+"Android touchscreen" applies to Android phones and the Android emulator, where a Rokid Glasses touchpad is not available.
 
-Rokid Glasses are still the best way to test the app, but a normal Android phone also works. The emulator should be usable as well, though it currently has some restrictions; see below.
+Rokid Glasses are the best way to test the app, but a normal Android phone also works. The emulator should be usable as well, though it currently has some restrictions; see below.
 
 ## Vosk Model Setup
 
