@@ -1,0 +1,6 @@
+/.gradle/
+/.kotlin/
+/build/
+/local.properties
+/app/build/
+/app/src/main/assets/model-en-us/

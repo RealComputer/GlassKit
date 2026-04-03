@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/menuPanel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/menuIntroView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:fontFamily="monospace"
+        android:text="@string/menu_intro"
+        android:textColor="@color/hud_white"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/menuCameraItem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="@string/menu_camera"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/menuAudioItem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="@string/menu_audio"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/menuMicItem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="@string/menu_microphone"
+        android:textSize="16sp" />
+</LinearLayout>
