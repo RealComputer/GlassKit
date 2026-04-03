@@ -6,12 +6,16 @@ See [AGENTS.md](./AGENTS.md) for project details.
 
 ## Control Mapping
 
-| Intent                       | Rokid Glasses touchpad (`KeyEvent`) | Voice command | Emulator    |
-| ---------------------------- | ----------------------------------- | ------------- | ----------- |
-| Select / OK                  | Tap (`KEYCODE_ENTER`)               | `select`      | Tap         |
-| Back / cancel                | Double tap (`KEYCODE_BACK`)         | `back`        | Double tap  |
-| Move focus to the right/down | Swipe forward (`KEYCODE_DPAD_DOWN`) | `next`        | Swipe right |
-| Move focus to the left/up    | Swipe back (`KEYCODE_DPAD_UP`)      | `previous`    | Swipe left  |
+| Intent                       | Rokid Glasses touchpad (`KeyEvent`) | Voice command | Android touchscreen |
+| ---------------------------- | ----------------------------------- | ------------- | ------------------- |
+| Select / OK                  | Tap (`KEYCODE_ENTER`)               | `select`      | Tap                 |
+| Back / cancel                | Double tap (`KEYCODE_BACK`)         | `back`        | Double tap          |
+| Move focus to the right/down | Swipe forward (`KEYCODE_DPAD_DOWN`) | `next`        | Swipe right         |
+| Move focus to the left/up    | Swipe back (`KEYCODE_DPAD_UP`)      | `previous`    | Swipe left          |
+
+`Android touchscreen` applies to Android phones and the Android emulator, where a Rokid-style touchpad is not available.
+
+Rokid Glasses are still the best way to test the app, but a normal Android phone also works. The emulator should be usable as well, though it currently has some restrictions; see below.
 
 ## Vosk Model Setup
 

@@ -6,7 +6,7 @@ Rokid Feature Demo is a Rokid Glasses app for testing device features and common
 - camera
 - microphone
 - speaker
-- touch gesture support in the Android emulator (mirrors the Rokid Glasses touchpad controls)
+- touch gesture support on Android touchscreens, including phones and the Android emulator (mirrors the Rokid Glasses touchpad controls)
 
 Rokid Glasses are Android-based smart glasses with a camera, a monochrome HUD, microphones, speakers, and a touchpad. Use black and white UI only.
 
