@@ -1,6 +1,6 @@
 # Rokid Feature Demo
 
-Rokid Feature Demo is a Rokid Glasses app for testing device features and common implementation patterns.
+Rokid Feature Demo is a Rokid Glasses app for testing device features and common implementation patterns, including voice commands and touchscreen-based testing on Android phones and emulators.
 
 See [AGENTS.md](./AGENTS.md) for project details.
 
