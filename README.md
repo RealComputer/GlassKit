@@ -56,7 +56,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     <tr>
       <th width="33%">Privacy filter</th>
       <th width="33%">Scene-description HUD</th>
-      <th width="33%"></th>
+      <th width="33%">Voice command + phone support reference</th>
     </tr>
     <tr>
       <td width="33%" valign="top" align="center">
@@ -78,7 +78,11 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <br><br>
         Simple Rokid Glasses app that streams camera video to Overshoot and shows live inference text on the HUD.
       </td>
-      <td width="33%" valign="top"></td>
+      <td width="33%" valign="top">
+        <a href="examples/rokid-feature-demo">Code ➡️</a>
+        <br><br>
+        Reference app for Rokid Glasses voice commands and Android phone/emulator support. Includes camera, microphone, speaker, and menu-screen patterns with touchscreen controls that mirror the Rokid touchpad.
+      </td>
     </tr>
   </tbody>
 </table>
