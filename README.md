@@ -56,7 +56,7 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     <tr>
       <th width="33%">Privacy filter</th>
       <th width="33%">Scene-description HUD</th>
-      <th width="33%">Voice command + phone support reference</th>
+      <th width="33%">Voice command + phone support</th>
     </tr>
     <tr>
       <td width="33%" valign="top" align="center">
