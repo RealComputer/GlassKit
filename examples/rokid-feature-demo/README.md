@@ -15,9 +15,9 @@ https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92
 | Move focus to the right/down | Swipe forward (`KEYCODE_DPAD_DOWN`) | `next`        | Swipe right         |
 | Move focus to the left/up    | Swipe back (`KEYCODE_DPAD_UP`)      | `previous`    | Swipe left          |
 
-"Android touchscreen" applies to Android phones and the Android emulator, where a Rokid Glasses touchpad is not available.
-
-Rokid Glasses are the best way to test the app, but a normal Android phone also works. The emulator should be usable as well, though it currently has some restrictions; see below.
+- "Android touchscreen" refers to Android phones and the Android emulator, where a Rokid Glasses touchpad is not available.
+- Rokid Glasses are the best way to test the app, but a standard Android phone also works. The emulator is usable too, with some current limitations described below.
+- Do not disable the back control on your app's root screen; on Rokid Glasses, it is the only way to exit the app.
 
 ## Vosk Model Setup
 
