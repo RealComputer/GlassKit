@@ -65,7 +65,9 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
       <td width="33%" valign="top" align="center">
         <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b" width="260" controls></video>
       </td>
-      <td width="33%" valign="top" align="center"></td>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92" width="260" controls></video>
+      </td>
     </tr>
     <tr>
       <td width="33%" valign="top">
