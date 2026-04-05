@@ -15,6 +15,7 @@ Check the official product page first:
 If the price looks unreasonably high, that usually means the cable is out of stock. In that case, check third-party sellers such as:
 
 - https://shenzhenlab.com/en/
+  - https://shop.shenzhenlab.com/products/magnetic-usb-a-programming-debug-cable?variant=46699787518146
 - AliExpress
 - Taobao
 
