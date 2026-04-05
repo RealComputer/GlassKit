@@ -18,7 +18,7 @@ An IKEA wooden box assembly instruction is set up for reference. Feel free to mo
 See [AGENTS.md](./AGENTS.md) for dev workflow.
 
 ## Requirements
-- Rokid Glasses and [dev cable](../../docs/how-to-get-rokid-glasses.md#rokid-glasses-dev-cable)
+- [Rokid Glasses + dev cable](../../docs/how-to-get-rokid-glasses.md)
 - Android Studio with `adb`
 - Node.js 24
 - OpenAI API key (`OPENAI_API_KEY`)

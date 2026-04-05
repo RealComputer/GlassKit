@@ -24,7 +24,7 @@ For a more advanced version of this pattern, see [rokid-overshoot-openai-realtim
 
 ## Requirements
 
-- Rokid Glasses + [dev cable](../../docs/how-to-get-rokid-glasses.md#rokid-glasses-dev-cable)
+- [Rokid Glasses + dev cable](../../docs/how-to-get-rokid-glasses.md)
 - Android Studio with `adb`
 - Python 3.12 with `uv`
 - Overshoot API key (`OVERSHOOT_API_KEY`)
