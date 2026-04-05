@@ -25,7 +25,7 @@ To demonstrate the template, this repo includes a vision-driven speedrun HUD for
 See [AGENTS.md](./AGENTS.md) for dev workflow.
 
 ## Requirements
-- Rokid Glasses + dev cable
+- Rokid Glasses + [dev cable](../../docs/how-to-get-rokid-glasses.md#rokid-glasses-dev-cable)
 - Android Studio with `adb`
 - Python 3.12 with `uv`
 - Roboflow API key (`ROBOFLOW_API_KEY`) if you use Roboflow-hosted weights (see "How to prepare the model" for details and alternatives).

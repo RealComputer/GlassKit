@@ -21,7 +21,7 @@ Feel free to modify and experiment with it!
 See [AGENTS.md](./AGENTS.md) for dev workflow.
 
 ## Requirements
-- Rokid Glasses + dev cable
+- Rokid Glasses + [dev cable](../../docs/how-to-get-rokid-glasses.md#rokid-glasses-dev-cable)
 - Android Studio with `adb`
 - Python 3.12 with `uv`
 - OpenAI API key (`OPENAI_API_KEY`)
