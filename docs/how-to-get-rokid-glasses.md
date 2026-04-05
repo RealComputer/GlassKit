@@ -25,3 +25,5 @@ It is also possible to upload APKs to the glasses without the dev cable. These p
 - https://github.com/Miniontoby/RokidApkUploader
 - https://github.com/Miniontoby/pyrokid_cxr_clientm
 - https://github.com/Anezium/Rokid-APKs
+
+If you have a confirmed way to establish wireless ADB without the dev cable, contributions to this guide are welcome.
