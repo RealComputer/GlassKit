@@ -18,6 +18,7 @@ If the price looks unreasonably high, that usually means the cable is out of sto
   - https://shop.shenzhenlab.com/products/magnetic-usb-a-programming-debug-cable?variant=46699787518146
 - AliExpress
 - Taobao
+- Or build one yourself: https://www.reddit.com/r/rokid_official/comments/1sd58u2/rokid_dev_cable_diy/
 
 # APK Upload Alternatives
 
