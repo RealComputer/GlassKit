@@ -18,29 +18,28 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
 <table width="100%">
   <thead>
     <tr>
-      <th width="33%">IKEA assembly assistant</th>
-      <th width="33%">Sushi speedrun HUD</th>
       <th width="33%">Drink-making coach</th>
+      <th width="33%">Sushi speedrun HUD</th>
+      <th width="33%">IKEA assembly assistant</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc" width="260" controls></video>
+        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab" width="260" controls></video>
       </td>
       <td width="33%" valign="top" align="center">
         <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da" width="260" controls></video>
       </td>
       <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab" width="260" controls></video>
+        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc" width="260" controls></video>
       </td>
     </tr>
     <tr>
       <td width="33%" valign="top">
-        <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
-        <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
+        <a href="examples/rokid-overshoot-openai-realtime">Code ➡️</a>
         <br><br>
-        Vision-enabled voice assistant for Rokid Glasses. Streams mic + camera to the OpenAI Realtime API over WebRTC for spoken IKEA assembly guidance. The RF-DETR variant adds object detection for stronger visual understanding.
+        Proactive drink-making assistant for Rokid Glasses. Streams live camera video to Overshoot for scene understanding and uses the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code ➡️</a>
@@ -48,9 +47,10 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         Real-world speedrun HUD for Rokid Glasses. Streams video over WebRTC with a data channel to the backend, which runs a fine-tuned RF-DETR object detector for automatic, hands-free split completion based on a configured route.
       </td>
       <td width="33%" valign="top">
-        <a href="examples/rokid-overshoot-openai-realtime">Code ➡️</a>
+        <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
+        <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
         <br><br>
-        Proactive drink-making assistant for Rokid Glasses. Streams live camera video to Overshoot for scene understanding and uses the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
+        Vision-enabled voice assistant for Rokid Glasses. Streams mic + camera to the OpenAI Realtime API over WebRTC for spoken IKEA assembly guidance. The RF-DETR variant adds object detection for stronger visual understanding.
       </td>
     </tr>
     <tr>
