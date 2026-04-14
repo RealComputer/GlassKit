@@ -71,9 +71,9 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <td width="33%" valign="top">
-        AI assistant that records a full day from smart-glasses video and lets me browse and query the footage later with AI.
+        Smart glasses capture an entire day and let you browse and query the footage with AI.
         <br><br>
-        Further read: <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">What I built and learned</a>
+        <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">Read the build write-up</a>
       </td>
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code ➡️</a>
