@@ -54,22 +54,27 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
       </td>
     </tr>
     <tr>
+      <th width="33%">Life Context for AI</th>
       <th width="33%">Privacy filter</th>
       <th width="33%">Scene-description HUD</th>
-      <th width="33%">Voice command + phone support</th>
     </tr>
     <tr>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/f285bff2-ebde-4d17-99e0-bd1573881d26" width="260" controls></video>
+      </td>
       <td width="33%" valign="top" align="center">
         <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
       </td>
       <td width="33%" valign="top" align="center">
         <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b" width="260" controls></video>
       </td>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92" width="260" controls></video>
-      </td>
     </tr>
     <tr>
+      <td width="33%" valign="top">
+        AI assistant that records a full day from smart-glasses video and lets me browse and query the footage later with AI.
+        <br><br>
+        Further read: <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">What I built and learned</a>
+      </td>
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code ➡️</a>
         <br><br>
@@ -80,11 +85,27 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
         <br><br>
         Simple Rokid Glasses app that streams camera video to Overshoot and shows live inference text on the HUD.
       </td>
+    </tr>
+    <tr>
+      <th width="33%">Voice command + phone support</th>
+      <th width="33%"></th>
+      <th width="33%"></th>
+    </tr>
+    <tr>
+      <td width="33%" valign="top" align="center">
+        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92" width="260" controls></video>
+      </td>
+      <td width="33%" valign="top" align="center"></td>
+      <td width="33%" valign="top" align="center"></td>
+    </tr>
+    <tr>
       <td width="33%" valign="top">
         <a href="examples/rokid-feature-demo">Code ➡️</a>
         <br><br>
         Reference app for Rokid Glasses voice commands and Android phone/emulator support. Includes camera, microphone, speaker, and menu-screen patterns with touchscreen controls that mirror the Rokid touchpad.
       </td>
+      <td width="33%" valign="top"></td>
+      <td width="33%" valign="top"></td>
     </tr>
   </tbody>
 </table>
