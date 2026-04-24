@@ -5,10 +5,10 @@
 Create a portable `glasskit` Agent Skill under `skills/glasskit/` that lets an AI coding agent help users build smart-glasses apps with GlassKit patterns without needing access to the rest of this repository. The first supported device family is Rokid Glasses. The skill should package:
 
 - A lean `SKILL.md` that explains when and how to use the skill.
-- Focused `references/` guides distilled from the current `examples/` and `docs/`.
 - A minimal standalone Rokid Android hello-world project in `assets/`.
+- Focused `references/` guides distilled from the current `examples/` and `docs/`.
 
-Do not implement a reusable GlassKit SDK yet. Treat this as a distributable agent skill that captures templates, snippets, device-specific constraints, and best-practice patterns.
+Treat this as a distributable agent skill that captures templates, snippets, device-specific constraints, and best-practice patterns.
 
 ## Source Material Reviewed
 
@@ -16,7 +16,6 @@ Use these existing repository areas as the source of truth:
 
 - `agent-skills.md`: Agent Skill format, progressive disclosure, frontmatter requirements, and best practices.
 - `skills/glasskit/SKILL.md`: current placeholder scaffold.
-- `README.md`: current GlassKit positioning, examples, and roadmap.
 - `docs/how-to-get-rokid-glasses.md`: device, dev cable, and APK upload guidance.
 - `examples/rokid-feature-demo`: Rokid HUD shape, touchpad/input mapping, CameraX preview, microphone/Vosk voice command, speaker test, Android phone/emulator fallback.
 - `examples/rokid-openai-realtime`: direct OpenAI Realtime WebRTC audio/video pattern and sideband tool broker. Treat its `gpt-realtime` model value and `KEYCODE_DPAD_CENTER` usage as outdated.
@@ -24,8 +23,6 @@ Use these existing repository areas as the source of truth:
 - `examples/rokid-overshoot`: minimal Overshoot video streaming and HUD log pattern.
 - `examples/rokid-rfdetr`: backend RF-DETR object detection, WebRTC data channel, speedrun HUD, two-hit confirmation, annotated frame capture.
 - `examples/rokid-overshoot-openai-realtime`: newest server-authoritative proactive workflow pattern, Overshoot plus OpenAI Realtime, `gpt-realtime-1.5`, exact backend-driven speech, HUD state, recipe schema.
-
-Exclude archived projects from the first skill pass unless a specific pattern is missing from the active examples.
 
 ## Agent Skill Constraints
 
@@ -35,17 +32,14 @@ Follow the constraints from `agent-skills.md` and `skill-creator`:
 - Keep `SKILL.md` concise. It should be an overview, workflow, gotchas list, and index. Put detailed guidance in directly linked reference files.
 - Use relative links from `SKILL.md` to `references/...` and `assets/...`.
 - Keep references one level deep from `SKILL.md`.
-- Avoid generic Android/Python explanations. Focus on Rokid, GlassKit, OpenAI Realtime, Overshoot, RF-DETR, and example-specific contracts that a general model is likely to miss.
+- Avoid generic Android/Python explanations. Focus on Rokid Glasses, OpenAI Realtime, Overshoot, RF-DETR, and example-specific contracts that a general model is likely to miss.
 - The skill directory must be standalone. Do not point users to `../../examples/...` as required context, because deployed skill users will not have this repository.
-- Do not add extra clutter such as `README.md` inside the skill. `SKILL.md`, `references/`, `assets/`, and optional `agents/openai.yaml` are enough.
 
 ## Proposed Skill Layout
 
 ```text
 skills/glasskit/
 ├── SKILL.md
-├── agents/
-│   └── openai.yaml
 ├── assets/
 │   └── rokid-hello-world/
 │       ├── build.gradle.kts
@@ -72,8 +66,6 @@ skills/glasskit/
     └── server-authoritative-workflows.md
 ```
 
-`agents/openai.yaml` is recommended by the skill-creator guidance. Add it if this repository wants the skill to present well in clients that show skill chips; otherwise leave it out.
-
 ## `SKILL.md` Plan
 
 Replace the placeholder with:
@@ -85,17 +77,14 @@ Replace the placeholder with:
   - Quick workflow:
     1. If starting a Rokid app from zero, copy `assets/rokid-hello-world/`.
     2. Identify requested feature area.
-    3. Read only the matching `references/*.md`.
+    3. Read the matching `references/*.md`.
     4. Implement with the local app's existing patterns when modifying an app.
     5. Validate with Gradle/backend commands.
-  - Mandatory gotchas:
-    - Use `KeyEvent.KEYCODE_ENTER` for Rokid tap. Do not copy `KEYCODE_DPAD_CENTER`.
+  - Gotchas:
     - Rokid HUD is monochrome; design black/white UI and rely on typography/spacing.
     - The Rokid display target is 480x640 at 240 dpi, 3:4 portrait.
     - Do not block root-screen back/exit behavior.
     - For OpenAI Realtime, prefer `gpt-realtime-1.5` as used by the newest mocktail example.
-    - Python backend commands should use `uv`.
-    - Local HTTP backends need Android cleartext traffic enabled or HTTPS.
   - Reference index with explicit "read this when..." guidance.
 
 ## Asset Template Plan
@@ -106,18 +95,16 @@ Create `assets/rokid-hello-world/` from `examples/rokid-feature-demo`, stripped 
 - Keep a simple Kotlin Android app with one `MainActivity`.
 - Keep `RokidHudViewportLayout` or an equivalent fixed 3:4 viewport wrapper, because it is the highest-value Rokid-specific part of the starter.
 - Remove CameraX, Vosk, microphone, speaker, menu screens, and all permissions.
-- Show only a black fullscreen HUD with centered white hello-world text, for example `Hello GlassKit`.
+- Show only a black fullscreen HUD with centered white hello-world text, for example `Hello World`.
 - Keep `FLAG_KEEP_SCREEN_ON`.
 - Use explicit Kotlin/Android Gradle plugin configuration so the copied project builds cleanly.
-- Prefer package/application id such as `ai.glasskit.hello` unless the owner wants `com.example...`.
+- Use package/application id such as `ai.glasskit.hello`
 - Validate with:
 
 ```bash
 cd skills/glasskit/assets/rokid-hello-world
 ./gradlew :app:assembleDebug
 ```
-
-If local Android SDK or dependency download blocks validation, document the exact blocker in the final implementation notes.
 
 ## Reference File Plans
 
@@ -172,13 +159,11 @@ Cover the device and app-layer patterns from `rokid-feature-demo` and the Androi
 
 Document the Android WebRTC patterns shared across OpenAI, Overshoot, and RF-DETR:
 
-- Dependency: `io.getstream:stream-webrtc-android:1.3.10`.
+- Dependency: `io.getstream:stream-webrtc-android`.
 - Create and dispose `EglBase`, `PeerConnectionFactory`, tracks, capturers, and data channels explicitly.
 - Video capture:
   - 1024x768 at 5 fps for low-rate backend detection.
   - 1024x768 at 15 fps for Overshoot.
-  - 720x1280 at 15 fps appears in the older OpenAI direct audio/video example; use only if direct portrait video to Realtime is intended.
-  - Prefer back/outward camera when available.
 - Audio:
   - For direct mic to OpenAI, use `JavaAudioDeviceModule`, 16 kHz mono, disable hardware AEC/NS where the example does.
   - For backend-controlled speech playback, use a receive-only audio transceiver.
@@ -213,7 +198,6 @@ Distill the OpenAI Realtime patterns:
   - Backend-controlled speech: Android receives audio only; backend sends `Speak exactly this line: ...` and `response.create`.
   - Sideband tool loop: handle `response.done`, find completed function call, send `function_call_output`, optionally `response.create`.
   - Transcript handling: dedupe event IDs, clear stale transcript when `speech_epoch` changes.
-- Explicitly mark older `gpt-realtime` examples as legacy in this repo.
 
 ### `references/overshoot.md`
 
@@ -306,14 +290,6 @@ cd skills/glasskit/assets/rokid-hello-world
 ./gradlew :app:assembleDebug
 ```
 
-3. Search for forbidden/outdated patterns:
-
-```bash
-rg "KEYCODE_DPAD_CENTER|gpt-realtime\"" skills/glasskit
-```
-
-`KEYCODE_DPAD_CENTER` should not appear except, if necessary, in a warning that says not to use it. Bare `gpt-realtime"` should not be used as a recommended model value.
-
 4. Check standalone portability:
 
 ```bash
@@ -324,15 +300,11 @@ References may mention that content was derived from examples in prose, but shou
 
 5. Review `SKILL.md` length and reference index clarity.
 
-6. If `agents/openai.yaml` is added, ensure its display name, short description, and default prompt match the final `SKILL.md`.
-
 ## Open Questions
 
 - Should the hello-world template use `ai.glasskit.hello` as the default package/application id, or a neutral `com.example.glasskithello`?
-- Should `agents/openai.yaml` be included in this repository's distributable skill, or should the skill remain spec-minimal?
+  - => use ai.glasskit.hello
 - Should the first skill version document both Node and Python OpenAI Realtime broker patterns, or should it standardize on Python/FastAPI plus `gpt-realtime-1.5` and only mention the Node example as legacy?
+  - => use python as sample. but no need to mention node as legacy
 - Should the references include short source-file provenance notes for maintainers, or should they avoid all links to repository paths to emphasize standalone portability?
-
-## Commit Scope
-
-The implementation commit should include only `skills/glasskit/**` changes and any necessary `AGENTS.md` update if repository instructions become outdated. Do not refactor examples during the skill implementation unless a copied pattern must be corrected in the skill output.
+  - avoid all links to repository paths.
