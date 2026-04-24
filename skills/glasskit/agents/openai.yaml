@@ -1,0 +1,4 @@
+interface:
+  display_name: "GlassKit"
+  short_description: "Build Rokid smart-glasses apps"
+  default_prompt: "Use $glasskit to build a Rokid smart-glasses app with a monochrome HUD."

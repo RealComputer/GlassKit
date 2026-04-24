@@ -22,7 +22,7 @@ Use these existing repository areas as the source of truth:
 - `examples/rokid-openai-realtime-rfdetr`: OpenAI Realtime plus backend RF-DETR frame injection. Treat its `gpt-realtime` model value and `KEYCODE_DPAD_CENTER` usage as outdated.
 - `examples/rokid-overshoot`: minimal Overshoot video streaming and HUD log pattern.
 - `examples/rokid-rfdetr`: backend RF-DETR object detection, WebRTC data channel, speedrun HUD, two-hit confirmation, annotated frame capture.
-- `examples/rokid-overshoot-openai-realtime`: newest server-authoritative proactive workflow pattern, Overshoot plus OpenAI Realtime, `gpt-realtime-1.5`, exact backend-driven speech, HUD state, recipe schema.
+- `examples/rokid-overshoot-openai-realtime`: newest server-authoritative proactive workflow pattern, Overshoot plus OpenAI Realtime, `gpt-realtime-1.5`, exact backend-driven speech, HUD state, and backend-owned workflow progression.
 
 ## Agent Skill Constraints
 
@@ -84,7 +84,7 @@ Replace the placeholder with:
     - Rokid HUD is monochrome; design black/white UI and rely on typography/spacing.
     - The Rokid display target is 480x640 at 240 dpi, 3:4 portrait.
     - Do not block root-screen back/exit behavior.
-    - For OpenAI Realtime, prefer `gpt-realtime-1.5` as used by the newest mocktail example.
+    - For OpenAI Realtime, prefer `gpt-realtime-1.5` as used by the newest combined workflow pattern.
   - Reference index with explicit "read this when..." guidance.
 
 ## Asset Template Plan
@@ -246,26 +246,26 @@ Distill backend object-detection patterns:
 
 ### `references/server-authoritative-workflows.md`
 
-Distill the proactive mocktail coach pattern:
+Distill the backend-orchestrated proactive workflow pattern in domain-neutral terms:
 
 - Android should stay thin: HUD rendering, gesture input, permissions, and media links.
-- Backend should own session lifecycle, phases, recipe choice, prompt switching, step progression, HUD state, and exact speech.
+- Backend should own session lifecycle, phases, prompt switching, task progression, HUD state, and exact speech.
 - Session flow:
   1. Control WebSocket creates a backend session.
   2. User tap sends `session.start`.
   3. Android creates vision and realtime media links.
-  4. Backend waits for both links.
-  5. Inventory scan stabilizes after two identical normalized ingredient arrays.
-  6. Backend selects/activates a recipe.
-  7. Backend switches Overshoot detector prompts per step.
-  8. Backend evaluates structured results and speaks exact lines through OpenAI Realtime.
-  9. Android renders `hud.state` and current transcript.
-- Recipe schema:
-  - tasks, detectors, steps.
-  - detector fields: `ingredients`, `color`, `state`, `flag`, `level`.
+  4. Backend waits for required media links before progressing.
+  5. Backend collects initial context until it is stable enough for the workflow.
+  6. Backend activates a workflow and switches detector prompts for each active task.
+  7. Backend evaluates structured detector results and advances task state.
+  8. Backend speaks exact lines through OpenAI Realtime and publishes HUD state.
+  9. Android renders `hud.state` and current transcript without owning workflow decisions.
+- Workflow schema:
+  - tasks, detectors, steps, transitions, and completion rules.
+  - detector output fields should be named for the app domain, plus generic fields like `state`, `flag`, `level`, and `confidence` when useful.
   - evaluation modes: `match_value`, `numeric_threshold_with_progress_once`, `count_rising_edges_true`, `enum_progress_once_then_complete`, `momentary_true_complete`.
 - HUD state contract:
-  - `type`, `screen`, `phase`, `recipe_name`, `tasks`, `active_task_id`, `speech_epoch`.
+  - `type`, `screen`, `phase`, `workflow_name`, `tasks`, `active_task_id`, `speech_epoch`.
 - Speech contract:
   - Cancel active response before replacing speech.
   - Increment `speech_epoch`.
@@ -290,7 +290,7 @@ cd skills/glasskit/assets/rokid-hello-world
 ./gradlew :app:assembleDebug
 ```
 
-4. Check standalone portability:
+3. Check standalone portability:
 
 ```bash
 rg "\\.\\./\\.\\./|examples/|docs/" skills/glasskit
@@ -298,7 +298,7 @@ rg "\\.\\./\\.\\./|examples/|docs/" skills/glasskit
 
 References may mention that content was derived from examples in prose, but should not require paths outside the skill directory.
 
-5. Review `SKILL.md` length and reference index clarity.
+4. Review `SKILL.md` length and reference index clarity.
 
 ## Open Questions
 

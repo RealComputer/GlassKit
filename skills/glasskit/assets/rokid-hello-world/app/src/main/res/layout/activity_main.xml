@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/hud_letterbox_gray">
+
+    <ai.glasskit.hello.RokidHudViewportLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/hud_black">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="24dp"
+                android:text="@string/hello_world"
+                android:textColor="@color/hud_white"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+        </FrameLayout>
+    </ai.glasskit.hello.RokidHudViewportLayout>
+
+</FrameLayout>
