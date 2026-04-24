@@ -20,9 +20,12 @@ payload = {
         "clip_length_seconds": 0.5,
         "delay_seconds": 0.5,
     },
-    "prompt": active_prompt,
-    "model": "Qwen/Qwen3.5-27B",
-    "output_schema": output_schema,
+    "inference": {
+        "prompt": active_prompt,
+        "backend": "overshoot",
+        "model": "Qwen/Qwen3.5-27B",
+        "output_schema_json": output_schema,
+    },
 }
 response = await overshoot_http.post("/streams", json=payload)
 response.raise_for_status()
@@ -73,7 +76,7 @@ For workflows with multiple active detectors, patch the stream prompt instead of
 ```python
 await overshoot_http.patch(
     f"/streams/{stream_id}/config/prompt",
-    json={"prompt": next_prompt, "output_schema": next_schema},
+    json={"prompt": next_prompt},
 )
 ```
 

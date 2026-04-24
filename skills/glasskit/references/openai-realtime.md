@@ -54,7 +54,7 @@ Open the sideband after extracting `call_id`:
 sideband_url = f"wss://api.openai.com/v1/realtime?call_id={call_id}"
 async with websockets.connect(
     sideband_url,
-    extra_headers={"Authorization": f"Bearer {openai_api_key}"},
+    additional_headers={"Authorization": f"Bearer {openai_api_key}"},
 ) as openai_ws:
     ...
 ```
