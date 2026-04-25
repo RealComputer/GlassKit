@@ -2,7 +2,7 @@
 
 Start with the official product page: https://global.rokid.com/products/rokid-glasses
 
-If Rokid does not ship to your location, check third-party listings on eBay.
+If Rokid does not ship to your location, check third-party listings on eBay. If you are outside China, make sure the listing says it is the global or international version.
 
 # Rokid Glasses Dev Cable
 
