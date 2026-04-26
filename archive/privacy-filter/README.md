@@ -1,6 +1,6 @@
 # Privacy Infrastructure for Smart Glasses
 
-Build smart glasses apps without privacy concerns.
+Build smart glasses apps without privacy concerns. https://privacy.camera
 
 <img width="1600" height="956" src="https://github.com/user-attachments/assets/2f71bd47-c959-4e6f-8d4e-28e4ca23d334" />
 
