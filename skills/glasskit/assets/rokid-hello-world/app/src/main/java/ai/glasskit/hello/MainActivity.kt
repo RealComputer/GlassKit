@@ -21,10 +21,6 @@ class MainActivity : Activity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_ENTER -> true
-            KeyEvent.KEYCODE_BACK -> {
-                finish()
-                true
-            }
             else -> super.onKeyUp(keyCode, event)
         }
     }
