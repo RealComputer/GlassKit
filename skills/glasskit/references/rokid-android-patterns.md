@@ -22,9 +22,29 @@ The starter asset includes `RokidHudViewportLayout`; copy that class into apps t
 
 ## Touchpad And Keys
 
-Use `KEYCODE_ENTER` for the Rokid tap/select action:
+Use `KEYCODE_ENTER` for the Rokid tap/select action. Use Android's back dispatcher as the source of truth for Back, then bridge Rokid's physical `KEYCODE_BACK` event into that dispatcher when the device sends it.
+
+For apps with in-app navigation, the back handler should consume Back only away from the root/home screen. On the root/home screen, disable the callback and delegate to the system so Back exits the app.
 
 ```kotlin
+private val backCallback = object : OnBackPressedCallback(false) {
+    override fun handleOnBackPressed() {
+        navigateBackWithinApp()
+        updateBackCallback()
+    }
+}
+
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    onBackPressedDispatcher.addCallback(this, backCallback)
+    updateBackCallback()
+}
+
+private fun updateBackCallback() {
+    backCallback.isEnabled = !isAtRootScreen()
+}
+
+@SuppressLint("GestureBackNavigation")
 override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
     return when (keyCode) {
         KeyEvent.KEYCODE_ENTER -> {
@@ -32,7 +52,7 @@ override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
             true
         }
         KeyEvent.KEYCODE_BACK -> {
-            handleBack()
+            onBackPressedDispatcher.onBackPressed()
             true
         }
         KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -48,6 +68,10 @@ override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
 }
 ```
 
+This pattern requires AndroidX `OnBackPressedCallback` through `ComponentActivity` or `AppCompatActivity`.
+
+The `@SuppressLint("GestureBackNavigation")` annotation is intentional for the physical Rokid key bridge. Do not put app navigation logic directly in the `KEYCODE_BACK` branch; keep that logic in the back dispatcher callback so Android system Back, phone/emulator Back, and Rokid Back follow the same root-vs-inner-screen rules.
+
 Do not use `KEYCODE_DPAD_CENTER` for tap/select. Existing swipe patterns map `KEYCODE_DPAD_DOWN` and `KEYCODE_DPAD_UP` to next/previous style navigation; verify direction against the app's intended gesture language.
 
 For phone fallback testing, a single tap can call select, double tap can call back, and horizontal fling can call next/previous.
@@ -57,7 +81,7 @@ For phone fallback testing, a single tap can call select, double tap can call ba
 - Request only the permissions needed by the current app: camera, microphone, or none.
 - Add `FLAG_KEEP_SCREEN_ON` while the HUD is active.
 - Stop CameraX, WebRTC, Vosk, `AudioRecord`, WebSockets, and backend sessions in `onStop` or `onDestroy`.
-- Keep root-screen back available with `finish()` or equivalent app exit behavior.
+- Keep root-screen back available by delegating to Android's system Back behavior. Use in-app Back only for inner screens.
 
 ```kotlin
 override fun onCreate(savedInstanceState: Bundle?) {
