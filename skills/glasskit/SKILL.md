@@ -1,28 +1,26 @@
 ---
 name: glasskit
-description: Use when building, modifying, or debugging GlassKit smart-glasses apps for Rokid Glasses, including Android monochrome HUDs, touchpad or voice controls, camera/mic/speaker access, WebRTC streaming, OpenAI Realtime, Overshoot vision, RF-DETR/object detection, or backend-orchestrated proactive workflows. Includes a portable Rokid hello-world starter and focused implementation references.
+description: Use when you start building a Rokid Glasses (smart glasses) app, or when you modify or debug existing Rokid Glasses apps. This includes templates and commmon implementation patterns, including a getting started template, display UI on HUD, camera/mic/speaker access, temple touchpad handling, WebRTC streaming, voice controls, realtime LLM/VLM integration, CV object detection integration, and best practices.
 ---
 
 # GlassKit
 
-GlassKit is a dev suite for smart-glasses apps. This skill currently targets Rokid Glasses and packages the patterns that are easy to miss when building through a general Android or backend workflow.
+This GlassKit skill provides useful templates and docs for Rokid Glasses app development.
+
+## Basics
+
+- Rokid Glasses are Android-based smart glasses with an outward camera, a monochrome HUD, microphones, speakers, and a temple touchpad. No touchscreen.
+- Rokid Glasses are developed by Rokid. Rokid has several other glasses, and this doc specifically targets their "Rokid Glasses", so do not confuse with their other glasses product.
+- Rokid Glasses have an green monochrome binocular display on the lenses. Use black for background and white for foreground, and they're shown in transparent and green accordingly. You can still use any other colors (e.g., displaying pictures), but they're always shown in green, transparent, and everything in between on the actual device.
+- You can build Rokid Glasses apps like Android phone apps, but Rokid Glasses have less computation power (CPU and RAM) than phones, so the implementation is preffered to be efficient. Also, camera and mic have some restrictions, so please refer the references below.
+- Target the Rokid HUD as 480x640 physical pixels (portrait 3:4) at 240 dpi.
+- Keep root-screen back/exit behavior available. Avoid trapping users in a HUD.
 
 ## Workflow
 
-1. For a new Rokid app, copy `assets/rokid-hello-world/` into the target workspace first. Rename the package/application id after copying.
-2. Identify the requested feature area and read only the matching reference below.
-3. When modifying an existing app, preserve its local Gradle, Android, backend, and UI conventions unless they conflict with the Rokid-specific constraints here.
-4. Validate with the app's native commands. For Python backends, use `uv run -- ...`; assume macOS or a nearby Unix environment, not Windows.
-
-## Non-Negotiables
-
-- Rokid tap/select is `KeyEvent.KEYCODE_ENTER`. Do not implement temple tap using `KeyEvent.KEYCODE_DPAD_CENTER`.
-- Rokid HUD UI should be monochrome: black background, white foreground, readable typography, and spacing. Do not rely on color semantics.
-- Target the Rokid HUD as 480x640 physical pixels at 240 dpi, portrait 3:4.
-- Keep root-screen back/exit behavior available. Avoid trapping users in a HUD.
-- Prefer `gpt-realtime-1.5` for OpenAI Realtime integrations.
-- Keep API keys on a backend. Android should call your own session broker, not OpenAI/Overshoot with secrets embedded.
-- Local HTTP backends need Android cleartext traffic enabled or an HTTPS tunnel.
+1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. Rename the package/application id after copying if necessary.
+2. Identify the necessary features and read the relevant references below for implementation to understand device specific constraints and patterns.
+3. For any questions, you can open an issue on the upstream [GlassKit repository](https://github.com/RealComputer/GlassKit), or ask questions in [the Discord server](https://discord.gg/v5ayGKhPNP).
 
 ## References
 
@@ -36,7 +34,7 @@ GlassKit is a dev suite for smart-glasses apps. This skill currently targets Rok
 
 ## Starter Asset
 
-`assets/rokid-hello-world/` is a standalone minimal Kotlin Android project. It includes the Gradle wrapper, a single `MainActivity`, and `RokidHudViewportLayout`.
+`assets/rokid-hello-world/` is a minimal Kotlin Android project. It includes the Gradle wrapper, a single `MainActivity`, and `RokidHudViewportLayout`.
 
 Build it after copying:
 
@@ -44,3 +42,8 @@ Build it after copying:
 cd rokid-hello-world
 ./gradlew :app:assembleDebug
 ```
+
+## Tips
+
+- `./gradlew build` for checking Android builds
+- Use `adb` for connected devices and `emulator` for Android Emulator
