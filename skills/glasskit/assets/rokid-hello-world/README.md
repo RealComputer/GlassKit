@@ -1,13 +1,13 @@
 # Rokid Glasses Hello World
 
-This is the minimal starter app for Rokid Glasses.
+This is a minimal starter app for Rokid Glasses.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
 ## Requirements
 
 - `adb`
-- Rokid Glasses with a dev cable (preferred), or an Android phone/emulator for quick checks
+- Rokid Glasses with a dev cable (preferred), or an Android phone or emulator for quick checks
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ adb shell monkey -p ai.glasskit.hello -c android.intent.category.LAUNCHER 1 # La
 
 ## Device
 
-Prefer the actual device for testing, but an Android phone can be used as well. Also, Android emulator works, but camera and microphone passthrough are often not stable or performant enough.
+Use physical Rokid Glasses for final testing. An Android phone is useful for quick UI checks, and an emulator can work for basic smoke tests, but camera and microphone passthrough are often not stable or performant enough.
 
 Emulator setup example:
 
