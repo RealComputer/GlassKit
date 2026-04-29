@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.GlassKitHello" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Hello" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/hud_black</item>
         <item name="android:statusBarColor">@color/hud_black</item>
         <item name="android:navigationBarColor">@color/hud_black</item>

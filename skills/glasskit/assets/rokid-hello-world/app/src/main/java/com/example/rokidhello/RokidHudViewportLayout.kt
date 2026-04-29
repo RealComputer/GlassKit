@@ -1,4 +1,4 @@
-package ai.glasskit.hello
+package com.example.rokidhello
 
 import android.content.Context
 import android.util.AttributeSet

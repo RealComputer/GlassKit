@@ -14,7 +14,7 @@ See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 ```sh
 ./gradlew :app:assembleDebug                                                # Build
 adb install -r app/build/outputs/apk/debug/app-debug.apk                    # Install
-adb shell monkey -p ai.glasskit.hello -c android.intent.category.LAUNCHER 1 # Launch
+adb shell monkey -p com.example.rokidhello -c android.intent.category.LAUNCHER 1 # Launch
 ```
 
 ## Device

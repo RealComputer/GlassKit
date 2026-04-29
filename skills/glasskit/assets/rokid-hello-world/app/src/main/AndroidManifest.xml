@@ -5,12 +5,12 @@
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.GlassKitHello">
+        android:theme="@style/Theme.Hello">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
-            android:theme="@style/Theme.GlassKitHello">
+            android:theme="@style/Theme.Hello">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

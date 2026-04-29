@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "ai.glasskit.hello"
+    namespace = "com.example.rokidhello"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ai.glasskit.hello"
+        applicationId = "com.example.rokidhello"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

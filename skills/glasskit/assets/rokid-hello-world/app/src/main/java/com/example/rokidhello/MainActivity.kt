@@ -1,4 +1,4 @@
-package ai.glasskit.hello
+package com.example.rokidhello
 
 import android.app.Activity
 import android.os.Build

@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GlassKit Rokid Hello World"
+rootProject.name = "Hello World"
 include(":app")
