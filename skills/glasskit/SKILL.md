@@ -14,7 +14,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - Rokid Glasses have a green monochrome binocular display on the lenses. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device still renders them as green, transparent, or intermediate brightness levels.
 - You can build Rokid Glasses apps like Android phone apps, but the glasses have less CPU and RAM than phones, so implementations should be efficient. Camera and microphone behavior also has device-specific constraints; consult the relevant references below.
 - Target the Rokid HUD as 480x640 physical pixels (portrait 3:4) at 240 dpi.
-- Keep root-screen back/exit behavior available. Avoid trapping users in a HUD.
+- Keep root-screen back/exit behavior available. Avoid trapping users in an app.
 
 ## Workflow
 
