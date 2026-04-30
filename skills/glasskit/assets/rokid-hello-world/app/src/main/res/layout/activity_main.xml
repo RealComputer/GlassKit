@@ -3,28 +3,19 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/viewport_background">
-
     <com.example.rokidhello.RokidHudViewportLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="center">
-
-        <FrameLayout
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/hud_background">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:padding="24dp"
-                android:text="@string/hello_world"
-                android:textColor="@color/hud_foreground"
-                android:textSize="28sp"
-                android:textStyle="bold" />
-
-        </FrameLayout>
+            android:background="@color/hud_background"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="@string/hello_world"
+            android:textColor="@color/hud_foreground"
+            android:textSize="28sp"
+            android:textStyle="bold" />
     </com.example.rokidhello.RokidHudViewportLayout>
-
 </FrameLayout>
