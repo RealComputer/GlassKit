@@ -2,7 +2,6 @@ package com.example.rokidhello
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.DisplayMetrics
 import android.view.View
 import android.view.View.MeasureSpec
 import android.widget.FrameLayout
@@ -15,11 +14,9 @@ class HudViewportLayout @JvmOverloads constructor(
 ) : FrameLayout(context, attrs) {
 
     companion object {
-        // Verified on Rokid Glasses: 480x640 physical pixels at 240 dpi.
-        private const val HUD_REFERENCE_WIDTH_PX = 480f
-        private const val HUD_REFERENCE_HEIGHT_PX = 640f
-        private const val HUD_REFERENCE_DENSITY_DPI = 240f
-        private const val HUD_ASPECT_RATIO = HUD_REFERENCE_WIDTH_PX / HUD_REFERENCE_HEIGHT_PX
+        private const val HUD_ASPECT_RATIO = 3f / 4f
+        private const val HUD_DESIGN_WIDTH_DP = 320f
+        private const val HUD_DESIGN_HEIGHT_DP = HUD_DESIGN_WIDTH_DP / HUD_ASPECT_RATIO
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -78,15 +75,14 @@ class HudViewportLayout @JvmOverloads constructor(
     }
 
     private fun designWidthPx(): Int {
-        return referencePixelsToCurrentPixels(HUD_REFERENCE_WIDTH_PX).roundToInt()
+        return dpToPx(HUD_DESIGN_WIDTH_DP)
     }
 
     private fun designHeightPx(): Int {
-        return referencePixelsToCurrentPixels(HUD_REFERENCE_HEIGHT_PX).roundToInt()
+        return dpToPx(HUD_DESIGN_HEIGHT_DP)
     }
 
-    private fun referencePixelsToCurrentPixels(referencePixels: Float): Float {
-        val referenceDp = referencePixels * DisplayMetrics.DENSITY_DEFAULT / HUD_REFERENCE_DENSITY_DPI
-        return referenceDp * resources.displayMetrics.density
+    private fun dpToPx(dp: Float): Int {
+        return (dp * resources.displayMetrics.density).roundToInt()
     }
 }
