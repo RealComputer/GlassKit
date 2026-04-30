@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/hud_letterbox_gray">
+    android:background="@color/viewport_background">
 
     <com.example.rokidhello.RokidHudViewportLayout
         android:layout_width="match_parent"
@@ -12,7 +12,7 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/hud_black">
+            android:background="@color/hud_background">
 
             <TextView
                 android:layout_width="match_parent"
@@ -20,7 +20,7 @@
                 android:gravity="center"
                 android:padding="24dp"
                 android:text="@string/hello_world"
-                android:textColor="@color/hud_white"
+                android:textColor="@color/hud_foreground"
                 android:textSize="28sp"
                 android:textStyle="bold" />
 

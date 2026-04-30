@@ -1,5 +1,5 @@
 <resources>
-    <color name="hud_black">#000000</color>
-    <color name="hud_letterbox_gray">#303030</color>
-    <color name="hud_white">#FFFFFF</color>
+    <color name="viewport_background">#303030</color>
+    <color name="hud_background">#000000</color>
+    <color name="hud_foreground">#FFFFFF</color>
 </resources>

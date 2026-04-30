@@ -1,8 +1,8 @@
 <resources>
     <style name="Theme.Hello" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/hud_black</item>
-        <item name="android:statusBarColor">@color/hud_black</item>
-        <item name="android:navigationBarColor">@color/hud_black</item>
+        <item name="android:windowBackground">@color/hud_background</item>
+        <item name="android:statusBarColor">@color/hud_background</item>
+        <item name="android:navigationBarColor">@color/hud_background</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
     </style>
