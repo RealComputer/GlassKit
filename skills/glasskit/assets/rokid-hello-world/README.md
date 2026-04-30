@@ -21,6 +21,15 @@ adb shell monkey -p com.example.rokidhello -c android.intent.category.LAUNCHER 1
 
 Use physical Rokid Glasses for final testing. An Android phone is useful for quick UI checks, and an emulator can work for basic smoke tests, but camera and microphone passthrough are often not stable or performant enough.
 
+## Controls
+
+| Intent | Rokid Glasses touchpad | Android phone/emulator |
+| --- | --- | --- |
+| Select / OK | Tap (`KEYCODE_ENTER`) | Tap |
+| Back / cancel | Double tap (`KEYCODE_BACK`) | Double tap |
+| Next | Swipe forward (`KEYCODE_DPAD_DOWN`) | Swipe right |
+| Previous | Swipe back (`KEYCODE_DPAD_UP`) | Swipe left |
+
 Emulator setup example:
 
 ```sh
