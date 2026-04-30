@@ -9,7 +9,7 @@ import android.widget.FrameLayout
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-class RokidHudViewportLayout @JvmOverloads constructor(
+class HudViewportLayout @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs) {

@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/viewport_background">
-    <com.example.rokidhello.RokidHudViewportLayout
+    <com.example.rokidhello.HudViewportLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="center">
@@ -17,5 +17,5 @@
             android:textColor="@color/hud_foreground"
             android:textSize="28dp"
             android:textStyle="bold" />
-    </com.example.rokidhello.RokidHudViewportLayout>
+    </com.example.rokidhello.HudViewportLayout>
 </FrameLayout>
