@@ -13,6 +13,7 @@ class HudViewportLayout @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs) {
 
+    // Rokid's 480px-wide HUD at 240dpi maps to a 320dp Android design canvas.
     companion object {
         private const val HUD_ASPECT_RATIO = 3f / 4f
         private const val HUD_DESIGN_WIDTH_DP = 320f
