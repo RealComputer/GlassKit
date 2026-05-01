@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">Hello World</string>
+    <string name="screen_menu_title">Menu</string>
+    <string name="screen_hello_title">Hello</string>
+    <string name="menu_intro">Choose a screen.</string>
+    <string name="menu_hello">Hello</string>
     <string name="hello_world">Hello</string>
+    <string name="nav_menu_default">TAP open   SWIPE choose\nBACK quit</string>
+    <string name="nav_menu_quit_confirm">BACK again to quit\nTAP/SWIPE to stay</string>
+    <string name="nav_hello">BACK menu</string>
 </resources>

@@ -1,6 +1,7 @@
 # Rokid Glasses Hello World
 
-This is a minimal starter app for Rokid Glasses.
+This is a minimal starter app for Rokid Glasses. It includes a small HUD screen
+structure with a menu, a content screen, and bottom navigation hints.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
@@ -21,6 +22,21 @@ adb shell monkey -p com.example.rokidhello -c android.intent.category.LAUNCHER 1
 
 Use physical Rokid Glasses for final testing. An Android phone is useful for quick UI checks, and an emulator can work for basic smoke tests, but camera and microphone passthrough are often not stable or performant enough.
 
+## App Structure
+
+The UI uses a simple screen-controller pattern:
+
+- `MainActivity.kt` owns shared HUD chrome, input routing, and current-screen navigation.
+- `ScreenController.kt` defines the screen IDs, actions, and navigation results.
+- `MenuScreenController.kt` owns menu focus and the root-screen quit confirmation.
+- `HelloScreenController.kt` is the example content screen.
+- `activity_main.xml` defines the shared title, content frame, and bottom navigation hint.
+- `screen_menu.xml` and `screen_hello.xml` define per-screen content.
+
+To add another screen, add an `AppScreen`, create a `ScreenController`, include its
+layout in `activity_main.xml`, register the controller in `MainActivity`, and add a
+menu item in `MenuScreenController`.
+
 ## Controls
 
 | Intent | Rokid Glasses touchpad | Android phone/emulator touchscreen |
@@ -31,6 +47,10 @@ Use physical Rokid Glasses for final testing. An Android phone is useful for qui
 | Previous | Swipe backward | Swipe left |
 
 Keep Back available on the root screen so users can exit the app on Rokid Glasses. Inner screens can use Back for in-app navigation, but the root screen should still let Back close the app.
+
+In this template, Back from the menu first updates the bottom hint to ask for
+confirmation. Press Back again to quit. Tapping or swiping clears the quit
+confirmation.
 
 Emulator setup example:
 

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 
@@ -18,18 +19,33 @@ class MainActivity : ComponentActivity() {
     private val navigationInputController by lazy {
         NavigationInputController(
             context = this,
-            onSelect = ::handleSelect,
+            onSelect = { handleAction(AppAction.SELECT) },
             onBack = { onBackPressedDispatcher.onBackPressed() },
-            onNext = ::handleNext,
-            onPrevious = ::handlePrevious
+            onNext = { handleAction(AppAction.NEXT) },
+            onPrevious = { handleAction(AppAction.PREVIOUS) }
         )
     }
+
+    private lateinit var screenTitleView: TextView
+    private lateinit var navigationHintView: TextView
+    private lateinit var screenControllers: Map<AppScreen, ScreenController>
+
+    private var currentScreen = AppScreen.MENU
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, backCallback)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+        bindViews()
+        bindScreenControllers()
+        currentScreenController().onEnter()
+        renderUi()
+    }
+
+    override fun onDestroy() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onDestroy()
     }
 
     // Phone/emulator touchscreen input.
@@ -42,20 +58,50 @@ class MainActivity : ComponentActivity() {
         return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }
 
-    // Rokid touchpad tap or phone/emulator touchscreen tap.
-    private fun handleSelect() = Unit
-
-    // Rokid touchpad double tap or phone/emulator touchscreen double tap.
-    // Keep Back available on the root screen so users can exit the app.
-    // Inner screens can use Back for in-app navigation, while the root screen exits.
-    // Tip: on the root screen, first Back can show "Double tap again to quit" to prevent accidental close.
     private fun handleBack() {
-        finish()
+        handleAction(AppAction.BACK)
     }
 
-    // Rokid touchpad swipe forward or phone/emulator touchscreen swipe right.
-    private fun handleNext() = Unit
+    private fun bindViews() {
+        screenTitleView = findViewById(R.id.screenTitleView)
+        navigationHintView = findViewById(R.id.navigationHintView)
+    }
 
-    // Rokid touchpad swipe backward or phone/emulator touchscreen swipe left.
-    private fun handlePrevious() = Unit
+    private fun bindScreenControllers() {
+        val menuController = MenuScreenController(findViewById(R.id.menuPanel))
+        val helloController = HelloScreenController(findViewById(R.id.helloPanel))
+        screenControllers = linkedMapOf(
+            menuController.screen to menuController,
+            helloController.screen to helloController
+        )
+    }
+
+    private fun handleAction(action: AppAction) {
+        when (val result = currentScreenController().handleAction(action)) {
+            NavigationResult.Stay -> renderUi()
+            NavigationResult.ExitApp -> finish()
+            is NavigationResult.Open -> {
+                navigateTo(result.screen)
+                renderUi()
+            }
+        }
+    }
+
+    private fun navigateTo(screen: AppScreen) {
+        if (currentScreen == screen) return
+        currentScreenController().onExit()
+        currentScreen = screen
+        currentScreenController().onEnter()
+    }
+
+    private fun renderUi() {
+        screenControllers.values.forEach { controller ->
+            controller.setVisible(controller.screen == currentScreen)
+            controller.render()
+        }
+        screenTitleView.setText(currentScreen.titleResId)
+        navigationHintView.text = currentScreenController().navigationHint(this)
+    }
+
+    private fun currentScreenController(): ScreenController = screenControllers.getValue(currentScreen)
 }
