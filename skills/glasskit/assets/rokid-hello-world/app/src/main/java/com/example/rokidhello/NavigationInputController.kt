@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import kotlin.math.abs
 
+// Normalizes Rokid touchpad keys and phone/emulator touchscreen gestures into app navigation actions.
 class NavigationInputController(
     context: Context,
     private val onSelect: () -> Unit,
