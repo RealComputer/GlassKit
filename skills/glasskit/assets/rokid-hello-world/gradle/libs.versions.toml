@@ -1,5 +1,9 @@
 [versions]
+activity = "1.13.0"
 agp = "9.2.0"
+
+[libraries]
+androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

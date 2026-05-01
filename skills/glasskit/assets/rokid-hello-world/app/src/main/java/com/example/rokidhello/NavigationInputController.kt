@@ -76,11 +76,6 @@ class NavigationInputController(
                 true
             }
 
-            KeyEvent.KEYCODE_BACK -> {
-                onBack()
-                true
-            }
-
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 onNext()
                 true

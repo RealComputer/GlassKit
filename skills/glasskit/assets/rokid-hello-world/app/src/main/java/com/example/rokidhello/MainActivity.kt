@@ -1,19 +1,25 @@
 package com.example.rokidhello
 
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
+
+    private val backCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            handleBack()
+        }
+    }
 
     private val navigationInputController by lazy {
         NavigationInputController(
             context = this,
             onSelect = ::handleSelect,
-            onBack = ::handleBack,
+            onBack = { onBackPressedDispatcher.onBackPressed() },
             onNext = ::handleNext,
             onPrevious = ::handlePrevious
         )
@@ -21,6 +27,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, backCallback)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
     }
@@ -29,7 +36,6 @@ class MainActivity : Activity() {
         return navigationInputController.onTouchEvent(event) || super.dispatchTouchEvent(event)
     }
 
-    @SuppressLint("GestureBackNavigation")
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }
