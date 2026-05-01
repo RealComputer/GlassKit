@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
         return navigationInputController.onTouchEvent(event) || super.dispatchTouchEvent(event)
     }
 
-    // Rokid touchpad key input.
+    // Rokid touchpad gesture input.
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }

@@ -6,7 +6,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import kotlin.math.abs
 
-// Maps Rokid touchpad key events and phone/emulator touchscreen gestures to app navigation actions.
+// Maps Rokid touchpad gestures and phone/emulator touchscreen gestures to app navigation actions.
 class NavigationInputController(
     context: Context,
     private val onSelect: () -> Unit,
@@ -64,7 +64,7 @@ class NavigationInputController(
         return touchscreenGestureDetector.onTouchEvent(event)
     }
 
-    // Rokid touchpad key input.
+    // Rokid touchpad gesture input.
     fun onKeyUp(keyCode: Int): Boolean {
         return when (keyCode) {
             // Tap.
