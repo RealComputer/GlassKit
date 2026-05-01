@@ -13,9 +13,9 @@ See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 ## Quick Start
 
 ```sh
-./gradlew :app:assembleDebug                                                # Build
-adb install -r app/build/outputs/apk/debug/app-debug.apk                    # Install
-adb shell monkey -p com.example.rokidhello -c android.intent.category.LAUNCHER 1 # Launch
+./gradlew :app:assembleDebug                               # Build
+adb install -r app/build/outputs/apk/debug/app-debug.apk   # Install
+adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 ```
 
 ## Device
