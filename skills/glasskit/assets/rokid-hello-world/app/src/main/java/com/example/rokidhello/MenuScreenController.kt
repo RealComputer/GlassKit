@@ -7,18 +7,18 @@ import android.widget.TextView
 
 internal class MenuScreenController(
     panelView: View
-) : PanelScreenController(AppScreen.MENU, panelView) {
+) : ViewScreenController(ScreenId.MENU, panelView) {
 
     private data class MenuItem(
         val labelResId: Int,
-        val targetScreen: AppScreen,
+        val targetScreen: ScreenId,
         val textView: TextView
     )
 
     private val menuItems = listOf(
         MenuItem(
             labelResId = R.string.menu_hello,
-            targetScreen = AppScreen.HELLO,
+            targetScreen = ScreenId.HELLO,
             textView = panelView.findViewById(R.id.menuHelloItem)
         )
     )
@@ -35,32 +35,32 @@ internal class MenuScreenController(
         }
     }
 
-    override fun handleAction(action: AppAction): NavigationResult {
+    override fun handleAction(action: NavigationAction): ScreenCommand {
         return when (action) {
-            AppAction.SELECT -> {
+            NavigationAction.SELECT -> {
                 quitConfirmationArmed = false
-                NavigationResult.Open(menuItems[focusedIndex].targetScreen)
+                ScreenCommand.Open(menuItems[focusedIndex].targetScreen)
             }
 
-            AppAction.BACK -> {
+            NavigationAction.BACK -> {
                 if (quitConfirmationArmed) {
-                    NavigationResult.ExitApp
+                    ScreenCommand.ExitApp
                 } else {
                     quitConfirmationArmed = true
-                    NavigationResult.Stay
+                    ScreenCommand.Stay
                 }
             }
 
-            AppAction.NEXT -> {
+            NavigationAction.NEXT -> {
                 quitConfirmationArmed = false
                 focusedIndex = (focusedIndex + 1).coerceAtMost(menuItems.lastIndex)
-                NavigationResult.Stay
+                ScreenCommand.Stay
             }
 
-            AppAction.PREVIOUS -> {
+            NavigationAction.PREVIOUS -> {
                 quitConfirmationArmed = false
                 focusedIndex = (focusedIndex - 1).coerceAtLeast(0)
-                NavigationResult.Stay
+                ScreenCommand.Stay
             }
         }
     }

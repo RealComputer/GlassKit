@@ -7,7 +7,7 @@ import android.view.MotionEvent
 import kotlin.math.abs
 
 // Maps Rokid touchpad gestures and phone/emulator touchscreen gestures to app navigation actions.
-class NavigationInputController(
+class NavigationInputMapper(
     context: Context,
     private val onSelect: () -> Unit,
     private val onBack: () -> Unit,

@@ -16,21 +16,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val navigationInputController by lazy {
-        NavigationInputController(
+    private val navigationInputMapper by lazy {
+        NavigationInputMapper(
             context = this,
-            onSelect = { handleAction(AppAction.SELECT) },
+            onSelect = { handleAction(NavigationAction.SELECT) },
             onBack = { onBackPressedDispatcher.onBackPressed() },
-            onNext = { handleAction(AppAction.NEXT) },
-            onPrevious = { handleAction(AppAction.PREVIOUS) }
+            onNext = { handleAction(NavigationAction.NEXT) },
+            onPrevious = { handleAction(NavigationAction.PREVIOUS) }
         )
     }
 
-    private lateinit var screenTitleView: TextView
-    private lateinit var navigationHintView: TextView
-    private lateinit var screenControllers: Map<AppScreen, ScreenController>
+    private lateinit var headerTitleView: TextView
+    private lateinit var footerNavigationView: TextView
+    private lateinit var screenControllers: Map<ScreenId, ScreenController>
 
-    private var currentScreen = AppScreen.MENU
+    private var currentScreen = ScreenId.MENU
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,21 +50,21 @@ class MainActivity : ComponentActivity() {
 
     // Phone/emulator touchscreen input.
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        return navigationInputController.onTouchEvent(event) || super.dispatchTouchEvent(event)
+        return navigationInputMapper.onTouchEvent(event) || super.dispatchTouchEvent(event)
     }
 
     // Rokid touchpad gesture input.
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
+        return navigationInputMapper.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }
 
     private fun handleBack() {
-        handleAction(AppAction.BACK)
+        handleAction(NavigationAction.BACK)
     }
 
     private fun bindViews() {
-        screenTitleView = findViewById(R.id.screenTitleView)
-        navigationHintView = findViewById(R.id.navigationHintView)
+        headerTitleView = findViewById(R.id.headerTitleView)
+        footerNavigationView = findViewById(R.id.footerNavigationView)
     }
 
     private fun bindScreenControllers() {
@@ -76,18 +76,18 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun handleAction(action: AppAction) {
+    private fun handleAction(action: NavigationAction) {
         when (val result = currentScreenController().handleAction(action)) {
-            NavigationResult.Stay -> renderUi()
-            NavigationResult.ExitApp -> finish()
-            is NavigationResult.Open -> {
+            ScreenCommand.Stay -> renderUi()
+            ScreenCommand.ExitApp -> finish()
+            is ScreenCommand.Open -> {
                 navigateTo(result.screen)
                 renderUi()
             }
         }
     }
 
-    private fun navigateTo(screen: AppScreen) {
+    private fun navigateTo(screen: ScreenId) {
         if (currentScreen == screen) return
         currentScreenController().onExit()
         currentScreen = screen
@@ -99,8 +99,8 @@ class MainActivity : ComponentActivity() {
             controller.setVisible(controller.screen == currentScreen)
             controller.render()
         }
-        screenTitleView.setText(currentScreen.titleResId)
-        navigationHintView.text = currentScreenController().navigationHint(this)
+        headerTitleView.setText(currentScreen.titleResId)
+        footerNavigationView.text = currentScreenController().navigationHint(this)
     }
 
     private fun currentScreenController(): ScreenController = screenControllers.getValue(currentScreen)

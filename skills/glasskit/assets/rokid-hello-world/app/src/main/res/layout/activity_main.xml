@@ -16,20 +16,27 @@
             android:orientation="vertical"
             android:padding="18dp">
 
-            <TextView
-                android:id="@+id/screenTitleView"
+            <FrameLayout
+                android:id="@+id/headerFrame"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:singleLine="true"
-                android:textColor="@color/hud_foreground"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:minHeight="28dp">
+
+                <TextView
+                    android:id="@+id/headerTitleView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="monospace"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:textColor="@color/hud_foreground"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
 
             <FrameLayout
-                android:id="@+id/screenContentFrame"
+                android:id="@+id/contentFrame"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_marginTop="18dp"
@@ -41,16 +48,22 @@
                 <include layout="@layout/screen_hello" />
             </FrameLayout>
 
-            <TextView
-                android:id="@+id/navigationHintView"
+            <FrameLayout
+                android:id="@+id/footerFrame"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:lineSpacingExtra="2dp"
-                android:minHeight="34dp"
-                android:textColor="@color/hud_foreground"
-                android:textSize="11sp" />
+                android:minHeight="34dp">
+
+                <TextView
+                    android:id="@+id/footerNavigationView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:gravity="center"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/hud_foreground"
+                    android:textSize="11sp" />
+            </FrameLayout>
         </LinearLayout>
     </com.example.rokidhello.HudViewportLayout>
 </FrameLayout>

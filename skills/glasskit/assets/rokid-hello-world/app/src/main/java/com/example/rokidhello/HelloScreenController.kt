@@ -5,13 +5,13 @@ import android.view.View
 
 internal class HelloScreenController(
     panelView: View
-) : PanelScreenController(AppScreen.HELLO, panelView) {
+) : ViewScreenController(ScreenId.HELLO, panelView) {
 
-    override fun handleAction(action: AppAction): NavigationResult {
-        return if (action == AppAction.BACK) {
-            NavigationResult.Open(AppScreen.MENU)
+    override fun handleAction(action: NavigationAction): ScreenCommand {
+        return if (action == NavigationAction.BACK) {
+            ScreenCommand.Open(ScreenId.MENU)
         } else {
-            NavigationResult.Stay
+            ScreenCommand.Stay
         }
     }
 

@@ -1,7 +1,7 @@
 # Rokid Glasses Hello World
 
-This is a minimal starter app for Rokid Glasses. It includes a small HUD screen
-structure with a menu, a content screen, and bottom navigation hints.
+This is a minimal starter app for Rokid Glasses. It includes a small HUD
+structure with a menu, a content screen, and footer navigation hints.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
@@ -27,13 +27,14 @@ Use physical Rokid Glasses for final testing. An Android phone is useful for qui
 The UI uses a simple screen-controller pattern:
 
 - `MainActivity.kt` owns shared HUD chrome, input routing, and current-screen navigation.
-- `ScreenController.kt` defines the screen IDs, actions, and navigation results.
+- `NavigationInputMapper.kt` maps Rokid touchpad and phone/emulator gestures to navigation actions.
+- `ScreenController.kt` defines screen IDs, navigation actions, and screen commands.
 - `MenuScreenController.kt` owns menu focus and the root-screen quit confirmation.
 - `HelloScreenController.kt` is the example content screen.
-- `activity_main.xml` defines the shared title, content frame, and bottom navigation hint.
+- `activity_main.xml` defines the shared header, content frame, and footer.
 - `screen_menu.xml` and `screen_hello.xml` define per-screen content.
 
-To add another screen, add an `AppScreen`, create a `ScreenController`, include its
+To add another screen, add a `ScreenId`, create a `ScreenController`, include its
 layout in `activity_main.xml`, register the controller in `MainActivity`, and add a
 menu item in `MenuScreenController`.
 
@@ -46,11 +47,14 @@ menu item in `MenuScreenController`.
 | Next | Swipe forward | Swipe right |
 | Previous | Swipe backward | Swipe left |
 
-Keep Back available on the root screen so users can exit the app on Rokid Glasses. Inner screens can use Back for in-app navigation, but the root screen should still let Back close the app.
+Keep Back available on the root screen so users can exit the app on Rokid
+Glasses. Inner screens can use Back for in-app navigation, but the root screen
+should still let Back close the app.
 
-In this template, Back from the menu first updates the bottom hint to ask for
+In this template, Back from the menu first updates the footer to ask for
 confirmation. Press Back again to quit. Tapping or swiping clears the quit
-confirmation.
+confirmation. The app-visible footer describes this as double-tap for Rokid
+Glass users.
 
 Emulator setup example:
 
