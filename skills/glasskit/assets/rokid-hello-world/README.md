@@ -23,12 +23,14 @@ Use physical Rokid Glasses for final testing. An Android phone is useful for qui
 
 ## Controls
 
-| Intent | Rokid Glasses touchpad | Android phone/emulator |
+| Intent | Rokid Glasses touchpad | Android phone/emulator touchscreen |
 | --- | --- | --- |
-| Select / OK | Tap (`KEYCODE_ENTER`) | Tap |
-| Back / cancel | Double tap (`KEYCODE_BACK`) | Double tap |
-| Next | Swipe forward (`KEYCODE_DPAD_DOWN`) | Swipe right |
-| Previous | Swipe back (`KEYCODE_DPAD_UP`) | Swipe left |
+| Select / OK | Tap | Tap |
+| Back / cancel | Double tap | Double tap |
+| Next | Swipe forward | Swipe right |
+| Previous | Swipe backward | Swipe left |
+
+Keep Back available on the root screen so users can exit the app on Rokid Glasses. Inner screens can use Back for in-app navigation, but the root screen should still let Back close the app.
 
 Emulator setup example:
 

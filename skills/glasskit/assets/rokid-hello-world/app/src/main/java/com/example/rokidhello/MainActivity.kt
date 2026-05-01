@@ -40,17 +40,18 @@ class MainActivity : ComponentActivity() {
         return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }
 
-    // Rokid tap or phone/emulator tap.
+    // Rokid touchpad tap or phone/emulator touchscreen tap.
     private fun handleSelect() = Unit
 
-    // Rokid Back or phone/emulator double tap.
+    // Rokid touchpad double tap or phone/emulator touchscreen double tap.
+    // Keep Back available on the root screen so users can exit the app.
     private fun handleBack() {
         finish()
     }
 
-    // Rokid swipe forward or phone/emulator swipe right.
+    // Rokid touchpad swipe forward or phone/emulator touchscreen swipe right.
     private fun handleNext() = Unit
 
-    // Rokid swipe backward or phone/emulator swipe left.
+    // Rokid touchpad swipe backward or phone/emulator touchscreen swipe left.
     private fun handlePrevious() = Unit
 }
