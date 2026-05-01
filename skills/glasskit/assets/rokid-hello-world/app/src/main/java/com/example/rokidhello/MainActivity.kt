@@ -32,10 +32,12 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
     }
 
+    // Phone/emulator touchscreen input.
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         return navigationInputController.onTouchEvent(event) || super.dispatchTouchEvent(event)
     }
 
+    // Rokid touchpad key input.
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return navigationInputController.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }

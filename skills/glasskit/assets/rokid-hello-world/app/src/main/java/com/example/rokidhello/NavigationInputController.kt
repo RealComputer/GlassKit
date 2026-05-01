@@ -59,25 +59,27 @@ class NavigationInputController(
         }
     )
 
+    // Phone/emulator touchscreen input.
     fun onTouchEvent(event: MotionEvent): Boolean {
         return touchscreenGestureDetector.onTouchEvent(event)
     }
 
+    // Rokid touchpad key input.
     fun onKeyUp(keyCode: Int): Boolean {
         return when (keyCode) {
-            // Rokid touchpad tap.
+            // Tap.
             KeyEvent.KEYCODE_ENTER -> {
                 onSelect()
                 true
             }
 
-            // Rokid touchpad swipe forward.
+            // Swipe forward.
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 onNext()
                 true
             }
 
-            // Rokid touchpad swipe backward.
+            // Swipe backward.
             KeyEvent.KEYCODE_DPAD_UP -> {
                 onPrevious()
                 true
