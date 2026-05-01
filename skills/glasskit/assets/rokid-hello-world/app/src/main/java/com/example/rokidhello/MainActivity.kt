@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
     // Rokid touchpad double tap or phone/emulator touchscreen double tap.
     // Keep Back available on the root screen so users can exit the app.
     // Inner screens can use Back for in-app navigation, while the root screen exits.
-    // Tip: to prevent accidental close, first Back can show "Double tap again to quit".
+    // Tip: on the root screen, first Back can show "Double tap again to quit" to prevent accidental close.
     private fun handleBack() {
         finish()
     }
