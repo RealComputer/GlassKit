@@ -2,10 +2,11 @@
     <!--
         Rokid HUD output is monochrome green: black is transparent, white is
         full-brightness green, and gray values render as dimmer green.
-        Keep HUD tokens grayscale rather than adding typical Android app accents.
+        Keep HUD color tokens minimal and grayscale rather than hue-based.
     -->
-    <color name="viewport_background">#303030</color>
     <color name="hud_background">#000000</color>
     <color name="hud_foreground">#FFFFFF</color>
     <color name="hud_foreground_muted">#888888</color>
+
+    <color name="viewport_background">#303030</color>
 </resources>
