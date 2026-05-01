@@ -20,11 +20,6 @@ class NavigationInputController(
         private const val SWIPE_DISTANCE_THRESHOLD_DP = 56f
     }
 
-    private var swipeStartX = 0f
-    private var swipeStartY = 0f
-    private var isSwipeTracking = false
-    private var swipeHandledByFling = false
-
     private val swipeDistanceThresholdPx = SWIPE_DISTANCE_THRESHOLD_DP * context.resources.displayMetrics.density
     private val swipeDirectionSlopPx = ViewConfiguration.get(context).scaledTouchSlop * 4f
     private val gestureDetector = GestureDetector(
@@ -53,7 +48,6 @@ class NavigationInputController(
                 val deltaY = e2.y - start.y
                 if (!isHorizontalSwipe(deltaX, deltaY)) return false
 
-                swipeHandledByFling = true
                 if (deltaX > 0f) {
                     onNext()
                 } else {
@@ -65,9 +59,7 @@ class NavigationInputController(
     )
 
     fun onTouchEvent(event: MotionEvent): Boolean {
-        val handledByGestureDetector = gestureDetector.onTouchEvent(event)
-        val handledBySwipeFallback = handleSwipeFallback(event)
-        return handledByGestureDetector || handledBySwipeFallback
+        return gestureDetector.onTouchEvent(event)
     }
 
     fun onKeyUp(keyCode: Int): Boolean {
@@ -92,43 +84,6 @@ class NavigationInputController(
 
             else -> false
         }
-    }
-
-    private fun handleSwipeFallback(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                swipeStartX = event.x
-                swipeStartY = event.y
-                isSwipeTracking = true
-                swipeHandledByFling = false
-            }
-
-            MotionEvent.ACTION_CANCEL -> resetSwipeTracking()
-
-            MotionEvent.ACTION_UP -> {
-                if (!isSwipeTracking) return false
-
-                val deltaX = event.x - swipeStartX
-                val deltaY = event.y - swipeStartY
-                val handledByFling = swipeHandledByFling
-                resetSwipeTracking()
-
-                if (handledByFling || !isHorizontalSwipe(deltaX, deltaY)) return false
-
-                if (deltaX > 0f) {
-                    onNext()
-                } else {
-                    onPrevious()
-                }
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun resetSwipeTracking() {
-        isSwipeTracking = false
-        swipeHandledByFling = false
     }
 
     private fun isHorizontalSwipe(deltaX: Float, deltaY: Float): Boolean {
