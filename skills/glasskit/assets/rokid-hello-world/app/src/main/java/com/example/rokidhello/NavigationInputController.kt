@@ -6,7 +6,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import kotlin.math.abs
 
-// Maps Rokid Glasses touchpad keys and phone/emulator touchscreen gestures to app navigation actions.
+// Maps Rokid touchpad key events and phone/emulator touchscreen gestures to app navigation actions.
 class NavigationInputController(
     context: Context,
     private val onSelect: () -> Unit,
@@ -16,11 +16,12 @@ class NavigationInputController(
 ) {
 
     companion object {
-        private const val SWIPE_DISTANCE_THRESHOLD_DP = 56f
+        private const val TOUCHSCREEN_FLING_DISTANCE_THRESHOLD_DP = 56f
     }
 
-    private val swipeDistanceThresholdPx = SWIPE_DISTANCE_THRESHOLD_DP * context.resources.displayMetrics.density
-    private val gestureDetector = GestureDetector(
+    private val touchscreenFlingDistanceThresholdPx =
+        TOUCHSCREEN_FLING_DISTANCE_THRESHOLD_DP * context.resources.displayMetrics.density
+    private val touchscreenGestureDetector = GestureDetector(
         context,
         object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
@@ -42,11 +43,13 @@ class NavigationInputController(
                 velocityY: Float
             ): Boolean {
                 val start = e1 ?: return false
-                val deltaX = e2.x - start.x
-                val deltaY = e2.y - start.y
-                if (!isHorizontalFling(deltaX, deltaY)) return false
+                val horizontalMovement = e2.x - start.x
+                val verticalMovement = e2.y - start.y
+                if (!isHorizontalTouchscreenFling(horizontalMovement, verticalMovement)) {
+                    return false
+                }
 
-                if (deltaX > 0f) {
+                if (horizontalMovement > 0f) {
                     onNext()
                 } else {
                     onPrevious()
@@ -57,7 +60,7 @@ class NavigationInputController(
     )
 
     fun onTouchEvent(event: MotionEvent): Boolean {
-        return gestureDetector.onTouchEvent(event)
+        return touchscreenGestureDetector.onTouchEvent(event)
     }
 
     fun onKeyUp(keyCode: Int): Boolean {
@@ -84,9 +87,13 @@ class NavigationInputController(
         }
     }
 
-    private fun isHorizontalFling(deltaX: Float, deltaY: Float): Boolean {
-        val horizontalDistance = abs(deltaX)
-        val verticalDistance = abs(deltaY)
-        return horizontalDistance >= swipeDistanceThresholdPx && horizontalDistance > verticalDistance
+    private fun isHorizontalTouchscreenFling(
+        horizontalMovement: Float,
+        verticalMovement: Float
+    ): Boolean {
+        val horizontalDistance = abs(horizontalMovement)
+        val verticalDistance = abs(verticalMovement)
+        return horizontalDistance >= touchscreenFlingDistanceThresholdPx &&
+            horizontalDistance > verticalDistance
     }
 }
