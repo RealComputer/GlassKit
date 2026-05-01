@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.ViewConfiguration
 import kotlin.math.abs
 
 // Maps Rokid Glasses touchpad keys and phone/emulator touchscreen gestures to app navigation actions.
@@ -21,7 +20,6 @@ class NavigationInputController(
     }
 
     private val swipeDistanceThresholdPx = SWIPE_DISTANCE_THRESHOLD_DP * context.resources.displayMetrics.density
-    private val swipeDirectionSlopPx = ViewConfiguration.get(context).scaledTouchSlop * 4f
     private val gestureDetector = GestureDetector(
         context,
         object : GestureDetector.SimpleOnGestureListener() {
@@ -46,7 +44,7 @@ class NavigationInputController(
                 val start = e1 ?: return false
                 val deltaX = e2.x - start.x
                 val deltaY = e2.y - start.y
-                if (!isHorizontalSwipe(deltaX, deltaY)) return false
+                if (!isHorizontalFling(deltaX, deltaY)) return false
 
                 if (deltaX > 0f) {
                     onNext()
@@ -86,10 +84,9 @@ class NavigationInputController(
         }
     }
 
-    private fun isHorizontalSwipe(deltaX: Float, deltaY: Float): Boolean {
+    private fun isHorizontalFling(deltaX: Float, deltaY: Float): Boolean {
         val horizontalDistance = abs(deltaX)
         val verticalDistance = abs(deltaY)
-        if (horizontalDistance < swipeDistanceThresholdPx) return false
-        return horizontalDistance >= verticalDistance - swipeDirectionSlopPx
+        return horizontalDistance >= swipeDistanceThresholdPx && horizontalDistance > verticalDistance
     }
 }
