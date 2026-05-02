@@ -7,7 +7,7 @@ See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 ## Requirements
 
 - `adb`
-- Rokid Glasses with a development cable (preferred), or an Android phone or emulator for quick checks
+- [Rokid Glasses with a development cable (preferred)](https://github.com/RealComputer/GlassKit/blob/main/docs/how-to-get-rokid-glasses.md), or an Android phone or emulator for quick checks
 
 ## Quick Start
 
