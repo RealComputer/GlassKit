@@ -11,12 +11,13 @@ This is a starter app for Rokid Glasses with a simple screen and navigation scaf
 
 # Key Files
 
-- `MainActivity.kt` is the entry point.
-- `NavigationInputMapper.kt` maps Rokid Glasses touchpad and phone/emulator gestures to navigation actions.
-- `ScreenController.kt` defines screen IDs, navigation actions, and screen commands.
-- `activity_main.xml` defines the shared screen structure.
-- `MenuScreenController.kt` owns menu focus and the root-screen quit confirmation.
-- `HelloScreenController.kt`/`screen_hello.xml` are example content.
+- `MainActivity.kt` owns the activity shell, shared HUD chrome, input routing, screen registration, navigation, and rendering.
+- `HudViewportLayout.kt` scales the UI into the Rokid 3:4 HUD design viewport.
+- `NavigationInputMapper.kt` maps Rokid touchpad key events and phone/emulator touchscreen gestures to navigation callbacks.
+- `ScreenController.kt` defines screen IDs, navigation actions, screen commands, and the shared controller contract.
+- `activity_main.xml` defines the shared HUD structure with the header, content frame, footer, and included screen layouts.
+- `MenuScreenController.kt` owns menu focus, menu navigation, and the root-screen quit confirmation.
+- `HelloScreenController.kt`/`screen_hello.xml` define one example content screen.
 
 # Useful Commands
 

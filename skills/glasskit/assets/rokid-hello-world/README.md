@@ -11,13 +11,15 @@ See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
 ## Quick Start
 
+Run these commands from this project directory:
+
 ```sh
 ./gradlew :app:assembleDebug                               # Build
 adb install -r app/build/outputs/apk/debug/app-debug.apk   # Install
 adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 ```
 
-## Control Convention
+## Controls
 
 | Intent | Rokid Glasses touchpad | Android phone/emulator touchscreen |
 | --- | --- | --- |
