@@ -6,6 +6,6 @@
     <string name="menu_hello">Hello</string>
     <string name="hello_world">Hello</string>
     <string name="nav_menu_default">Tap: open\nSwipe: move focus\nDouble-tap: quit</string>
-    <string name="nav_menu_quit_confirm">Tap: open\nSwipe: move focus\nDouble-tap: confirm quit</string>
+    <string name="nav_menu_quit_confirm">Tap: open\nSwipe: move focus\nDouble-tap: CONFIRM QUIT</string>
     <string name="nav_hello">Double-tap: return to menu</string>
 </resources>
