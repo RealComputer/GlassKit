@@ -5,7 +5,7 @@
     <string name="menu_intro">Choose a screen.</string>
     <string name="menu_hello">Hello</string>
     <string name="hello_world">Hello</string>
-    <string name="nav_menu_default">TAP open   SWIPE choose\nDOUBLE-TAP quit</string>
-    <string name="nav_menu_quit_confirm">DOUBLE-TAP again to quit\nTAP/SWIPE to stay</string>
-    <string name="nav_hello">DOUBLE-TAP menu</string>
+    <string name="nav_menu_default">Tap: open\nSwipe: move focus\nDouble-tap: quit</string>
+    <string name="nav_menu_quit_confirm">Tap: open\nSwipe: move focus\nDouble-tap: confirm quit</string>
+    <string name="nav_hello">Double-tap: return to menu</string>
 </resources>
