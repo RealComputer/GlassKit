@@ -1,7 +1,6 @@
-# Rokid Glasses Hello World
+# Rokid Glasses Starter
 
-This is a minimal starter app for Rokid Glasses. It includes a small HUD
-structure with a menu, two content screens, and footer navigation hints.
+This is a Rokid Glasses starter app with a screen and navigation scaffold.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
@@ -18,35 +17,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk   # Install
 adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 ```
 
-## Device
-
-Use physical Rokid Glasses for final testing. An Android phone is useful for quick UI checks, and an emulator can work for basic smoke tests, but camera and microphone passthrough are often not stable or performant enough.
-
-## HUD Sizing
-
-The app renders inside a fixed 3:4 HUD design viewport that matches the Rokid
-display shape. Text sizes use `dp` instead of `sp` so Android font-scale
-settings do not change the layout between Rokid Glasses and phone/emulator
-testing. Keep new HUD text sizes in `dp` when exact device-to-device sizing is
-more important than user-configurable font scaling.
-
-## App Structure
-
-The UI uses a simple screen-controller pattern:
-
-- `MainActivity.kt` owns shared HUD chrome, input routing, and current-screen navigation.
-- `NavigationInputMapper.kt` maps Rokid touchpad and phone/emulator gestures to navigation actions.
-- `ScreenController.kt` defines screen IDs, navigation actions, and screen commands.
-- `MenuScreenController.kt` owns menu focus and the root-screen quit confirmation.
-- `HelloScreenController.kt` and `HolaScreenController.kt` are example content screens.
-- `activity_main.xml` defines the shared header, content frame, and footer.
-- `screen_menu.xml`, `screen_hello.xml`, and `screen_hola.xml` define per-screen content.
-
-To add another screen, add a `ScreenId`, create a `ScreenController`, include its
-layout in `activity_main.xml`, register the controller in `MainActivity`, and add a
-menu item in `MenuScreenController`.
-
-## Controls
+## Control convention
 
 | Intent | Rokid Glasses touchpad | Android phone/emulator touchscreen |
 | --- | --- | --- |
@@ -55,16 +26,7 @@ menu item in `MenuScreenController`.
 | Next | Swipe forward | Swipe right |
 | Previous | Swipe backward | Swipe left |
 
-Keep Back available on the root screen so users can exit the app on Rokid
-Glasses. Inner screens can use Back for in-app navigation, but the root screen
-should still let Back close the app.
-
-In this template, Back from the menu first updates the footer to ask for
-confirmation. Press Back again to quit. Tapping or swiping clears the quit
-confirmation. The app-visible footer describes this as double-tap for Rokid
-Glass users.
-
-Emulator setup example:
+## Emulator setup example
 
 ```sh
 AVD=Test
