@@ -1,7 +1,7 @@
 # Rokid Glasses Hello World
 
 This is a minimal starter app for Rokid Glasses. It includes a small HUD
-structure with a menu, a content screen, and footer navigation hints.
+structure with a menu, two content screens, and footer navigation hints.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
@@ -30,9 +30,9 @@ The UI uses a simple screen-controller pattern:
 - `NavigationInputMapper.kt` maps Rokid touchpad and phone/emulator gestures to navigation actions.
 - `ScreenController.kt` defines screen IDs, navigation actions, and screen commands.
 - `MenuScreenController.kt` owns menu focus and the root-screen quit confirmation.
-- `HelloScreenController.kt` is the example content screen.
+- `HelloScreenController.kt` and `HolaScreenController.kt` are example content screens.
 - `activity_main.xml` defines the shared header, content frame, and footer.
-- `screen_menu.xml` and `screen_hello.xml` define per-screen content.
+- `screen_menu.xml`, `screen_hello.xml`, and `screen_hola.xml` define per-screen content.
 
 To add another screen, add a `ScreenId`, create a `ScreenController`, include its
 layout in `activity_main.xml`, register the controller in `MainActivity`, and add a

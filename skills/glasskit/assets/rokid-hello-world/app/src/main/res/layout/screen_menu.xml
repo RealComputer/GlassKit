@@ -26,4 +26,15 @@
         android:paddingBottom="10dp"
         android:text="@string/menu_hello"
         android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/menuHolaItem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:includeFontPadding="false"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:text="@string/menu_hola"
+        android:textSize="22sp" />
 </LinearLayout>

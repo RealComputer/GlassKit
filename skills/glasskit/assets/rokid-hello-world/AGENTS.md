@@ -18,6 +18,7 @@ Rokid Glasses are Android-based smart glasses with an outward-facing camera, a m
 - `app/src/main/java/com/example/rokidhello/NavigationInputMapper.kt`: maps Rokid touchpad and phone/emulator gestures to navigation actions.
 - `app/src/main/java/com/example/rokidhello/ScreenController.kt`: shared screen IDs, navigation actions, and screen commands.
 - `app/src/main/java/com/example/rokidhello/MenuScreenController.kt`: root menu focus and quit confirmation behavior.
-- `app/src/main/java/com/example/rokidhello/HelloScreenController.kt`: example content screen.
+- `app/src/main/java/com/example/rokidhello/HelloScreenController.kt`: English example content screen.
+- `app/src/main/java/com/example/rokidhello/HolaScreenController.kt`: Spanish example content screen.
 - `app/src/main/res/layout/activity_main.xml`: header/content/footer HUD structure.
-- `app/src/main/res/layout/screen_menu.xml`, `screen_hello.xml`: per-screen layouts.
+- `app/src/main/res/layout/screen_menu.xml`, `screen_hello.xml`, `screen_hola.xml`: per-screen layouts.

@@ -7,7 +7,8 @@ internal enum class ScreenId(
     val titleResId: Int
 ) {
     MENU(R.string.screen_menu_title),
-    HELLO(R.string.screen_hello_title)
+    HELLO(R.string.screen_hello_title),
+    HOLA(R.string.screen_hola_title)
 }
 
 internal enum class NavigationAction {

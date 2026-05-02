@@ -20,6 +20,11 @@ internal class MenuScreenController(
             labelResId = R.string.menu_hello,
             targetScreen = ScreenId.HELLO,
             textView = panelView.findViewById(R.id.menuHelloItem)
+        ),
+        MenuItem(
+            labelResId = R.string.menu_hola,
+            targetScreen = ScreenId.HOLA,
+            textView = panelView.findViewById(R.id.menuHolaItem)
         )
     )
 

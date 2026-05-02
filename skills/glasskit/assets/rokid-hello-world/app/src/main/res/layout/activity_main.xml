@@ -46,6 +46,8 @@
                 <include layout="@layout/screen_menu" />
 
                 <include layout="@layout/screen_hello" />
+
+                <include layout="@layout/screen_hola" />
             </FrameLayout>
 
             <FrameLayout

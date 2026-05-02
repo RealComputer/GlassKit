@@ -70,9 +70,11 @@ class MainActivity : ComponentActivity() {
     private fun bindScreenControllers() {
         val menuController = MenuScreenController(findViewById(R.id.menuPanel))
         val helloController = HelloScreenController(findViewById(R.id.helloPanel))
+        val holaController = HolaScreenController(findViewById(R.id.holaPanel))
         screenControllers = linkedMapOf(
             menuController.screen to menuController,
-            helloController.screen to helloController
+            helloController.screen to helloController,
+            holaController.screen to holaController
         )
     }
 
