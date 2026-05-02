@@ -62,7 +62,6 @@
                     android:layout_gravity="bottom"
                     android:fontFamily="monospace"
                     android:gravity="center"
-                    android:includeFontPadding="false"
                     android:lineSpacingExtra="2dp"
                     android:textColor="@color/hud_foreground"
                     android:textSize="11sp" />
