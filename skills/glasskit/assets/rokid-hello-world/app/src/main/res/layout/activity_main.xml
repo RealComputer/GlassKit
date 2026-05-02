@@ -25,10 +25,11 @@
                     android:id="@+id/headerTitleView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_gravity="center"
                     android:ellipsize="end"
                     android:fontFamily="monospace"
                     android:gravity="center"
-                    android:singleLine="true"
+                    android:maxLines="1"
                     android:textColor="@color/hud_foreground"
                     android:textSize="22sp"
                     android:textStyle="bold" />
