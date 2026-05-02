@@ -7,19 +7,18 @@ description: Use when starting, modifying, or debugging a Rokid Glasses smart gl
 
 This GlassKit skill provides templates and documentation for Rokid Glasses app development.
 
-## Basics
+## Rokid Glasses Basics
 
 - Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad. They do not have a touchscreen.
 - Rokid makes several glasses products; this skill specifically targets the product named "Rokid Glasses".
-- Rokid Glasses have a green monochrome binocular display on the lenses. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device still renders them as green, transparent, or intermediate brightness levels.
+- Rokid Glasses have a green monochrome binocular display with a portrait 480x640 HUD. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device renders them as green, transparent, or intermediate brightness levels.
+- The temple touchpad supports four common controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
 - You can build Rokid Glasses apps like Android phone apps, but the glasses have less CPU and RAM than phones, so implementations should be efficient. Camera and microphone behavior also has device-specific constraints; consult the relevant references below.
-- Target the Rokid HUD as 480x640 physical pixels (portrait 3:4) at 240 dpi.
-- Keep root-screen back/exit behavior available. Avoid trapping users in an app.
 
 ## Workflow
 
-1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. It is the minimal starter app. Rename the package and application ID after copying if needed.
-2. Identify the required features, then read the relevant references below before implementation so device-specific constraints and patterns are understood.
+1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. It is a small starter app. Rename the package and application ID after copying if needed.
+2. Identify the required features, then read the relevant references below before implementation so you can account for device-specific constraints and patterns.
 3. For questions, open an issue in the upstream [GlassKit repository](https://github.com/RealComputer/GlassKit) or ask in [the Discord server](https://discord.gg/v5ayGKhPNP).
 
 ## References
