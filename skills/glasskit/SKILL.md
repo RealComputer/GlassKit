@@ -17,7 +17,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 
 ## Workflow
 
-1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. It is a small starter app. Rename the package and application ID after copying if needed.
+1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. It is a small starter app. Rename the package and application ID after copying if needed. You can also compare your app against this starter when troubleshooting setup issues.
 2. Identify the required features, then read the relevant references below before implementation so you can account for device-specific constraints and patterns.
 3. For questions, open an issue in the upstream [GlassKit repository](https://github.com/RealComputer/GlassKit) or ask in [the Discord server](https://discord.gg/v5ayGKhPNP).
 
