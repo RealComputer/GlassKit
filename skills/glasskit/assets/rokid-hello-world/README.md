@@ -1,13 +1,13 @@
 # Rokid Glasses Starter
 
-This is a Rokid Glasses starter app with a screen and navigation scaffold.
+This is a starter app for Rokid Glasses with a simple screen and navigation scaffold.
 
 See [AGENTS.md](./AGENTS.md) for technical details and guidance.
 
 ## Requirements
 
 - `adb`
-- Rokid Glasses with a dev cable (preferred), or an Android phone or emulator for quick checks
+- Rokid Glasses with a development cable (preferred), or an Android phone or emulator for quick checks
 
 ## Quick Start
 
@@ -17,7 +17,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk   # Install
 adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 ```
 
-## Control convention
+## Control Convention
 
 | Intent | Rokid Glasses touchpad | Android phone/emulator touchscreen |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 | Next | Swipe forward | Swipe right |
 | Previous | Swipe backward | Swipe left |
 
-## Emulator setup example
+## Emulator Setup Example
 
 ```sh
 AVD=Test

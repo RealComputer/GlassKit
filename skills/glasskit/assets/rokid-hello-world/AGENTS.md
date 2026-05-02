@@ -1,13 +1,13 @@
 # Project Overview
 
-This is a Rokid Glasses starter app with a screen and navigation scaffold.
+This is a starter app for Rokid Glasses with a simple screen and navigation scaffold.
 
 # About Rokid Glasses
 
 - Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad.
-- In the app, app can use tap (select), double-tap (back), swipe forward (next), and swipe backward (previsous). Keep the double-tap available to exit the Rokid Glasses as it's the only way to quit the app.
-- The app can be tested on an Android phone or emulator for convinience, but use actual Rokid Glasses to confirm real device behavior, especially for camera and microphone features, which are often unstable in the emulator.
-- They have a green monochrome binocular display (portrait 3:4) on the lenses. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device still renders them as green, transparent, or intermediate brightness levels.
+- The app maps touchpad gestures to navigation: tap selects, double-tap goes back, swipe forward advances, and swipe backward returns to the previous item. Keep double-tap available on the root screen so users can exit the app.
+- You can test the app on an Android phone or emulator for convenience, but confirm real device behavior on physical Rokid Glasses. This is especially important for camera and microphone features, which are often unstable in the emulator.
+- Rokid Glasses use a green monochrome binocular display with a portrait 3:4 viewport. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device renders them as green, transparent, or intermediate brightness levels.
 
 # Key Files
 
@@ -20,7 +20,7 @@ This is a Rokid Glasses starter app with a screen and navigation scaffold.
 
 # Useful Commands
 
-- `./gradlew :app:build`: check the app module and build the APKs.
+- `./gradlew :app:build`: check the app module and build APKs.
 - `adb install -r app/build/outputs/apk/debug/app-debug.apk`: install the debug APK on a connected device.
 - `adb shell am start -n com.example.rokidhello/.MainActivity`: launch the app on a device.
 - `adb logcat -c && adb logcat -v time`: view the full device log. Use `adb logcat -v time --pid "$(adb shell pidof -s com.example.rokidhello)"` to view only app logs once the app is running.
