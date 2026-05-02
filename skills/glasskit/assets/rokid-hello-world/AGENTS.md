@@ -4,6 +4,8 @@ This is a minimal Rokid Glasses app with a small HUD screen/navigation scaffold.
 
 Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad. The app UI and logic can be tested on an Android phone or emulator when convenient, but use physical Rokid Glasses to confirm real device behavior. This is especially important for camera and microphone features, which are often unstable in the emulator.
 
+The UI is sized against a fixed 3:4 HUD design viewport. Use `dp` for HUD text sizes in this template instead of `sp` when consistent sizing across Rokid Glasses and phone/emulator testing is more important than Android font-scale configurability.
+
 # Useful Commands
 
 - `./gradlew :app:build`: check the app module and build the APKs.

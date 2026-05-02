@@ -22,6 +22,14 @@ adb shell am start -n com.example.rokidhello/.MainActivity # Launch
 
 Use physical Rokid Glasses for final testing. An Android phone is useful for quick UI checks, and an emulator can work for basic smoke tests, but camera and microphone passthrough are often not stable or performant enough.
 
+## HUD Sizing
+
+The app renders inside a fixed 3:4 HUD design viewport that matches the Rokid
+display shape. Text sizes use `dp` instead of `sp` so Android font-scale
+settings do not change the layout between Rokid Glasses and phone/emulator
+testing. Keep new HUD text sizes in `dp` when exact device-to-device sizing is
+more important than user-configurable font scaling.
+
 ## App Structure
 
 The UI uses a simple screen-controller pattern:

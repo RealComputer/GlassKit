@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- HUD text intentionally uses dp for fixed sizing across Rokid and phone/emulator tests. -->
+    <issue id="SpUsage" severity="ignore" />
+</lint>

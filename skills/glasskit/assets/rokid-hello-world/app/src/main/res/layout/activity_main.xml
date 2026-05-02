@@ -31,7 +31,7 @@
                     android:gravity="center"
                     android:maxLines="1"
                     android:textColor="@color/hud_foreground"
-                    android:textSize="22sp"
+                    android:textSize="22dp"
                     android:textStyle="bold" />
             </FrameLayout>
 
@@ -65,7 +65,7 @@
                     android:gravity="center"
                     android:lineSpacingExtra="2dp"
                     android:textColor="@color/hud_foreground"
-                    android:textSize="11sp" />
+                    android:textSize="11dp" />
             </FrameLayout>
         </LinearLayout>
     </com.example.rokidhello.HudViewportLayout>

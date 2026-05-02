@@ -14,6 +14,6 @@
         android:paddingBottom="18dp"
         android:text="@string/hello_world"
         android:textColor="@color/hud_foreground"
-        android:textSize="30sp"
+        android:textSize="30dp"
         android:textStyle="bold" />
 </FrameLayout>
