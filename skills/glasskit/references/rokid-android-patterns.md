@@ -65,7 +65,7 @@ Request normal Android `CAMERA` permission before binding, and unbind the provid
 
 ## Microphone Access
 
-Use the standard Android microphone stack; Rokid Glasses do not need a separate microphone SDK. Across the working local-command and realtime examples, the Rokid-specific choices are `MediaRecorder.AudioSource.MIC`, mono capture, and 16 kHz input when the capture stack lets the app choose the sample rate.
+Use the standard Android microphone stack; Rokid Glasses do not need a separate microphone SDK. The Rokid-specific choices are `MediaRecorder.AudioSource.MIC`, mono capture, and 16 kHz input when the capture stack lets the app choose the sample rate.
 
 For direct PCM access, use `AudioRecord` with 16 kHz mono PCM 16-bit:
 
@@ -124,7 +124,7 @@ JavaAudioDeviceModule.builder(context)
     }
 ```
 
-The realtime examples use `USAGE_MEDIA` instead of a voice-call route and disable hardware AEC/noise suppression to avoid the vendor VOIP path during simultaneous mic capture and speaker playback. Request normal Android `RECORD_AUDIO` permission before starting either path.
+For simultaneous mic capture and speaker playback, use `USAGE_MEDIA` instead of a voice-call route and disable hardware AEC/noise suppression to avoid the vendor VOIP path. Request normal Android `RECORD_AUDIO` permission before starting either path.
 
 ## Local Voice Commands
 
