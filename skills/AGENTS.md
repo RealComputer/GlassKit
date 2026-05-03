@@ -1,3 +1,3 @@
-- Skills here are installed independently in user environments. Treat each skill directory as the agent's whole available context; do not rely on anything outside the skill, such as sibling skills or repo-root files, unless it is copied into that skill.
+- The agent skills in this directory are installed independently in user environments. Treat each skill directory as the agent's whole available context; do not rely on anything outside the skill, such as sibling skills or repo-root files, unless it is copied into that skill.
 - The target reader is a capable AI agent. Skip widely known background, such as common Android implementation patterns. Focus on specific context an agent cannot reliably infer, such as what Rokid Glasses are.
 - Commit messages for changes under this directory must start with `skills: `.
