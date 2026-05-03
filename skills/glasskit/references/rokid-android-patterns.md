@@ -2,66 +2,100 @@
 
 ## Touchpad And Keys
 
-Use `KEYCODE_ENTER` for the Rokid tap/select action. Use Android's back dispatcher as the source of truth for Back, then bridge Rokid's physical `KEYCODE_BACK` event into that dispatcher when the device sends it.
+Follow the starter app pattern: keep raw input mapping in one small class and let the activity forward device events into it. The mapper should translate Rokid touchpad keys and phone/emulator gestures into semantic app actions such as select, back, next, and previous.
 
-For apps with in-app navigation, the back handler should consume Back only away from the root/home screen. On the root/home screen, disable the callback and delegate to the system so Back exits the app.
+Use Android's back dispatcher as the source of truth for Back. Rokid double-tap should reach the same back path as Android system Back; phone/emulator double-tap fallback can call the mapper's `onBack` callback directly. Keep root-screen Back available so users can exit the app, either by delegating to system Back or by using an explicit root-screen quit flow.
+
+In the activity, wire semantic navigation callbacks once and forward touch/key events to the mapper:
 
 ```kotlin
-private val backCallback = object : OnBackPressedCallback(false) {
+private val backCallback = object : OnBackPressedCallback(true) {
     override fun handleOnBackPressed() {
-        navigateBackWithinApp()
-        updateBackCallback()
+        handleAction(NavigationAction.BACK)
     }
+}
+
+private val navigationInputMapper by lazy {
+    NavigationInputMapper(
+        context = this,
+        onSelect = { handleAction(NavigationAction.SELECT) },
+        onBack = { onBackPressedDispatcher.onBackPressed() },
+        onNext = { handleAction(NavigationAction.NEXT) },
+        onPrevious = { handleAction(NavigationAction.PREVIOUS) }
+    )
 }
 
 override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     onBackPressedDispatcher.addCallback(this, backCallback)
-    updateBackCallback()
 }
 
-private fun updateBackCallback() {
-    backCallback.isEnabled = !isAtRootScreen()
+override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    return navigationInputMapper.onTouchEvent(event) || super.dispatchTouchEvent(event)
 }
 
+override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+    return navigationInputMapper.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
+}
+```
+
+In the mapper, keep Rokid key handling small and return `false` for keys the mapper does not own:
+
+```kotlin
+fun onKeyUp(keyCode: Int): Boolean {
+    return when (keyCode) {
+        // Tap.
+        KeyEvent.KEYCODE_ENTER -> {
+            onSelect()
+            true
+        }
+
+        // Swipe forward.
+        KeyEvent.KEYCODE_DPAD_DOWN -> {
+            onNext()
+            true
+        }
+
+        // Swipe backward.
+        KeyEvent.KEYCODE_DPAD_UP -> {
+            onPrevious()
+            true
+        }
+
+        else -> false
+    }
+}
+```
+
+If a target Rokid firmware delivers double-tap as a raw `KEYCODE_BACK` to `onKeyUp`, bridge that key into the dispatcher rather than putting navigation logic in the key branch:
+
+```kotlin
 @SuppressLint("GestureBackNavigation")
 override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
     return when (keyCode) {
-        KeyEvent.KEYCODE_ENTER -> {
-            handleSelect()
-            true
-        }
         KeyEvent.KEYCODE_BACK -> {
             onBackPressedDispatcher.onBackPressed()
             true
         }
-        KeyEvent.KEYCODE_DPAD_DOWN -> {
-            handleNext()
-            true
-        }
-        KeyEvent.KEYCODE_DPAD_UP -> {
-            handlePrevious()
-            true
-        }
-        else -> super.onKeyUp(keyCode, event)
+        else -> navigationInputMapper.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
     }
 }
 ```
 
 This pattern requires AndroidX `OnBackPressedCallback` through `ComponentActivity` or `AppCompatActivity`.
 
-The `@SuppressLint("GestureBackNavigation")` annotation is intentional for the physical Rokid key bridge. Do not put app navigation logic directly in the `KEYCODE_BACK` branch; keep that logic in the back dispatcher callback so Android system Back, phone/emulator Back, and Rokid Back follow the same root-vs-inner-screen rules.
-
 Do not use `KEYCODE_DPAD_CENTER` for tap/select. Existing swipe patterns map `KEYCODE_DPAD_DOWN` and `KEYCODE_DPAD_UP` to next/previous style navigation; verify direction against the app's intended gesture language.
 
 For phone fallback testing, a single tap can call select, double tap can call back, and horizontal fling can call next/previous.
+
+For a complete reference, see the [Rokid Hello World starter](../assets/rokid-hello-world/), especially [`MainActivity.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/MainActivity.kt) and [`NavigationInputMapper.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/NavigationInputMapper.kt).
 
 ## Permissions And Lifecycle
 
 - Request only the permissions needed by the current app: camera, microphone, or none.
 - Add `FLAG_KEEP_SCREEN_ON` while the HUD is active.
 - Stop CameraX, WebRTC, Vosk, `AudioRecord`, WebSockets, and backend sessions in `onStop` or `onDestroy`.
-- Keep root-screen back available by delegating to Android's system Back behavior. Use in-app Back only for inner screens.
+- Keep root-screen Back available so users can exit the app. Either delegate to Android system Back or handle an explicit quit flow.
 
 ```kotlin
 override fun onCreate(savedInstanceState: Bundle?) {
