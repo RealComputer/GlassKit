@@ -63,6 +63,71 @@ private fun bindRokidCamera(
 
 Request normal Android `CAMERA` permission before binding, and unbind the provider when the camera screen is no longer visible.
 
+## Microphone Access
+
+Use the standard Android microphone stack. The confirmed Rokid Glasses input path is `AudioRecord` from `MediaRecorder.AudioSource.MIC` at 16 kHz mono PCM 16-bit.
+
+```kotlin
+private const val ROKID_MIC_SAMPLE_RATE_HZ = 16_000
+private const val ROKID_MIC_BUFFER_MS = 200
+private const val ROKID_MIC_READ_CHUNK_MS = 50
+
+@SuppressLint("MissingPermission")
+private fun openRokidMic(): AudioRecord {
+    val minBufferBytes = AudioRecord.getMinBufferSize(
+        ROKID_MIC_SAMPLE_RATE_HZ,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT
+    )
+    check(minBufferBytes > 0) { "Invalid microphone buffer size: $minBufferBytes" }
+
+    val record = AudioRecord(
+        MediaRecorder.AudioSource.MIC,
+        ROKID_MIC_SAMPLE_RATE_HZ,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT,
+        maxOf(minBufferBytes, ROKID_MIC_SAMPLE_RATE_HZ * ROKID_MIC_BUFFER_MS / 1000 * 2)
+    )
+    check(record.state == AudioRecord.STATE_INITIALIZED) {
+        "Microphone failed to initialize: state=${record.state}"
+    }
+    return record
+}
+
+private fun readRokidMic(
+    record: AudioRecord,
+    shouldStop: () -> Boolean,
+    onPcm: (ShortArray, Int) -> Unit
+) {
+    Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+    val buffer = ShortArray(
+        (ROKID_MIC_SAMPLE_RATE_HZ * ROKID_MIC_READ_CHUNK_MS / 1000).coerceAtLeast(1)
+    )
+
+    try {
+        record.startRecording()
+        check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            "Microphone did not start recording"
+        }
+
+        while (!shouldStop()) {
+            val readCount = record.read(buffer, 0, buffer.size)
+            if (readCount < 0) error("Microphone read failed: $readCount")
+            if (readCount > 0) onPcm(buffer, readCount)
+        }
+    } finally {
+        runCatching {
+            if (record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                record.stop()
+            }
+        }
+        record.release()
+    }
+}
+```
+
+Request normal Android `RECORD_AUDIO` permission before opening the recorder, run the read loop off the main thread, and stop/release the recorder when the app no longer needs microphone input.
+
 ## Local Voice Commands
 
 For offline command words, use Vosk with a small grammar rather than free dictation:
