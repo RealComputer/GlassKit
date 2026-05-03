@@ -13,28 +13,7 @@ Rokid Glasses touchpad gestures come through Android input handling.
 
 For actual implementation example and optional phone/emulator touch fallback, `../assets/rokid-hello-world/`.
 
-## Permissions And Lifecycle
-
-- Request only the permissions needed by the current app: camera, microphone, or none.
-- Add `FLAG_KEEP_SCREEN_ON` while the HUD is active.
-- Stop CameraX, WebRTC, Vosk, `AudioRecord`, WebSockets, and backend sessions in `onStop` or `onDestroy`.
-- Keep root-screen Back available so users can exit the app. Either delegate to Android system Back or handle an explicit quit flow.
-
-```kotlin
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-}
-
-override fun onDestroy() {
-    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    super.onDestroy()
-}
-```
-
-## CameraX Preview
-
-Use this shape for a local preview test before adding WebRTC:
+## Camera Access and Preview
 
 ```kotlin
 private val requestedCameraSize = Size(1024, 768)
@@ -63,8 +42,6 @@ private fun buildPreview(previewView: PreviewView): Preview {
 ```
 
 Bind with `CameraSelector.DEFAULT_BACK_CAMERA`. The physical camera stream is landscape in sensor space; setting target rotation is important for a portrait HUD.
-
-If exact 1024x768 at 5 fps fails, retry without the exact FPS, then without the target resolution.
 
 ## Local Voice Commands
 
