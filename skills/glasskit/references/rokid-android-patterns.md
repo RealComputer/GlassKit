@@ -13,9 +13,9 @@ Rokid Glasses touchpad gestures come through Android input handling.
 
 For actual implementation example and optional phone/emulator touch fallback, `../assets/rokid-hello-world/`.
 
-## Camera Access and Preview
+## Camera Access
 
-Use CameraX `PreviewView` and bind the rear camera. Rokid Glasses apps run in portrait, and camera preview is confirmed working at 1024x768 and 5 fps. Set the preview target rotation from the `PreviewView` display so CameraX transforms the camera frame correctly for the portrait HUD.
+Use CameraX and bind the rear camera. The confirmed Rokid Glasses camera request is 1024x768 at 5 fps. The gotcha is that the requested CameraX size is landscape-shaped even though the camera image should appear portrait; request `1024x768`, not `768x1024`, then set target rotation so CameraX applies the correct transform.
 
 ```kotlin
 private val rokidCameraSize = Size(1024, 768)
