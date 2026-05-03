@@ -15,7 +15,7 @@ For actual implementation example and optional phone/emulator touch fallback, `.
 
 ## Camera Access and Preview
 
-Use CameraX `PreviewView` and bind the rear camera. Rokid Glasses camera preview is confirmed working at 1024x768 and 5 fps. The camera stream is landscape in sensor space, while HUD apps are normally portrait, so set the preview target rotation from the display before binding.
+Use CameraX `PreviewView` and bind the rear camera. Rokid Glasses apps run in portrait, and camera preview is confirmed working at 1024x768 and 5 fps. Set the preview target rotation from the `PreviewView` display so CameraX transforms the camera frame correctly for the portrait HUD.
 
 ```kotlin
 private val rokidCameraSize = Size(1024, 768)
