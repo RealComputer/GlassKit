@@ -65,9 +65,9 @@ Request normal Android `CAMERA` permission before binding, and unbind the provid
 
 ## Microphone Access
 
-Use the standard Android microphone stack; Rokid Glasses do not need a separate microphone SDK. The Rokid-specific choices are `MediaRecorder.AudioSource.MIC`, mono capture, and 16 kHz input when the capture stack lets the app choose the sample rate.
+Use the standard Android microphone stack. The Rokid-specific choices are `MediaRecorder.AudioSource.MIC` and mono capture.
 
-For direct PCM access, use `AudioRecord` with 16 kHz mono PCM 16-bit:
+For direct PCM access, use `AudioRecord`:
 
 ```kotlin
 private const val ROKID_MIC_SAMPLE_RATE_HZ = 16_000
@@ -102,7 +102,7 @@ if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
 
 Run `AudioRecord.read(...)` on a background thread with `Process.THREAD_PRIORITY_AUDIO`, then stop and release the recorder when capture ends.
 
-For WebRTC or another streaming stack that owns capture, configure that stack to use the same Rokid-friendly microphone path instead of adding a separate `AudioRecord` loop:
+For WebRTC or another streaming stack that owns capture, configure that stack to use the same Rokid-friendly microphone path:
 
 ```kotlin
 JavaAudioDeviceModule.builder(context)
