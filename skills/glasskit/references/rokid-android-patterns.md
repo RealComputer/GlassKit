@@ -15,33 +15,53 @@ For actual implementation example and optional phone/emulator touch fallback, `.
 
 ## Camera Access and Preview
 
-```kotlin
-private val requestedCameraSize = Size(1024, 768)
-private val requestedFps = Range(5, 5)
+Use CameraX `PreviewView` and bind the rear camera. Rokid Glasses camera preview is confirmed working at 1024x768 and 5 fps. The camera stream is landscape in sensor space, while HUD apps are normally portrait, so set the preview target rotation from the display before binding.
 
-private fun buildPreview(previewView: PreviewView): Preview {
-    val builder = Preview.Builder()
+```kotlin
+private val rokidCameraSize = Size(1024, 768)
+private val rokidCameraFps = Range(5, 5)
+
+@OptIn(ExperimentalCamera2Interop::class)
+private fun bindRokidCamera(
+    lifecycleOwner: LifecycleOwner,
+    cameraProvider: ProcessCameraProvider,
+    previewView: PreviewView
+) {
+    previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+    previewView.scaleType = PreviewView.ScaleType.FIT_CENTER
+
+    val previewBuilder = Preview.Builder()
         .setTargetRotation(previewView.display?.rotation ?: Surface.ROTATION_0)
         .setResolutionSelector(
             ResolutionSelector.Builder()
                 .setResolutionStrategy(
                     ResolutionStrategy(
-                        requestedCameraSize,
+                        rokidCameraSize,
                         ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                     )
                 )
                 .build()
         )
 
-    Camera2Interop.Extender(builder).setCaptureRequestOption(
+    Camera2Interop.Extender(previewBuilder).setCaptureRequestOption(
         CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-        requestedFps
+        rokidCameraFps
     )
-    return builder.build()
+
+    val preview = previewBuilder.build().also {
+        it.setSurfaceProvider(previewView.surfaceProvider)
+    }
+
+    cameraProvider.unbindAll()
+    cameraProvider.bindToLifecycle(
+        lifecycleOwner,
+        CameraSelector.DEFAULT_BACK_CAMERA,
+        preview
+    )
 }
 ```
 
-Bind with `CameraSelector.DEFAULT_BACK_CAMERA`. The physical camera stream is landscape in sensor space; setting target rotation is important for a portrait HUD.
+Request normal Android `CAMERA` permission before binding, and unbind the provider when the camera screen is no longer visible.
 
 ## Local Voice Commands
 
