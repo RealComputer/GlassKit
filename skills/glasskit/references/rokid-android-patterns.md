@@ -11,7 +11,7 @@ Rokid Glasses touchpad gestures are primarily delivered to Android as key events
 | Swipe forward | `KeyEvent.KEYCODE_DPAD_DOWN` | Next / move focus forward |
 | Swipe backward | `KeyEvent.KEYCODE_DPAD_UP` | Previous / move focus backward |
 
-Handle double-tap as Back by routing it through the same centralized back path used by Android Back, so inner-screen navigation and root-screen exit behavior stay consistent.
+Double-tap arrives as Android Back. Keep Back behavior centralized so inner-screen navigation and root-screen exit behavior stay consistent.
 
 For actual implementation example and optional phone/emulator touch fallback, `../assets/rokid-hello-world/`.
 
