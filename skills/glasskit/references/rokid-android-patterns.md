@@ -1,29 +1,17 @@
 # Rokid Android Patterns
 
-## Touchpad And Keys
+## Touchpad
 
-Rokid Glasses touchpad gestures are delivered to Android as key events. Keep that hardware mapping at the activity/input boundary, then dispatch app-level navigation actions to the rest of the app.
+Rokid Glasses touchpad gestures are primarily delivered to Android as key events.
 
 | Rokid touchpad action | Android key event | Typical app action |
 | --- | --- | --- |
 | Tap | `KeyEvent.KEYCODE_ENTER` | Select / confirm |
+| Double-tap | None used | Back / cancel |
 | Swipe forward | `KeyEvent.KEYCODE_DPAD_DOWN` | Next / move focus forward |
 | Swipe backward | `KeyEvent.KEYCODE_DPAD_UP` | Previous / move focus backward |
 
-Use a small mapper that converts key codes into semantic actions. Screen code should consume app actions, not `KeyEvent` constants.
-
-```kotlin
-fun mapRokidKey(keyCode: Int): NavigationAction? = when (keyCode) {
-    KeyEvent.KEYCODE_ENTER -> NavigationAction.SELECT
-    KeyEvent.KEYCODE_DPAD_DOWN -> NavigationAction.NEXT
-    KeyEvent.KEYCODE_DPAD_UP -> NavigationAction.PREVIOUS
-    else -> null
-}
-```
-
-Handle Back through Android's back dispatcher so root-screen exit behavior and in-app back behavior stay centralized.
-
-For optional phone/emulator touch fallback, use the same semantic callbacks with a `GestureDetector`; see the [Rokid Hello World starter](../assets/rokid-hello-world/), especially [`MainActivity.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/MainActivity.kt) and [`NavigationInputMapper.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/NavigationInputMapper.kt).
+For actual implementation example and optional phone/emulator touch fallback, `../assets/rokid-hello-world/`.
 
 ## Permissions And Lifecycle
 
