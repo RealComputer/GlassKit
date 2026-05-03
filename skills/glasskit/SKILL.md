@@ -12,7 +12,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad. They do not have a touchscreen.
 - Rokid makes several glasses products; this skill specifically targets the product named "Rokid Glasses".
 - Rokid Glasses have a green monochrome binocular display with a portrait 480x640 HUD. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device renders them as green, transparent, or intermediate brightness levels.
-- The temple touchpad supports four common controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
+- The temple touchpad supports four controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
 - You can build Rokid Glasses apps like Android phone apps, but the glasses have less CPU and RAM than phones, so implementations should be efficient. Camera and microphone behavior also has device-specific constraints; consult the relevant references below.
 
 ## Workflow

@@ -5,7 +5,7 @@ This is a starter app for Rokid Glasses with a simple screen and navigation scaf
 # About Rokid Glasses
 
 - Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad.
-- The temple touchpad supports four common controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
+- The temple touchpad supports four controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
 - You can test the app on an Android phone or emulator for convenience, but confirm real device behavior on physical Rokid Glasses. This is especially important for camera and microphone features, which are often unstable in the emulator.
 - Rokid Glasses use a green monochrome binocular display with a portrait 3:4 viewport. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device renders them as green, transparent, or intermediate brightness levels.
 
