@@ -40,8 +40,5 @@ DEVICE=pixel_9a
 sdkmanager "$IMG"
 echo no | avdmanager create avd -n "$AVD" -k "$IMG" --device "$DEVICE"
 
-emulator @"$AVD" \
-  -allow-host-audio \
-  -camera-front webcam0 \
-  -camera-back webcam0
+emulator @"$AVD" -allow-host-audio -camera-back webcam0
 ```
