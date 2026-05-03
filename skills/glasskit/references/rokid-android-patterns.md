@@ -1,25 +1,5 @@
 # Rokid Android Patterns
 
-Use this when implementing the Android side of a Rokid Glasses app: HUD, touchpad keys, camera, local voice commands, speaker feedback, and lifecycle cleanup.
-
-## HUD Constraints
-
-- Rokid HUD target: 480x640 physical pixels, 240 dpi, portrait 3:4.
-- Use black backgrounds and white foreground UI. Do not encode state by color alone.
-- Keep text large, short, and stable. The HUD is not a phone screen.
-- Use a fixed 3:4 viewport wrapper for phone/emulator previews so layout problems are visible before device testing.
-
-Minimal viewport constants:
-
-```kotlin
-private const val HUD_REFERENCE_WIDTH_PX = 480f
-private const val HUD_REFERENCE_HEIGHT_PX = 640f
-private const val HUD_REFERENCE_DENSITY_DPI = 240f
-private const val HUD_ASPECT_RATIO = HUD_REFERENCE_WIDTH_PX / HUD_REFERENCE_HEIGHT_PX
-```
-
-The starter asset includes `RokidHudViewportLayout`; copy that class into apps that need consistent phone/emulator rendering.
-
 ## Touchpad And Keys
 
 Use `KEYCODE_ENTER` for the Rokid tap/select action. Use Android's back dispatcher as the source of truth for Back, then bridge Rokid's physical `KEYCODE_BACK` event into that dispatcher when the device sends it.
@@ -170,14 +150,3 @@ val record = AudioRecord(
 ```
 
 Bundle the Vosk model under Android assets only when the app actually needs offline voice commands; it is too large for a hello-world starter.
-
-## Speaker Feedback
-
-For simple audible feedback:
-
-```kotlin
-val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
-```
-
-Release `ToneGenerator` in the host lifecycle.
