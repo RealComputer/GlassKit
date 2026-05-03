@@ -23,10 +23,10 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 
 ## References
 
-- Read `references/rokid-setup.md` for device connection, ADB, Android Studio, and emulator setup.
-- Read `references/rokid-android-patterns.md` for HUD layout, touchpad keys, CameraX, Vosk voice commands, and speaker feedback.
-- Read `references/rokid-media-webrtc.md` for Android WebRTC video/audio sessions, SDP signaling, data channels, and ICE/TURN details.
-- Read `references/openai-realtime.md` for OpenAI Realtime WebRTC brokering, sideband events, transcripts, and backend-controlled speech.
-- Read `references/overshoot.md` for Overshoot live-video streams, prompt switching, result relay, and stream lifecycle.
-- Read `references/rfdetr.md` for FastAPI/aiortc RF-DETR object detection and detection-driven HUD updates.
-- Read `references/server-authoritative-workflows.md` for backend-owned workflow state, prompt switching, HUD state, and exact speech orchestration.
+- `references/rokid-setup.md`: device connection, ADB, Android Studio, and emulator setup.
+- `references/rokid-android-patterns.md`: HUD layout, touchpad keys, CameraX, Vosk voice commands, and speaker feedback.
+- `references/rokid-media-webrtc.md`: Android WebRTC video/audio sessions, SDP signaling, data channels, and ICE/TURN details.
+- `references/openai-realtime.md`: OpenAI Realtime WebRTC brokering, sideband events, transcripts, and backend-controlled speech.
+- `references/overshoot.md`: Overshoot live-video streams, prompt switching, result relay, and stream lifecycle.
+- `references/rfdetr.md`: FastAPI/aiortc RF-DETR object detection and detection-driven HUD updates.
+- `references/server-authoritative-workflows.md`: backend-owned workflow state, prompt switching, HUD state, and exact speech orchestration.
