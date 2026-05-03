@@ -2,93 +2,28 @@
 
 ## Touchpad And Keys
 
-Follow the starter app pattern: keep raw input mapping in one small class and let the activity forward device events into it. The mapper should translate Rokid touchpad keys and phone/emulator gestures into semantic app actions such as select, back, next, and previous.
+Rokid Glasses touchpad gestures are delivered to Android as key events. Keep that hardware mapping at the activity/input boundary, then dispatch app-level navigation actions to the rest of the app.
 
-Use Android's back dispatcher as the source of truth for Back. Rokid double-tap should reach the same back path as Android system Back; phone/emulator double-tap fallback can call the mapper's `onBack` callback directly. Keep root-screen Back available so users can exit the app, either by delegating to system Back or by using an explicit root-screen quit flow.
+| Rokid touchpad action | Android key event | Typical app action |
+| --- | --- | --- |
+| Tap | `KeyEvent.KEYCODE_ENTER` | Select / confirm |
+| Swipe forward | `KeyEvent.KEYCODE_DPAD_DOWN` | Next / move focus forward |
+| Swipe backward | `KeyEvent.KEYCODE_DPAD_UP` | Previous / move focus backward |
 
-In the activity, wire semantic navigation callbacks once and forward touch/key events to the mapper:
+Use a small mapper that converts key codes into semantic actions. Screen code should consume app actions, not `KeyEvent` constants.
 
 ```kotlin
-private val backCallback = object : OnBackPressedCallback(true) {
-    override fun handleOnBackPressed() {
-        handleAction(NavigationAction.BACK)
-    }
-}
-
-private val navigationInputMapper by lazy {
-    NavigationInputMapper(
-        context = this,
-        onSelect = { handleAction(NavigationAction.SELECT) },
-        onBack = { onBackPressedDispatcher.onBackPressed() },
-        onNext = { handleAction(NavigationAction.NEXT) },
-        onPrevious = { handleAction(NavigationAction.PREVIOUS) }
-    )
-}
-
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    onBackPressedDispatcher.addCallback(this, backCallback)
-}
-
-override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-    return navigationInputMapper.onTouchEvent(event) || super.dispatchTouchEvent(event)
-}
-
-override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-    return navigationInputMapper.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
+fun mapRokidKey(keyCode: Int): NavigationAction? = when (keyCode) {
+    KeyEvent.KEYCODE_ENTER -> NavigationAction.SELECT
+    KeyEvent.KEYCODE_DPAD_DOWN -> NavigationAction.NEXT
+    KeyEvent.KEYCODE_DPAD_UP -> NavigationAction.PREVIOUS
+    else -> null
 }
 ```
 
-In the mapper, keep Rokid key handling small and return `false` for keys the mapper does not own:
+Handle Back through Android's back dispatcher so root-screen exit behavior and in-app back behavior stay centralized.
 
-```kotlin
-fun onKeyUp(keyCode: Int): Boolean {
-    return when (keyCode) {
-        // Tap.
-        KeyEvent.KEYCODE_ENTER -> {
-            onSelect()
-            true
-        }
-
-        // Swipe forward.
-        KeyEvent.KEYCODE_DPAD_DOWN -> {
-            onNext()
-            true
-        }
-
-        // Swipe backward.
-        KeyEvent.KEYCODE_DPAD_UP -> {
-            onPrevious()
-            true
-        }
-
-        else -> false
-    }
-}
-```
-
-If a target Rokid firmware delivers double-tap as a raw `KEYCODE_BACK` to `onKeyUp`, bridge that key into the dispatcher rather than putting navigation logic in the key branch:
-
-```kotlin
-@SuppressLint("GestureBackNavigation")
-override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-    return when (keyCode) {
-        KeyEvent.KEYCODE_BACK -> {
-            onBackPressedDispatcher.onBackPressed()
-            true
-        }
-        else -> navigationInputMapper.onKeyUp(keyCode) || super.onKeyUp(keyCode, event)
-    }
-}
-```
-
-This pattern requires AndroidX `OnBackPressedCallback` through `ComponentActivity` or `AppCompatActivity`.
-
-Do not use `KEYCODE_DPAD_CENTER` for tap/select. Existing swipe patterns map `KEYCODE_DPAD_DOWN` and `KEYCODE_DPAD_UP` to next/previous style navigation; verify direction against the app's intended gesture language.
-
-For phone fallback testing, a single tap can call select, double tap can call back, and horizontal fling can call next/previous.
-
-For a complete reference, see the [Rokid Hello World starter](../assets/rokid-hello-world/), especially [`MainActivity.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/MainActivity.kt) and [`NavigationInputMapper.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/NavigationInputMapper.kt).
+For optional phone/emulator touch fallback, use the same semantic callbacks with a `GestureDetector`; see the [Rokid Hello World starter](../assets/rokid-hello-world/), especially [`MainActivity.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/MainActivity.kt) and [`NavigationInputMapper.kt`](../assets/rokid-hello-world/app/src/main/java/com/example/rokidhello/NavigationInputMapper.kt).
 
 ## Permissions And Lifecycle
 
