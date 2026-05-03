@@ -23,7 +23,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 
 ## References
 
-- Read `references/rokid-device-setup.md` for device connection, ADB, Android Studio, and emulator setup.
+- Read `references/rokid-setup.md` for device connection, ADB, Android Studio, and emulator setup.
 - Read `references/rokid-android-patterns.md` for HUD layout, touchpad keys, CameraX, Vosk voice commands, and speaker feedback.
 - Read `references/rokid-media-webrtc.md` for Android WebRTC video/audio sessions, SDP signaling, data channels, and ICE/TURN details.
 - Read `references/openai-realtime.md` for OpenAI Realtime WebRTC brokering, sideband events, transcripts, and backend-controlled speech.
