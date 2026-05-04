@@ -20,7 +20,7 @@ dependencies {
 
 Add `android.permission.RECORD_AUDIO` to the manifest and request it at runtime before opening `AudioRecord`.
 
-Bundle a model at `app/src/main/assets/model-en-us/`. The demo uses `vosk-model-small-en-us-0.15`:
+Bundle a model at `app/src/main/assets/model-en-us/`. Recommended default: `vosk-model-small-en-us-0.15`.
 
 ```bash
 ASSET_DIR=app/src/main/assets
