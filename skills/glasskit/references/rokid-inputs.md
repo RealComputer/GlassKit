@@ -1,4 +1,4 @@
-# Rokid Android Patterns
+# Rokid Inputs
 
 ## Touchpad
 
