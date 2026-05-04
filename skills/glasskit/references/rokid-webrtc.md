@@ -14,8 +14,10 @@ Android should receive URLs, session ids, SDP answers, and normalized app events
 
 Common patterns:
 
-- **Backend media receiver**: Android sends an SDP offer to your backend. The backend uses `aiortc`, receives tracks, creates an answer, and sends app state back on a data channel.
+- **Backend media receiver**: Android sends an SDP offer to your backend. If the backend is Python, use `aiortc` to create the peer connection, receive tracks, create an answer, and send app state back on a data channel.
 - **Backend service broker**: Android sends an SDP offer to your backend. The backend creates an upstream vendor stream/call, returns the vendor answer SDP, and relays service events to Android. This fits realtime media APIs.
+
+Use `aiortc` for Python backend code that terminates WebRTC or needs to generate a local answer SDP. Provider brokers that only forward Android's offer to an upstream service may not need local WebRTC objects.
 
 ## Android Setup
 
@@ -127,26 +129,19 @@ Set `OfferToReceiveAudio` to `"true"` only when Android should receive speech or
 
 ## Video Capture
 
-Use `Camera2Enumerator` and prefer the outward/back camera when names expose front/back orientation; otherwise fall back to the first camera that opens:
+Rokid Glasses have a single rear/outward camera. Do not add front-camera selection logic for device code. With Stream WebRTC, create a capturer from the available `Camera2Enumerator` device names:
 
 ```kotlin
 private fun createCameraCapturer(): VideoCapturer? {
     val enumerator = Camera2Enumerator(context)
-    val deviceNames = enumerator.deviceNames
-
-    val preferred = deviceNames.firstOrNull { !enumerator.isFrontFacing(it) }
-        ?: deviceNames.firstOrNull()
-
-    if (preferred != null) {
-        enumerator.createCapturer(preferred, null)?.let { return it }
-    }
-
-    for (name in deviceNames) {
+    for (name in enumerator.deviceNames) {
         enumerator.createCapturer(name, null)?.let { return it }
     }
     return null
 }
 ```
+
+For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`. The feature demo uses that path and requests `1024x768 @ 5 fps` with display rotation set so the landscape sensor stream appears correctly in the portrait HUD.
 
 Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
 
@@ -266,7 +261,7 @@ Some hosted media services require service-specific TURN servers. Fetch TURN URL
 
 ## Backend Receiver Pattern
 
-For Python backends that receive media directly, use `aiortc`:
+For Python backends that receive media directly, use `aiortc`. Do not hand-roll SDP parsing or media transport:
 
 ```python
 @app.post("/vision/session")
