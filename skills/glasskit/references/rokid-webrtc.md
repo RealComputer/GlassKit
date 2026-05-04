@@ -129,7 +129,7 @@ Set `OfferToReceiveAudio` to `"true"` only when Android should receive speech or
 
 ## Video Capture
 
-Rokid Glasses have a single rear/outward camera. Do not add front-camera selection logic for device code. With Stream WebRTC, create a capturer from the available `Camera2Enumerator` device names:
+Rokid Glasses have a single rear/outward camera. With Stream WebRTC, create a capturer from the available `Camera2Enumerator` device names:
 
 ```kotlin
 private fun createCameraCapturer(): VideoCapturer? {
