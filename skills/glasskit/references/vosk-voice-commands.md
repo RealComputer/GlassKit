@@ -1,7 +1,5 @@
 # Vosk Voice Commands
 
-Use Vosk when the app needs offline command words. Keep the grammar small and explicit instead of using free dictation:
-
 ```kotlin
 private const val SAMPLE_RATE_HZ = 16_000
 
@@ -38,4 +36,4 @@ val record = AudioRecord(
 )
 ```
 
-Bundle the Vosk model under Android assets only when the app actually needs offline voice commands; it is too large for a hello-world starter.
+Bundle the Vosk model under Android assets when the app actually needs offline voice commands.
