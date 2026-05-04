@@ -22,7 +22,7 @@ Add `android.permission.RECORD_AUDIO` to the manifest and request it at runtime 
 
 Bundle a model at `app/src/main/assets/model-en-us/`. Recommended default: `vosk-model-small-en-us-0.15`.
 
-```bash
+```sh
 ASSET_DIR=app/src/main/assets
 curl -L -o /tmp/vosk-model-small-en-us-0.15.zip \
   https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
