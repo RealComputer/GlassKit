@@ -26,7 +26,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - `references/rokid-setup.md`: Rokid hardware, Wi-Fi/ADB connection, common commands, and phone/emulator setup.
 - `references/rokid-inputs.md`: Rokid touchpad handling, camera access, and microphone access.
 - `references/vosk-voice-commands.md`: Vosk setup and implementation pattern for offline command words.
-- `references/rokid-webrtc.md`: Android WebRTC video/audio sessions, SDP signaling, data channels, and ICE/TURN details.
+- `references/rokid-webrtc.md`: Rokid WebRTC sessions, including Android video/audio tracks, receive-only audio, SDP signaling, data channels, ICE/TURN, and backend receiver/broker patterns.
 - `references/openai-realtime.md`: OpenAI Realtime WebRTC brokering, sideband events, transcripts, and backend-controlled speech.
 - `references/overshoot.md`: Overshoot live-video streams, prompt switching, result relay, and stream lifecycle.
 - `references/rfdetr.md`: FastAPI/aiortc RF-DETR object detection and detection-driven HUD updates.
