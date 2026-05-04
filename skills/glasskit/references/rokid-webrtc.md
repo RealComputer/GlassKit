@@ -141,7 +141,7 @@ private fun createCameraCapturer(): VideoCapturer? {
 }
 ```
 
-For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`. The feature demo uses that path and requests `1024x768 @ 5 fps` with display rotation set so the landscape sensor stream appears correctly in the portrait HUD.
+For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 5 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
 
 Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
 
