@@ -1,7 +1,5 @@
 # Rokid Media And WebRTC
 
-Use this when streaming Rokid camera or microphone media to a backend, OpenAI Realtime, Overshoot, or an RF-DETR service.
-
 ## Android Dependency
 
 The Android clients use Stream's WebRTC package:
@@ -26,7 +24,6 @@ Use the lowest useful rate for the job:
 
 - 1024x768 at 5 fps for backend object detection where latency and battery matter more than smoothness.
 - 1024x768 at 15 fps for live vision services that expect clip-like video.
-- Prefer 4:3 capture because it matches the camera and HUD assumptions better than widescreen.
 
 ## Audio Modes
 
@@ -61,11 +58,6 @@ private fun normalizeSdp(sdp: String): String {
 
 ## Data Channels
 
-Use stable labels:
-
-- `oai-events` for OpenAI Realtime event JSON.
-- `vision-events` for backend detection, config, and state JSON.
-
 If Android sends messages before the data channel is open, queue them and flush on `DataChannel.State.OPEN`.
 
 ## ICE Servers
@@ -96,4 +88,4 @@ val iceServers = listOf(
 
 ## Local Backends
 
-If Android calls `http://...` during development, enable cleartext traffic for the app or expose the backend through HTTPS. Keep API keys on the backend even for local prototypes.
+If Android calls `http://...` during development, enable cleartext traffic for the app or expose the backend through HTTPS. Keep API keys on the backend.
