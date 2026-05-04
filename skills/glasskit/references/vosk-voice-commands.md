@@ -125,11 +125,10 @@ if (text in commands) {
 
 Callbacks from the recognition thread must hop to the main thread before touching Android views.
 
-## Lifecycle and failure handling
+## Lifecycle
 
 - Start only after the model is unpacked and `RECORD_AUDIO` is granted.
 - On stop, set a stop flag, stop `AudioRecord`, interrupt/join the worker briefly, release `AudioRecord`, clear partial UI state, and reset any audio meter to zero.
 - On destroy, close `Recognizer` and `Model`.
 - Call `recognizer.reset()` before each new listening session.
 - Suppress duplicate final commands in a short window, around `400ms`, because endpointing can produce repeated finals.
-- Surface specific status/errors for missing model, unpack failure, missing permission, invalid buffer size, uninitialized recorder, recorder start failure, negative read result, and runtime exceptions.
