@@ -1,4 +1,4 @@
-# Vosk Android Voice Commands
+# Vosk Voice Commands
 
 Use Vosk when the app needs offline command words. Keep the grammar small and explicit instead of using free dictation:
 
