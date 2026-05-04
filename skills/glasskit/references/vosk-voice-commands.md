@@ -45,7 +45,7 @@ StorageService.unpack(
 )
 ```
 
-Check `context.assets.list("model-en-us")` before unpacking so missing-model builds fail with a useful message.
+Check `context.assets.list("model-en-us")` before unpacking so missing models report a useful runtime error.
 
 ## Recognizer
 
@@ -98,26 +98,40 @@ val buffer = ShortArray(SAMPLE_RATE_HZ * 50 / 1000)
 
 while (!stopRequested) {
     val readCount = record.read(buffer, 0, buffer.size)
-    if (readCount <= 0) continue
+    if (readCount < 0) {
+        reportAudioReadFailure(readCount)
+        return
+    }
+    if (readCount == 0) continue
 
     if (recognizer.acceptWaveForm(buffer, readCount)) {
+        publishPartial("")
         dispatchResult(recognizer.getResult())
     } else {
-        publishPartial(recognizer.getPartialResult())
+        publishPartial(partialText(recognizer.getPartialResult()))
     }
 }
 
-dispatchResult(recognizer.getFinalResult())
+if (!stopRequested) {
+    publishPartial("")
+    dispatchResult(recognizer.getFinalResult())
+}
 ```
 
 Parse Vosk JSON with `JSONObject`: final results use `"text"` and partial results use `"partial"`.
 
 ```kotlin
-val text = JSONObject(resultJson)
+fun resultText(resultJson: String) = JSONObject(resultJson)
     .optString("text", "")
     .trim()
     .lowercase(Locale.US)
 
+fun partialText(partialJson: String) = JSONObject(partialJson)
+    .optString("partial", "")
+    .trim()
+    .lowercase(Locale.US)
+
+val text = resultText(resultJson)
 if (text in commands) {
     onCommand(text)
 }
