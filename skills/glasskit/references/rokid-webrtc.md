@@ -1,4 +1,4 @@
-# Rokid Media And WebRTC
+# Rokid WebRTC
 
 Use this when adding a WebRTC media session to a Rokid Glasses app. The common pattern is:
 

@@ -35,7 +35,7 @@ Return `{ "session_id": "...", "answer_sdp": "..." }` or an equivalent contract 
 
 ## Android WebRTC
 
-Use the Overshoot TURN servers listed in `rokid-media-webrtc.md`. Capture 1024x768 at 15 fps unless the product has stricter latency or battery requirements.
+Use the TURN guidance in `rokid-webrtc.md`. Capture 1024x768 at 15 fps unless the product has stricter latency or battery requirements.
 
 The Android app should close the backend session when the app stops or the user exits:
 
