@@ -21,13 +21,13 @@ Use `aiortc` for Python backend code that terminates WebRTC or needs to generate
 
 ## Android Setup
 
-Use Stream's WebRTC package:
+Use Stream's WebRTC package. This is the known working version:
 
 ```kotlin
 implementation("io.getstream:stream-webrtc-android:1.3.10")
 ```
 
-Most clients also use OkHttp and coroutines for signaling:
+Most clients also use OkHttp and coroutines for signaling. Prefer the app's existing versions; these versions are known to work:
 
 ```kotlin
 implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -44,6 +44,8 @@ Manifest permissions depend on the tracks:
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 ```
+
+Request `RECORD_AUDIO` only when Android captures local microphone audio. Receive-only remote audio playback and transcript rendering do not need `RECORD_AUDIO`.
 
 Use `android:usesCleartextTraffic="true"` only for local `http://` development backends.
 
@@ -125,7 +127,22 @@ val mediaConstraints = MediaConstraints().apply {
 }
 ```
 
-Set `OfferToReceiveAudio` to `"true"` only when Android should receive speech or other remote audio. Most Rokid vision streams do not receive remote video.
+Set `OfferToReceiveAudio` to `"true"` only when Android should receive speech or other remote audio. Under Unified Plan, also add a receive-only audio transceiver before creating the offer so the local SDP contains an `m=audio` section:
+
+```kotlin
+val init = RtpTransceiver.RtpTransceiverInit(
+    RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
+)
+val transceiver = peerConnection.addTransceiver(
+    MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
+    init
+) ?: error("Failed to add receive-only audio transceiver")
+transceiver.receiver.track()?.setEnabled(true)
+```
+
+For remote-audio-required sessions, fail fast if the local offer SDP does not contain an `m=audio` section.
+
+Most Rokid vision streams do not receive remote video.
 
 ## Video Capture
 
@@ -145,7 +162,7 @@ For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `10
 
 Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
 
-Set both the source adaptation and capturer start values:
+Prefer matching the source adaptation and capturer start values:
 
 ```kotlin
 val source = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
@@ -156,6 +173,8 @@ localVideoSource = source
 videoCapturer.initialize(surfaceTextureHelper, context, source.capturerObserver)
 videoCapturer.startCapture(1024, 768, 5)
 ```
+
+If the camera HAL rejects the desired low FPS or resolution, start capture with a supported mode and use `adaptOutputFormat(...)` to limit what WebRTC sends.
 
 Avoid WebRTC silently lowering the video sender quality:
 
