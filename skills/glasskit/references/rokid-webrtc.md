@@ -1,6 +1,6 @@
 # Rokid WebRTC
 
-Use this when adding a WebRTC media session to a Rokid Glasses app. The common pattern is:
+The common pattern is:
 
 1. Android captures camera and/or microphone media.
 2. Android creates a WebRTC offer.
@@ -8,17 +8,14 @@ Use this when adding a WebRTC media session to a Rokid Glasses app. The common p
 4. The backend returns an answer SDP.
 5. Android sets the remote description and keeps HUD/control state outside the media track.
 
-Keep service credentials and API keys on the backend. Android should receive URLs, session ids, SDP answers, and normalized app events.
+Android should receive URLs, session ids, SDP answers, and normalized app events.
 
 ## Integration Shapes
 
-Choose one shape before writing code:
+Common patterns:
 
-- **Backend media receiver**: Android sends an SDP offer to your backend. The backend uses `aiortc`, receives tracks, creates an answer, and sends app state back on a data channel or WebSocket. This fits local CV models and backend-owned workflows.
-- **Backend service broker**: Android sends an SDP offer to your backend. The backend creates an upstream vendor stream/call, returns the vendor answer SDP, and relays service events to Android. This fits hosted vision or realtime media APIs.
-- **Split media and control**: WebRTC carries audio/video and optional low-volume JSON. A separate control WebSocket owns session state, prompt changes, HUD state, and exact speech decisions. Use this for multi-step workflows.
-
-If the target is OpenAI Realtime, Overshoot, or RF-DETR, use this file for Android/WebRTC mechanics and then read the service-specific reference for endpoint and event details.
+- **Backend media receiver**: Android sends an SDP offer to your backend. The backend uses `aiortc`, receives tracks, creates an answer, and sends app state back on a data channel.
+- **Backend service broker**: Android sends an SDP offer to your backend. The backend creates an upstream vendor stream/call, returns the vendor answer SDP, and relays service events to Android. This fits realtime media APIs.
 
 ## Android Setup
 
@@ -46,7 +43,7 @@ Manifest permissions depend on the tracks:
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 ```
 
-Use `android:usesCleartextTraffic="true"` only for local `http://` development backends. Prefer HTTPS outside development. Put backend URLs in `local.properties` and expose them through `BuildConfig`; do not put provider secrets in Android resources or source.
+Use `android:usesCleartextTraffic="true"` only for local `http://` development backends.
 
 Create and release these explicitly:
 
@@ -151,10 +148,7 @@ private fun createCameraCapturer(): VideoCapturer? {
 }
 ```
 
-Start with the lowest useful capture rate:
-
-- `1024x768 @ 5 fps` for backend object detection where latency, thermals, and battery matter more than smoothness.
-- `1024x768 @ 15 fps` for hosted live vision services that expect clip-like video.
+Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
 
 Set both the source adaptation and capturer start values:
 
@@ -168,7 +162,7 @@ videoCapturer.initialize(surfaceTextureHelper, context, source.capturerObserver)
 videoCapturer.startCapture(1024, 768, 5)
 ```
 
-For backend CV, prefer H264 on the receiving side when available and avoid WebRTC silently lowering the video sender quality:
+Avoid WebRTC silently lowering the video sender quality:
 
 ```kotlin
 private fun configureVideoSender(sender: RtpSender?) {
@@ -346,4 +340,4 @@ Surface connection state to the HUD:
 
 ## Local Development
 
-For `http://` backends on the development machine, either enable cleartext traffic or expose HTTPS. Ensure the glasses can reach the backend over Wi-Fi; emulator-only loopback assumptions do not apply to the physical device. Keep API keys, model keys, and provider credentials only on the backend.
+For `http://` backends on the development machine, either enable cleartext traffic or expose HTTPS.
