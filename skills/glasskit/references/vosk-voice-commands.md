@@ -146,3 +146,4 @@ Callbacks from the recognition thread must hop to the main thread before touchin
 - On destroy, close `Recognizer` and `Model`.
 - Call `recognizer.reset()` before each new listening session.
 - Suppress duplicate final commands in a short window, around `400ms`, because endpointing can produce repeated finals.
+- Surface actionable errors for missing model, unpack failure, missing permission, invalid buffer size, recorder init/start failure, negative reads, and runtime exceptions.
