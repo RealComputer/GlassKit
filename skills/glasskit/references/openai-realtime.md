@@ -1,7 +1,5 @@
 # OpenAI Realtime
 
-Use this when connecting Rokid audio/video or backend-authored speech to OpenAI Realtime.
-
 ## Preferred Shape
 
 Keep `OPENAI_API_KEY` on the backend. Android sends a WebRTC offer to your backend, the backend creates the Realtime call, and Android receives the SDP answer from your backend.
