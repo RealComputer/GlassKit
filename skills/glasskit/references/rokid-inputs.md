@@ -17,9 +17,7 @@ For actual implementation example and optional phone/emulator touch fallback, `.
 
 Use CameraX and bind the rear camera. The confirmed Rokid Glasses camera request is 1024x768 at 5 fps. The gotcha is that the requested CameraX size is landscape-shaped even though the camera image should appear portrait; request `1024x768`, not `768x1024`, then set target rotation so CameraX applies the correct transform.
 
-Rokid Glasses expose only the rear/outward camera. For a build or configuration whose camera feature only needs back-camera capture, limit CameraX to that camera at the Application level before any `ProcessCameraProvider` is initialized. On real hardware, this avoids CameraX front-camera validation retries such as `CameraValidator: Camera LENS_FACING_FRONT verification failed` and `CameraX: Retry init...`, which can happen even when the later bind call uses `CameraSelector.DEFAULT_BACK_CAMERA`.
-
-This does not stop the app from running on an Android phone or emulator that has a back camera; it only makes CameraX expose the back camera to this app process. Do not apply it unconditionally to a shared phone build that needs selfie/front-camera features. For broad phone testing, use a Rokid build flavor/source set for this Application config, or omit the limiter in non-Rokid builds.
+Rokid Glasses expose only the rear/outward camera. Configure CameraX at the Application level to expose only `CameraSelector.DEFAULT_BACK_CAMERA` before any `ProcessCameraProvider` is initialized. This avoids CameraX front-camera validation retries on hardware that reports no front camera, and still works for Rokid-style phone/emulator testing with a back camera. Omit this only if the same app process needs front-camera features.
 
 ```kotlin
 import android.app.Application
