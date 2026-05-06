@@ -10,7 +10,7 @@ OpenAI Realtime is a low-latency, stateful API for speech-to-speech and multimod
 
 Android sends an SDP offer to the backend, the backend creates the Realtime call, and Android receives the SDP answer from the backend.
 
-Use `gpt-realtime-1.5` for new GlassKit Realtime examples. Use the GA Realtime docs and avoid older beta-era examples or model names.
+Use `gpt-realtime-1.5` for new Realtime integrations. Use the GA Realtime docs and avoid older beta-era API shapes or model names.
 
 Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
 
@@ -314,7 +314,7 @@ Track active responses from sideband events:
 
 Keep tools on the backend. The sideband receives the same Realtime events as the client, including completed function calls. Handle tool calls from `response.done`, send a function output item, then continue only when the model should keep reasoning or speaking from that output.
 
-Intermediate tools usually continue. Terminal tools should not. For example, `list_recipes` continues so the model can call `activate_recipe`; `activate_recipe` does not continue because the backend activates the recipe and speaks exact workflow lines itself.
+Intermediate tools usually continue. Terminal tools should not. For example, a list or lookup tool can continue so the model can use the returned options, but a terminal action tool should usually stop because the backend has already updated workflow state and will speak the next exact line itself.
 
 ```python
 async def send_tool_output(
@@ -343,7 +343,7 @@ async def send_tool_output(
 
 For backend vision augmentation, insert the latest frame after Realtime has committed and added the user's audio item, then create the response.
 
-Use the event sequence from the RF-DETR example:
+Use this event sequence for backend-augmented vision:
 
 1. On `input_audio_buffer.committed`, store the `item_id` as a pending user turn.
 2. On `conversation.item.added`, check that the item id is pending and that the item is a user message containing `input_audio`.
