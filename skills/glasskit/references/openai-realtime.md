@@ -10,7 +10,7 @@ OpenAI Realtime is a low-latency, stateful API for speech-to-speech and multimod
 
 Android sends an SDP offer to the backend, the backend creates the Realtime call, and Android receives the SDP answer from the backend.
 
-`gpt-realtime-1.5` is the current latest model. Do not use older models or refer beta (which was existed before this GA version) docs.
+`gpt-realtime-1.5` is the latest Realtime model. Use the GA Realtime docs and avoid older beta-era examples or model names.
 
 Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
 
@@ -26,7 +26,7 @@ The important objects are:
 - **Session**: model, voice, instructions, audio config, tools, turn detection, and output modalities.
 - **Conversation item**: a user message, assistant message, tool call, tool output, image input, or audio item in the live conversation.
 - **Response**: one model turn. In the default path, Realtime creates the response automatically after VAD decides the user has stopped speaking. Use `response.create` when the app has disabled automatic responses or when the backend adds an item that needs a model answer.
-- **Sideband**: a server control channel attached with the call. Use it when backend business logic, tools, workflow state, or guardrails must stay server-side.
+- **Sideband**: a server control channel attached to the call. Use it when backend business logic, tools, workflow state, or guardrails must stay server-side.
 
 ### Response Creation
 
@@ -40,7 +40,7 @@ Use explicit `response.create` only for backend-gated turns. In that mode, keep 
 
 Use this when the model can own the conversation. Android streams microphone audio and optionally camera media to the Realtime peer connection. Android receives remote assistant audio and renders transcript events from `oai-events`.
 
-This is the simplest shape for a conversational assistant. The backend still brokers SDP and handles tools so secrets and private data stay off the glasses. Keep automatic turn creation enabled for this pattern.
+This is the simplest pattern for a conversational assistant. The backend still brokers SDP and handles tools so secrets and private data stay off the glasses. Keep automatic turn creation enabled for this pattern.
 
 ### Backend-Augmented Vision
 
@@ -67,11 +67,42 @@ Keep VAD, but disable automatic response creation so the backend has time to inj
 
 ### Backend-Controlled Speech
 
-Use this for server-authoritative workflows where the backend decides each step, HUD state, and exact spoken line. Configure the Realtime session so user audio does not automatically create assistant turns, then let the backend send text conversation items such as `Speak exactly this line: ...` followed by `response.create`.
+Use this for server-authoritative workflows where the backend decides each step, client-visible state, and exact spoken line. Configure the Realtime session so user audio does not automatically create assistant turns, then let the backend send text conversation items such as `Speak exactly this line: ...` followed by `response.create`.
+
+## System Instructions
+
+Realtime instructions should define the assistant's role, speaking style, visual grounding rules, and tool policy. For smart glasses, keep spoken output short, state what to do next, and explicitly handle unclear audio or poor framing. Put workflow authority in the backend when the app has external state, safety constraints, or deterministic step progression.
+
+Example:
+
+```python
+SESSION_INSTRUCTIONS = """
+# Role
+- You are a voice assistant running on smart glasses.
+- Help the user complete the current real-world task using speech, tool results, and the latest visual context.
+
+# Speaking Style
+- Be concise, concrete, and actionable.
+- Use no more than two short sentences per response unless the user asks for detail.
+- Do not use sound effects, filler, or stage directions.
+
+# Visual Grounding
+- Treat the camera view as the user's current field of view.
+- If the image is unclear, blocked, or missing the relevant object, ask the user to adjust their view.
+- Do not claim that you can see an object unless the current visual context supports it.
+
+# Tools and Backend State
+- Call backend tools for private data, workflow decisions, or external actions.
+- Do not invent step progression when the backend owns the workflow state.
+- If the user's message starts with `Speak exactly this line:`, speak that line exactly and do not add commentary.
+""".strip()
+```
+
+Set the same `instructions` field from Python, JavaScript, or any other backend that creates the Realtime session.
 
 ## Backend SDP Broker
 
-The backend can be any language that can accept SDP and send a multipart request. This is a Python/FastAPI example snippets.
+The backend can be written in any language that can accept SDP and send a multipart request. These are Python/FastAPI snippets.
 
 Endpoint contract:
 
@@ -130,7 +161,7 @@ Validate both outputs before returning to Android:
 if not call_id or not answer_sdp.startswith("v="):
     raise HTTPException(
         status_code=502,
-        detail="OpenAI realtime response missing call_id or valid answer SDP",
+        detail="OpenAI Realtime response missing call_id or valid answer SDP",
     )
 ```
 
@@ -207,7 +238,7 @@ async def speak_line(session: SessionState, text: str) -> None:
         session.openai_response_active = False
 
     session.speech_epoch += 1
-    await publish_hud_state(session)
+    await publish_client_state(session)
     await send_openai_event(
         session,
         {
@@ -228,7 +259,7 @@ async def speak_line(session: SessionState, text: str) -> None:
     session.openai_response_active = True
 ```
 
-Increment `speech_epoch` before replacing speech. Android should treat that epoch as the transcript freshness key.
+Increment `speech_epoch` or another speech item version before replacing speech. Android should treat that value as the transcript freshness key.
 
 ## Tool Loop
 
