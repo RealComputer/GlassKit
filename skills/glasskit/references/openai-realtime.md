@@ -18,7 +18,7 @@ Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-on
 
 Think in two planes:
 
-- **Media plane**: Android's WebRTC peer connection carries microphone audio, optional direct camera media, and remote assistant audio.
+- **Media plane**: Android's WebRTC peer connection carries microphone audio, optional camera media, and remote assistant audio.
 - **Control plane**: JSON events move over the `oai-events` WebRTC data channel and a backend WebSocket sideband channel attached to the same Realtime call.
 
 The important objects are:
@@ -36,36 +36,11 @@ Use explicit `response.create` only for backend-gated turns. In that mode, keep 
 
 ## Common Patterns
 
-| Pattern | Media links | Response creation | Use when |
-| --- | --- | --- | --- |
-| Direct assistant | Mic, optional direct camera media, assistant audio over one Realtime WebRTC call | Automatic VAD responses | The model can own the conversation and tools are enough backend logic |
-| Backend-augmented vision | Mic and assistant audio over Realtime; camera to backend vision service | Backend sends `response.create` after injecting visual context | You need object detection, spatial hints, annotated frames, or domain-specific vision |
-| Server-authoritative speech | Assistant audio over Realtime; workflow state over backend control socket; optional separate vision link | Backend sends exact speech items and `response.create` | Backend owns state transitions, timing, guardrails, or deterministic workflow progress |
-
 ### Direct Assistant
 
-Use this when the model can own the conversation. Android streams microphone audio and, for the confirmed-working direct vision path, camera media to the Realtime peer connection. Android receives remote assistant audio and renders transcript events from `oai-events`.
+Use this when the model can own the conversation. Android streams microphone audio and optionally camera media to the Realtime peer connection. Android receives remote assistant audio and renders transcript events from `oai-events`.
 
 This is the simplest pattern for a conversational assistant. The backend still brokers SDP and handles tools so secrets and private data stay off the glasses. Keep automatic turn creation enabled for this pattern.
-
-Direct assistant session shape:
-
-```python
-session_config = {
-    "type": "realtime",
-    "model": "gpt-realtime-1.5",
-    "audio": {
-        "input": {
-            "noise_reduction": {"type": "near_field"},
-            "transcription": {"language": "en", "model": "whisper-1"},
-            "turn_detection": {"type": "semantic_vad"},
-        },
-        "output": {"voice": "marin"},
-    },
-    "instructions": SESSION_INSTRUCTIONS,
-    "tools": [...],
-}
-```
 
 ### Backend-Augmented Vision
 
@@ -90,13 +65,9 @@ Keep VAD, but disable automatic response creation so the backend has time to inj
 }
 ```
 
-The backend sideband should wait for a committed user audio item, wait for that same item to appear as a conversation item, insert the latest frame after it, then create the response. If no frame is available, still send `response.create` so the user turn does not stall.
-
 ### Backend-Controlled Speech
 
-Use this for server-authoritative workflows where the backend decides each step, client-visible state, and exact spoken line. If this Realtime session does not need user microphone audio, do not add a local microphone track; create a receive-only audio offer so the assistant can speak. If the session does include user audio but the backend must gate each turn, disable automatic response creation.
-
-The backend sends text conversation items such as `Speak exactly this line: ...` followed by `response.create`. Track active responses with `response.created`, `response.done`, and `error` events so replacement speech can cancel any currently active response before starting the next one.
+Use this for server-authoritative workflows where the backend decides each step, client-visible state, and exact spoken line. Configure the Realtime session so user audio does not automatically create assistant turns, then let the backend send text conversation items such as `Speak exactly this line: ...` followed by `response.create`.
 
 ## System Instructions
 
@@ -146,7 +117,7 @@ async def create_realtime_session(session_id: str, request: Request) -> Response
     return Response(content=answer_sdp, media_type="application/sdp")
 ```
 
-Realtime call creation for backend-gated audio turns or vision injection:
+Realtime call creation for backend-controlled speech or vision injection:
 
 ```python
 session_config = {
@@ -166,8 +137,6 @@ session_config = {
         "When the user's message starts with `Speak exactly this line:`, "
         "speak that line exactly."
     ),
-    # Optional. Keep private tools on the backend sideband.
-    "tools": [...],
 }
 
 form = {
@@ -182,11 +151,9 @@ upstream = await openai_http.post(
 )
 upstream.raise_for_status()
 
-answer_sdp = normalize_sdp(upstream.text)
+answer_sdp = upstream.text.strip()
 call_id = upstream.headers["location"].rstrip("/").split("/")[-1]
 ```
-
-For receive-only backend-controlled speech, omit `audio.input` unless this Realtime call also carries user microphone audio. The server can still create text conversation items and trigger spoken output with `response.create`.
 
 Validate both outputs before returning to Android:
 
@@ -207,48 +174,11 @@ async with websockets.connect(
     additional_headers={"Authorization": f"Bearer {openai_api_key}"},
 ) as openai_sideband:
     async for raw in openai_sideband:
-        event = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+        event = json.loads(raw)
         ...
 ```
 
 The sideband is the backend's control channel, not the glasses media transport. It can monitor session events, send `session.update`, call tools, insert conversation items, cancel active speech, and create responses.
-
-### Sideband Lifecycle
-
-Treat sideband state as session runtime state, not global process state:
-
-- increment a realtime generation before replacing or closing a Realtime call;
-- close the previous sideband WebSocket before attaching a new one;
-- store the `call_id` and sideband WebSocket only if the session is still current;
-- mark Realtime ready only after the sideband WebSocket has connected;
-- clear `openai_response_active`, `openai_ws`, `openai_call_id`, and readiness on close;
-- ignore events from stale generations.
-
-Minimal event handling:
-
-```python
-async for raw in openai_sideband:
-    event = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
-    event_type = event.get("type")
-
-    if event_type == "response.created":
-        session.openai_response_active = True
-        continue
-
-    if event_type == "response.done":
-        session.openai_response_active = False
-        await handle_response_done(session, event.get("response") or {})
-        continue
-
-    if event_type == "error":
-        error = event.get("error") or {}
-        if error.get("code") == "response_cancel_not_active":
-            session.openai_response_active = False
-            continue
-        await fail_or_recover(session, error)
-```
-
-It is also fine to set `openai_response_active = True` optimistically when sending `response.create`, then reconcile with `response.created`, `response.done`, and `error`.
 
 ## Android Client Contract
 
@@ -269,7 +199,7 @@ For direct assistant mode:
 - add a camera track only for the direct-vision path you have validated;
 - set `OfferToReceiveAudio` to `"true"` so assistant speech plays on the device;
 - parse `conversation.item.input_audio_transcription.completed` for user text;
-- parse `response.output_audio_transcript.delta` and `response.output_audio_transcript.done` for assistant transcript.
+- parse `response.output_audio_transcript.delta` and `.done` for assistant transcript.
 
 For backend-controlled speech:
 
@@ -278,26 +208,6 @@ For backend-controlled speech:
 - require the local SDP to contain `m=audio` before posting it;
 - render transcript deltas only for the current speech item;
 - clear stale transcript text when backend `speech_epoch` changes.
-
-Receive-only audio offer:
-
-```kotlin
-private fun addReceiveOnlyAudioTransceiver(pc: PeerConnection) {
-    val init = RtpTransceiver.RtpTransceiverInit(
-        RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
-    )
-    val transceiver = pc.addTransceiver(
-        MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
-        init
-    ) ?: error("Failed to add receive-only audio transceiver")
-    transceiver.receiver.track()?.setEnabled(true)
-}
-
-private fun requireAudioMediaSection(sdp: String) {
-    if (sdp.contains("\r\nm=audio ") || sdp.startsWith("m=audio ")) return
-    error("Realtime offer missing audio media section")
-}
-```
 
 Deduplicate server events by `event_id` where possible:
 
@@ -313,24 +223,6 @@ private fun shouldIgnoreEvent(json: JSONObject): Boolean {
 }
 ```
 
-Gate transcript deltas and final transcripts by item ID when the backend may replace speech:
-
-```kotlin
-private fun shouldAcceptItem(itemId: String): Boolean {
-    synchronized(transcriptLock) {
-        if (ignoredTranscriptItemIds.contains(itemId)) return false
-
-        val current = activeTranscriptItemId
-        if (current == null) {
-            activeTranscriptItemId = itemId
-            return true
-        }
-
-        return current == itemId
-    }
-}
-```
-
 ## Backend-Controlled Speech
 
 Use this pattern when another backend service owns workflow state:
@@ -338,7 +230,7 @@ Use this pattern when another backend service owns workflow state:
 ```python
 async def speak_line(session: SessionState, text: str) -> None:
     line = text.strip()
-    if not line or session.openai_ws is None:
+    if not line or session.openai_sideband is None:
         return
 
     if session.openai_response_active:
@@ -346,7 +238,6 @@ async def speak_line(session: SessionState, text: str) -> None:
         session.openai_response_active = False
 
     session.speech_epoch += 1
-    session.current_speech_text = line
     await publish_client_state(session)
     await send_openai_event(
         session,
@@ -365,40 +256,14 @@ async def speak_line(session: SessionState, text: str) -> None:
         },
     )
     await send_openai_event(session, {"type": "response.create"})
+    session.openai_response_active = True
 ```
 
 Increment `speech_epoch` or another speech item version before replacing speech. Android should treat that value as the transcript freshness key.
 
 ## Tool Loop
 
-Keep tools on the backend. The sideband receives the same Realtime events as the client, including completed function calls. Handle completed function calls from `response.done`, send a function output item, then continue the response:
-
-```python
-async def handle_response_done(session: SessionState, response: dict[str, Any]) -> None:
-    output_items = response.get("output") or []
-    fn_call = next(
-        (
-            item
-            for item in output_items
-            if item.get("type") == "function_call"
-            and item.get("status") == "completed"
-        ),
-        None,
-    )
-    if fn_call is None:
-        return
-
-    args = parse_arguments(fn_call.get("arguments"))
-    result = await run_tool(str(fn_call.get("name") or ""), args)
-    await send_tool_output(
-        session,
-        call_id=str(fn_call.get("call_id") or ""),
-        output=json.dumps(result),
-        continue_response=True,
-    )
-```
-
-Function output item:
+Keep tools on the backend. The sideband receives the same Realtime events as the client, including completed function calls. Handle tool calls from `response.done`, send a function output item, then continue the response:
 
 ```python
 await send_openai_event(
@@ -415,41 +280,9 @@ await send_openai_event(
 await send_openai_event(session, {"type": "response.create"})
 ```
 
-`item.output` must be a string. Use a JSON string for structured results and a JSON error object for tool failures.
-
 ## Image Injection
 
-For backend vision augmentation, use this turn barrier:
-
-1. `input_audio_buffer.committed` gives an `item_id` for the completed user audio turn.
-2. `conversation.item.added` confirms the user audio item is in the conversation.
-3. The backend inserts an image item with `previous_item_id` set to that user audio item ID.
-4. The backend sends exactly one `response.create`.
-
-Track pending turns so image injection happens once per completed audio item:
-
-```python
-pending_turns: set[str] = set()
-sent_images: set[str] = set()
-
-if event_type == "input_audio_buffer.committed":
-    item_id = event.get("item_id")
-    if isinstance(item_id, str) and item_id:
-        pending_turns.add(item_id)
-
-if event_type == "conversation.item.added":
-    item = event.get("item") or {}
-    item_id = item.get("id")
-    if item_id in pending_turns and item_id not in sent_images:
-        if not is_user_audio_item(item):
-            pending_turns.discard(item_id)
-            continue
-        pending_turns.discard(item_id)
-        sent_images.add(item_id)
-        await send_latest_frame_or_continue(openai_sideband, item_id)
-```
-
-Insert the latest frame after the user audio turn and before `response.create`:
+For backend vision augmentation, insert the latest frame after a user audio turn and before `response.create`:
 
 ```python
 await send_openai_event(
@@ -472,5 +305,3 @@ await send_openai_event(
 )
 await send_openai_event(session, {"type": "response.create"})
 ```
-
-Use a PNG or JPEG data URI for `image_url`. If no frame is available within a short timeout, skip the image item and send `response.create` anyway.
