@@ -97,7 +97,6 @@ Choose the model by the behavior you need:
 - Fine-tuned object detector: best for a known set of physical objects, parts, states, or completion markers.
 - Open-vocabulary detector: useful during prototyping, but stabilize labels before wiring completion rules to them.
 - Hosted detector service: fastest to prototype, but normalize results and hide vendor auth from Android.
-- Local exported model: best when latency, cost, offline use, or privacy matter.
 
 RF-DETR is a good concrete example for fine-tuned object detection.
 
