@@ -130,12 +130,14 @@ Update the skill later with:
 npx skills update glasskit
 ```
 
-Then ask your coding agent with prompts like:
+To invoke the skill explicitly, mention `glasskit` in the prompt:
 
-- "Create a starter Rokid Glasses app using the GlassKit skill."
-- "Add a camera preview to the first screen of this Rokid Glasses app."
-- "Add Rokid touchpad navigation and a menu screen to this app."
-- "Stream the Rokid camera and microphone to a WebRTC backend."
+- "glasskit: Create a starter Rokid Glasses app."
+- "glasskit: Add a camera preview to the first screen of this Rokid Glasses app."
+- "glasskit: Add Rokid touchpad navigation and a menu screen to this app."
+- "glasskit: Stream the Rokid camera and microphone to a WebRTC backend."
+
+Curious about what the skill contains? Read [`skills/glasskit/SKILL.md`](skills/glasskit/SKILL.md).
 
 ### 2. Copy an example
 
