@@ -124,20 +124,11 @@ Install it with [the skills CLI](https://github.com/vercel-labs/skills):
 npx skills add RealComputer/GlassKit
 ```
 
-Update the skill later with:
+Update the skill later with: `npx skills update glasskit`
 
-```sh
-npx skills update glasskit
-```
+Then ask your coding agent with prompts like: `create a starter rokid glasses app` or `add a camera preview to the first screen using the glasskit skill`.
 
-To invoke the skill explicitly, mention `glasskit` in the prompt:
-
-- "glasskit: Create a starter Rokid Glasses app."
-- "glasskit: Add a camera preview to the first screen of this Rokid Glasses app."
-- "glasskit: Add Rokid touchpad navigation and a menu screen to this app."
-- "glasskit: Stream the Rokid camera and microphone to a WebRTC backend."
-
-Curious about what the skill contains? Read [`skills/glasskit/SKILL.md`](skills/glasskit/SKILL.md).
+Curious about what the skill contains? Check out [`SKILL.md`](skills/glasskit/SKILL.md).
 
 ### 2. Copy an example
 
