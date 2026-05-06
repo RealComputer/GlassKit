@@ -305,10 +305,3 @@ await send_openai_event(
 )
 await send_openai_event(session, {"type": "response.create"})
 ```
-
-## Official Docs
-
-- Realtime overview: https://developers.openai.com/api/docs/guides/realtime
-- WebRTC connection: https://developers.openai.com/api/docs/guides/realtime-webrtc
-- Managing conversations: https://developers.openai.com/api/docs/guides/realtime-conversations
-- Server-side controls: https://developers.openai.com/api/docs/guides/realtime-server-controls
