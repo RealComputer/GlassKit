@@ -110,28 +110,36 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
   </tbody>
 </table>
 
-## How to Use
+## How to use
 
-### 1. As a Agent Skills
+There are two common ways to start with GlassKit: install the agent skill for guided development, or copy an example and build from it.
 
-This works with Codex, Claude Code, Cursor, etc.
+### 1. Install the agent skill
 
-Via [the skills CLI](https://github.com/vercel-labs/skills):
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to apply the GlassKit patterns while it works on your app.
+
+Install it with [the skills CLI](https://github.com/vercel-labs/skills):
 
 ```sh
 npx skills add RealComputer/GlassKit
 ```
 
-To update: `npx skills update glasskit`
+Update the skill later with:
+
+```sh
+npx skills update glasskit
+```
 
 ### 2. Copy an example
 
-If you have a specific example you want to use to build your app on top of it. Free free to copy the dir. For example with `rokid-feature-demo` example:
+Use this when one of the examples already matches the app you want to build. Pick the closest example from the table above, copy it into your own project, then follow that example's README.
+
+For example, to copy `examples/rokid-feature-demo` into a new `rokid/` directory:
 
 ```sh
-git clone https://github.com/RealComputer/GlassKit.git \
-  && mkdir rokid \
-  && git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C rokid
+git clone https://github.com/RealComputer/GlassKit.git
+mkdir rokid
+git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C rokid
 ```
 
 ## Why GlassKit
