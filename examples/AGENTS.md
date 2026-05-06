@@ -1,3 +1,1 @@
-# Commit Guidelines
-
-- Start commit messages for example changes with "example: ".
+- Start commit messages for example projects with `example: `.
