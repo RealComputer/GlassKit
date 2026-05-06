@@ -1,6 +1,6 @@
 ---
 name: glasskit
-description: Use when starting, modifying, or debugging apps for Rokid Glasses or similar camera glasses. Covers Rokid setup, on-device display and input patterns, camera/mic/speaker access, touchpad controls, WebRTC streaming, voice controls, real-time LLM/VLM integration, CV object detection, and device-specific best practices.
+description: Use when starting, modifying, or debugging apps for Rokid Glasses or similar camera glasses. Covers Rokid setup, on-device display and input patterns, camera/mic/speaker access, touchpad controls, WebRTC streaming, voice controls, real-time LLM/VLM integration, proactive workflow apps, CV object detection, and device-specific best practices.
 ---
 
 # GlassKit
@@ -27,5 +27,6 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - `references/rokid-inputs.md`: Rokid touchpad handling, camera access, and microphone access.
 - `references/vosk-voice-commands.md`: Vosk setup and implementation pattern for offline command words.
 - `references/rokid-webrtc.md`: Rokid WebRTC sessions, including Android video/audio tracks, receive-only audio, SDP signaling, data channels, ICE/TURN, and backend receiver/broker patterns.
+- `references/proactive-app-pattern.md`: high-level pattern for proactive glasses apps where continuous observations drive backend-authoritative workflow state, HUD updates, speech, and actions.
 - `references/openai-realtime.md`: OpenAI Realtime patterns for smart glasses, including WebRTC media brokering, automatic VAD responses, backend-gated turns for vision/tool/speech workflows, sideband events, and transcripts.
 - `references/object-detection.md`: model-agnostic object detection patterns for Rokid camera streams, including backend inference, normalized events, detection-driven app events, RF-DETR as an example, and realtime model augmentation.
