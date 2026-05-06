@@ -1,6 +1,6 @@
 ---
 name: glasskit
-description: Use when starting, modifying, or debugging a Rokid Glasses smart glasses app. This includes templates and common implementation patterns for HUD UI, camera/mic/speaker access, temple touchpad handling, WebRTC streaming, voice controls, real-time LLM/VLM integration, CV object detection, and best practices.
+description: Use when starting, modifying, or debugging apps for Rokid Glasses or similar camera glasses. Covers Rokid setup, on-device display and input patterns, camera/mic/speaker access, touchpad controls, WebRTC streaming, voice controls, real-time LLM/VLM integration, CV object detection, and device-specific best practices.
 ---
 
 # GlassKit
