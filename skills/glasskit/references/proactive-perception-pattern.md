@@ -1,4 +1,4 @@
-# Proactive App Pattern
+# Proactive Perception Pattern
 
 Proactive glasses apps continuously observe real-world context and react when something meaningful changes. They are not just chat flows waiting for user prompts. The main design problem is turning noisy perception into reliable app events.
 
