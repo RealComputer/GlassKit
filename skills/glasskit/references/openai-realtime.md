@@ -21,6 +21,8 @@ Think in two planes:
 - **Media plane**: Android's WebRTC peer connection carries microphone audio, optional camera media, and remote assistant audio.
 - **Control plane**: JSON events move over the `oai-events` WebRTC data channel and a backend WebSocket sideband channel attached to the same Realtime call.
 
+Public OpenAI docs document image input through `input_image` conversation items and do not currently document live video input over WebRTC. GlassKit has a validated direct-vision path where camera media over WebRTC works; keep `input_image` as the documented image path for backend augmentation and fallback designs.
+
 The important objects are:
 
 - **Session**: model, voice, instructions, audio config, tools, turn detection, and output modalities.
