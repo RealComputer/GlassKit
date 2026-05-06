@@ -110,6 +110,30 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
   </tbody>
 </table>
 
+## How to Use
+
+### 1. As a Agent Skills
+
+This works with Codex, Claude Code, Cursor, etc.
+
+Via [the skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add RealComputer/GlassKit
+```
+
+To update: `npx skills update glasskit`
+
+### 2. Copy an example
+
+If you have a specific example you want to use to build your app on top of it. Free free to copy the dir. For example with `rokid-feature-demo` example:
+
+```sh
+git clone https://github.com/RealComputer/GlassKit.git \
+  && mkdir rokid \
+  && git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C rokid
+```
+
 ## Why GlassKit
 
 Smart glasses apps are hard.
