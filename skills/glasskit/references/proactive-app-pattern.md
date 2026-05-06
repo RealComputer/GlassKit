@@ -23,6 +23,8 @@ camera/audio/sensors
 
 Feedback can be visual display, audio, haptics if available, logs, or backend actions. The proactive pattern does not require any one output channel.
 
+Perception providers should report observations; the app controller should own workflow changes and effects.
+
 ## Perception Loop
 
 The perception loop can use any provider that turns live context into observations:
@@ -56,7 +58,7 @@ Prefer small app-owned events:
 }
 ```
 
-The contract should make stale-result checks possible. Include a generation, active task id, prompt id, detector id, or equivalent field when the perception request changes over time.
+The contract should make stale-result checks possible. Include a generation, active task id, prompt id, detector id, or equivalent field when the perception request changes over time. Add a timestamp only when time-based stabilization needs it.
 
 ## Stabilization
 
@@ -75,7 +77,7 @@ Do not emit user-facing feedback or external actions on every inference callback
 
 ## Workflow Authority
 
-Workflow authority means one controller owns the current app state, active perception request, and effect of each observation. In networked glasses apps this is usually the backend. In fully local apps it can be an on-device controller.
+Workflow authority means one controller owns the current app state, active perception request, and effect of each observation. For Rokid-class glasses apps, this should usually be the backend. Serialize per-session workflow changes through that controller before mutating state.
 
 For each state, define:
 
@@ -93,4 +95,4 @@ A concrete example of this pattern is the proactive drink-making coach in GlassK
 
 https://github.com/RealComputer/GlassKit/tree/main/examples/rokid-overshoot-openai-realtime
 
-That example uses Overshoot for the continuous VLM loop and OpenAI Realtime for spoken guidance, but the pattern generalizes to other perception providers and workflow domains.
+That example uses Overshoot for the continuous VLM loop and OpenAI Realtime for spoken guidance, but the pattern generalizes to other perception providers and workflow domains. Its backend queues perception, OpenAI, control, and disconnect events through one session loop; Android streams media, sends gestures, and renders HUD/transcripts.
