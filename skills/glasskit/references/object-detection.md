@@ -1,6 +1,6 @@
 # Object Detection
 
-Object detection on Rokid Glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, or annotated frames for Realtime augmentation. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
+Object detection on Rokid Glasses and similar camera glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, structured context, or annotated frames for Realtime augmentation. The output may drive visible UI, speech, logs, controls, or backend workflow state. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
 
 Related references:
 
@@ -18,7 +18,7 @@ The common object-detection shape is:
 4. The backend publishes app events to Android over a data channel or control WebSocket.
 5. The backend optionally stores the latest annotated JPEG for inspection, debugging, or OpenAI Realtime image augmentation.
 
-Android should not interpret raw model envelopes. It should render normalized app state such as:
+Android should not interpret raw model envelopes. It should consume normalized app state such as:
 
 ```json
 {
@@ -30,11 +30,11 @@ Android should not interpret raw model envelopes. It should render normalized ap
 }
 ```
 
-For workflow apps, put task progression on the backend. Android should stream, send user controls, and render HUD state.
+For workflow apps, put task progression on the backend. Android should stream, send user controls, and render or act on normalized state.
 
 ## Android Stream
 
-Use a separate camera WebRTC session when detection is not the main Realtime media path. Start with the lowest resolution and frame rate that still supports the detector. For glasses apps, freshness and stability usually matter more than visual smoothness.
+Use a separate camera WebRTC session when detection is not the main Realtime media path. Start with the lowest resolution and frame rate that still supports the detector. A known working Rokid baseline is `1024x768 @ 5 fps`; raise resolution or frame rate only when the detector needs it. For glasses apps, freshness and stability usually matter more than visual smoothness.
 
 Prefer the outward-facing camera. If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
 
@@ -46,11 +46,11 @@ The backend can be any stack that can receive media and run inference. In Python
 
 Keep the receiver thin: accept the media stream, hand frames to a vision processor, and publish normalized app events. Keep session lifecycle, cleanup, and state broadcasting outside the detector model wrapper so the model can be swapped later.
 
-Close peer connections on failed, closed, or disconnected states, and clear channel/session state when the stream ends. Prefer H264 when available because it is a practical codec choice for Rokid camera streaming.
+Close peer connections on failed, closed, or disconnected states, and clear channel/session state when the stream ends. If the app supports only one active vision stream, close existing peer connections and clear channel/session state before accepting a new offer so stale detections cannot affect the next run. Prefer H264 when available because it is a practical codec choice for Rokid camera streaming.
 
 ## Frame Policy
 
-Object detection should optimize freshness, not throughput. A glasses HUD that reacts to stale frames feels wrong even when inference is accurate.
+Object detection should optimize freshness, not throughput. A camera-glasses app that reacts to stale frames feels wrong even when inference is accurate.
 
 Use one of these policies:
 
@@ -58,19 +58,25 @@ Use one of these policies:
 - **Minimum interval**: skip frames until `now - last_processed >= min_interval_s`. This is simple and works well for image augmentation.
 - **One in-flight inference**: if a frame is being processed, drop incoming frames instead of building a queue.
 
-Run blocking model inference outside the event loop so media receiving and control messages stay responsive. Keep model objects warm and reused; repeated per-frame model loading will dominate latency and make the HUD unusable.
+Run blocking model inference outside the event loop so media receiving and control messages stay responsive. Keep model objects warm and reused; repeated per-frame model loading will dominate latency and make the interaction unusable.
 
 ## Normalized Results
 
-Normalize every detector into a small app-owned structure before any workflow or HUD code sees it:
+Normalize every detector into a small app-owned structure before any workflow or client code sees it:
 
 ```python
 @dataclass(frozen=True)
+class Detection:
+    label: str
+    confidence: float | None
+    box_xyxy: tuple[float, float, float, float] | None = None
+
+
+@dataclass(frozen=True)
 class DetectionSnapshot:
+    detections: list[Detection]
     classes: set[str]
-    labels: list[str]
-    boxes: list[tuple[float, float, float, float]]
-    confidences: list[float]
+    image_size: tuple[int, int] | None
     timestamp: float
     annotated_jpeg: bytes | None = None
 ```
@@ -79,6 +85,8 @@ Keep these rules:
 
 - Map provider labels to domain labels on the backend.
 - Include confidence and timestamp if downstream logic needs stability checks.
+- Make the bounding-box convention explicit. `box_xyxy` should mean left, top, right, bottom in source-image pixels; use a `_norm` suffix or a `coordinate_space` field for normalized boxes.
+- Prefer a list of detection objects over parallel `labels`, `boxes`, and `confidences` arrays unless the app already has a strict schema for parallel arrays.
 - Keep raw predictions available only in logs or debug traces.
 - Use stable event types and field names. Android should ignore unknown fields, but it should not need provider-specific parsing.
 
@@ -117,7 +125,7 @@ Other useful rules:
 - Region rule: require the object box to be inside a known image region.
 - Generation match: ignore detector results from an old task generation after the backend switches tasks.
 
-For multi-step workflows, the backend should own the active detector, completion criteria, HUD state, and speech. Android should not infer progression from local timers, transcripts, or raw detections.
+For multi-step workflows, the backend should own the active detector, completion criteria, client-visible state, backend actions, and any workflow speech. Android should not infer progression from local timers, transcripts, or raw detections.
 
 ## Event Contracts
 
@@ -163,7 +171,9 @@ Convert the latest annotated JPEG to a data URI:
 data_uri = "data:image/jpeg;base64," + base64.b64encode(jpeg_bytes).decode("ascii")
 ```
 
-Insert the image after Realtime has committed the user's audio item, then send exactly one `response.create`. Do not inject images on every event or replay a backlog:
+Insert the image after Realtime has committed the user's audio item, then send exactly one `response.create`. Do not inject images on every event or replay a backlog.
+
+When wiring the trigger, use the `pending_turns` / `sent_images` gate from `openai-realtime.md`: wait for `input_audio_buffer.committed`, verify that the matching `conversation.item.added` is a user audio item, and insert the image only once for that item. The payload below is only the final insertion:
 
 ```python
 await send_openai_event(
@@ -198,7 +208,7 @@ Practical tuning loop:
 1. Start with a small label set that maps directly to app decisions.
 2. Capture annotated frame history while using the app.
 3. Review false positives and missed detections from `latest.jpg` plus history frames.
-4. Adjust labels, thresholds, and confirmation rules before changing HUD logic.
+4. Adjust labels, thresholds, and confirmation rules before changing client or workflow logic.
 5. Add manual debug controls so the app remains testable when the detector is wrong.
 
 Keep labels stable once workflow rules depend on them. If the model label names are messy, map them to clean domain names on the backend instead of leaking model names into Android UI or prompts.
