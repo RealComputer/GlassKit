@@ -36,7 +36,7 @@ For workflow apps, put task progression on the backend. Android should stream, s
 
 Use a separate camera WebRTC session when detection is not the main realtime media path. Start with the lowest resolution and frame rate that still supports the detector. A known working Rokid baseline is `1024x768 @ 5 fps`; raise resolution or frame rate only when the detector needs it. For glasses apps, freshness and stability usually matter more than visual smoothness.
 
-Prefer the outward-facing camera. If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
+If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
 
 Send explicit app events such as `session.start`, `run.start`, `debug.step`, or `workflow.confirm`. Queue client events until the channel or control socket is open.
 
@@ -99,7 +99,7 @@ Choose the model by the behavior you need:
 - Hosted detector service: fastest to prototype, but normalize results and hide vendor auth from Android.
 - Local exported model: best when latency, cost, offline use, or privacy matter.
 
-RF-DETR is a good concrete example for fine-tuned object detection. With Roboflow-hosted weights, the API key is only needed for weight access; inference can run locally after the model is available. If you export weights and load them directly, the same app architecture applies without a hosted weight dependency.
+RF-DETR is a good concrete example for fine-tuned object detection.
 
 ## Decision Logic
 
@@ -198,4 +198,4 @@ Practical tuning loop:
 4. Adjust labels, thresholds, and confirmation rules before changing client or workflow logic.
 5. Add manual debug controls so the app remains testable when the detector is wrong.
 
-Keep labels stable once workflow rules depend on them. If the model label names are messy, map them to clean domain names on the backend instead of leaking model names into Android UI or prompts.
+Keep labels stable once workflow rules depend on them.
