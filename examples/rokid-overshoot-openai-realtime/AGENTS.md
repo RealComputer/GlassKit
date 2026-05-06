@@ -122,7 +122,3 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `uv run --env-file .env foo.py`: run a script with env loaded
 - `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
 - `uv add <package>`: add a package
-
-# Commit Guidelines
-
-- Start message with "example/mocktail: "

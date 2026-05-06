@@ -34,7 +34,3 @@ Rokid Glasses are Android-based smart glasses with a camera, a monochrome HUD, m
 - `./gradlew :app:assembleDebug`: debug APK build
 - `emulator -avd glass_480x640 -camera-back emulated`: launch the emulator
 - `adb logcat -v time --pid "$(adb shell pidof -s com.example.rokidfeaturedemo)"`: general-purpose app log view once the demo is running
-
-# Commit Guidelines
-
-- Start message with "rokid-feature-demo: "
