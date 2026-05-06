@@ -158,7 +158,7 @@ private fun createCameraCapturer(): VideoCapturer? {
 }
 ```
 
-For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 5 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
+For CameraX preview code, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 5 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD. In Rokid-only CameraX apps, also apply the Application-level available-camera limiter from `rokid-inputs.md` so CameraX does not retry initialization while validating a front camera the device does not expose.
 
 Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
 

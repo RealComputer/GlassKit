@@ -17,6 +17,35 @@ For actual implementation example and optional phone/emulator touch fallback, `.
 
 Use CameraX and bind the rear camera. The confirmed Rokid Glasses camera request is 1024x768 at 5 fps. The gotcha is that the requested CameraX size is landscape-shaped even though the camera image should appear portrait; request `1024x768`, not `768x1024`, then set target rotation so CameraX applies the correct transform.
 
+Rokid Glasses expose only the rear/outward camera. For Rokid-only CameraX apps, limit CameraX to that camera at the Application level before any `ProcessCameraProvider` is initialized. On real hardware, this avoids CameraX front-camera validation retries such as `CameraValidator: Camera LENS_FACING_FRONT verification failed` and `CameraX: Retry init...`, which can happen even when the later bind call uses `CameraSelector.DEFAULT_BACK_CAMERA`.
+
+Use the app-level limiter only for Rokid-targeted builds or apps that never need a front camera. It changes which cameras CameraX exposes for the whole process, so do not apply it unconditionally to a shared phone build that needs selfie/front-camera features.
+
+```kotlin
+import android.app.Application
+import androidx.camera.camera2.Camera2Config
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraXConfig
+
+class RokidApplication : Application(), CameraXConfig.Provider {
+    override fun getCameraXConfig(): CameraXConfig {
+        return CameraXConfig.Builder.fromConfig(Camera2Config.defaultConfig())
+            .setAvailableCamerasLimiter(CameraSelector.DEFAULT_BACK_CAMERA)
+            .build()
+    }
+}
+```
+
+Register the Application in `AndroidManifest.xml`:
+
+```xml
+<application
+    android:name=".RokidApplication"
+    ...>
+```
+
+If the app already has a custom `Application`, implement `CameraXConfig.Provider` there instead of adding another Application class.
+
 ```kotlin
 private val rokidCameraSize = Size(1024, 768)
 private val rokidCameraFps = Range(5, 5)
