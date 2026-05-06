@@ -87,14 +87,6 @@ For each state, define:
 
 This prevents raw model responses, client timers, transcripts, and disconnected services from independently advancing the app.
 
-## Avoid
-
-- raw model or provider output directly mutates app state
-- a single noisy observation triggers an important action
-- feedback is emitted on every inference result
-- old perception results remain valid after the active task changes
-- multiple components mutate the same workflow state independently
-
 ## Example
 
 A concrete example of this pattern is the proactive drink-making coach in GlassKit:
