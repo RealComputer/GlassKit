@@ -1,12 +1,11 @@
 # Object Detection
 
-Use this when a Rokid app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, or annotated frames for Realtime augmentation. Keep the detector model interchangeable. RF-DETR is one validated backend, but the app architecture should work with YOLO, a custom local model, a hosted detector, or a task-specific vision service.
+Object detection on Rokid Glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, or annotated frames for Realtime augmentation. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
 
 Related references:
 
 - `rokid-webrtc.md`: Android camera streaming, SDP signaling, data channels, ICE, and Python `aiortc` receiver setup.
 - `openai-realtime.md`: backend-augmented vision, image insertion after user audio turns, and Realtime sideband behavior.
-- `server-authoritative-workflows.md`: backend-owned task state, detector prompt/schema switching, HUD state, and exact speech.
 - `rokid-inputs.md`: Rokid camera constraints and touchpad/debug controls.
 
 ## Architecture
@@ -19,7 +18,7 @@ The common object-detection shape is:
 4. The backend publishes app events to Android over a data channel or control WebSocket.
 5. The backend optionally stores the latest annotated JPEG for inspection, debugging, or OpenAI Realtime image augmentation.
 
-Android should not interpret raw model envelopes. It should render normalized state such as:
+Android should not interpret raw model envelopes. It should render normalized app state such as:
 
 ```json
 {
@@ -35,67 +34,19 @@ For workflow apps, put task progression on the backend. Android should stream, s
 
 ## Android Stream
 
-Use a separate camera WebRTC session when detection is not the main Realtime media path. Start with low capture rates; common Rokid values are `1024x768 @ 2 fps` for Realtime augmentation and `1024x768 @ 5 fps` for detection-driven HUDs.
+Use a separate camera WebRTC session when detection is not the main Realtime media path. Start with the lowest resolution and frame rate that still supports the detector. For glasses apps, freshness and stability usually matter more than visual smoothness.
 
-Create local tracks and data channels before creating the offer:
+Prefer the outward-facing camera. If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
 
-```kotlin
-val mediaConstraints = MediaConstraints().apply {
-    mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
-    mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
-}
-
-val dataChannel = peerConnection.createDataChannel(
-    "vision-events",
-    DataChannel.Init()
-)
-```
-
-Prefer a back/outward camera, then fall back to the first available camera. Match `adaptOutputFormat(...)` and `startCapture(...)` when possible. If the camera HAL rejects the requested mode, start with a supported mode and use `adaptOutputFormat(...)` to cap WebRTC output.
-
-Disable video sender degradation when detection quality matters:
-
-```kotlin
-private fun configureVideoSender(sender: RtpSender?) {
-    val params = sender?.parameters ?: return
-    params.degradationPreference = RtpParameters.DegradationPreference.DISABLED
-    sender.parameters = params
-}
-```
-
-Queue data-channel messages until the channel is open. Send explicit app events such as `session.start`, `run.start`, `debug.step`, or `workflow.confirm` instead of encoding actions as ad hoc key names.
+Send explicit app events such as `session.start`, `run.start`, `debug.step`, or `workflow.confirm`. Queue client events until the channel or control socket is open.
 
 ## Backend Receiver
 
-Use FastAPI plus `aiortc` for a backend that terminates the vision WebRTC session:
+The backend can be any stack that can receive media and run inference. In Python, use `aiortc` for WebRTC termination instead of hand-rolled SDP or media parsing. See `rokid-webrtc.md` for the receiver shape.
 
-```python
-@app.post("/vision/session")
-async def vision_session(request: Request) -> Response:
-    offer_sdp = (await request.body()).decode()
-    offer = RTCSessionDescription(sdp=offer_sdp, type="offer")
+Keep the receiver thin: accept the media stream, hand frames to a vision processor, and publish normalized app events. Keep session lifecycle, cleanup, and state broadcasting outside the detector model wrapper so the model can be swapped later.
 
-    pc = RTCPeerConnection()
-    transceiver = pc.addTransceiver("video", direction="recvonly")
-    prefer_video_codec(transceiver, "video/H264")
-
-    @pc.on("track")
-    def on_track(track: MediaStreamTrack) -> None:
-        if track.kind == "video":
-            asyncio.create_task(vision_processor.consume(track))
-
-    @pc.on("datachannel")
-    def on_datachannel(channel: RTCDataChannel) -> None:
-        attach_vision_events(channel)
-
-    await pc.setRemoteDescription(offer)
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    return PlainTextResponse(pc.localDescription.sdp)
-```
-
-Close peer connections on `failed`, `closed`, or `disconnected`, and clear data-channel state when the session ends. Prefer H264 when available because it is a good fit for Rokid camera streaming.
+Close peer connections on failed, closed, or disconnected states, and clear channel/session state when the stream ends. Prefer H264 when available because it is a practical codec choice for Rokid camera streaming.
 
 ## Frame Policy
 
@@ -107,33 +58,7 @@ Use one of these policies:
 - **Minimum interval**: skip frames until `now - last_processed >= min_interval_s`. This is simple and works well for image augmentation.
 - **One in-flight inference**: if a frame is being processed, drop incoming frames instead of building a queue.
 
-Example latest-frame buffer:
-
-```python
-class LatestFrameBuffer:
-    def __init__(self) -> None:
-        self._condition = asyncio.Condition()
-        self._latest: tuple[int, Any] | None = None
-        self._counter = 0
-        self._closed = False
-
-    async def update(self, frame: Any) -> None:
-        async with self._condition:
-            if self._closed:
-                return
-            self._counter += 1
-            self._latest = (self._counter, frame)
-            self._condition.notify_all()
-```
-
-Run blocking model inference in a worker thread so the media receiver and control channels stay responsive:
-
-```python
-image = frame.to_ndarray(format="bgr24")
-result = await asyncio.to_thread(run_detection, model, image)
-```
-
-Keep model objects warm and reused. Load the model once per process or session, guard lazy initialization with an async lock, and start a warmup task during FastAPI lifespan when startup latency matters.
+Run blocking model inference outside the event loop so media receiving and control messages stay responsive. Keep model objects warm and reused; repeated per-frame model loading will dominate latency and make the HUD unusable.
 
 ## Normalized Results
 
@@ -152,7 +77,7 @@ class DetectionSnapshot:
 
 Keep these rules:
 
-- Map provider labels to domain labels on the backend, for example `"wood panel with label"` to `"BASE PANEL"`.
+- Map provider labels to domain labels on the backend.
 - Include confidence and timestamp if downstream logic needs stability checks.
 - Keep raw predictions available only in logs or debug traces.
 - Use stable event types and field names. Android should ignore unknown fields, but it should not need provider-specific parsing.
@@ -166,29 +91,7 @@ Choose the model by the behavior you need:
 - Hosted detector service: fastest to prototype, but normalize results and hide vendor auth from Android.
 - Local exported model: best when latency, cost, offline use, or privacy matter.
 
-Useful generic knobs:
-
-```text
-VISION_MODEL_ID
-VISION_CONFIDENCE
-VISION_MIN_INTERVAL_S
-VISION_FRAME_DIR
-VISION_HISTORY_LIMIT
-VISION_JPEG_QUALITY
-```
-
-RF-DETR is a good concrete example. With Roboflow-hosted weights, use `inference.get_model`; `ROBOFLOW_API_KEY` is needed to fetch weights, and inference runs locally after download. Existing RF-DETR examples use knobs such as:
-
-```text
-RFDETR_MODEL_ID
-RFDETR_CONFIDENCE
-RFDETR_MIN_INTERVAL_S
-RFDETR_FRAME_DIR
-RFDETR_HISTORY_LIMIT
-RFDETR_JPEG_QUALITY
-```
-
-If you export weights and load them directly with an RF-DETR library, the same architecture applies and `ROBOFLOW_API_KEY` is no longer part of runtime configuration.
+RF-DETR is a good concrete example for fine-tuned object detection. With Roboflow-hosted weights, the API key is only needed for weight access; inference can run locally after the model is available. If you export weights and load them directly, the same app architecture applies without a hosted weight dependency.
 
 ## Decision Logic
 
@@ -214,15 +117,11 @@ Other useful rules:
 - Region rule: require the object box to be inside a known image region.
 - Generation match: ignore detector results from an old task generation after the backend switches tasks.
 
-For multi-step workflows, combine this reference with `server-authoritative-workflows.md`: the backend owns the active detector, completion criteria, HUD state, and speech. Android should not infer progression from local timers, transcripts, or raw detections.
+For multi-step workflows, the backend should own the active detector, completion criteria, HUD state, and speech. Android should not infer progression from local timers, transcripts, or raw detections.
 
 ## Event Contracts
 
-Use `vision-events` for vision-only WebRTC data-channel state when that fits the app:
-
-```kotlin
-val dataChannel = peerConnection.createDataChannel("vision-events", DataChannel.Init())
-```
+Use a stable channel or socket contract for vision state. A WebRTC data channel such as `vision-events` is a good fit when the camera peer connection already exists and events only matter while that stream is live.
 
 Common backend-to-Android events:
 
@@ -238,7 +137,7 @@ Common Android-to-backend events:
 - `workflow.confirm` for explicit user confirmation.
 - `session.stop` when the app exits.
 
-Use a control WebSocket instead when multiple backend services share one session state, when events must outlive one media peer connection, or when the workflow is server-authoritative.
+Use a control WebSocket instead when multiple backend services share one session state, when events must outlive one media peer connection, or when the backend owns long-lived workflow state.
 
 ## Annotated Frames
 
