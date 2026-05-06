@@ -1,47 +1,31 @@
 # Proactive App Pattern
 
-Proactive glasses apps are workflow apps driven by continuous observations. They should feel less like a chat assistant waiting for prompts and more like a task partner that notices relevant state changes, updates the HUD, and speaks only when the workflow calls for it.
+Proactive glasses apps continuously observe real-world context and react when something meaningful changes. They are not just chat flows waiting for user prompts. The main design problem is turning noisy perception into reliable app events.
 
-Use this pattern when the app should react to the user's real-world context without requiring an explicit voice or touch command for every step.
+Use this pattern when camera, audio, sensor, or backend observations should guide, alert, adapt, or trigger actions without requiring an explicit command for every step.
 
 Related references:
 
-- `rokid-webrtc.md`: camera, microphone, data channel, and backend media-session setup.
-- `openai-realtime.md`: backend-controlled speech, sideband control, transcripts, and realtime model turns.
-- `object-detection.md`: normalized detector events, confirmation rules, and detection-driven task progression.
+- `rokid-webrtc.md`: media streaming and data channel setup.
+- `openai-realtime.md`: realtime model turns, backend-controlled speech, and sideband control.
+- `object-detection.md`: detector events, confirmation rules, and detection-driven task progression.
 
-## Core Shape
-
-Keep Android thin and make the backend the workflow authority:
+## Core Loop
 
 ```text
-Android media/control loops
-  -> backend session runtime
-    -> continuous perception loop
-    -> observation normalizer/stabilizer
-    -> workflow state machine
-    -> HUD, speech, and action publisher
+camera/audio/sensors
+  -> perception loop
+  -> normalized observation
+  -> stabilization or trigger policy
+  -> app workflow/controller
+  -> wearer feedback or action
 ```
 
-Android should:
-
-- capture and stream camera/audio at the lowest useful rate
-- render normalized HUD state
-- send explicit user controls such as `session.start`, `session.stop`, `debug.step`, or `workflow.confirm`
-- keep local UI responsive during backend reconnects and media-session restarts
-
-The backend should:
-
-- own session lifecycle, task phase, active prompt or detector, and step progression
-- normalize raw perception output before workflow code sees it
-- stabilize noisy observations before mutating user-visible state
-- publish compact state to the HUD
-- decide when to speak, cancel, replace, or suppress speech
-- discard stale results from old generations after prompts, detectors, or media sessions change
+Feedback can be visual display, audio, haptics if available, logs, or backend actions. The proactive pattern does not require any one output channel.
 
 ## Perception Loop
 
-The perception loop can be implemented with any service or model that produces useful observations from the camera stream:
+The perception loop can use any provider that turns live context into observations:
 
 - continuous VLM inference, such as Overshoot
 - object detection
@@ -49,11 +33,15 @@ The perception loop can be implemented with any service or model that produces u
 - barcode or marker detection
 - hand, pose, or gesture detection
 - periodic image turns to a realtime model
-- non-visual sensors or backend events
+- audio events, sensors, or backend events
 
-Overshoot is a useful service for this shape because it can run continuous VLM inference over a live WebRTC stream and return structured results. Do not design the app so that only Overshoot can fit the architecture. Treat it as one possible perception provider behind the same observation contract.
+Overshoot is useful for this shape because it can run continuous VLM inference over a live WebRTC stream and return structured results. Treat it as one possible perception provider behind the same observation contract, not as a requirement of the architecture.
 
-Raw provider output should be converted into app-owned observations. Prefer small structured payloads over provider envelopes or free text:
+## Observation Contract
+
+Normalize provider output before app logic sees it. Avoid letting raw VLM text, detector envelopes, transcripts, or provider-specific schemas directly drive behavior.
+
+Prefer small app-owned events:
 
 ```json
 {
@@ -68,9 +56,11 @@ Raw provider output should be converted into app-owned observations. Prefer smal
 }
 ```
 
+The contract should make stale-result checks possible. Include a generation, active task id, prompt id, detector id, or equivalent field when the perception request changes over time.
+
 ## Stabilization
 
-Continuous inference is noisy. Put a confirmation rule between observations and workflow transitions unless the workflow tolerates false positives.
+Continuous inference is noisy. Define the trigger policy between observations and app behavior.
 
 Useful rules include:
 
@@ -79,67 +69,31 @@ Useful rules include:
 - count rising edges instead of every positive frame
 - require confidence or agreement across providers
 - require explicit user confirmation for important actions
-- ignore observations whose `generation`, `task_id`, prompt, or detector does not match the active workflow state
+- ignore observations whose generation, task id, prompt, or detector does not match the active request
 
-The user should not hear a new instruction for every inference result. Speech should come from workflow transitions, notable corrections, or deliberate status updates.
+Do not emit user-facing feedback or external actions on every inference callback unless the app explicitly needs a live debug stream.
 
 ## Workflow Authority
 
-Workflow authority means one backend component decides what state the app is in and what external behavior follows from that state. It should not be split across Android UI code, raw model responses, transcripts, and timers.
+Workflow authority means one controller owns the current app state, active perception request, and effect of each observation. In networked glasses apps this is usually the backend. In fully local apps it can be an on-device controller.
 
-For each phase or step, define:
+For each state, define:
 
-- the active prompt, detector, or perception query
-- the observation schema the workflow accepts
-- the stabilization rule
-- the condition that advances, retries, corrects, or fails the step
-- the HUD state to publish
-- the exact speech or model turn to trigger
-- cleanup behavior when the session stops or restarts
+- the active perception query
+- the observation schema accepted in that state
+- the trigger or stabilization rule
+- the transition, feedback, or action caused by a valid observation
+- how old perception results are invalidated when the state changes
 
-A compact event loop is usually easier to reason about than scattered callbacks:
+This prevents raw model responses, client timers, transcripts, and disconnected services from independently advancing the app.
 
-```text
-receive event
-  -> reject stale event
-  -> normalize event
-  -> update phase-local runtime state
-  -> maybe transition workflow
-  -> publish HUD state
-  -> maybe speak or trigger model turn
-```
+## Avoid
 
-Use realtime models as collaborators, not as the only state holder, when the app has deterministic progression, safety constraints, or external state. The model can choose among backend-provided options, explain the next action, or speak an authored line, but the backend should still own step completion and client-visible state.
-
-## Output
-
-Treat HUD state and speech as separate outputs from the same workflow state.
-
-HUD state should be compact and replaceable:
-
-```json
-{
-  "type": "state",
-  "phase": "guiding",
-  "title": "Add lime",
-  "body": "Squeeze the lime into the cup.",
-  "status": "watching"
-}
-```
-
-Speech should be sparse and cancellable. Track an epoch, response id, or generation for active speech so a newer workflow transition can replace stale output. Avoid long narration; smart-glasses speech should be short, concrete, and actionable.
-
-## Failure Modes
-
-Avoid these patterns:
-
-- Android interprets raw VLM, detector, or LLM envelopes.
-- A single positive observation completes an important step.
-- The app speaks on every inference callback.
-- Model transcripts or local timers advance a workflow the backend owns.
-- Prompt changes do not invalidate older perception results.
-- Multiple services mutate session state independently.
-- HUD state and spoken state drift because they come from different authorities.
+- raw model or provider output directly mutates app state
+- a single noisy observation triggers an important action
+- feedback is emitted on every inference result
+- old perception results remain valid after the active task changes
+- multiple components mutate the same workflow state independently
 
 ## Example
 
