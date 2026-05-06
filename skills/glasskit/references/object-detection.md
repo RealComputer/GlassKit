@@ -1,11 +1,11 @@
 # Object Detection
 
-Object detection on Rokid Glasses and similar camera glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, structured context, or annotated frames for Realtime augmentation. The output may drive visible UI, speech, logs, controls, or backend workflow state. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
+Object detection on Rokid Glasses and similar camera glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, structured context, or annotated frames for realtime model augmentation. The output may drive visible UI, speech, logs, controls, or backend workflow state. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
 
 Related references:
 
 - `rokid-webrtc.md`: Android camera streaming, SDP signaling, data channels, ICE, and Python `aiortc` receiver setup.
-- `openai-realtime.md`: backend-augmented vision, image insertion after user audio turns, and Realtime sideband behavior.
+- `openai-realtime.md`: provider-specific realtime model wiring for backend-augmented vision, image insertion after user audio turns, sideband events, and transcripts.
 - `rokid-inputs.md`: Rokid camera constraints and touchpad/debug controls.
 
 ## Architecture
@@ -16,7 +16,7 @@ The common object-detection shape is:
 2. Android sends video to a backend vision endpoint over WebRTC.
 3. The backend receives video, runs detection on the latest useful frame, and normalizes model output.
 4. The backend publishes app events to Android over a data channel or control WebSocket.
-5. The backend optionally stores the latest annotated JPEG for inspection, debugging, or OpenAI Realtime image augmentation.
+5. The backend optionally stores the latest annotated JPEG for inspection, debugging, or realtime model image augmentation.
 
 Android should not interpret raw model envelopes. It should consume normalized app state such as:
 
@@ -34,7 +34,7 @@ For workflow apps, put task progression on the backend. Android should stream, s
 
 ## Android Stream
 
-Use a separate camera WebRTC session when detection is not the main Realtime media path. Start with the lowest resolution and frame rate that still supports the detector. A known working Rokid baseline is `1024x768 @ 5 fps`; raise resolution or frame rate only when the detector needs it. For glasses apps, freshness and stability usually matter more than visual smoothness.
+Use a separate camera WebRTC session when detection is not the main realtime media path. Start with the lowest resolution and frame rate that still supports the detector. A known working Rokid baseline is `1024x768 @ 5 fps`; raise resolution or frame rate only when the detector needs it. For glasses apps, freshness and stability usually matter more than visual smoothness.
 
 Prefer the outward-facing camera. If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
 
@@ -149,7 +149,7 @@ Use a control WebSocket instead when multiple backend services share one session
 
 ## Annotated Frames
 
-Annotated frames are useful for debugging, model tuning, and Realtime augmentation. Use `supervision`, OpenCV, PIL, or the detector library's own helpers to draw boxes and labels.
+Annotated frames are useful for debugging, model tuning, and realtime model augmentation. Use `supervision`, OpenCV, PIL, or the detector library's own helpers to draw boxes and labels.
 
 Save:
 
@@ -158,9 +158,9 @@ Save:
 
 Keep storage bounded with a history limit. A JPEG quality around 85 is a practical default for readable annotations without excessive payload size.
 
-## Realtime Augmentation
+## Realtime Model Augmentation
 
-For OpenAI Realtime, object detection can provide either structured context or the latest annotated image:
+Object detection can provide either structured context or the latest annotated image to a realtime model:
 
 - Use structured text when labels, counts, or state are enough.
 - Use an annotated `input_image` when spatial layout, part appearance, or visual ambiguity matters.
@@ -171,33 +171,20 @@ Convert the latest annotated JPEG to a data URI:
 data_uri = "data:image/jpeg;base64," + base64.b64encode(jpeg_bytes).decode("ascii")
 ```
 
-Insert the image after Realtime has committed the user's audio item, then send exactly one `response.create`. Do not inject images on every event or replay a backlog.
+Insert the image after the realtime session has committed the user's audio turn, then request exactly one model response. Do not inject images on every event or replay a backlog.
 
-When wiring the trigger, use the `pending_turns` / `sent_images` gate from `openai-realtime.md`: wait for `input_audio_buffer.committed`, verify that the matching `conversation.item.added` is a user audio item, and insert the image only once for that item. The payload below is only the final insertion:
+When wiring the trigger, keep a per-turn gate: wait for the user audio turn to be committed, verify that the committed turn belongs to the user, and attach the image only once for that turn. The exact event names are provider-specific; this is the final action in pseudocode:
 
 ```python
-await send_openai_event(
-    session,
-    {
-        "type": "conversation.item.create",
-        "previous_item_id": user_audio_item_id,
-        "item": {
-            "type": "message",
-            "role": "user",
-            "content": [
-                {
-                    "type": "input_image",
-                    "image_url": data_uri,
-                    "detail": "high",
-                }
-            ],
-        },
-    },
+await realtime_session.add_user_image(
+    image_url=data_uri,
+    after_turn_id=user_audio_turn_id,
+    detail="high",
 )
-await send_openai_event(session, {"type": "response.create"})
+await realtime_session.create_response()
 ```
 
-See `openai-realtime.md` for the full event sequence that avoids duplicate image injection.
+See `openai-realtime.md` for one concrete event sequence that avoids duplicate image injection.
 
 ## Training And Tuning
 
