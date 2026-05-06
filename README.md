@@ -130,6 +130,13 @@ Update the skill later with:
 npx skills update glasskit
 ```
 
+Then ask your coding agent with prompts like:
+
+- "Create a starter Rokid Glasses app using the GlassKit skill."
+- "Add a camera preview to the first screen of this Rokid Glasses app."
+- "Add Rokid touchpad navigation and a menu screen to this app."
+- "Stream the Rokid camera and microphone to a WebRTC backend."
+
 ### 2. Copy an example
 
 Use this when one of the examples already matches the app you want to build. Pick the closest example from the table above, copy it into your own project, then follow that example's README.
