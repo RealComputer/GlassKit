@@ -1,6 +1,6 @@
 # Object Detection
 
-Object detection on Rokid Glasses and similar camera glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, structured context, or annotated frames for realtime model augmentation. The output may drive visible UI, speech, logs, controls, or backend workflow state. Keep the detector model interchangeable. RF-DETR is one validated backend, but the architecture should also fit YOLO, a custom local model, a hosted detector, or a task-specific vision service.
+Object detection on Rokid Glasses and similar camera glasses is most useful when the app needs deterministic visual signals from the outward camera: object presence, class labels, bounding boxes, counters, completion triggers, structured context, or annotated frames for realtime model augmentation. The output may drive visible UI, speech, logs, controls, or backend workflow state.
 
 Related references:
 
