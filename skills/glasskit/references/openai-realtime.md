@@ -11,7 +11,7 @@ OpenAI Realtime is a low-latency, stateful API for speech-to-speech and multimod
 
 For Rokid Glasses, use WebRTC for Android media because it gives the most consistent client-side audio path. Keep `OPENAI_API_KEY` on the backend. Android sends an SDP offer to the backend, the backend creates the Realtime call, and Android receives the SDP answer from the backend.
 
-Use `gpt-realtime-1.5` for new Realtime integrations in this skill. It is the current recommended Realtime voice model for audio-in/audio-out GlassKit apps.
+Use `gpt-realtime-1.5` for new smart glasses Realtime integrations. It is the current recommended Realtime voice model for audio-in/audio-out smart glasses apps.
 
 Related reference: [rokid-webrtc.md](rokid-webrtc.md) covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
 
@@ -19,7 +19,7 @@ Related reference: [rokid-webrtc.md](rokid-webrtc.md) covers the Android WebRTC 
 
 Think in two planes:
 
-- **Media plane**: Android's WebRTC peer connection carries microphone audio, optional camera media, and remote assistant audio. Do not manually stream audio event payloads in this GlassKit path; the WebRTC tracks carry the media.
+- **Media plane**: Android's WebRTC peer connection carries microphone audio, optional camera media, and remote assistant audio. Do not manually stream audio event payloads in this WebRTC path; the WebRTC tracks carry the media.
 - **Control plane**: JSON events move over the `oai-events` WebRTC data channel and, when needed, a backend sideband control channel attached to the same Realtime call.
 
 The important objects are:
@@ -31,11 +31,11 @@ The important objects are:
 
 ### Response Creation
 
-The default GlassKit voice pattern is automatic response creation. Leave VAD enabled, let Realtime decide when the user has finished speaking, and do not send `response.create` for each microphone turn.
+The default smart glasses voice pattern is automatic response creation. Leave VAD enabled, let Realtime decide when the user has finished speaking, and do not send `response.create` for each microphone turn.
 
 Use explicit `response.create` only for backend-gated turns. In that mode, keep VAD enabled for turn detection but set `create_response` to `False`, wait for the completed user turn or backend workflow event, add any required conversation items, and then send exactly one `response.create`.
 
-## GlassKit Patterns
+## Smart Glasses Patterns
 
 ### Direct Assistant
 

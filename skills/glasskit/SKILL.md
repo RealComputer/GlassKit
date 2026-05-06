@@ -27,7 +27,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - `references/rokid-inputs.md`: Rokid touchpad handling, camera access, and microphone access.
 - `references/vosk-voice-commands.md`: Vosk setup and implementation pattern for offline command words.
 - `references/rokid-webrtc.md`: Rokid WebRTC sessions, including Android video/audio tracks, receive-only audio, SDP signaling, data channels, ICE/TURN, and backend receiver/broker patterns.
-- `references/openai-realtime.md`: OpenAI Realtime for GlassKit, including WebRTC media brokering, automatic VAD responses, backend-gated turns for vision/tool/speech workflows, sideband events, and transcripts.
+- `references/openai-realtime.md`: OpenAI Realtime patterns for smart glasses, including WebRTC media brokering, automatic VAD responses, backend-gated turns for vision/tool/speech workflows, sideband events, and transcripts.
 - `references/overshoot.md`: Overshoot live-video streams, prompt switching, result relay, and stream lifecycle.
 - `references/rfdetr.md`: FastAPI/aiortc RF-DETR object detection and detection-driven HUD updates.
 - `references/server-authoritative-workflows.md`: backend-owned workflow state, prompt switching, HUD state, and exact speech orchestration.
