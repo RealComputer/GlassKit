@@ -10,7 +10,7 @@ OpenAI Realtime is a low-latency, stateful API for speech-to-speech and multimod
 
 Android sends an SDP offer to the backend, the backend creates the Realtime call, and Android receives the SDP answer from the backend.
 
-Use `gpt-realtime-1.5` for new Realtime integrations. Use the GA Realtime docs and avoid older beta-era API shapes or model names.
+Use `gpt-realtime-2` for new Realtime integrations. Start with `reasoning.effort: "low"` for responsive speech-to-speech behavior, then raise it only for workflows that need deeper multi-step planning. Use the GA Realtime docs and avoid older beta-era API shapes or model names.
 
 Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
 
@@ -57,7 +57,8 @@ Session shape:
 ```python
 session_config = {
     "type": "realtime",
-    "model": "gpt-realtime-1.5",
+    "model": "gpt-realtime-2",
+    "reasoning": {"effort": "low"},
     "audio": {
         "input": {
             "noise_reduction": {"type": "near_field"},
@@ -105,7 +106,8 @@ For output-only speech, keep the Realtime session small:
 ```python
 session_config = {
     "type": "realtime",
-    "model": "gpt-realtime-1.5",
+    "model": "gpt-realtime-2",
+    "reasoning": {"effort": "low"},
     "audio": {"output": {"voice": "cedar"}},
     "instructions": OPENAI_SESSION_INSTRUCTIONS,
     "tools": [...],
@@ -167,7 +169,8 @@ Realtime call creation for backend-gated user audio or vision injection:
 ```python
 session_config = {
     "type": "realtime",
-    "model": "gpt-realtime-1.5",
+    "model": "gpt-realtime-2",
+    "reasoning": {"effort": "low"},
     "audio": {
         "input": {
             "noise_reduction": {"type": "near_field"},
