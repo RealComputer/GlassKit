@@ -13,7 +13,7 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 - Rokid makes several glasses products; this skill specifically targets the product named "Rokid Glasses".
 - Rokid Glasses have a green monochrome binocular display with a portrait 480x640 HUD. Use black backgrounds and white foregrounds; on the device, black appears transparent and white appears green. Other colors can be used for media such as images, but the device renders them as green, transparent, or intermediate brightness levels.
 - The temple touchpad supports four controls: tap for select, double-tap for back, swipe forward for next, and swipe backward for previous. Keep double-tap available on the root screen so users can exit the app.
-- Rokid Glasses do not have cellular networking. Networked apps need device Wi-Fi, or internet access through a phone companion app when the app architecture requires one. Most guidance in this skill assumes a standalone glasses app without a phone companion app for simplicity; if building a companion app, prefer Rokid's official [CXR-L SDK](https://ar.rokid.com/sprite?lang=en).
+- Rokid Glasses do not have cellular networking. Networked apps need device Wi-Fi or internet access through a phone companion app. Most guidance here assumes a standalone glasses app without a phone companion app for simplicity; if building a companion app, also check out Rokid's official [CXR-L SDK](https://ar.rokid.com/sprite?lang=en).
 - You can build Rokid Glasses apps like Android phone apps, but the glasses have less CPU and RAM than phones, so implementations should be efficient. Camera and microphone behavior also has device-specific constraints; consult the relevant references below.
 
 ## Workflow
