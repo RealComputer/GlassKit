@@ -92,7 +92,7 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
       <td width="33%" valign="top">
         <a href="examples/rokid-overshoot">Code</a>
         <br><br>
-        <strong>What:</strong> Smallest live-video HUD example.
+        <strong>What:</strong> Simple real-time scene reader that keeps describing what the wearer is looking at.
         <br>
         <strong>How:</strong> Rokid streams camera video to Overshoot; the backend relays live inference text back to the HUD.
       </td>
