@@ -10,7 +10,7 @@ https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 </div>
 
-## Demos and Examples
+## Demos
 
 These demos show the main pieces GlassKit supports today for Rokid Glasses: camera and microphone capture, monochrome HUD rendering, touchpad and offline voice controls, WebRTC media streaming, and integrations with OpenAI Realtime, Overshoot, and object detection workflows.
 
