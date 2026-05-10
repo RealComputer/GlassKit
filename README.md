@@ -4,8 +4,8 @@ Build *smart* AI apps for *smart glasses*, fast.
 
 **GlassKit is an open-source dev suite for building vision-enabled smart glasses apps.** It provides SDKs and backends that turn real-time camera and microphone streams into specialized AI responses and actions, tailored to your workflow.
 
-**Today:** this repository focuses on end-to-end examples you can adapt.
-**Next:** reusable SDKs + a production-ready backend are coming up.
+- **Platform support today:** Rokid Glasses
+- **Planned support:** Meta glasses, Android XR, Mentra, and more
 
 <div align="center">
 
@@ -141,40 +141,6 @@ git clone https://github.com/RealComputer/GlassKit.git
 mkdir rokid
 git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C rokid
 ```
-
-## Why GlassKit
-
-Smart glasses apps are hard.
-
-- Generic vision-capable LLMs often fail at real-world task support.
-- Each glasses brand has different hardware, form factors, and frameworks.
-- Real-time camera + mic streaming is non-trivial to build correctly and ergonomically.
-
-GlassKit is built around:
-
-- **Vision model orchestration:** choose the right mix of multimodal LLMs and object detectors for the job.
-- **Visual context management:** define what the AI should know and how it is represented.
-- **Real-time streaming:** camera + mic in, responses out, with sane developer ergonomics.
-
-## How it works
-
-You define your AI with visual/textual context and your business logic. Then your app works like this:
-
-1. Camera frames and audio stream from the glasses to the backend via the SDK
-2. The backend processes inputs using vision models and LLMs with your custom context + logic
-3. Responses stream back to the glasses and the wearer via the SDK
-
-You handle the app logic. GlassKit handles the glasses-to-AI pipeline.
-
-## Status and roadmap
-
-GlassKit is early and under active development, but the examples are usable today.
-
-- **Current focus:** end-to-end templates you can clone and adapt
-- **Coming next:** reusable SDKs + production-ready backends
-- **Developer experience:** demo video recording tooling; observability + debuggability tools
-- **Platform support today:** Rokid Glasses
-- **Planned support:** Meta glasses, Android XR, Mentra, and more
 
 ## Contributing
 
