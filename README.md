@@ -1,19 +1,85 @@
 # GlassKit
 
-Build *smart* AI apps for *smart glasses*, fast.
+Build AI apps for smart glasses.
 
-**GlassKit is an open-source dev suite for building vision-enabled smart glasses apps.** It provides SDKs and backends that turn real-time camera and microphone streams into specialized AI responses and actions, tailored to your workflow.
+**GlassKit is an open-source toolkit for building AI apps on smart glasses, starting with Rokid Glasses.** It gives you runnable Android examples, reference backends, device docs, and a coding-agent skill for apps that use live camera/mic streams, a HUD, and real-time guidance.
 
-- **Platform support today:** Rokid Glasses
-- **Planned support:** Meta glasses, Android XR, Mentra, and more
+The broader direction is a developer platform for building, hosting, and shipping smart-glasses apps across more devices. Hosted infrastructure, reusable APIs/SDKs, and support for more glasses targets are future work; this repo is the toolkit and foundation you can use today.
 
 <div align="center">
 
-https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKhPNP
+https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 </div>
 
-## Examples/Templates you can use
+## Start Here
+
+There are three good ways to start, depending on how you like to build.
+
+### 1. Install the GlassKit agent skill
+
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to apply the GlassKit patterns while it works on your app.
+
+Install it with [the skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add RealComputer/GlassKit
+```
+
+Update it later with:
+
+```sh
+npx skills update glasskit
+```
+
+Then ask your coding agent for something concrete, for example:
+
+```text
+Create a starter Rokid Glasses app using the glasskit skill.
+```
+
+The skill is also useful for humans. Start with [`skills/glasskit/SKILL.md`](skills/glasskit/SKILL.md), then read the linked references for Rokid setup, input handling, WebRTC, OpenAI Realtime, object detection, and proactive workflow patterns.
+
+### 2. Copy the Rokid starter app
+
+Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns.
+
+```sh
+git clone https://github.com/RealComputer/GlassKit.git
+mkdir rokid-starter
+git -C GlassKit archive HEAD:skills/glasskit/assets/rokid-hello-world | tar -x -C rokid-starter
+```
+
+Then follow [`skills/glasskit/assets/rokid-hello-world/README.md`](skills/glasskit/assets/rokid-hello-world/README.md).
+
+### 3. Copy a complete example
+
+Use this when one of the demos below is close to the app you want to build.
+
+```sh
+git clone https://github.com/RealComputer/GlassKit.git
+mkdir my-glasses-app
+git -C GlassKit archive HEAD:examples/rokid-overshoot-openai-realtime | tar -x -C my-glasses-app
+```
+
+Replace `examples/rokid-overshoot-openai-realtime` with the example you want, then follow that example's README.
+
+## What You Can Build Today
+
+GlassKit examples cover the main pieces needed for real smart-glasses AI apps:
+
+- Camera and microphone capture on Rokid Glasses
+- Monochrome HUD rendering for the 480x640 glasses display
+- Temple touchpad controls and offline voice commands
+- WebRTC media streaming between glasses, backends, and AI services
+- OpenAI Realtime API voice/vision assistants
+- Overshoot live-video understanding
+- RF-DETR object detection workflows
+- Backend-driven workflow state, guidance, and speech
+
+## Demos and Examples
+
+These are GlassKit demos and prototypes from this repo. Use the Rokid examples as copyable templates when they match your app, and use the other demos as implementation context for related ideas.
 
 <table width="100%">
   <thead>
@@ -37,24 +103,24 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <td width="33%" valign="top">
-        <a href="examples/rokid-overshoot-openai-realtime">Code ➡️</a>
+        <a href="examples/rokid-overshoot-openai-realtime">Code</a>
         <br><br>
-        Proactive drink-making assistant for Rokid Glasses. Streams live camera video to Overshoot for scene understanding and uses the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
+        Proactive mocktail coach for Rokid Glasses. The backend watches live Overshoot observations, chooses a recipe, advances steps, and uses OpenAI Realtime for short spoken guidance and HUD transcripts.
       </td>
       <td width="33%" valign="top">
-        <a href="examples/rokid-rfdetr">Code ➡️</a>
+        <a href="examples/rokid-rfdetr">Code</a>
         <br><br>
-        Real-world speedrun HUD for Rokid Glasses. Streams video over WebRTC with a data channel to the backend, which runs a fine-tuned RF-DETR object detector for automatic, hands-free split completion based on a configured route.
+        Real-world speedrun timer for Rokid Glasses. The glasses stream video to a FastAPI backend, RF-DETR recognizes configured objects, and the HUD advances splits hands-free after confirmation.
       </td>
       <td width="33%" valign="top">
-        <a href="examples/rokid-openai-realtime">Code ➡️</a> ·
-        <a href="examples/rokid-openai-realtime-rfdetr">Code (+ RF-DETR) ➡️</a>
+        <a href="examples/rokid-openai-realtime">Code</a> /
+        <a href="examples/rokid-openai-realtime-rfdetr">Code with RF-DETR</a>
         <br><br>
-        Vision-enabled voice assistant for Rokid Glasses. Streams mic + camera to the OpenAI Realtime API over WebRTC for spoken IKEA assembly guidance. The RF-DETR variant adds object detection for stronger visual understanding.
+        Voice-first assembly assistant for Rokid Glasses. The base version streams mic and camera data to OpenAI Realtime over WebRTC; the RF-DETR variant adds backend object detection and annotated-frame injection for stronger part awareness.
       </td>
     </tr>
     <tr>
-      <th width="33%">Life Context for AI</th>
+      <th width="33%">Life context for AI</th>
       <th width="33%">Privacy filter</th>
       <th width="33%">Scene-description HUD</th>
     </tr>
@@ -71,19 +137,19 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <td width="33%" valign="top">
-        Smart glasses capture an entire day and let you browse and query the footage with AI.
+        Demo write-up about recording a full day from smart glasses and making the footage searchable with AI.
         <br><br>
         <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">Read the build write-up</a>
       </td>
       <td width="33%" valign="top">
-        <a href="archive/privacy-filter">Code ➡️</a>
+        <a href="archive/privacy-filter">Code</a>
         <br><br>
-        Real-time privacy filter that sits between the camera and app. Anonymizes faces without consent, detects and remembers verbal consent, and runs locally with recording support.
+        Prototype privacy layer that sits between a camera and an app. It can anonymize faces, track verbal consent, and run locally with recording support.
       </td>
       <td width="33%" valign="top">
-        <a href="examples/rokid-overshoot">Code ➡️</a>
+        <a href="examples/rokid-overshoot">Code</a>
         <br><br>
-        Simple Rokid Glasses app that streams camera video to Overshoot and shows live inference text on the HUD.
+        Smallest live-video example. Rokid Glasses stream camera video to Overshoot and render returned scene text on the HUD.
       </td>
     </tr>
     <tr>
@@ -100,9 +166,9 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
     </tr>
     <tr>
       <td width="33%" valign="top">
-        <a href="examples/rokid-feature-demo">Code ➡️</a>
+        <a href="examples/rokid-feature-demo">Code</a>
         <br><br>
-        Reference app for Rokid Glasses voice commands and Android phone/emulator support. Includes camera, microphone, speaker, and menu-screen patterns with touchscreen controls that mirror the Rokid touchpad.
+        Device-feature reference app for touchpad navigation, offline Vosk commands, camera preview, mic levels, speaker output, menu screens, and Android phone/emulator controls.
       </td>
       <td width="33%" valign="top"></td>
       <td width="33%" valign="top"></td>
@@ -110,40 +176,38 @@ https://glasskit.ai • https://x.com/GlassKit_ai • https://discord.gg/v5ayGKh
   </tbody>
 </table>
 
-## How to use
+## How GlassKit Apps Work
 
-There are two common ways to start with GlassKit: install the agent skill for guided development, or copy an example and build from it.
+A typical app in this repo has four pieces:
 
-### 1. Install the agent skill
+1. A Rokid Android app captures camera and/or microphone input, handles touchpad gestures, and renders a small HUD.
+2. WebRTC carries live media between the glasses, your backend, and AI services.
+3. A backend coordinates session setup, workflow state, model calls, tool calls, and app-specific decisions.
+4. The wearer gets guidance through HUD updates, speech, transcripts, timers, or other state events.
 
-Use this when you want Codex, Claude Code, Cursor, or another coding agent to apply the GlassKit patterns while it works on your app.
+The exact architecture depends on the example. Some apps send media directly to OpenAI Realtime. Some terminate video on a Python backend with `aiortc`. Some use Overshoot for live video understanding or RF-DETR for object detection.
 
-Install it with [the skills CLI](https://github.com/vercel-labs/skills):
+## Repo Map
 
-```sh
-npx skills add RealComputer/GlassKit
-```
+| Path | What it is for |
+| --- | --- |
+| [`skills/glasskit`](skills/glasskit) | Agent skill, Rokid starter app, and focused references. Useful for both coding agents and human developers. |
+| [`examples`](examples) | Runnable Rokid Glasses examples with Android apps and reference backends. |
+| [`docs`](docs) | Hardware setup, Rokid device notes, and demo-recording workflow. |
 
-Update the skill later with: `npx skills update glasskit`
+## Requirements
 
-Then ask your coding agent with prompts like: `create a starter rokid glasses app` or `add a camera preview to the first screen using the glasskit skill`.
+Most examples need:
 
-Curious about what the skill contains? Check out [`SKILL.md`](skills/glasskit/SKILL.md).
+- [Rokid Glasses and a development cable](docs/how-to-get-rokid-glasses.md)
+- Android Studio and `adb`
+- `uv` for Python backends or Node.js for TypeScript backends
+- API keys depending on the example, such as `OPENAI_API_KEY`, `OVERSHOOT_API_KEY`, or `ROBOFLOW_API_KEY`
 
-### 2. Copy an example
-
-Use this when one of the examples already matches the app you want to build. Pick the closest example from the table above, copy it into your own project, then follow that example's README.
-
-For example, to copy `examples/rokid-feature-demo` into a new `rokid/` directory:
-
-```sh
-git clone https://github.com/RealComputer/GlassKit.git
-mkdir rokid
-git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C rokid
-```
+Each example README has the exact setup steps and environment variables.
 
 ## Contributing
 
-**Contributions are welcome!**
+Contributions are welcome.
 
 By submitting a pull request, you agree that your contribution is licensed under the MIT License of this project (see LICENSE), and you confirm that you have the right to submit it under those terms.
