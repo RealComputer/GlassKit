@@ -14,11 +14,11 @@ https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 There are three ways to start, depending on how you like to build.
 
-### 1. Install the GlassKit Agent Skills
+### 1. Install the GlassKit agent skill
 
-Use this when you want Codex, Claude Code, Cursor, or another coding agent to give smart glasses app development knowledge and implementation patterns. This skill includes a starter template, so it's good to start a project from scratch as well. This is pretty useful as your coding agents because don't know about the device and unique constraints, thus without telling this, it fails to build good apps.
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app. Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
 
-Install it with [the skills CLI](https://github.com/vercel-labs/skills):
+Install it with [the Agent Skills CLI](https://github.com/vercel-labs/skills):
 
 ```sh
 npx skills add RealComputer/GlassKit
@@ -30,13 +30,11 @@ Update it later with:
 npx skills update glasskit
 ```
 
-Then ask your coding agent for something concrete, for example:
-
-Then ask your coding agent with prompts like: `create a starter rokid glasses app`, `add a camera preview to the first screen using the glasskit skill`, or `create a rokid glasses app that connects to openai realtime allowing to have conversation based on what it sees`.
+Then ask your coding agent with prompts like: `create a starter rokid glasses app`, `add a camera preview to the first screen using the glasskit skill`, or `create a rokid glasses app that connects to openai realtime and talks about what it sees`.
 
 ### 2. Copy the Rokid starter app
 
-Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns. You can manually copy, or with this command like this:
+Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns. You can copy it manually or run:
 
 ```sh
 git clone https://github.com/RealComputer/GlassKit.git
