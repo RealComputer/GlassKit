@@ -10,52 +10,6 @@ https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 </div>
 
-## Quick Start
-
-There are three ways to start, depending on how you like to build.
-
-### 1. Install the GlassKit agent skill
-
-Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app. Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
-
-Install it with [the Agent Skills CLI](https://github.com/vercel-labs/skills):
-
-```sh
-npx skills add RealComputer/GlassKit
-```
-
-Update it later with:
-
-```sh
-npx skills update glasskit
-```
-
-Then ask your coding agent with prompts like: `create a starter rokid glasses app`, `add a camera preview to the first screen using the glasskit skill`, or `create a rokid glasses app that connects to openai realtime and talks about what it sees`.
-
-### 2. Copy the Rokid starter app
-
-Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns. You can copy it manually or run:
-
-```sh
-git clone https://github.com/RealComputer/GlassKit.git
-mkdir rokid-starter
-git -C GlassKit archive HEAD:skills/glasskit/assets/rokid-hello-world | tar -x -C rokid-starter
-```
-
-Then follow [the README](skills/glasskit/assets/rokid-hello-world/README.md).
-
-### 3. Copy a complete example
-
-Use this when one of the demos below is close to the app you want to build. For example, to copy `examples/rokid-feature-demo`:
-
-```sh
-git clone https://github.com/RealComputer/GlassKit.git
-mkdir my-glasses-app
-git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-app
-```
-
-Then follow that example's README.
-
 ## Demos and Examples
 
 These demos show the main pieces GlassKit supports today for Rokid Glasses: camera and microphone capture, monochrome HUD rendering, touchpad and offline voice controls, WebRTC media streaming, and integrations with OpenAI Realtime, Overshoot, and object detection workflows.
@@ -154,6 +108,52 @@ These demos show the main pieces GlassKit supports today for Rokid Glasses: came
     </tr>
   </tbody>
 </table>
+
+## Quick Start
+
+There are three ways to start, depending on how you like to build.
+
+### 1. Install the GlassKit agent skill
+
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app. Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
+
+Install it with [the Agent Skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add RealComputer/GlassKit
+```
+
+Update it later with:
+
+```sh
+npx skills update glasskit
+```
+
+Then ask your coding agent with prompts like: `create a starter rokid glasses app`, `add a camera preview to the first screen using the glasskit skill`, or `create a rokid glasses app that connects to openai realtime and talks about what it sees`.
+
+### 2. Copy the Rokid starter app
+
+Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns. You can copy it manually or run:
+
+```sh
+git clone https://github.com/RealComputer/GlassKit.git
+mkdir rokid-starter
+git -C GlassKit archive HEAD:skills/glasskit/assets/rokid-hello-world | tar -x -C rokid-starter
+```
+
+Then follow [the README](skills/glasskit/assets/rokid-hello-world/README.md).
+
+### 3. Copy a complete example
+
+Use this when a demo is close to the app you want to build. For example, to copy `examples/rokid-feature-demo`:
+
+```sh
+git clone https://github.com/RealComputer/GlassKit.git
+mkdir my-glasses-app
+git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-app
+```
+
+Then follow that example's README.
 
 ## How GlassKit Apps Work
 
