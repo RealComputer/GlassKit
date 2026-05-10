@@ -43,7 +43,7 @@ Physical Rokid Glasses do not show an interactive Android permission dialog in t
 
 You can test most app flows on an Android phone or emulator for convenience, but confirm final behavior on physical Rokid Glasses. This is especially important for the camera and microphone, which are often unstable in the emulator.
 
-If you decide to use an Android phone or emulator, refer to the example project at `../assets/rokid-hello-world/` for a viewport wrapper and touchpad navigation mapping with touchscreen controls.
+If you decide to use an Android phone or emulator, refer to the [Rokid Hello World starter](../assets/rokid-hello-world/) for a viewport wrapper and touchpad navigation mapping with touchscreen controls.
 
 ## Emulator Setup
 

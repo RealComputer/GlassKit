@@ -18,16 +18,16 @@ This GlassKit skill provides templates and documentation for Rokid Glasses app d
 
 ## Workflow
 
-1. For a new Rokid Glasses app, copy `assets/rokid-hello-world/` into the target workspace first. It is a small starter app. Rename the package and application ID after copying if needed. You can also compare your app against this starter when troubleshooting setup issues.
+1. For a new Rokid Glasses app, copy the [Rokid Hello World starter](assets/rokid-hello-world/) into the target workspace first. It is a small starter app. Rename the package and application ID after copying if needed. You can also compare your app against this starter when troubleshooting setup issues.
 2. Identify the required features, then read the relevant references below before implementation so you can account for device-specific constraints and patterns.
 3. For questions, open an issue in the upstream [GlassKit repository](https://github.com/RealComputer/GlassKit) or ask in [the Discord server](https://discord.gg/v5ayGKhPNP).
 
 ## References
 
-- `references/rokid-setup.md`: Rokid hardware, Wi-Fi/ADB connection, common commands, and phone/emulator setup.
-- `references/rokid-inputs.md`: Rokid touchpad handling, camera access, and microphone access.
-- `references/vosk-voice-commands.md`: Vosk setup and implementation pattern for offline command words.
-- `references/rokid-webrtc.md`: Rokid WebRTC sessions, including Android video/audio tracks, receive-only audio, SDP signaling, data channels, ICE/TURN, and backend receiver/broker patterns.
-- `references/proactive-perception-pattern.md`: high-level pattern for proactive glasses apps where continuous observations drive workflow state, wearer feedback, and actions.
-- `references/openai-realtime.md`: OpenAI Realtime patterns for smart glasses, including WebRTC media brokering, automatic VAD responses, backend-gated turns for vision/tool/speech workflows, sideband events, and transcripts.
-- `references/object-detection.md`: model-agnostic object detection patterns for Rokid camera streams, including backend inference, normalized events, detection-driven app events, RF-DETR as an example, and realtime model augmentation.
+- [Rokid Setup](references/rokid-setup.md): Rokid hardware, Wi-Fi/ADB connection, common commands, and phone/emulator setup.
+- [Rokid Inputs](references/rokid-inputs.md): Rokid touchpad handling, camera access, and microphone access.
+- [Vosk Voice Commands](references/vosk-voice-commands.md): Vosk setup and implementation pattern for offline command words.
+- [Rokid WebRTC](references/rokid-webrtc.md): Rokid WebRTC sessions, including Android video/audio tracks, receive-only audio, SDP signaling, data channels, ICE/TURN, and backend receiver/broker patterns.
+- [Proactive Perception Pattern](references/proactive-perception-pattern.md): high-level pattern for proactive glasses apps where continuous observations drive workflow state, wearer feedback, and actions.
+- [OpenAI Realtime](references/openai-realtime.md): OpenAI Realtime patterns for smart glasses, including WebRTC media brokering, automatic VAD responses, backend-gated turns for vision/tool/speech workflows, sideband events, and transcripts.
+- [Object Detection](references/object-detection.md): model-agnostic object detection patterns for Rokid camera streams, including backend inference, normalized events, detection-driven app events, RF-DETR as an example, and realtime model augmentation.

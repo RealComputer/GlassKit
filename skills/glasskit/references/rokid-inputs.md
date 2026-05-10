@@ -11,7 +11,7 @@ Rokid Glasses touchpad gestures come through Android input handling.
 | Swipe forward | `KeyEvent.KEYCODE_DPAD_DOWN` | Next / move focus forward |
 | Swipe backward | `KeyEvent.KEYCODE_DPAD_UP` | Previous / move focus backward |
 
-For actual implementation example and optional phone/emulator touch fallback, `../assets/rokid-hello-world/`.
+For an implementation example and optional phone/emulator touch fallback, see the [Rokid Hello World starter](../assets/rokid-hello-world/).
 
 ## Camera Access
 

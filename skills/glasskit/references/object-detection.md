@@ -4,9 +4,9 @@ Object detection on Rokid Glasses and similar camera glasses is most useful when
 
 Related references:
 
-- `rokid-webrtc.md`: Android camera streaming, SDP signaling, data channels, ICE, and Python `aiortc` receiver setup.
-- `openai-realtime.md`: provider-specific realtime model wiring for backend-augmented vision, image insertion after user audio turns, sideband events, and transcripts.
-- `rokid-inputs.md`: Rokid camera constraints and touchpad/debug controls.
+- [Rokid WebRTC](rokid-webrtc.md): Android camera streaming, SDP signaling, data channels, ICE, and Python `aiortc` receiver setup.
+- [OpenAI Realtime](openai-realtime.md): provider-specific realtime model wiring for backend-augmented vision, image insertion after user audio turns, sideband events, and transcripts.
+- [Rokid Inputs](rokid-inputs.md): Rokid camera constraints and touchpad/debug controls.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Send explicit app events such as `session.start`, `run.start`, `debug.step`, or 
 
 ## Backend Receiver
 
-The backend can be any stack that can receive media and run inference. In Python, use `aiortc` for WebRTC termination instead of hand-rolled SDP or media parsing. See `rokid-webrtc.md` for the receiver shape.
+The backend can be any stack that can receive media and run inference. In Python, use `aiortc` for WebRTC termination instead of hand-rolled SDP or media parsing. See [Rokid WebRTC](rokid-webrtc.md) for the receiver shape.
 
 Keep the receiver thin: accept the media stream, hand frames to a vision processor, and publish normalized app events. Keep session lifecycle, cleanup, and state broadcasting outside the detector model wrapper so the model can be swapped later.
 
@@ -183,7 +183,7 @@ await realtime_session.add_user_image(
 await realtime_session.create_response()
 ```
 
-See `openai-realtime.md` for one concrete event sequence that avoids duplicate image injection.
+See [OpenAI Realtime](openai-realtime.md) for one concrete event sequence that avoids duplicate image injection.
 
 ## Training And Tuning
 

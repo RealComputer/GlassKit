@@ -158,7 +158,7 @@ private fun createCameraCapturer(): VideoCapturer? {
 }
 ```
 
-For CameraX preview code, apply the Application-level back-camera limiter from `rokid-inputs.md`, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 15 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
+For CameraX preview code, apply the Application-level back-camera limiter from [Rokid Inputs](rokid-inputs.md), bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 15 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
 
 Rokid's camera HAL does not reliably advertise sub-15 fps modes. Start capture at a supported mode such as `1024x768 @ 15 fps`, then use source adaptation to lower the outbound WebRTC rate when needed.
 

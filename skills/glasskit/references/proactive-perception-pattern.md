@@ -6,9 +6,9 @@ Use this pattern when camera, audio, sensor, or backend observations should guid
 
 Related references:
 
-- `rokid-webrtc.md`: media streaming and data channel setup.
-- `openai-realtime.md`: realtime model turns, backend-controlled speech, and sideband control.
-- `object-detection.md`: detector events, confirmation rules, and detection-driven task progression.
+- [Rokid WebRTC](rokid-webrtc.md): media streaming and data channel setup.
+- [OpenAI Realtime](openai-realtime.md): realtime model turns, backend-controlled speech, and sideband control.
+- [Object Detection](object-detection.md): detector events, confirmation rules, and detection-driven task progression.
 
 ## Core Loop
 

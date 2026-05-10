@@ -14,7 +14,7 @@ For personal or hackathon development, Android can POST the SDP offer directly t
 
 Use `gpt-realtime-2` for new Realtime integrations. Start with `reasoning.effort: "low"` for responsive speech-to-speech behavior, then raise it only for workflows that need deeper multi-step planning. Use the GA Realtime docs and avoid older beta-era API shapes or model names.
 
-Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
+Related reference: [Rokid WebRTC](rokid-webrtc.md) covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.
 
 ## How It Works
 
