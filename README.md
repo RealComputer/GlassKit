@@ -184,7 +184,7 @@ A typical app in this repo has four pieces:
 1. A Rokid Glasses app (Android) captures camera/microphone input, handles touchpad gestures, and renders a HUD.
 2. WebRTC carries live media between the glasses, your backend, and AI services.
 3. A backend coordinates session setup, workflow state, model calls, tool calls, and app-specific decisions.
-4. The wearer gets real-time display and audio feedback.
+4. The wearer gets real-time feedback via display and audio.
 
 The exact architecture varies by example. Some pieces can run offline, including local voice commands, device controls, and local vision/privacy processing.
 
