@@ -131,7 +131,7 @@ There are three ways to start, depending on how you like to build.
 
 Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app.
 
-Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
+Smart-glasses apps have constraints that most coding agents are not used to handling: small HUDs, camera and microphone access, touchpad and voice inputs, WebRTC setup, latency, battery use, and wearer-facing UX. The GlassKit agent skill packages that context with reference patterns and a starter template, so agents can build more realistic glasses apps from the first pass.
 
 Install it with [the Agent Skills CLI](https://github.com/vercel-labs/skills):
 
