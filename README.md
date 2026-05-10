@@ -18,7 +18,7 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
   <thead>
     <tr>
       <th width="33%">Drink-making coach</th>
-      <th width="33%">Sushi speedrun HUD</th>
+      <th width="33%">Sushi speedrun timer</th>
       <th width="33%">IKEA assembly assistant</th>
     </tr>
   </thead>
@@ -59,9 +59,9 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
       </td>
     </tr>
     <tr>
-      <th width="33%">Life context for AI</th>
-      <th width="33%">Privacy filter</th>
-      <th width="33%">Scene-description HUD</th>
+      <th width="33%">Searchable life recording</th>
+      <th width="33%">Real-time privacy filter</th>
+      <th width="33%">Live scene reader</th>
     </tr>
     <tr>
       <td width="33%" valign="top" align="center">
@@ -98,7 +98,7 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
       </td>
     </tr>
     <tr>
-      <th width="33%">Voice command + phone support</th>
+      <th width="33%">Rokid feature demo</th>
       <th width="33%"></th>
       <th width="33%"></th>
     </tr>
