@@ -166,12 +166,6 @@ You define your AI with visual/textual context and your business logic. Then you
 
 You handle the app logic. GlassKit handles the glasses-to-AI pipeline.
 
-## Getting started
-
-1. **Pick an example** from `examples/`
-2. **Open its README** and follow the setup steps
-3. **Run it**, then modify for your workflow
-
 ## Status and roadmap
 
 GlassKit is early and under active development, but the examples are usable today.
