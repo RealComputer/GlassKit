@@ -14,37 +14,37 @@ https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mic capture, WebRTC streaming, a monochrome on-lens display (HUD), touchpad and offline voice controls, OpenAI Realtime, Overshoot, and object detection.
 
-<table width="100%">
+<table>
   <thead>
     <tr>
-      <th width="33%">Drink-making coach</th>
-      <th width="33%">Sushi speedrun timer</th>
-      <th width="33%">IKEA assembly assistant</th>
+      <th>Drink-making coach</th>
+      <th>Sushi speedrun timer</th>
+      <th>IKEA assembly assistant</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab"></video>
       </td>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da"></video>
       </td>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc"></video>
       </td>
     </tr>
     <tr>
       <td width="33%" valign="top">
         <a href="examples/rokid-overshoot-openai-realtime">Code</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Proactive drink-making coach that watches ingredients, picks a recipe, and guides each step.
         <br>
         <strong>How:</strong> Rokid streams video to Overshoot; a FastAPI backend manages recipe state; OpenAI Realtime provides spoken guidance and HUD transcripts.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Real-world speedrun timer for physical tasks, shown with sushi.
         <br>
         <strong>How:</strong> Rokid streams video to a FastAPI backend; RF-DETR detects configured objects and advances HUD splits after two-hit confirmation.
@@ -52,26 +52,26 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
       <td width="33%" valign="top">
         <a href="examples/rokid-openai-realtime">Code</a> /
         <a href="examples/rokid-openai-realtime-rfdetr">Code with RF-DETR</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Voice-first assembly assistant for an IKEA wooden box.
         <br>
         <strong>How:</strong> The base app streams Rokid mic/camera to OpenAI Realtime over WebRTC; the RF-DETR version adds backend object detection and annotated-frame injection.
       </td>
     </tr>
     <tr>
-      <th width="33%">Searchable life recording</th>
-      <th width="33%">Real-time privacy filter</th>
-      <th width="33%">Live scene reader</th>
+      <th>Searchable life recording</th>
+      <th>Real-time privacy filter</th>
+      <th>Live scene reader</th>
     </tr>
     <tr>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f285bff2-ebde-4d17-99e0-bd1573881d26" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/f285bff2-ebde-4d17-99e0-bd1573881d26"></video>
       </td>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa"></video>
       </td>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b"></video>
       </td>
     </tr>
     <tr>
@@ -79,46 +79,46 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
         <strong>What:</strong> Full-day smart-glasses recording demo.
         <br>
         <strong>How:</strong> AI makes first-person footage browsable and searchable so long recordings become usable context.
-        <br><br>
+        <br>
         <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">Read the build write-up</a>
       </td>
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Real-time privacy layer between a camera and an app.
         <br>
         <strong>How:</strong> FFmpeg/OpenCV process and anonymize video locally; Faster Whisper and Phi-3.5 Mini detect and remember verbal consent.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-overshoot">Code</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Simple real-time scene reader that keeps describing what the wearer is looking at.
         <br>
         <strong>How:</strong> Rokid streams camera video to Overshoot; the backend relays live inference text back to the HUD.
       </td>
     </tr>
     <tr>
-      <th width="33%">Rokid feature demo</th>
-      <th width="33%"></th>
-      <th width="33%"></th>
+      <th>Rokid feature demo</th>
+      <th></th>
+      <th></th>
     </tr>
     <tr>
-      <td width="33%" valign="top" align="center">
-        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92" width="260" controls></video>
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92"></video>
       </td>
-      <td width="33%" valign="top" align="center"></td>
-      <td width="33%" valign="top" align="center"></td>
+      <td align="center"></td>
+      <td align="center"></td>
     </tr>
     <tr>
       <td width="33%" valign="top">
         <a href="examples/rokid-feature-demo">Code</a>
-        <br><br>
+        <br>
         <strong>What:</strong> Device-feature reference app for Rokid Glasses and phone/emulator testing.
         <br>
         <strong>How:</strong> Shows touchpad navigation, offline Vosk voice commands, camera preview, mic level meter, audio playback, and reusable screen controllers.
       </td>
-      <td width="33%" valign="top"></td>
-      <td width="33%" valign="top"></td>
+      <td></td>
+      <td></td>
     </tr>
   </tbody>
 </table>
