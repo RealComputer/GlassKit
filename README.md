@@ -171,24 +171,22 @@ Then follow that example's README.
 
 ## Repository Map
 
-| Path | What it is for |
+| Path | What it contains |
 | --- | --- |
-| [`skills/glasskit/`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter, and references. |
+| [`skills/glasskit/`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter, and smart-glasses app references for coding agents and human developers. |
 | [`docs/`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
-| [`examples/`](examples) | Runnable Rokid Glasses examples. |
-
-They're useful for both coding agents and human developers.
+| [`examples/`](examples) | Runnable Rokid Glasses examples you can copy or adapt. |
 
 ## How Apps Work
 
 A typical app in this repo has four pieces:
 
-1. A Rokid Glasses (Android) app captures camera/microphone input, handles touchpad gestures, and renders a HUD.
+1. A Rokid Glasses app (Android) captures camera/microphone input, handles touchpad gestures, and renders a HUD.
 2. WebRTC carries live media between the glasses, your backend, and AI services.
 3. A backend coordinates session setup, workflow state, model calls, tool calls, and app-specific decisions.
-4. The wearer gets update through HUD and speech.
+4. The wearer gets real-time display and audio feedback.
 
-Some apps can work independently offline.
+The exact architecture varies by example. Some pieces can run offline, including local voice commands, device controls, and local vision/privacy processing.
 
 ## Requirements
 
