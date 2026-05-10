@@ -169,24 +169,26 @@ git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-
 
 Then follow that example's README.
 
-## How GlassKit Apps Work
-
-A typical app in this repo has four pieces:
-
-1. A Rokid Android app captures camera and/or microphone input, handles touchpad gestures, and renders a small HUD.
-2. WebRTC carries live media between the glasses, your backend, and AI services.
-3. A backend coordinates session setup, workflow state, model calls, tool calls, and app-specific decisions.
-4. The wearer gets guidance through HUD updates, speech, transcripts, timers, or other state events.
-
-The exact architecture depends on the example. Some apps send media directly to OpenAI Realtime. Some terminate video on a Python backend with `aiortc`. Some use Overshoot for live video understanding or RF-DETR for object detection.
-
 ## Repository Map
 
 | Path | What it is for |
 | --- | --- |
-| [`skills/glasskit`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter app, and focused references. Useful for both coding agents and human developers. |
-| [`docs`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
-| [`examples`](examples) | Runnable Rokid Glasses examples. |
+| [`skills/glasskit/`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter, and references. |
+| [`docs/`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
+| [`examples/`](examples) | Runnable Rokid Glasses examples. |
+
+They're useful for both coding agents and human developers.
+
+## How Apps Work
+
+A typical app in this repo has four pieces:
+
+1. A Rokid Glasses (Android) app captures camera/microphone input, handles touchpad gestures, and renders a HUD.
+2. WebRTC carries live media between the glasses, your backend, and AI services.
+3. A backend coordinates session setup, workflow state, model calls, tool calls, and app-specific decisions.
+4. The wearer gets update through HUD and speech.
+
+Some apps can work independently offline.
 
 ## Requirements
 
