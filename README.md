@@ -4,11 +4,13 @@
 
 Today GlassKit starts with Rokid Glasses. The long-term goal is a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
 
-<div align="center">
-
-https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
-
-</div>
+<p align="center">
+  https://glasskit.ai
+  &nbsp;&middot;&nbsp;
+  https://x.com/GlassKit_ai
+  &nbsp;&middot;&nbsp;
+  https://discord.gg/v5ayGKhPNP
+</p>
 
 ## Demos
 
