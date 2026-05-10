@@ -190,11 +190,11 @@ The exact architecture varies by example. Some pieces can run offline, including
 
 ## Requirements
 
-Most examples need:
+Many examples need:
 
 - [Rokid Glasses and a development cable](docs/how-to-get-rokid-glasses.md)
-- Android Studio and `adb`
-- `uv` for Python backends or Node.js for TypeScript backends
+- Android Studio or `adb`
+- `uv` for Python backends or `node` for TypeScript backends
 - API keys depending on the example, such as `OPENAI_API_KEY`, `OVERSHOOT_API_KEY`, or `ROBOFLOW_API_KEY`
 
 Each example README has the exact setup steps and environment variables.
