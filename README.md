@@ -56,22 +56,9 @@ git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-
 
 Then follow that example's README.
 
-## What You Can Build Today
-
-GlassKit examples cover the main pieces needed for real smart-glasses AI apps:
-
-- Camera and microphone capture on Rokid Glasses
-- Monochrome HUD rendering for the 480x640 glasses display
-- Temple touchpad controls and offline voice commands
-- WebRTC media streaming between glasses, backends, and AI services
-- OpenAI Realtime API voice/vision assistants
-- Overshoot live-video understanding
-- RF-DETR object detection workflows
-- Backend-driven workflow state, guidance, and speech
-
 ## Demos and Examples
 
-These are GlassKit demos and prototypes from this repo. Use the Rokid examples as copyable templates when they match your app, and use the other demos as implementation context for related ideas.
+These demos show the main pieces GlassKit supports today for Rokid Glasses: camera and microphone capture, monochrome HUD rendering, touchpad and offline voice controls, WebRTC media streaming, and integrations with OpenAI Realtime, Overshoot, and object detection workflows.
 
 <table width="100%">
   <thead>
