@@ -38,18 +38,18 @@ These demos show the main pieces GlassKit supports today for Rokid Glasses: came
       <td width="33%" valign="top">
         <a href="examples/rokid-overshoot-openai-realtime">Code</a>
         <br><br>
-        Proactive mocktail coach for Rokid Glasses. The backend watches live Overshoot observations, chooses a recipe, advances steps, and uses OpenAI Realtime for short spoken guidance and HUD transcripts.
+        Proactive drink-making assistant. Overshoot watches the scene and guide the user using OpenAI Realtime API.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-rfdetr">Code</a>
         <br><br>
-        Real-world speedrun timer for Rokid Glasses. The glasses stream video to a FastAPI backend, RF-DETR recognizes configured objects, and the HUD advances splits hands-free after confirmation.
+        Real-world speedrun timer. The glasses stream video to a backend, RF-DETR recognizes objects, and the HUD advances splits hands-free.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-openai-realtime">Code</a> /
         <a href="examples/rokid-openai-realtime-rfdetr">Code with RF-DETR</a>
         <br><br>
-        Voice-first assembly assistant for Rokid Glasses. The base version streams mic and camera data to OpenAI Realtime over WebRTC; the RF-DETR variant adds backend object detection and annotated-frame injection for stronger part awareness.
+        Vision-enabled assembly assistant. The base version streams mic and camera data to OpenAI Realtime for assembly guidance; the RF-DETR variant adds backend object detection and annotated-frame injection for stronger part awareness.
       </td>
     </tr>
     <tr>
@@ -70,19 +70,19 @@ These demos show the main pieces GlassKit supports today for Rokid Glasses: came
     </tr>
     <tr>
       <td width="33%" valign="top">
-        Demo write-up about recording a full day from smart glasses and making the footage searchable with AI.
+        Demo about recording a full day from smart glasses and making the footage browsable/searchable with AI.
         <br><br>
         <a href="https://dev.to/tash-2s/i-recorded-13-hours-of-my-day-with-smart-glasses-for-ai-heres-what-i-built-and-what-i-learned-5f1c">Read the build write-up</a>
       </td>
       <td width="33%" valign="top">
         <a href="archive/privacy-filter">Code</a>
         <br><br>
-        Prototype privacy layer that sits between a camera and an app. It can anonymize faces, track verbal consent, and run locally with recording support.
+        Real-time privacy filter that sits between a camera and an app. Anonymizes faces, detects and remembers verbal consent, and runs locally.
       </td>
       <td width="33%" valign="top">
         <a href="examples/rokid-overshoot">Code</a>
         <br><br>
-        Smallest live-video example. Rokid Glasses stream camera video to Overshoot and render returned scene text on the HUD.
+        Streams camera video to Overshoot and shows live inference text on the HUD.
       </td>
     </tr>
     <tr>
@@ -101,7 +101,7 @@ These demos show the main pieces GlassKit supports today for Rokid Glasses: came
       <td width="33%" valign="top">
         <a href="examples/rokid-feature-demo">Code</a>
         <br><br>
-        Device-feature reference app for touchpad navigation, offline Vosk commands, camera preview, mic levels, speaker output, menu screens, and Android phone/emulator controls.
+        Rokid Glasses feature reference app for touchpad navigation, offline voice commands via Vosk, camera/mic/spearker access, screen archtecture pattern, and Android phone/emulator support for testing.
       </td>
       <td width="33%" valign="top"></td>
       <td width="33%" valign="top"></td>
