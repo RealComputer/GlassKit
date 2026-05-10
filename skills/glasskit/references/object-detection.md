@@ -34,7 +34,7 @@ For workflow apps, put task progression on the backend. Android should stream, s
 
 ## Android Stream
 
-Use a separate camera WebRTC session when detection is not the main realtime media path. Start with the lowest resolution and frame rate that still supports the detector. A known working Rokid baseline is `1024x768 @ 5 fps`; raise resolution or frame rate only when the detector needs it. For glasses apps, freshness and stability usually matter more than visual smoothness.
+Use a separate camera WebRTC session when detection is not the main realtime media path. Start with the lowest supported capture mode that still supports the detector; on Rokid, use `1024x768 @ 15 fps` capture and throttle detection or WebRTC output lower when needed. For glasses apps, freshness and stability usually matter more than visual smoothness.
 
 If the requested mode is not supported by the camera HAL, start capture with a supported mode and let WebRTC adapt the outgoing stream. Create any data channel before the offer if detection events need to move over the same peer connection.
 

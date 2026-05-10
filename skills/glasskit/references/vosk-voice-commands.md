@@ -18,6 +18,8 @@ dependencies {
 }
 ```
 
+Keep the Vosk and JNA dependencies as inline strings: Gradle version catalogs lose the `@aar` qualifier and can pull duplicate JNA classes.
+
 Add `android.permission.RECORD_AUDIO` to the manifest and request it at runtime before opening `AudioRecord`.
 
 Bundle a model at `app/src/main/assets/model-en-us/`. Recommended default: `vosk-model-small-en-us-0.15`.

@@ -35,6 +35,10 @@ adb devices
 - `adb logcat -v time --pid "$(adb shell pidof -s com.example.example)"`: stream only the app logs once the app is running.
 - `emulator ...`: launch an Android emulator when one is available.
 
+## Runtime Permissions
+
+Physical Rokid Glasses do not show an interactive Android permission dialog in the HUD; runtime permission requests on-device behave as accepted, but keep normal permission request code for phone and emulator testing.
+
 ## Phone And Emulator
 
 You can test most app flows on an Android phone or emulator for convenience, but confirm final behavior on physical Rokid Glasses. This is especially important for the camera and microphone, which are often unstable in the emulator.

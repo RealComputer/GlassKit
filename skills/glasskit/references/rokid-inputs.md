@@ -15,7 +15,7 @@ For actual implementation example and optional phone/emulator touch fallback, `.
 
 ## Camera Access
 
-Use CameraX and bind the rear camera. The confirmed Rokid Glasses camera request is 1024x768 at 5 fps. The gotcha is that the requested CameraX size is landscape-shaped even though the camera image should appear portrait; request `1024x768`, not `768x1024`, then set target rotation so CameraX applies the correct transform.
+Use CameraX and bind the rear camera. The practical Rokid Glasses capture floor is 1024x768 at 15 fps; request `1024x768`, not `768x1024`, then set target rotation so CameraX applies the correct transform.
 
 Rokid Glasses expose only the rear/outward camera. Configure CameraX at the Application level to expose only `CameraSelector.DEFAULT_BACK_CAMERA` before any `ProcessCameraProvider` is initialized. This avoids CameraX front-camera validation retries on hardware that reports no front camera, and still works for Rokid-style phone/emulator testing with a back camera. Omit this only if the same app process needs front-camera features.
 
@@ -46,7 +46,7 @@ If the app already has a custom `Application`, implement `CameraXConfig.Provider
 
 ```kotlin
 private val rokidCameraSize = Size(1024, 768)
-private val rokidCameraFps = Range(5, 5)
+private val rokidCameraFps = Range(15, 15)
 
 @OptIn(ExperimentalCamera2Interop::class)
 private fun bindRokidCamera(
@@ -89,6 +89,8 @@ private fun bindRokidCamera(
 ```
 
 Request normal Android `CAMERA` permission before binding, and unbind the provider when the camera screen is no longer visible.
+
+Do not rely on Camera2 accepting sub-15 fps requests on Rokid; for lower outbound rates, capture at a supported mode and throttle downstream processing or WebRTC output.
 
 ## Microphone Access
 

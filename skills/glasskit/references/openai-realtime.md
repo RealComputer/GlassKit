@@ -10,6 +10,8 @@ OpenAI Realtime is a low-latency, stateful API for speech-to-speech and multimod
 
 Android sends an SDP offer to the backend, the backend creates the Realtime call, and Android receives the SDP answer from the backend.
 
+For personal or hackathon development, Android can POST the SDP offer directly to `https://api.openai.com/v1/realtime/calls` with a local API key; do not ship that pattern because it embeds the key in the APK.
+
 Use `gpt-realtime-2` for new Realtime integrations. Start with `reasoning.effort: "low"` for responsive speech-to-speech behavior, then raise it only for workflows that need deeper multi-step planning. Use the GA Realtime docs and avoid older beta-era API shapes or model names.
 
 Related reference: `rokid-webrtc.md` covers the Android WebRTC setup, receive-only audio transceivers, SDP normalization, ICE, and lifecycle cleanup that this document assumes.

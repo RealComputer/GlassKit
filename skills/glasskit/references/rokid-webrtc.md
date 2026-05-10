@@ -158,11 +158,11 @@ private fun createCameraCapturer(): VideoCapturer? {
 }
 ```
 
-For CameraX preview code, apply the Application-level back-camera limiter from `rokid-inputs.md`, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 5 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
+For CameraX preview code, apply the Application-level back-camera limiter from `rokid-inputs.md`, bind `CameraSelector.DEFAULT_BACK_CAMERA`, request `1024x768 @ 15 fps`, and set display rotation so the landscape sensor stream appears correctly in the portrait HUD.
 
-Start with the lowest useful capture rate. Common choices: `1024x768 @ 5 fps`, `1024x768 @ 15 fps`
+Rokid's camera HAL does not reliably advertise sub-15 fps modes. Start capture at a supported mode such as `1024x768 @ 15 fps`, then use source adaptation to lower the outbound WebRTC rate when needed.
 
-Prefer matching the source adaptation and capturer start values:
+For example, capture at 15 fps and send about 5 fps:
 
 ```kotlin
 val source = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast).apply {
@@ -171,7 +171,7 @@ val source = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast)
 localVideoSource = source
 
 videoCapturer.initialize(surfaceTextureHelper, context, source.capturerObserver)
-videoCapturer.startCapture(1024, 768, 5)
+videoCapturer.startCapture(1024, 768, 15)
 ```
 
 If the camera HAL rejects the desired low FPS or resolution, start capture with a supported mode and use `adaptOutputFormat(...)` to limit what WebRTC sends.
