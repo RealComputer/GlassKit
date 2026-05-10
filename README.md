@@ -10,13 +10,13 @@ https://glasskit.ai - https://x.com/GlassKit_ai - https://discord.gg/v5ayGKhPNP
 
 </div>
 
-## Start Here
+## Quick Start
 
-There are three good ways to start, depending on how you like to build.
+There are three ways to start, depending on how you like to build.
 
-### 1. Install the GlassKit agent skill
+### 1. Install the GlassKit Agent Skills
 
-Use this when you want Codex, Claude Code, Cursor, or another coding agent to apply the GlassKit patterns while it works on your app.
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to give smart glasses app development knowledge and implementation patterns. This skill includes a starter template, so it's good to start a project from scratch as well. This is pretty useful as your coding agents because don't know about the device and unique constraints, thus without telling this, it fails to build good apps.
 
 Install it with [the skills CLI](https://github.com/vercel-labs/skills):
 
@@ -32,15 +32,11 @@ npx skills update glasskit
 
 Then ask your coding agent for something concrete, for example:
 
-```text
-Create a starter Rokid Glasses app using the glasskit skill.
-```
-
-The skill is also useful for humans. Start with [`skills/glasskit/SKILL.md`](skills/glasskit/SKILL.md), then read the linked references for Rokid setup, input handling, WebRTC, OpenAI Realtime, object detection, and proactive workflow patterns.
+Then ask your coding agent with prompts like: `create a starter rokid glasses app`, `add a camera preview to the first screen using the glasskit skill`, or `create a rokid glasses app that connects to openai realtime allowing to have conversation based on what it sees`.
 
 ### 2. Copy the Rokid starter app
 
-Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns.
+Use this when you want a small app scaffold with Rokid HUD layout and navigation patterns. You can manually copy, or with this command like this:
 
 ```sh
 git clone https://github.com/RealComputer/GlassKit.git
@@ -48,19 +44,19 @@ mkdir rokid-starter
 git -C GlassKit archive HEAD:skills/glasskit/assets/rokid-hello-world | tar -x -C rokid-starter
 ```
 
-Then follow [`skills/glasskit/assets/rokid-hello-world/README.md`](skills/glasskit/assets/rokid-hello-world/README.md).
+Then follow [the README](skills/glasskit/assets/rokid-hello-world/README.md).
 
 ### 3. Copy a complete example
 
-Use this when one of the demos below is close to the app you want to build.
+Use this when one of the demos below is close to the app you want to build. For example, to copy `examples/rokid-feature-demo`:
 
 ```sh
 git clone https://github.com/RealComputer/GlassKit.git
 mkdir my-glasses-app
-git -C GlassKit archive HEAD:examples/rokid-overshoot-openai-realtime | tar -x -C my-glasses-app
+git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-app
 ```
 
-Replace `examples/rokid-overshoot-openai-realtime` with the example you want, then follow that example's README.
+Then follow that example's README.
 
 ## What You Can Build Today
 
@@ -185,13 +181,13 @@ A typical app in this repo has four pieces:
 
 The exact architecture depends on the example. Some apps send media directly to OpenAI Realtime. Some terminate video on a Python backend with `aiortc`. Some use Overshoot for live video understanding or RF-DETR for object detection.
 
-## Repo Map
+## Repository Map
 
 | Path | What it is for |
 | --- | --- |
-| [`skills/glasskit`](skills/glasskit) | Agent skill, Rokid starter app, and focused references. Useful for both coding agents and human developers. |
-| [`examples`](examples) | Runnable Rokid Glasses examples with Android apps and reference backends. |
-| [`docs`](docs) | Hardware setup, Rokid device notes, and demo-recording workflow. |
+| [`skills/glasskit`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter app, and focused references. Useful for both coding agents and human developers. |
+| [`docs`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
+| [`examples`](examples) | Runnable Rokid Glasses examples. |
 
 ## Requirements
 
