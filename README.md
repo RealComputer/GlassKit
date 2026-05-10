@@ -2,7 +2,7 @@
 
 **GlassKit is an open-source toolkit for building smart-glasses AI apps.** Your AI coding agent can use the included skill, docs, and runnable examples to build apps that understand what wearers see and hear, then guide them in real time.
 
-GlassKit starts with Rokid Glasses and is growing into a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
+Today GlassKit starts with Rokid Glasses. The long-term goal is a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
 
 <div align="center">
 
@@ -25,13 +25,13 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
   <tbody>
     <tr>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab"></video>
+        <video controls src="https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab"></video>
       </td>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da"></video>
+        <video controls src="https://github.com/user-attachments/assets/0dcaf9aa-35c7-49a4-971d-8ef7645715da"></video>
       </td>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc"></video>
+        <video controls src="https://github.com/user-attachments/assets/370fe9d7-09ea-45a7-bd09-5ab090e550bc"></video>
       </td>
     </tr>
     <tr>
@@ -65,13 +65,13 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
     </tr>
     <tr>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/f285bff2-ebde-4d17-99e0-bd1573881d26"></video>
+        <video controls src="https://github.com/user-attachments/assets/f285bff2-ebde-4d17-99e0-bd1573881d26"></video>
       </td>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa"></video>
+        <video controls src="https://github.com/user-attachments/assets/42f0eee9-6366-4078-abc0-0226a8b8b1aa"></video>
       </td>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b"></video>
+        <video controls src="https://github.com/user-attachments/assets/3f412e40-009d-402a-9c3b-a2a28d0a010b"></video>
       </td>
     </tr>
     <tr>
@@ -104,7 +104,7 @@ These demos cover the core GlassKit building blocks for Rokid Glasses: camera/mi
     </tr>
     <tr>
       <td align="center">
-        <video src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92"></video>
+        <video controls src="https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92"></video>
       </td>
       <td align="center"></td>
       <td align="center"></td>
@@ -129,7 +129,9 @@ There are three ways to start, depending on how you like to build.
 
 ### 1. Install the GlassKit agent skill
 
-Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app. Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
+Use this when you want Codex, Claude Code, Cursor, or another coding agent to understand smart-glasses app development while it builds your app.
+
+Smart-glasses apps have device specs, sensor access, display constraints, input patterns, and wearer-facing UX details that general coding agents often miss. The GlassKit agent skill gives the agent that context, plus a Rokid starter template for new apps.
 
 Install it with [the Agent Skills CLI](https://github.com/vercel-labs/skills):
 
