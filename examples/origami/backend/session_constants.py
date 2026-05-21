@@ -7,10 +7,9 @@ DEFAULT_OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
 DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.6-27B-FP8"
 DEFAULT_OPENAI_MODEL = "gpt-realtime-1.5"
 DEFAULT_OPENAI_VOICE = "cedar"
-DEFAULT_PROCESSING = {
-    "target_fps": 6,
-    "clip_length_seconds": 0.5,
-    "delay_seconds": 0.5,
+DEFAULT_OVERSHOOT_MODE = "frame"
+DEFAULT_OVERSHOOT_PROCESSING = {
+    "interval_seconds": 0.5,
 }
 INVENTORY_SCAN_PROMPT = (
     "Return the visible ingredient list on the table as an `ingredients` array "

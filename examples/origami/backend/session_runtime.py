@@ -14,7 +14,8 @@ from websockets import ConnectionClosed
 from session_constants import (
     DEFAULT_OPENAI_CALLS_URL,
     DEFAULT_OPENAI_VOICE,
-    DEFAULT_PROCESSING,
+    DEFAULT_OVERSHOOT_MODE,
+    DEFAULT_OVERSHOOT_PROCESSING,
     GENERAL_OUTPUT_SCHEMA,
     INVENTORY_SCAN_PROMPT,
     OPENAI_SESSION_INSTRUCTIONS,
@@ -69,8 +70,8 @@ class SessionRuntimeMixin:
         generation = session.vision_generation
         payload = {
             "source": {"type": "webrtc", "sdp": offer_sdp},
-            "mode": "clip",
-            "processing": DEFAULT_PROCESSING,
+            "mode": DEFAULT_OVERSHOOT_MODE,
+            "processing": DEFAULT_OVERSHOOT_PROCESSING,
             "inference": {
                 "prompt": INVENTORY_SCAN_PROMPT,
                 "backend": "overshoot",
