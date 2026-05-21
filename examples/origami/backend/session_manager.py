@@ -1490,8 +1490,8 @@ def _green_hud_asset(image: Image.Image) -> Image.Image:
 def _green_hud_overlay(image: Image.Image) -> Image.Image:
     source = image.convert("RGB")
     alpha = source.convert("L").point(lambda value: min(245, value * 3))
-    glow_alpha = alpha.filter(ImageFilter.GaussianBlur(radius=4)).point(
-        lambda value: min(180, value * 2)
+    glow_alpha = alpha.filter(ImageFilter.GaussianBlur(radius=2)).point(
+        lambda value: min(90, value)
     )
     glow = Image.new("RGBA", source.size, (*HUD_GREEN, 0))
     glow.putalpha(glow_alpha)
