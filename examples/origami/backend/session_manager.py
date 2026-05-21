@@ -190,19 +190,10 @@ class OrigamiSessionManager:
         if not offer_sdp:
             raise HTTPException(status_code=422, detail="offer_sdp must not be empty")
 
-        await self.destroy_all_sessions("new media session requested")
-
         session_id = str(uuid.uuid4())
         session = OrigamiSession(session_id=session_id)
         pc = self._create_peer_connection()
         session.media_pc = pc
-        session.loop_task = asyncio.create_task(
-            self._run_session_loop(session),
-            name=f"origami-session-{session_id}",
-        )
-
-        async with self._sessions_lock:
-            self._sessions[session_id] = session
 
         for _ in range(2):
             transceiver = pc.addTransceiver("video", direction="recvonly")
@@ -243,8 +234,17 @@ class OrigamiSessionManager:
             await pc.setLocalDescription(answer)
             await _wait_for_ice_gathering_complete(pc)
         except Exception:
-            await self.destroy_session(session_id, reason="media setup failed")
+            await self._cleanup_session(session)
             raise
+
+        await self.destroy_all_sessions("new media session requested")
+        session.loop_task = asyncio.create_task(
+            self._run_session_loop(session),
+            name=f"origami-session-{session_id}",
+        )
+        async with self._sessions_lock:
+            self._sessions[session_id] = session
+        await self._broadcast_demo_state()
 
         return {
             "session_id": session_id,
@@ -788,6 +788,7 @@ class OrigamiSessionManager:
 
         pc = self._create_overshoot_peer_connection()
         session.overshoot_pc = pc
+        created_stream_id: str | None = None
         pc.addTrack(ReferenceCompositeTrack(self, session))
         for transceiver in pc.getTransceivers():
             if transceiver.sender and transceiver.sender.track:
@@ -819,6 +820,7 @@ class OrigamiSessionManager:
 
             data = response.json()
             stream_id = str(data.get("stream_id") or "").strip()
+            created_stream_id = stream_id or None
             answer_sdp = _extract_answer_sdp(data.get("webrtc"))
             ttl_seconds = _parse_positive_int(
                 (data.get("lease") or {}).get("ttl_seconds")
@@ -836,11 +838,11 @@ class OrigamiSessionManager:
                 await self._close_overshoot_stream(stream_id)
                 return
 
+            current.overshoot_stream_id = stream_id
+            current.overshoot_lease_ttl_seconds = ttl_seconds
             await pc.setRemoteDescription(
                 RTCSessionDescription(sdp=answer_sdp, type="answer")
             )
-            current.overshoot_stream_id = stream_id
-            current.overshoot_lease_ttl_seconds = ttl_seconds
             current.overshoot_ws_task = asyncio.create_task(
                 self._run_overshoot_ws(current.session_id, stream_id, generation),
                 name=f"overshoot-ws-{current.session_id}-{generation}",
@@ -863,6 +865,8 @@ class OrigamiSessionManager:
                 generation,
             )
         except Exception:
+            if created_stream_id and session.overshoot_stream_id != created_stream_id:
+                await self._close_overshoot_stream(created_stream_id)
             await self._stop_overshoot_runtime(session)
             raise
 
@@ -1064,7 +1068,11 @@ class OrigamiSessionManager:
         return session
 
     async def _close_overshoot_stream(self, stream_id: str) -> None:
-        response = await self._overshoot_http.delete(f"/streams/{stream_id}")
+        try:
+            response = await self._overshoot_http.delete(f"/streams/{stream_id}")
+        except httpx.HTTPError as error:
+            logger.warning("stream=%s close failed error=%s", stream_id, error)
+            return
         if not response.is_success and response.status_code != 404:
             logger.warning(
                 "stream=%s close failed status=%s body=%s",

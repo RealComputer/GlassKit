@@ -26,15 +26,17 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
     private var currentHudState: HudState? = null
     private var pendingStart = false
     private var isMediaRunning = false
+    private var pendingScreenCaptureIntent: Intent? = null
+    private var screenCaptureReadyListener: (() -> Unit)? = null
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL
 
     private val screenCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            startScreenCaptureService()
-            startMediaSession(result.data)
+        val screenCaptureIntent = result.data
+        if (result.resultCode == Activity.RESULT_OK && screenCaptureIntent != null) {
+            startScreenCaptureServiceAndWait(screenCaptureIntent)
         } else {
             pendingStart = false
             renderStart("Screen capture permission is required for the demo feed.")
@@ -140,7 +142,6 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
     }
 
     private fun startMediaSession(screenCaptureIntent: Intent?) {
-        stopMediaSession()
         isMediaRunning = true
         currentHudState = null
         sessionClient = OrigamiSessionClient(
@@ -155,6 +156,7 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
     }
 
     private fun stopMediaSession() {
+        clearScreenCaptureWait()
         val active = sessionClient
         sessionClient = null
         isMediaRunning = false
@@ -289,11 +291,44 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
         binding.tvControls.text = getString(R.string.start_controls_hint)
     }
 
-    private fun startScreenCaptureService() {
-        ContextCompat.startForegroundService(
-            this,
-            Intent(this, ScreenCaptureService::class.java)
-        )
+    private fun startScreenCaptureServiceAndWait(screenCaptureIntent: Intent) {
+        clearScreenCaptureWait()
+        ScreenCaptureService.resetForegroundReady()
+        pendingScreenCaptureIntent = screenCaptureIntent
+
+        val listener = {
+            runOnUiThread { onScreenCaptureServiceReady() }
+        }
+        screenCaptureReadyListener = listener
+        val alreadyReady = ScreenCaptureService.addForegroundReadyListener(listener)
+        try {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, ScreenCaptureService::class.java)
+            )
+        } catch (t: Throwable) {
+            clearScreenCaptureWait()
+            pendingStart = false
+            renderStart("Screen capture service failed to start.")
+            return
+        }
+        if (alreadyReady) {
+            onScreenCaptureServiceReady()
+        }
+    }
+
+    private fun onScreenCaptureServiceReady() {
+        val screenCaptureIntent = pendingScreenCaptureIntent ?: return
+        clearScreenCaptureWait()
+        startMediaSession(screenCaptureIntent)
+    }
+
+    private fun clearScreenCaptureWait() {
+        screenCaptureReadyListener?.let {
+            ScreenCaptureService.removeForegroundReadyListener(it)
+        }
+        screenCaptureReadyListener = null
+        pendingScreenCaptureIntent = null
     }
 
     companion object {
