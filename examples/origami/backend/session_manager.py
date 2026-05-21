@@ -55,8 +55,6 @@ DEMO_FPS = 5
 OVERSHOOT_FPS = 5
 HUD_WIDTH = 480
 HUD_HEIGHT = 640
-DEMO_WIDTH = HUD_WIDTH * 2
-DEMO_HEIGHT = HUD_HEIGHT
 HUD_GREEN = (38, 255, 108)
 HUD_DIM_GREEN = (20, 150, 64)
 HUD_DENSITY = 1.5
@@ -1354,19 +1352,15 @@ def _compose_demo_image(
     hud_state: dict[str, Any],
     hud_image: Image.Image | None,
 ) -> Image.Image:
-    image = Image.new("RGB", (DEMO_WIDTH, DEMO_HEIGHT), "black")
-    image.paste(_portrait_pov_image(base), (0, 0))
-    image.paste(_backend_hud_image(hud_state, hud_image), (HUD_WIDTH, 0))
-    draw = ImageDraw.Draw(image)
-    draw.line(
-        (HUD_WIDTH - 1, 0, HUD_WIDTH - 1, DEMO_HEIGHT),
-        fill=(4, 34, 16),
-        width=2,
-    )
-    return image
+    image = _portrait_pov_native_crop(base)
+    hud = _backend_hud_image(hud_state, hud_image)
+    hud = hud.resize(image.size, Image.Resampling.LANCZOS)
+    image_rgba = image.convert("RGBA")
+    image_rgba.alpha_composite(_green_hud_overlay(hud))
+    return image_rgba.convert("RGB")
 
 
-def _portrait_pov_image(base: Image.Image) -> Image.Image:
+def _portrait_pov_native_crop(base: Image.Image) -> Image.Image:
     image = base.convert("RGB")
     width, height = image.size
     target_aspect = HUD_WIDTH / HUD_HEIGHT
@@ -1379,7 +1373,7 @@ def _portrait_pov_image(base: Image.Image) -> Image.Image:
         crop_height = int(width / target_aspect)
         top = max(0, (height - crop_height) // 2)
         image = image.crop((0, top, width, top + crop_height))
-    return image.resize((HUD_WIDTH, HUD_HEIGHT), Image.Resampling.LANCZOS)
+    return image
 
 
 def _backend_hud_image(
@@ -1494,6 +1488,14 @@ def _green_hud_asset(image: Image.Image) -> Image.Image:
     background = Image.new("RGBA", source.size, (0, 0, 0, 255))
     background.alpha_composite(colorized)
     return background.convert("RGB")
+
+
+def _green_hud_overlay(image: Image.Image) -> Image.Image:
+    source = image.convert("RGB")
+    alpha = source.convert("L").point(lambda value: min(230, value * 2))
+    overlay = Image.new("RGBA", source.size, (*HUD_GREEN, 0))
+    overlay.putalpha(alpha)
+    return overlay
 
 
 def _dp(value: int) -> int:

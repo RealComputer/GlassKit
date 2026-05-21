@@ -289,10 +289,11 @@ Browser `PeerConnection`:
 
 Backend viewer composition:
 
-- Use the latest camera frame as a portrait POV panel.
-- Render the current HUD state in the backend as a matching portrait green HUD
-  panel, using the same step assets as the glasses.
-- Compose the POV and HUD panels side by side for the browser WebRTC stream.
+- Use the latest camera frame as the POV and preserve its native pixel density.
+- Crop only as needed to match the HUD portrait aspect; do not downsize the POV.
+- Render the current HUD state in the backend as a green transparent overlay,
+  using the same step assets as the glasses, then scale the HUD up to the POV
+  crop size for the browser WebRTC stream.
 - Run viewer output at about 5 fps; browser demo latency matters more than high
   quality.
 
@@ -366,7 +367,7 @@ Manual verification:
   advance.
 - A `false` result resets true streak.
 - Step 7 completion shows final state; double-tap returns to initial screen.
-- Browser `/demo` shows live portrait camera POV plus backend-rendered green HUD.
+- Browser `/demo` shows live camera POV with a backend-rendered green HUD overlay.
 - Browser buttons produce the same state transitions as glasses controls.
 - Backend teardown closes Rokid peer, browser peers, and Overshoot streams.
 

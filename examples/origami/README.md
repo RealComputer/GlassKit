@@ -2,7 +2,7 @@
 
 This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera video to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done!` for two seconds and advances to the next step.
 
-The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with a portrait camera POV beside a backend-rendered green HUD that mirrors the glasses UI, and its buttons send the same control events as the glasses gestures.
+The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with a backend-rendered green HUD overlaid on the camera POV, and its buttons send the same control events as the glasses gestures.
 
 ## What The App Does
 
