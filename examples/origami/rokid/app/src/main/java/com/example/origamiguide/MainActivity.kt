@@ -60,7 +60,6 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_ENTER -> {
-                handleTap()
                 true
             }
 
@@ -80,13 +79,6 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
             }
 
             else -> super.onKeyUp(keyCode, event)
-        }
-    }
-
-    private fun handleTap() {
-        val phase = currentHudState?.phase
-        if (phase == "GUIDING" || phase == "STEP_DONE") {
-            sessionClient?.sendAutoToggle()
         }
     }
 

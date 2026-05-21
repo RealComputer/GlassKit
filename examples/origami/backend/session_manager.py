@@ -1513,9 +1513,9 @@ def _backend_hud_image(
 
     auto_enabled = bool(hud_state.get("auto_check_enabled", True))
     controls = (
-        ["Auto check on", "Tap: pause auto | Swipe: previous/next"]
+        ["Auto check on", "Swipe: previous/next | Double tap: reset"]
         if auto_enabled
-        else ["Auto check off", "Tap: resume auto | Swipe: previous/next"]
+        else ["Auto check off", "Swipe: previous/next | Double tap: reset"]
     )
     _draw_centered_lines(
         draw,

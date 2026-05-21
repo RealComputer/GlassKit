@@ -137,10 +137,6 @@ class OrigamiSessionClient(
         sendJson(JSONObject().put("type", "manual.prev"))
     }
 
-    fun sendAutoToggle() {
-        sendJson(JSONObject().put("type", "auto.toggle"))
-    }
-
     private suspend fun startInternal() = withContext(Dispatchers.Default) {
         val pc = createPeerConnection()
         peerConnection = pc

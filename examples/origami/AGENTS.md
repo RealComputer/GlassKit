@@ -16,7 +16,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
   - `session.reset`
   - `manual.next`
   - `manual.prev`
-  - `auto.toggle`
 - The Android camera must capture at `1024x768@15fps` and adapt outbound WebRTC to `5fps`.
 
 ## Backend Contract
@@ -56,9 +55,9 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 6. Backend samples camera frames, overlays the active reference image header, and publishes that video to Overshoot.
 7. Overshoot results arrive over WebSocket. Two consecutive `true` values mark the step done.
 8. Backend publishes `Done!`, waits two seconds, then advances to the next step.
-9. Swipe forward/back sends manual step navigation. Tap toggles automatic checking.
+9. Swipe forward/back sends manual step navigation.
 10. At completion, double tap sends `session.reset` and returns the HUD to the initial screen.
-11. Browser `/demo` can connect at any time and receives the latest camera/HUD composite plus matching control buttons.
+11. Browser `/demo` can connect at any time and receives the latest camera/HUD composite plus matching control buttons, including automatic-check toggling.
 
 # Key Files
 
@@ -93,7 +92,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 # Gestures
 
 - `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen, resets after completion.
-- `KeyEvent.KEYCODE_ENTER`: tap. Toggles automatic checking while a step is active.
+- `KeyEvent.KEYCODE_ENTER`: tap. Consumed by the app and intentionally has no workflow action.
 - `KeyEvent.KEYCODE_DPAD_DOWN`: swipe forward. Advances one step manually.
 - `KeyEvent.KEYCODE_DPAD_UP`: swipe backward. Moves one step back manually.
 
