@@ -4,7 +4,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, and temple touchpad.
 - Overshoot is a Vision Language Model inference API for live video.
-- OpenAI Realtime is not used in this app.
 
 # Implementation Contracts
 

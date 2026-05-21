@@ -22,8 +22,6 @@ The backend also serves a browser demo at `/demo`. That page receives a composed
 - `Backend <-> Overshoot` WebSocket: boolean inference results and keepalive
 - `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
 
-OpenAI Realtime is no longer used in this project.
-
 ## Requirements
 
 - [Rokid Glasses + dev cable](../../docs/how-to-get-rokid-glasses.md)
