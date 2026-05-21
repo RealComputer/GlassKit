@@ -50,7 +50,7 @@ Optional backend overrides:
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
 
-You can also toggle Overshoot at runtime:
+You can also toggle Overshoot at runtime. Turning it back on requires `OVERSHOOT_API_KEY` to be configured.
 
 ```bash
 curl -X POST http://<YOUR_BACKEND>:8000/debug/overshoot \

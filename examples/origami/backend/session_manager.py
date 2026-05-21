@@ -315,6 +315,14 @@ class OrigamiSessionManager:
         return {"enabled": self._overshoot_enabled}
 
     async def set_overshoot_enabled(self, enabled: bool) -> dict[str, bool]:
+        if enabled and not self._overshoot_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cannot enable Overshoot because OVERSHOOT_API_KEY is not "
+                    "configured."
+                ),
+            )
         self._overshoot_enabled = enabled
         async with self._sessions_lock:
             sessions = list(self._sessions.values())
