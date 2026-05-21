@@ -146,30 +146,13 @@ DEMO_HTML = """
       overflow: hidden;
       background: #000;
     }
-    header {
-      position: absolute;
-      z-index: 2;
-      top: 12px;
-      left: 12px;
-      right: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      pointer-events: none;
-    }
-    h1 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 650;
-      letter-spacing: 0;
-      text-shadow: 0 1px 8px #000;
-    }
     #status {
       color: #d8ffe4;
       font-size: 12px;
-      white-space: nowrap;
-      text-shadow: 0 1px 8px #000;
+      line-height: 1.35;
+      min-width: 100%;
+      text-align: center;
+      text-shadow: 0 0 8px rgba(0, 255, 96, 0.7);
     }
     video {
       display: block;
@@ -192,37 +175,40 @@ DEMO_HTML = """
       gap: 8px;
       max-width: calc(100vw - 24px);
       padding: 8px;
-      border: 1px solid rgba(68, 255, 128, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease;
+      border: 1px solid rgba(0, 255, 96, 0.42);
       border-radius: 8px;
       background: rgba(0, 0, 0, 0.72);
       backdrop-filter: blur(8px);
     }
+    video:hover + footer,
+    footer:hover,
+    main:focus-within footer {
+      opacity: 1;
+      pointer-events: auto;
+    }
     button {
       appearance: none;
-      border: 1px solid #315d3f;
+      border: 1px solid #16a34a;
       border-radius: 6px;
-      background: #07140b;
-      color: #dfffe9;
+      background: #031208;
+      color: #ecfff2;
       font: inherit;
       font-size: 13px;
       padding: 8px 11px;
       cursor: pointer;
+      box-shadow: 0 0 14px rgba(0, 255, 96, 0.16);
     }
     button:hover {
-      background: #0d2113;
+      background: #083817;
     }
     button:disabled {
       color: #66756a;
       cursor: default;
     }
     @media (max-width: 720px) {
-      header {
-        left: 8px;
-        right: 8px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
-      }
       #status {
         white-space: normal;
       }
@@ -238,12 +224,9 @@ DEMO_HTML = """
 </head>
 <body>
   <main>
-    <header>
-      <h1>Origami Guide Demo</h1>
-      <div id="status">Connecting...</div>
-    </header>
     <video id="video" autoplay playsinline muted></video>
     <footer>
+      <div id="status">Connecting...</div>
       <button data-command="session.start">Start</button>
       <button data-command="manual.prev">Previous</button>
       <button data-command="manual.next">Next</button>

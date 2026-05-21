@@ -289,11 +289,11 @@ Browser `PeerConnection`:
 
 Backend viewer composition:
 
-- Use the latest camera frame as the POV and preserve its native pixel density.
-- Crop only as needed to match the HUD portrait aspect; do not downsize the POV.
+- Use the latest camera frame as the POV and preserve its received dimensions.
+- Do not crop or downsize the POV for the browser demo.
 - Render the current HUD state in the backend as a green transparent overlay,
   using the same step assets as the glasses, then scale the HUD up to the POV
-  crop size for the browser WebRTC stream.
+  size for the browser WebRTC stream.
 - Run viewer output at about 5 fps; browser demo latency matters more than high
   quality.
 

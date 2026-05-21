@@ -26,7 +26,7 @@ from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
 from fastapi import HTTPException
 from origami_config import OrigamiStep, load_origami_steps
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from websockets import ConnectionClosed
 
 logger = logging.getLogger("uvicorn.error")
@@ -55,8 +55,8 @@ DEMO_FPS = 5
 OVERSHOOT_FPS = 5
 HUD_WIDTH = 480
 HUD_HEIGHT = 640
-HUD_GREEN = (38, 255, 108)
-HUD_DIM_GREEN = (20, 150, 64)
+HUD_GREEN = (0, 255, 96)
+HUD_DIM_GREEN = (28, 190, 82)
 HUD_DENSITY = 1.5
 
 __all__ = [
@@ -1352,28 +1352,25 @@ def _compose_demo_image(
     hud_state: dict[str, Any],
     hud_image: Image.Image | None,
 ) -> Image.Image:
-    image = _portrait_pov_native_crop(base)
+    image = base.convert("RGB")
     hud = _backend_hud_image(hud_state, hud_image)
-    hud = hud.resize(image.size, Image.Resampling.LANCZOS)
+    hud = _fit_hud_to_canvas(hud, image.size)
     image_rgba = image.convert("RGBA")
     image_rgba.alpha_composite(_green_hud_overlay(hud))
     return image_rgba.convert("RGB")
 
 
-def _portrait_pov_native_crop(base: Image.Image) -> Image.Image:
-    image = base.convert("RGB")
-    width, height = image.size
-    target_aspect = HUD_WIDTH / HUD_HEIGHT
-    aspect = width / height
-    if aspect > target_aspect:
-        crop_width = int(height * target_aspect)
-        left = max(0, (width - crop_width) // 2)
-        image = image.crop((left, 0, left + crop_width, height))
-    elif aspect < target_aspect:
-        crop_height = int(width / target_aspect)
-        top = max(0, (height - crop_height) // 2)
-        image = image.crop((0, top, width, top + crop_height))
-    return image
+def _fit_hud_to_canvas(hud: Image.Image, size: tuple[int, int]) -> Image.Image:
+    canvas = Image.new("RGB", size, "black")
+    fitted = ImageOps.contain(hud, size, Image.Resampling.LANCZOS)
+    canvas.paste(
+        fitted,
+        (
+            (size[0] - fitted.width) // 2,
+            (size[1] - fitted.height) // 2,
+        ),
+    )
+    return canvas
 
 
 def _backend_hud_image(
@@ -1492,10 +1489,16 @@ def _green_hud_asset(image: Image.Image) -> Image.Image:
 
 def _green_hud_overlay(image: Image.Image) -> Image.Image:
     source = image.convert("RGB")
-    alpha = source.convert("L").point(lambda value: min(230, value * 2))
-    overlay = Image.new("RGBA", source.size, (*HUD_GREEN, 0))
-    overlay.putalpha(alpha)
-    return overlay
+    alpha = source.convert("L").point(lambda value: min(245, value * 3))
+    glow_alpha = alpha.filter(ImageFilter.GaussianBlur(radius=4)).point(
+        lambda value: min(180, value * 2)
+    )
+    glow = Image.new("RGBA", source.size, (*HUD_GREEN, 0))
+    glow.putalpha(glow_alpha)
+    sharp = Image.new("RGBA", source.size, (*HUD_GREEN, 0))
+    sharp.putalpha(alpha)
+    glow.alpha_composite(sharp)
+    return glow
 
 
 def _dp(value: int) -> int:
