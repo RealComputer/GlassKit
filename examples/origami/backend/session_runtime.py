@@ -19,11 +19,11 @@ from session_constants import (
     GENERAL_OUTPUT_SCHEMA,
     INVENTORY_SCAN_PROMPT,
     OPENAI_SESSION_INSTRUCTIONS,
+    OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE,
     OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
-    OVERSHOOT_WS_RETRYABLE_CLOSE_CODES,
     OVERSHOOT_WS_RETRY_BASE_SECONDS,
     OVERSHOOT_WS_RETRY_MAX_SECONDS,
-    OVERSHOOT_WS_TERMINAL_CLOSE_CODES,
+    OVERSHOOT_WS_STREAM_ENDED_CLOSE_CODE,
     RuntimeKind,
 )
 from session_helpers import (
@@ -367,7 +367,6 @@ class SessionRuntimeMixin:
                     await overshoot_ws.send(
                         json.dumps({"api_key": self._overshoot_api_key})
                     )
-                    attempt = 0
                     async for raw_message in overshoot_ws:
                         raw_text = (
                             raw_message.decode()
@@ -400,39 +399,61 @@ class SessionRuntimeMixin:
                                 },
                             )
                         )
+                        attempt = 0
+                    if (
+                        overshoot_ws.close_code == OVERSHOOT_WS_STREAM_ENDED_CLOSE_CODE
+                        and overshoot_ws.close_reason
+                    ):
+                        logger.info(
+                            "session=%s overshoot stream ended reason=%s",
+                            session_id,
+                            overshoot_ws.close_reason,
+                        )
+                        await self._notify_overshoot_closed(
+                            session_id,
+                            generation,
+                            overshoot_ws.close_reason,
+                        )
+                        return
+                    logger.warning(
+                        "session=%s overshoot websocket closed unexpectedly code=%s reason=%s",
+                        session_id,
+                        overshoot_ws.close_code,
+                        overshoot_ws.close_reason,
+                    )
             except asyncio.CancelledError:
                 raise
             except ConnectionClosed as exc:
-                if exc.code in OVERSHOOT_WS_TERMINAL_CLOSE_CODES:
-                    session = await self._get_session_if_current(
-                        session_id, generation, "vision"
+                if exc.code == OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE:
+                    logger.error(
+                        "session=%s overshoot websocket authentication failed reason=%s",
+                        session_id,
+                        exc.reason,
                     )
-                    if session is not None:
-                        await session.queue.put(
-                            SessionEvent(
-                                kind="overshoot.closed",
-                                payload={
-                                    "generation": generation,
-                                    "reason": exc.reason,
-                                },
-                            )
-                        )
-                    return
-                if exc.code not in OVERSHOOT_WS_RETRYABLE_CLOSE_CODES:
-                    session = await self._get_session_if_current(
-                        session_id, generation, "vision"
+                    await self._notify_overshoot_closed(
+                        session_id,
+                        generation,
+                        exc.reason or "authentication_failed",
                     )
-                    if session is not None:
-                        await session.queue.put(
-                            SessionEvent(
-                                kind="overshoot.closed",
-                                payload={
-                                    "generation": generation,
-                                    "reason": exc.reason,
-                                },
-                            )
-                        )
                     return
+                if exc.code == OVERSHOOT_WS_STREAM_ENDED_CLOSE_CODE and exc.reason:
+                    logger.info(
+                        "session=%s overshoot stream ended reason=%s",
+                        session_id,
+                        exc.reason,
+                    )
+                    await self._notify_overshoot_closed(
+                        session_id,
+                        generation,
+                        exc.reason,
+                    )
+                    return
+                logger.warning(
+                    "session=%s overshoot websocket closed unexpectedly code=%s reason=%s",
+                    session_id,
+                    exc.code,
+                    exc.reason,
+                )
             except Exception:
                 logger.exception("session=%s overshoot websocket crashed", session_id)
 
@@ -457,6 +478,25 @@ class SessionRuntimeMixin:
                 OVERSHOOT_WS_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
             )
             await asyncio.sleep(delay)
+
+    async def _notify_overshoot_closed(
+        self,
+        session_id: str,
+        generation: int,
+        reason: str | None,
+    ) -> None:
+        session = await self._get_session_if_current(session_id, generation, "vision")
+        if session is None:
+            return
+        await session.queue.put(
+            SessionEvent(
+                kind="overshoot.closed",
+                payload={
+                    "generation": generation,
+                    "reason": reason,
+                },
+            )
+        )
 
     async def _run_openai_sideband(
         self,
