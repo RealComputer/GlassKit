@@ -1482,7 +1482,7 @@ def _backend_hud_image(
 
     draw.text(
         (_dp(18), _dp(68)),
-        f"Step {hud_state.get('step_number', 1)}/{hud_state.get('step_count', 7)}:",
+        f"Step {hud_state.get('step_number', 1)}/{hud_state.get('step_count', 7)}",
         fill=HUD_GREEN,
         font=step_font,
     )
