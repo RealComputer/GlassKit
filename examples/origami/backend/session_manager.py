@@ -7,6 +7,7 @@ import time
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,7 @@ OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE = 1008
 VIDEO_CLOCK_RATE = 90_000
 DEMO_FPS = 5
 OVERSHOOT_FPS = 5
+DEBUG_COMPOSITE_INTERVAL_SECONDS = 1.0
 HUD_WIDTH = 480
 HUD_HEIGHT = 640
 HUD_GREEN = (0, 255, 96)
@@ -142,6 +144,7 @@ class OrigamiSession:
     overshoot_ws_task: asyncio.Task[None] | None = None
     overshoot_keepalive_task: asyncio.Task[None] | None = None
     active_prompt_text: str | None = None
+    last_debug_composite_save_at: float = 0.0
 
 
 @dataclass
@@ -160,11 +163,19 @@ class OrigamiSessionManager:
         overshoot_model: str,
         steps_path: Path,
         overshoot_enabled: bool = True,
+        save_overshoot_composites: bool = False,
+        debug_composite_dir: Path | None = None,
     ) -> None:
         self._overshoot_api_url = overshoot_api_url.rstrip("/")
         self._overshoot_api_key = overshoot_api_key
         self._overshoot_model = overshoot_model
         self._overshoot_enabled = overshoot_enabled
+        self._save_overshoot_composites = save_overshoot_composites
+        self._debug_composite_dir = (
+            debug_composite_dir
+            if debug_composite_dir is not None
+            else steps_path.parent.parent / "debug" / "overshoot-composites"
+        )
         self._steps = load_origami_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
@@ -509,6 +520,7 @@ class OrigamiSessionManager:
             await self._sync_overshoot_enabled_state(session)
             return
         if event.kind == "camera.frame":
+            await self._maybe_save_overshoot_debug_composite(session)
             if session.phase == PHASE_GUIDING and session.auto_check_enabled:
                 await self._ensure_overshoot_runtime(session)
             return
@@ -821,6 +833,40 @@ class OrigamiSessionManager:
         else:
             await self._stop_overshoot_runtime(session)
         await self._publish_hud_state(session)
+
+    async def _maybe_save_overshoot_debug_composite(
+        self, session: OrigamiSession
+    ) -> None:
+        if not self._save_overshoot_composites:
+            return
+        if session.phase != PHASE_GUIDING:
+            return
+
+        now = time.monotonic()
+        if (
+            now - session.last_debug_composite_save_at
+            < DEBUG_COMPOSITE_INTERVAL_SECONDS
+        ):
+            return
+        session.last_debug_composite_save_at = now
+
+        camera_item = await session.camera_frames.latest()
+        if camera_item is None:
+            return
+
+        step = self.current_step_for(session)
+        camera = _frame_to_image(camera_item[1], fallback_size=(1024, 768))
+        reference = self.reference_image_for(step)
+        image = _compose_reference_image(camera, reference, "Reference shape")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        path = self._debug_composite_dir / (
+            f"{timestamp}_step-{session.step_index + 1:02d}_"
+            f"{session.session_id[:8]}.jpg"
+        )
+        try:
+            await asyncio.to_thread(_save_jpeg, image, path)
+        except Exception:
+            logger.exception("failed to save Overshoot debug composite to %s", path)
 
     async def _start_overshoot_runtime(self, session: OrigamiSession) -> None:
         step = self._steps[session.step_index]
@@ -1578,6 +1624,11 @@ def _frame_to_image(
     except Exception:
         logger.exception("failed to convert video frame to image")
         return Image.new("RGB", fallback_size, "black")
+
+
+def _save_jpeg(image: Image.Image, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.convert("RGB").save(path, format="JPEG", quality=90, optimize=True)
 
 
 def _fit_font(

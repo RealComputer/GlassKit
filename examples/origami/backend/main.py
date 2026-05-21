@@ -41,6 +41,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ).strip()
     overshoot_model = os.getenv("OVERSHOOT_MODEL", DEFAULT_OVERSHOOT_MODEL).strip()
     steps_path = Path(__file__).with_name("assets") / "origami_steps.json"
+    debug_composite_dir_raw = os.getenv(
+        "ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR", ""
+    ).strip()
+    debug_composite_dir = (
+        Path(debug_composite_dir_raw).expanduser() if debug_composite_dir_raw else None
+    )
 
     manager = OrigamiSessionManager(
         overshoot_api_url=overshoot_api_url,
@@ -48,6 +54,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         overshoot_model=overshoot_model,
         steps_path=steps_path,
         overshoot_enabled=overshoot_enabled,
+        save_overshoot_composites=_env_bool(
+            "ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES",
+            default=False,
+        ),
+        debug_composite_dir=debug_composite_dir,
     )
     try:
         yield

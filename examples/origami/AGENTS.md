@@ -27,6 +27,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Manual next/previous controls cancel a pending `Done!` delay.
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
 - `ORIGAMI_OVERSHOOT_ENABLED=false` or `POST /debug/overshoot {"enabled": false}` must keep device/browser media alive while preventing Overshoot stream creation.
+- `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` must save timestamped Overshoot input preview JPEGs under a gitignored debug directory without requiring an active Overshoot stream.
 
 ## External Service Contract
 

@@ -47,6 +47,8 @@ cp .env.example .env
 Optional backend overrides:
 
 - `ORIGAMI_OVERSHOOT_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams
+- `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save timestamped Overshoot input previews once per second while guiding
+- `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to override the default preview directory, `backend/debug/overshoot-composites/`
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
 
