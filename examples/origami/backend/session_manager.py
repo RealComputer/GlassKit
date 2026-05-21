@@ -875,6 +875,25 @@ class OrigamiSessionManager:
         session.active_prompt_text = step.prompt
 
         pc = self._create_overshoot_peer_connection()
+
+        @pc.on("connectionstatechange")
+        def on_connection_state_change() -> None:
+            logger.info(
+                "session=%s overshoot media state=%s generation=%s",
+                session.session_id,
+                pc.connectionState,
+                generation,
+            )
+
+        @pc.on("iceconnectionstatechange")
+        def on_ice_connection_state_change() -> None:
+            logger.info(
+                "session=%s overshoot ice state=%s generation=%s",
+                session.session_id,
+                pc.iceConnectionState,
+                generation,
+            )
+
         session.overshoot_pc = pc
         created_stream_id: str | None = None
         pc.addTrack(ReferenceCompositeTrack(self, session))
@@ -1200,6 +1219,7 @@ class OrigamiSessionManager:
         return RTCPeerConnection(
             RTCConfiguration(
                 iceServers=[
+                    RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
                     RTCIceServer(
                         urls=[
                             "turn:turn.overshoot.ai:3478?transport=udp",
@@ -1209,7 +1229,7 @@ class OrigamiSessionManager:
                         ],
                         username="overshoot",
                         credential="overshoot",
-                    )
+                    ),
                 ]
             )
         )
