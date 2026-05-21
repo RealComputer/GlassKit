@@ -2,6 +2,7 @@ package com.example.origamiguide
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -38,8 +39,7 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
         if (result.resultCode == Activity.RESULT_OK && screenCaptureIntent != null) {
             startScreenCaptureServiceAndWait(screenCaptureIntent)
         } else {
-            pendingStart = false
-            renderStart("Screen capture permission is required for the demo feed.")
+            startMediaSessionWithoutScreenCapture()
         }
     }
 
@@ -138,7 +138,19 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
 
     private fun requestScreenCapture() {
         val projectionManager = getSystemService(MediaProjectionManager::class.java)
-        screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
+        try {
+            screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
+        } catch (_: ActivityNotFoundException) {
+            startMediaSessionWithoutScreenCapture()
+        } catch (_: SecurityException) {
+            startMediaSessionWithoutScreenCapture()
+        }
+    }
+
+    private fun startMediaSessionWithoutScreenCapture() {
+        clearScreenCaptureWait()
+        renderStart("Screen capture unavailable. Starting camera-only demo feed.")
+        startMediaSession(null)
     }
 
     private fun startMediaSession(screenCaptureIntent: Intent?) {

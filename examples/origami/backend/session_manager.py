@@ -195,10 +195,6 @@ class OrigamiSessionManager:
         pc = self._create_peer_connection()
         session.media_pc = pc
 
-        for _ in range(2):
-            transceiver = pc.addTransceiver("video", direction="recvonly")
-            _prefer_codec(transceiver, "video/H264", sender=False)
-
         @pc.on("connectionstatechange")
         async def on_connection_state_change() -> None:
             logger.info("session=%s media state=%s", session_id, pc.connectionState)
@@ -230,6 +226,9 @@ class OrigamiSessionManager:
             await pc.setRemoteDescription(
                 RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
+            for transceiver in pc.getTransceivers():
+                if transceiver.kind == "video":
+                    _prefer_codec(transceiver, "video/H264", sender=False)
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
             await _wait_for_ice_gathering_complete(pc)
