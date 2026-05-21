@@ -4,7 +4,7 @@ from typing import Literal
 
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v0.2"
 DEFAULT_OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
-DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.5-27B"
+DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.6-27B-FP8"
 DEFAULT_OPENAI_MODEL = "gpt-realtime-1.5"
 DEFAULT_OPENAI_VOICE = "cedar"
 DEFAULT_PROCESSING = {
