@@ -13,13 +13,13 @@ val backendBaseUrl = localProperties.getProperty("BACKEND_BASE_URL")
     ?: error("BACKEND_BASE_URL is required in rokid/local.properties")
 
 android {
-    namespace = "com.example.rokidovershootopenairealtime"
+    namespace = "com.example.origamiguide"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.rokidovershootopenairealtime"
+        applicationId = "com.example.origamiguide"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

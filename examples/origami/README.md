@@ -1,32 +1,28 @@
-# Example: Proactive Drink-making Coach (Rokid Glasses/Overshoot/OpenAI Realtime API)
+# Origami Guide for Rokid Glasses
 
-This example turns Rokid Glasses into a proactive drink-making assistant. The glasses look at the ingredients, choose a recipe, show the current step, and guide you based on what they see in real time. The goal is an interaction that feels more like a helpful person beside you than a voice assistant waiting for prompts.
+This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera and HUD screen-capture tracks to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done!` for two seconds and advances to the next step.
 
-It uses [Overshoot](https://overshoot.ai/) for live visual understanding and the OpenAI Realtime API for low-latency spoken guidance and transcript streaming.
+The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with the camera POV plus the current HUD UI, and its buttons send the same control events as the glasses gestures.
 
-[demo.webm](https://github.com/user-attachments/assets/f11631f9-6ce2-4524-9634-4b4746f64fab)
+## What The App Does
 
-## What the app does
+- Starts from `Double tap temple to start`
+- Shows `Origami Guide`, `Step N/7`, and the provided step image on the Rokid HUD
+- Captures camera at `1024x768@15fps` and adapts outbound WebRTC to `5fps`
+- Captures the Android HUD screen as a second WebRTC video track at `5fps`
+- Lets the backend perform Overshoot checks every `0.5s`
+- Supports swipe forward/back for manual step navigation
+- Uses tap to toggle automatic checking on or off
+- Uses double tap to reset back to the start screen
 
-- Scans the visible ingredients at the start
-- Chooses the best matching recipe automatically
-- Watches the table as you work and reacts step by step
-- Guides you step by step with short spoken instructions
-- Shows the current task and the latest guidance transcript on the display
-- Corrects you if you're not following the recipe
-- (Supports debug step navigation from swipe controls.)
+## How It Works
 
-## How it works
+- `Rokid -> Backend` WebRTC: one peer connection with camera, screen, and a `session-events` data channel
+- `Backend -> Overshoot` WebRTC: backend-originated composed reference video for the active step
+- `Backend <-> Overshoot` WebSocket: boolean inference results and keepalive
+- `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
 
-At a high level:
-
-- Rokid Glasses stream live camera video into Overshoot for scene understanding
-- The FastAPI backend is authoritative for recipe choice, workflow state, step transitions, HUD state, and speech timing
-- The backend creates and controls an OpenAI Realtime session for live LLM recipe selection and spoken guidance
-- OpenAI Realtime speaks the backend's lines over WebRTC and streams transcript text back to the HUD
-- The Android app stays thin: it renders the HUD, handles gestures, and owns the media connections
-
-Detailed technical architecture, workflow contracts, configuration, and developer workflow live in [AGENTS.md](./AGENTS.md).
+OpenAI Realtime is no longer used in this project.
 
 ## Requirements
 
@@ -34,16 +30,13 @@ Detailed technical architecture, workflow contracts, configuration, and develope
 - Android Studio with `adb`
 - Python 3.12 with `uv`
 - Overshoot API key (`OVERSHOOT_API_KEY`)
-- OpenAI API key (`OPENAI_API_KEY`)
 
-## Developer Setup
-
-### Configuration
+## Configuration
 
 Set the backend URL in `rokid/local.properties`:
 
 ```properties
-BACKEND_BASE_URL=http://<YOUR_BACKEND>
+BACKEND_BASE_URL=http://<YOUR_BACKEND>:8000
 ```
 
 Create the backend env file:
@@ -51,8 +44,13 @@ Create the backend env file:
 ```bash
 cd backend
 cp .env.example .env
-# set OVERSHOOT_API_KEY and OPENAI_API_KEY
+# set OVERSHOOT_API_KEY
 ```
+
+Optional backend overrides:
+
+- `OVERSHOOT_API_URL`
+- `OVERSHOOT_MODEL`
 
 ## Run The Backend
 
@@ -61,36 +59,54 @@ cd backend
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 ```
 
+Open the browser demo:
+
+```text
+http://<YOUR_BACKEND>:8000/demo
+```
+
 ## Run The Glasses App
 
-Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB (see below), then run the Android app from `rokid/` in Android Studio.
+Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB, then run the Android app from `rokid/` in Android Studio.
 
 Useful ADB commands:
 
 ```bash
-adb devices # confirm your device is visible
-adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
-adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
-adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"' # set network
-adb shell cmd wifi status # confirm the connection
+adb devices
+adb shell cmd wifi status
+adb shell cmd wifi set-wifi-enabled enabled
+adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
+adb shell cmd wifi status
 ```
 
 Optional wireless ADB:
 
 ```bash
-adb shell ip -f inet addr show wlan0 # check the glasses IP
-ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
-adb tcpip 5555 # enable remote ADB mode
-adb connect <IP> # connect to the glasses over remote ADB
-adb devices # verify the remote connection (you can unplug the cable afterward)
+adb shell ip -f inet addr show wlan0
+ping -c 5 -W 3 <IP>
+adb tcpip 5555
+adb connect <IP>
+adb devices
 ```
 
-## Recipe files
+## Assets
 
-- Recipes live in `backend/recipes/`
-- The current example recipe is `orange-juice-blue-gatorade-lime-mocktail.json`
+- Rokid HUD step images: `rokid/app/src/main/res/drawable-nodpi/origami_step_*.png`
+- Backend reference images: `backend/assets/ref-imgs/*.jpg`
+- Step config and per-step prompts: `backend/assets/origami_steps.json`
 
-## Related projects
+## Developer Checks
 
-- [rokid-overshoot](../rokid-overshoot/README.md): Minimal Overshoot-only example for streaming camera video to Overshoot and rendering live inference text on the HUD.
-- [rokid-openai-realtime](../rokid-openai-realtime/README.md): Simple OpenAI Realtime API assistant example for Rokid Glasses with real-time audio/video streaming and voice responses.
+Backend:
+
+```bash
+cd backend
+uv run ty check && uv run ruff check --fix && uv run ruff format
+```
+
+Android:
+
+```bash
+cd rokid
+./gradlew :app:assembleDebug
+```

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Rokid Overshoot OpenAI Realtime"
+rootProject.name = "Origami Guide"
 include(":app")

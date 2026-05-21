@@ -9,7 +9,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:paddingStart="18dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="16dp">
 
         <TextView
             android:id="@+id/tvTitle"
@@ -17,7 +20,6 @@
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-medium"
             android:gravity="center_horizontal"
-            android:paddingBottom="8dp"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -26,64 +28,57 @@
             android:id="@+id/tvHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:paddingBottom="14dp"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/tvRecipe"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_marginTop="26dp"
             android:fontFamily="sans-serif"
             android:gravity="center_horizontal"
-            android:paddingBottom="15dp"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            android:textSize="17sp" />
 
         <TextView
-            android:id="@+id/tvTasks"
+            android:id="@+id/tvStep"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
             android:fontFamily="monospace"
-            android:lineSpacingExtra="4dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="32dp"
             android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:visibility="gone" />
 
-        <LinearLayout
-            android:id="@+id/transcriptContainer"
+        <ImageView
+            android:id="@+id/ivStep"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="6dp"
+            android:layout_weight="0.48"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/step_image_description"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvMessage"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center_horizontal"
+            android:textColor="#FFFFFF"
+            android:textSize="21sp"
+            android:textStyle="bold"
+            android:visibility="invisible" />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.52" />
+
+        <TextView
+            android:id="@+id/tvControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:baselineAligned="false"
-            android:gravity="top"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/tvFace"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="2dp"
-                android:paddingBottom="2dp"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/tvTranscript"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:fontFamily="sans-serif-medium"
-                android:lineSpacingExtra="2dp"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp" />
-        </LinearLayout>
+            android:fontFamily="monospace"
+            android:gravity="center_horizontal"
+            android:lineSpacingExtra="2dp"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
     </LinearLayout>
 </FrameLayout>

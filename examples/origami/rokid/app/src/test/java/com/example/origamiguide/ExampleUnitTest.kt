@@ -1,4 +1,4 @@
-package com.example.rokidovershootopenairealtime
+package com.example.origamiguide
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -1,6 +1,11 @@
 <resources>
-    <string name="app_name">Mocktail Coach</string>
-    <string name="start_hint">Look at ingredients. Tap to start.</string>
+    <string name="app_name">Origami Guide</string>
+    <string name="start_hint">Double tap temple to start</string>
     <string name="connecting_backend">Connecting backend...</string>
-    <string name="recipe_label">Recipe: %1$s</string>
+    <string name="step_label">Step %1$d/%2$d:</string>
+    <string name="controls_hint">Tap: auto on/off\nSwipe: previous/next\nDouble tap: reset</string>
+    <string name="start_controls_hint">Double tap temple to start</string>
+    <string name="controls_auto_on">Auto check on\nTap: pause auto | Swipe: previous/next</string>
+    <string name="controls_auto_off">Auto check off\nTap: resume auto | Swipe: previous/next</string>
+    <string name="step_image_description">Origami step guide image</string>
 </resources>

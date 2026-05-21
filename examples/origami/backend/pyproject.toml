@@ -1,12 +1,14 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Rokid Overshoot OpenAI Realtime signaling and event bridge"
+description = "Rokid origami guide backend with WebRTC ingest and Overshoot checking"
 readme = "README.md"
 requires-python = ">=3.12.12"
 dependencies = [
+    "aiortc>=1.14.0",
     "fastapi[standard]>=0.135.1",
     "httpx>=0.28.1",
+    "pillow>=12.2.0",
     "websockets>=16.0",
 ]
 

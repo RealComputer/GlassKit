@@ -1,109 +1,100 @@
 # Project Overview
 
-This project is a server-authoritative mocktail coach for Rokid Glasses. The glasses stream camera video to Overshoot for live vision inference, receive spoken guidance from OpenAI Realtime API, and render a minimal HUD driven by the backend.
+This project is a server-authoritative origami guide for Rokid Glasses. The glasses show a seven-step folding HUD, stream camera plus HUD screen capture to the backend, and receive backend-driven state updates over a WebRTC data channel. The backend checks the active fold with Overshoot and advances after two consecutive `true` results.
 
-- Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, mic, and speaker.
+- Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, and temple touchpad.
 - Overshoot is a Vision Language Model inference API for live video.
+- OpenAI Realtime is not used in this app.
 
 # Implementation Contracts
 
-## Client contract
+## Client Contract
 
-- The Android client must own only HUD rendering, gesture input, runtime permission handling, and the two WebRTC links.
-- The Android client must not choose recipes, interpret vision results, advance workflow steps, or decide what speech to play.
-- The Android client must render only the latest transcript and must clear stale transcript text when `speech_epoch` changes.
+- The Android client owns only HUD rendering, gesture input, runtime permission handling, MediaProjection consent, and the WebRTC media/data-channel connection.
+- The Android client must not interpret Overshoot results or decide automatic step progression.
+- The Android client sends gesture commands over the `session-events` data channel:
+  - `session.start`
+  - `session.reset`
+  - `manual.next`
+  - `manual.prev`
+  - `auto.toggle`
+- The Android camera must capture at `1024x768@15fps` and adapt outbound WebRTC to `5fps`.
+- The Android screen capture track should be sent at `5fps`.
 
-## Backend contract
+## Backend Contract
 
-- The FastAPI backend must remain authoritative for session lifecycle, phases, recipe loading, prompt switching, step progression, HUD state, and exact speech decisions.
-- The backend must serialize per-session workflow through one session event loop.
-- Recipe selection must happen only after the inventory scan stabilizes, using detected ingredient names and recipe filenames.
+- The FastAPI backend remains authoritative for session lifecycle, current step, automatic checking, step progression, prompt selection, Overshoot runtime state, and HUD state.
+- The backend serializes each device session through one session event loop.
+- A step passes only after two consecutive Overshoot boolean `true` results; any `false` resets the streak.
+- Manual next/previous controls cancel a pending `Done!` delay.
+- Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
 
-## External service contract
+## External Service Contract
 
-- Overshoot must provide structured outputs for the active prompt; the backend decides what those outputs mean.
-- OpenAI Realtime must only do two things in this app: choose a recipe from filename ids and speak exact backend-provided lines.
-- OpenAI Realtime must not invent workflow decisions or drive step transitions.
+- Overshoot receives backend-composed camera frames with the active step reference header.
+- Overshoot uses the active step prompt from `backend/assets/origami_steps.json`.
+- The default prompt is: `Return true if the origami model on the tray matches the reference shape; otherwise, return false.`
+- The Overshoot output schema is `{"type":"boolean"}`.
 
 # Architecture
 
-## Connection graph
+## Connection Graph
 
-- `Rokid <-> Backend` (WebSocket): persistent control channel for session lifecycle, HUD updates, and debug gestures.
-- `Rokid -> Backend` (HTTP): setup path for both media links. The glasses send SDP offers to the backend, and the backend returns the answers for the Overshoot and OpenAI Realtime sessions.
-- `Rokid <-> Overshoot` (WebRTC video): direct camera stream for live vision after backend setup.
-- `Backend -> Overshoot` (HTTP): stream creation and prompt updates. The backend creates and manages the stream lifecycle through the Overshoot HTTP API.
-- `Backend <-> Overshoot` (WebSocket): live inference result delivery plus keepalive traffic for the active stream.
-- `Rokid <-> OpenAI Realtime` (WebRTC audio + data): direct audio playback and transcript delivery after backend setup.
-- `Backend <-> OpenAI Realtime` (WebSocket sideband): server-side control for recipe selection and exact speech playback. The backend handles tools and can cancel or replace speech when server decisions change.
-  - Realtime events should be observable from both OpenAI paths: Rokid can receive them over the WebRTC data channel, and the backend can receive them over the sideband WebSocket.
+- `Rokid -> Backend` (WebRTC): one peer connection with camera video, screen-capture video, and `session-events` data channel.
+- `Backend -> Overshoot` (WebRTC): backend-originated video stream containing camera POV plus the active reference image.
+- `Backend -> Overshoot` (HTTP): stream creation, keepalive, and stream deletion.
+- `Backend <-> Overshoot` (WebSocket): boolean inference results.
+- `Browser <-> Backend` (WebRTC): browser demo receives a composed camera/HUD video feed and sends controls over `demo-events`.
 
-## End-to-end session flow
+## End-to-End Session Flow
 
-1. App launch: once camera permission is available, Rokid opens the backend control websocket and gets a server-created `session_id`.
-2. User tap: Rokid sends `session.start` on the control socket.
-3. Media setup:
-   - Rokid sends the vision SDP offer to `/session/{session_id}/vision`
-   - Rokid sends the realtime SDP offer to `/session/{session_id}/realtime`
-4. Stream ownership:
-   - Backend creates the Overshoot stream and starts the Overshoot websocket + keepalive tasks
-   - Backend creates the OpenAI realtime call and opens the sideband websocket
-5. Inventory scan:
-   - Backend waits until both links are ready
-   - Backend keeps the hardcoded inventory detector prompt active on Overshoot
-   - Backend waits for two consecutive identical normalized ingredient arrays
-6. Recipe selection:
-   - Backend asks OpenAI Realtime to choose a recipe from filename ids using `list_recipes` and `activate_recipe`
-   - Backend loads the chosen recipe JSON and switches to the first guided step
-7. Guided workflow:
-   - Backend patches the active Overshoot prompt for each step
-   - Backend evaluates structured results and decides whether to advance, correct, or speak progress
-   - Backend sends `hud.state` updates to Rokid and exact speech instructions to OpenAI sideband
-8. Speech delivery:
-   - OpenAI Realtime speaks to Rokid over WebRTC
-   - Rokid renders only the latest transcript, keyed by `speech_epoch`
-9. App background / close:
-   - Rokid stops the workflow and closes the backend control websocket on `onStop`
-   - Backend destroys the control session and tears down Overshoot and OpenAI runtime state
-   - The next foreground reconnect gets a fresh `session_id` and starts from the beginning
+1. App launch: Rokid renders the start screen: `Double tap temple to start`.
+2. Double tap: Rokid asks for MediaProjection consent, starts a foreground capture service, and creates `/session/media`.
+3. Backend creates a fresh single-device session and answers the WebRTC offer.
+4. Rokid opens `session-events` and queues `session.start`.
+5. Backend enters step 1, publishes `hud.state`, and starts an Overshoot stream for the active step.
+6. Backend samples camera frames, overlays the active reference image header, and publishes that video to Overshoot.
+7. Overshoot results arrive over WebSocket. Two consecutive `true` values mark the step done.
+8. Backend publishes `Done!`, waits two seconds, then advances to the next step.
+9. Swipe forward/back sends manual step navigation. Tap toggles automatic checking.
+10. At completion, double tap sends `session.reset` and returns the HUD to the initial screen.
+11. Browser `/demo` can connect at any time and receives the latest camera/HUD composite plus matching control buttons.
 
 # Key Files
 
 ## Rokid (`./rokid/`)
 
-- `app/src/main/java/com/example/rokidovershootopenairealtime/MainActivity.kt`: start/stop flow, gesture handling, HUD rendering, transcript reset on `speech_epoch`, and control-session teardown on app background.
-- `app/src/main/java/com/example/rokidovershootopenairealtime/BackendControlClient.kt`: backend control WebSocket and `hud.state` parsing.
-- `app/src/main/java/com/example/rokidovershootopenairealtime/OvershootSessionClient.kt`: camera -> Overshoot WebRTC brokered through the backend.
-- `app/src/main/java/com/example/rokidovershootopenairealtime/OpenAIRealtimeClient.kt`: receive-only OpenAI Realtime WebRTC audio plus transcript delta parsing.
-- `app/src/main/res/layout/activity_main.xml`: minimal start screen and running HUD.
+- `app/src/main/java/com/example/origamiguide/MainActivity.kt`: start screen, touchpad gesture mapping, MediaProjection request, and HUD rendering.
+- `app/src/main/java/com/example/origamiguide/OrigamiSessionClient.kt`: camera/screen WebRTC publishing and `session-events` data channel.
+- `app/src/main/java/com/example/origamiguide/ScreenCaptureService.kt`: foreground service required for ongoing screen capture.
+- `app/src/main/res/layout/activity_main.xml`: monochrome Rokid HUD.
+- `app/src/main/res/drawable-nodpi/origami_step_*.png`: seven step guide images.
 - `app/build.gradle.kts`: `BACKEND_BASE_URL` BuildConfig value from `rokid/local.properties`.
 
 ## Backend (`./backend/`)
 
-- `main.py`: FastAPI lifecycle and the control / vision / realtime routes.
-- `session_manager.py`: small composition layer that wires the session mixins and shared clients together.
-- `session_workflow.py`: workflow state machine, recipe activation, step evaluation, and HUD publishing.
-- `session_runtime.py`: Overshoot/OpenAI runtime creation, sideband transport, keepalive, and speech/event sending.
-- `recipe_catalog.py`, `session_types.py`, `session_constants.py`, `session_helpers.py`: recipe schemas, session dataclasses, shared constants, and pure helpers used by the orchestrator.
-- `recipes/*.json`: data-driven workflow definitions. Filename keywords matter for recipe selection.
-- `.env.example`: required keys and optional model overrides.
+- `main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
+- `session_manager.py`: session loop, aiortc media ingest, Overshoot bridge, boolean result handling, HUD state, and browser demo composition.
+- `origami_config.py`: step config loader.
+- `assets/origami_steps.json`: seven step definitions and prompts.
+- `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
+- `.env.example`: required key and optional Overshoot overrides.
 
 # Configuration
 
 - `rokid/local.properties`: must define `BACKEND_BASE_URL` (for example `http://<HOST>:8000`).
 - `backend/.env`: must define:
   - `OVERSHOOT_API_KEY`
-  - `OPENAI_API_KEY`
 - Optional backend overrides:
   - `OVERSHOOT_API_URL`
   - `OVERSHOOT_MODEL`
-  - `OPENAI_REALTIME_MODEL`
 
 # Gestures
 
-- `KeyEvent.KEYCODE_ENTER`: tap, used to start or stop the run
-- `KeyEvent.KEYCODE_DPAD_UP`: swipe forward, advances one internal debug step
-- `KeyEvent.KEYCODE_DPAD_DOWN`: swipe backward, moves back one internal debug step
+- `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen, resets after completion.
+- `KeyEvent.KEYCODE_ENTER`: tap. Toggles automatic checking while a step is active.
+- `KeyEvent.KEYCODE_DPAD_DOWN`: swipe forward. Advances one step manually.
+- `KeyEvent.KEYCODE_DPAD_UP`: swipe backward. Moves one step back manually.
 
 # Commands
 
@@ -120,5 +111,5 @@ This project is a server-authoritative mocktail coach for Rokid Glasses. The gla
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: ALWAYS run after backend changes
 - `uv run --env-file .env fastapi dev main.py --host 0.0.0.0`: start server with env loaded
 - `uv run --env-file .env foo.py`: run a script with env loaded
-- `uv run -- python -c "print('hello')"`: run a one-off Python command (the direct `python` command without uv might not be available.)
+- `uv run -- python -c "print('hello')"`: run a one-off Python command. The direct `python` command without uv might not be available.
 - `uv add <package>`: add a package

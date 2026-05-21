@@ -1,4 +1,4 @@
-package com.example.rokidovershootopenairealtime
+package com.example.origamiguide
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -11,6 +11,6 @@ class ExampleInstrumentedTest {
     @Test
     fun useAppContext() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.rokidovershootopenairealtime", appContext.packageName)
+        assertEquals("com.example.origamiguide", appContext.packageName)
     }
 }
