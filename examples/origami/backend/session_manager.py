@@ -26,7 +26,7 @@ from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
 from fastapi import HTTPException
 from origami_config import OrigamiStep, load_origami_steps
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from websockets import ConnectionClosed
 
 logger = logging.getLogger("uvicorn.error")
@@ -53,6 +53,13 @@ OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE = 1008
 VIDEO_CLOCK_RATE = 90_000
 DEMO_FPS = 5
 OVERSHOOT_FPS = 5
+HUD_WIDTH = 480
+HUD_HEIGHT = 640
+DEMO_WIDTH = HUD_WIDTH * 2
+DEMO_HEIGHT = HUD_HEIGHT
+HUD_GREEN = (38, 255, 108)
+HUD_DIM_GREEN = (20, 150, 64)
+HUD_DENSITY = 1.5
 
 __all__ = [
     "DEFAULT_OVERSHOOT_API_URL",
@@ -128,7 +135,6 @@ class OrigamiSession:
     destroyed: bool = False
     track_counter: int = 0
     camera_frames: LatestFrameBuffer = field(default_factory=LatestFrameBuffer)
-    screen_frames: LatestFrameBuffer = field(default_factory=LatestFrameBuffer)
     track_tasks: list[asyncio.Task[None]] = field(default_factory=list)
     done_task: asyncio.Task[None] | None = None
     overshoot_generation: int = 0
@@ -155,12 +161,15 @@ class OrigamiSessionManager:
         overshoot_api_key: str,
         overshoot_model: str,
         steps_path: Path,
+        overshoot_enabled: bool = True,
     ) -> None:
         self._overshoot_api_url = overshoot_api_url.rstrip("/")
         self._overshoot_api_key = overshoot_api_key
         self._overshoot_model = overshoot_model
+        self._overshoot_enabled = overshoot_enabled
         self._steps = load_origami_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
+        self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
         self._overshoot_http = httpx.AsyncClient(
             base_url=self._overshoot_api_url,
             timeout=httpx.Timeout(20.0),
@@ -302,6 +311,18 @@ class OrigamiSessionManager:
         if viewer is not None:
             await viewer.pc.close()
 
+    def overshoot_status(self) -> dict[str, bool]:
+        return {"enabled": self._overshoot_enabled}
+
+    async def set_overshoot_enabled(self, enabled: bool) -> dict[str, bool]:
+        self._overshoot_enabled = enabled
+        async with self._sessions_lock:
+            sessions = list(self._sessions.values())
+        for session in sessions:
+            await session.queue.put(SessionEvent(kind="overshoot.enabled_changed"))
+        await self._broadcast_demo_state()
+        return self.overshoot_status()
+
     async def destroy_all_sessions(self, reason: str) -> None:
         async with self._sessions_lock:
             session_ids = list(self._sessions.keys())
@@ -325,10 +346,15 @@ class OrigamiSessionManager:
     async def demo_frame_image(self) -> Image.Image:
         session = await self._latest_session()
         if session is None:
-            return _demo_placeholder("Waiting for glasses")
+            hud_state = _empty_hud_payload()
+            hud_state["overshoot_enabled"] = self._overshoot_enabled
+            return _compose_demo_image(
+                base=_demo_placeholder("Waiting for glasses"),
+                hud_state=hud_state,
+                hud_image=self.hud_image_for(self._steps[0]),
+            )
 
         camera_item = await session.camera_frames.latest()
-        screen_item = await session.screen_frames.latest()
         hud_state = self._hud_payload(session)
 
         if camera_item is None:
@@ -337,8 +363,8 @@ class OrigamiSessionManager:
             base = _frame_to_image(camera_item[1], fallback_size=(1024, 768))
         return _compose_demo_image(
             base=base,
-            screen_frame=screen_item[1] if screen_item else None,
             hud_state=hud_state,
+            hud_image=self.hud_image_for(self.current_step_for(session)),
         )
 
     async def _latest_session(self) -> OrigamiSession | None:
@@ -472,6 +498,9 @@ class OrigamiSessionManager:
             return
         if event.kind == "client.media_ready":
             await self._publish_hud_state(session)
+            return
+        if event.kind == "overshoot.enabled_changed":
+            await self._sync_overshoot_enabled_state(session)
             return
         if event.kind == "camera.frame":
             if session.phase == PHASE_GUIDING and session.auto_check_enabled:
@@ -652,6 +681,8 @@ class OrigamiSessionManager:
             return
         if session.phase in {PHASE_WAITING, PHASE_COMPLETED, PHASE_ERROR}:
             return
+        if not self._overshoot_enabled:
+            return
         if not session.auto_check_enabled:
             return
         await self._fail_session(
@@ -692,6 +723,7 @@ class OrigamiSessionManager:
             "step_title": step.title,
             "hud_image": step.hud_image,
             "auto_check_enabled": session.auto_check_enabled,
+            "overshoot_enabled": self._overshoot_enabled,
             "true_streak": session.true_streak,
             "message": message,
         }
@@ -738,12 +770,10 @@ class OrigamiSessionManager:
         self, session: OrigamiSession, track: MediaStreamTrack
     ) -> str:
         track_id = str(getattr(track, "id", "") or "").lower()
-        if "screen" in track_id or "hud" in track_id:
-            return "screen"
         if "camera" in track_id or "video0" in track_id:
             return "camera"
         session.track_counter += 1
-        return "camera" if session.track_counter == 1 else "screen"
+        return "camera"
 
     async def _consume_video_track(
         self,
@@ -757,11 +787,8 @@ class OrigamiSessionManager:
                 frame = await track.recv()
                 if not isinstance(frame, VideoFrame):
                     continue
-                if track_kind == "screen":
-                    await session.screen_frames.update(frame)
-                else:
-                    await session.camera_frames.update(frame)
-                    await session.queue.put(SessionEvent(kind="camera.frame"))
+                await session.camera_frames.update(frame)
+                await session.queue.put(SessionEvent(kind="camera.frame"))
         except Exception:
             logger.info("session=%s %s track ended", session.session_id, track_kind)
 
@@ -775,9 +802,19 @@ class OrigamiSessionManager:
     async def _ensure_overshoot_runtime(self, session: OrigamiSession) -> None:
         if session.overshoot_stream_id is not None or session.overshoot_pc is not None:
             return
+        if not self._overshoot_enabled:
+            return
         if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
             return
         await self._start_overshoot_runtime(session)
+
+    async def _sync_overshoot_enabled_state(self, session: OrigamiSession) -> None:
+        if self._overshoot_enabled and session.phase == PHASE_GUIDING:
+            if session.auto_check_enabled:
+                await self._ensure_overshoot_runtime(session)
+        else:
+            await self._stop_overshoot_runtime(session)
+        await self._publish_hud_state(session)
 
     async def _start_overshoot_runtime(self, session: OrigamiSession) -> None:
         step = self._steps[session.step_index]
@@ -1096,7 +1133,6 @@ class OrigamiSessionManager:
         if session.track_tasks:
             await asyncio.gather(*session.track_tasks, return_exceptions=True)
         await session.camera_frames.close()
-        await session.screen_frames.close()
         if session.media_pc is not None:
             await session.media_pc.close()
             session.media_pc = None
@@ -1134,8 +1170,27 @@ class OrigamiSessionManager:
                 images[step.id] = image.convert("RGB")
         return images
 
+    @staticmethod
+    def _load_hud_images(
+        steps: list[OrigamiStep], asset_dir: Path
+    ) -> dict[str, Image.Image]:
+        images: dict[str, Image.Image] = {}
+        step_image_dir = asset_dir / "step-imgs"
+        for step in steps:
+            path = step_image_dir / f"{step.hud_image}.png"
+            if not path.exists():
+                logger.warning("HUD step image not found: %s", path)
+                continue
+            with Image.open(path) as image:
+                images[step.id] = image.convert("RGBA")
+        return images
+
     def reference_image_for(self, step: OrigamiStep) -> Image.Image:
         return self._reference_images[step.id].copy()
+
+    def hud_image_for(self, step: OrigamiStep) -> Image.Image | None:
+        image = self._hud_images.get(step.id)
+        return image.copy() if image is not None else None
 
     def current_step_for(self, session: OrigamiSession) -> OrigamiStep:
         return self._steps[min(session.step_index, len(self._steps) - 1)]
@@ -1288,75 +1343,124 @@ def _compose_reference_image(
 def _compose_demo_image(
     *,
     base: Image.Image,
-    screen_frame: VideoFrame | None,
     hud_state: dict[str, Any],
+    hud_image: Image.Image | None,
 ) -> Image.Image:
-    image = base.convert("RGB")
-    width, height = image.size
+    image = Image.new("RGB", (DEMO_WIDTH, DEMO_HEIGHT), "black")
+    image.paste(_portrait_pov_image(base), (0, 0))
+    image.paste(_backend_hud_image(hud_state, hud_image), (HUD_WIDTH, 0))
     draw = ImageDraw.Draw(image)
-    font = _load_font(max(18, width // 42))
-    small_font = _load_font(max(14, width // 56))
-
-    if screen_frame is not None:
-        screen = _frame_to_image(screen_frame, fallback_size=(480, 640))
-    else:
-        screen = _backend_hud_image(hud_state)
-
-    panel_width = max(220, min(width // 3, 360))
-    panel_height = int(panel_width * 4 / 3)
-    if panel_height > height - 48:
-        panel_height = height - 48
-        panel_width = int(panel_height * 3 / 4)
-    screen.thumbnail((panel_width, panel_height), Image.Resampling.LANCZOS)
-    x = width - screen.width - 24
-    y = 24
-    draw.rectangle(
-        (x - 4, y - 4, x + screen.width + 4, y + screen.height + 4),
-        fill="black",
-        outline="white",
+    draw.line(
+        (HUD_WIDTH - 1, 0, HUD_WIDTH - 1, DEMO_HEIGHT),
+        fill=(4, 34, 16),
         width=2,
     )
-    image.paste(screen, (x, y))
-
-    step_label = (
-        f"Step {hud_state.get('step_number', 1)}/{hud_state.get('step_count', 7)}"
-    )
-    auto_label = "Auto on" if hud_state.get("auto_check_enabled", True) else "Auto off"
-    message = str(hud_state.get("message") or "")
-    footer = f"{step_label}  {auto_label}"
-    draw.rectangle((0, height - 54, width, height), fill=(0, 0, 0))
-    draw.text((24, height - 42), footer, fill="white", font=font)
-    if message:
-        draw.text((24, height - 78), message, fill="white", font=small_font)
     return image
 
 
-def _backend_hud_image(hud_state: dict[str, Any]) -> Image.Image:
-    image = Image.new("RGB", (480, 640), "black")
+def _portrait_pov_image(base: Image.Image) -> Image.Image:
+    image = base.convert("RGB")
+    width, height = image.size
+    target_aspect = HUD_WIDTH / HUD_HEIGHT
+    aspect = width / height
+    if aspect > target_aspect:
+        crop_width = int(height * target_aspect)
+        left = max(0, (width - crop_width) // 2)
+        image = image.crop((left, 0, left + crop_width, height))
+    elif aspect < target_aspect:
+        crop_height = int(width / target_aspect)
+        top = max(0, (height - crop_height) // 2)
+        image = image.crop((0, top, width, top + crop_height))
+    return image.resize((HUD_WIDTH, HUD_HEIGHT), Image.Resampling.LANCZOS)
+
+
+def _backend_hud_image(
+    hud_state: dict[str, Any],
+    hud_image: Image.Image | None,
+) -> Image.Image:
+    image = Image.new("RGB", (HUD_WIDTH, HUD_HEIGHT), "black")
     draw = ImageDraw.Draw(image)
-    title_font = _load_font(30)
-    font = _load_font(22)
-    small = _load_font(18)
-    draw.text((0, 40), "Origami Guide", fill="white", font=title_font, anchor="la")
-    if hud_state.get("screen") == "start":
-        draw.text((42, 280), "Double tap temple", fill="white", font=font)
-        draw.text((88, 314), "to start", fill="white", font=font)
-        return image
-    draw.text(
-        (28, 118),
-        f"Step {hud_state.get('step_number', 1)}/{hud_state.get('step_count', 7)}",
-        fill="white",
-        font=font,
+    title_font = _load_font(_sp(20))
+    step_font = _load_font(_sp(15))
+    hint_font = _load_font(_sp(17))
+    controls_font = _load_font(_sp(12))
+
+    title_bbox = _draw_centered_text(
+        draw,
+        "Origami Guide",
+        center_x=HUD_WIDTH // 2,
+        y=_dp(25),
+        font=title_font,
+        fill=HUD_GREEN,
     )
+
+    if hud_state.get("screen") == "start":
+        hint_y = title_bbox[3] + _dp(38)
+        _draw_centered_text(
+            draw,
+            "Double tap temple to start",
+            center_x=HUD_WIDTH // 2,
+            y=hint_y,
+            font=hint_font,
+            fill=HUD_GREEN,
+        )
+        _draw_centered_lines(
+            draw,
+            ["Double tap temple to start"],
+            center_x=HUD_WIDTH // 2,
+            bottom=HUD_HEIGHT - _dp(16),
+            font=controls_font,
+            fill=HUD_GREEN,
+            line_gap=3,
+        )
+        return image
+
+    draw.text(
+        (_dp(18), _dp(68)),
+        f"Step {hud_state.get('step_number', 1)}/{hud_state.get('step_count', 7)}:",
+        fill=HUD_GREEN,
+        font=step_font,
+    )
+
+    if hud_image is not None:
+        guide = _green_hud_asset(hud_image)
+        guide.thumbnail((HUD_WIDTH - 2 * _dp(18), 180), Image.Resampling.LANCZOS)
+        image.paste(
+            guide,
+            (
+                (HUD_WIDTH - guide.width) // 2,
+                _dp(94) + (180 - guide.height) // 2,
+            ),
+        )
+
     message = str(hud_state.get("message") or "")
     if message:
-        draw.text((28, 190), message, fill="white", font=font)
-    auto = (
-        "Auto check on"
-        if hud_state.get("auto_check_enabled", True)
-        else "Auto check off"
+        message_size = _sp(21)
+        fitted = _fit_font(draw, message, HUD_WIDTH - 36, message_size)
+        _draw_centered_text(
+            draw,
+            message,
+            center_x=HUD_WIDTH // 2,
+            y=_dp(206),
+            font=fitted,
+            fill=HUD_GREEN,
+        )
+
+    auto_enabled = bool(hud_state.get("auto_check_enabled", True))
+    controls = (
+        ["Auto check on", "Tap: pause auto | Swipe: previous/next"]
+        if auto_enabled
+        else ["Auto check off", "Tap: resume auto | Swipe: previous/next"]
     )
-    draw.text((28, 548), auto, fill="white", font=small)
+    _draw_centered_lines(
+        draw,
+        controls,
+        center_x=HUD_WIDTH // 2,
+        bottom=HUD_HEIGHT - _dp(16),
+        font=controls_font,
+        fill=HUD_GREEN,
+        line_gap=16,
+    )
     return image
 
 
@@ -1368,10 +1472,89 @@ def _demo_placeholder(message: str) -> Image.Image:
     draw.text(
         ((1024 - (bbox[2] - bbox[0])) // 2, (768 - (bbox[3] - bbox[1])) // 2),
         message,
-        fill="white",
+        fill=HUD_DIM_GREEN,
         font=font,
     )
     return image
+
+
+def _green_hud_asset(image: Image.Image) -> Image.Image:
+    source = image.convert("RGBA")
+    luminance = source.convert("L")
+    colorized = ImageOps.colorize(luminance, black=(0, 0, 0), white=HUD_GREEN)
+    colorized.putalpha(source.getchannel("A"))
+    background = Image.new("RGBA", source.size, (0, 0, 0, 255))
+    background.alpha_composite(colorized)
+    return background.convert("RGB")
+
+
+def _dp(value: int) -> int:
+    return round(value * HUD_DENSITY)
+
+
+def _sp(value: int) -> int:
+    return round(value * HUD_DENSITY)
+
+
+def _draw_centered_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    center_x: int,
+    y: int,
+    font: Any,
+    fill: tuple[int, int, int],
+) -> tuple[int, int, int, int]:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0]
+    x = center_x - width // 2 - bbox[0]
+    draw.text((x, y - bbox[1]), text, fill=fill, font=font)
+    rendered = draw.textbbox((x, y - bbox[1]), text, font=font)
+    return (
+        int(rendered[0]),
+        int(rendered[1]),
+        int(rendered[2]),
+        int(rendered[3]),
+    )
+
+
+def _draw_centered_lines(
+    draw: ImageDraw.ImageDraw,
+    lines: list[str],
+    *,
+    center_x: int,
+    bottom: int,
+    font: Any,
+    fill: tuple[int, int, int],
+    line_gap: int,
+) -> None:
+    metrics = [draw.textbbox((0, 0), line, font=font) for line in lines]
+    heights = [bbox[3] - bbox[1] for bbox in metrics]
+    total_height = sum(heights) + line_gap * max(0, len(lines) - 1)
+    y = bottom - total_height
+    for line, bbox, height in zip(lines, metrics, heights, strict=True):
+        width = bbox[2] - bbox[0]
+        x = center_x - width // 2 - bbox[0]
+        draw.text((x, y - bbox[1]), line, fill=fill, font=font)
+        y += height + line_gap
+
+
+def _empty_hud_payload() -> dict[str, Any]:
+    return {
+        "type": "hud.state",
+        "screen": "start",
+        "phase": PHASE_WAITING,
+        "step_index": 0,
+        "step_number": 1,
+        "step_count": 7,
+        "step_id": "step_1",
+        "step_title": "Step 1",
+        "hud_image": "origami_step_1",
+        "auto_check_enabled": True,
+        "overshoot_enabled": True,
+        "true_streak": 0,
+        "message": "",
+    }
 
 
 def _frame_to_image(

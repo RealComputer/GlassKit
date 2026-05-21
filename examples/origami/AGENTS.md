@@ -1,6 +1,6 @@
 # Project Overview
 
-This project is a server-authoritative origami guide for Rokid Glasses. The glasses show a seven-step folding HUD, stream camera plus HUD screen capture to the backend, and receive backend-driven state updates over a WebRTC data channel. The backend checks the active fold with Overshoot and advances after two consecutive `true` results.
+This project is a server-authoritative origami guide for Rokid Glasses. The glasses show a seven-step folding HUD, stream camera video to the backend, and receive backend-driven state updates over a WebRTC data channel. The backend checks the active fold with Overshoot and advances after two consecutive `true` results.
 
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, and temple touchpad.
 - Overshoot is a Vision Language Model inference API for live video.
@@ -9,7 +9,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## Client Contract
 
-- The Android client owns only HUD rendering, gesture input, runtime permission handling, MediaProjection consent, and the WebRTC media/data-channel connection.
+- The Android client owns only HUD rendering, gesture input, runtime permission handling, and the WebRTC media/data-channel connection.
 - The Android client must not interpret Overshoot results or decide automatic step progression.
 - The Android client sends gesture commands over the `session-events` data channel:
   - `session.start`
@@ -18,7 +18,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
   - `manual.prev`
   - `auto.toggle`
 - The Android camera must capture at `1024x768@15fps` and adapt outbound WebRTC to `5fps`.
-- The Android screen capture track should be sent at `5fps`.
 
 ## Backend Contract
 
@@ -27,6 +26,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - A step passes only after two consecutive Overshoot boolean `true` results; any `false` resets the streak.
 - Manual next/previous controls cancel a pending `Done!` delay.
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
+- `ORIGAMI_OVERSHOOT_ENABLED=false` or `POST /debug/overshoot {"enabled": false}` must keep device/browser media alive while preventing Overshoot stream creation.
 
 ## External Service Contract
 
@@ -39,7 +39,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## Connection Graph
 
-- `Rokid -> Backend` (WebRTC): one peer connection with camera video, screen-capture video, and `session-events` data channel.
+- `Rokid -> Backend` (WebRTC): one peer connection with camera video and `session-events` data channel.
 - `Backend -> Overshoot` (WebRTC): backend-originated video stream containing camera POV plus the active reference image.
 - `Backend -> Overshoot` (HTTP): stream creation, keepalive, and stream deletion.
 - `Backend <-> Overshoot` (WebSocket): boolean inference results.
@@ -48,7 +48,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 ## End-to-End Session Flow
 
 1. App launch: Rokid renders the start screen: `Double tap temple to start`.
-2. Double tap: Rokid asks for MediaProjection consent, starts a foreground capture service, and creates `/session/media`.
+2. Double tap: Rokid creates `/session/media` with camera video and the `session-events` data channel.
 3. Backend creates a fresh single-device session and answers the WebRTC offer.
 4. Rokid opens `session-events` and queues `session.start`.
 5. Backend enters step 1, publishes `hud.state`, and starts an Overshoot stream for the active step.
@@ -63,9 +63,8 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## Rokid (`./rokid/`)
 
-- `app/src/main/java/com/example/origamiguide/MainActivity.kt`: start screen, touchpad gesture mapping, MediaProjection request, and HUD rendering.
-- `app/src/main/java/com/example/origamiguide/OrigamiSessionClient.kt`: camera/screen WebRTC publishing and `session-events` data channel.
-- `app/src/main/java/com/example/origamiguide/ScreenCaptureService.kt`: foreground service required for ongoing screen capture.
+- `app/src/main/java/com/example/origamiguide/MainActivity.kt`: start screen, touchpad gesture mapping, and HUD rendering.
+- `app/src/main/java/com/example/origamiguide/OrigamiSessionClient.kt`: camera WebRTC publishing and `session-events` data channel.
 - `app/src/main/res/layout/activity_main.xml`: monochrome Rokid HUD.
 - `app/src/main/res/drawable-nodpi/origami_step_*.png`: seven step guide images.
 - `app/build.gradle.kts`: `BACKEND_BASE_URL` BuildConfig value from `rokid/local.properties`.
@@ -76,6 +75,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `session_manager.py`: session loop, aiortc media ingest, Overshoot bridge, boolean result handling, HUD state, and browser demo composition.
 - `origami_config.py`: step config loader.
 - `assets/origami_steps.json`: seven step definitions and prompts.
+- `assets/step-imgs/*.png`: green browser-demo HUD versions of the step guide images.
 - `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
 - `.env.example`: required key and optional Overshoot overrides.
 
@@ -85,6 +85,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `backend/.env`: must define:
   - `OVERSHOOT_API_KEY`
 - Optional backend overrides:
+  - `ORIGAMI_OVERSHOOT_ENABLED`
   - `OVERSHOOT_API_URL`
   - `OVERSHOOT_MODEL`
 

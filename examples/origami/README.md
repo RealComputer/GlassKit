@@ -1,15 +1,14 @@
 # Origami Guide for Rokid Glasses
 
-This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera and HUD screen-capture tracks to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done!` for two seconds and advances to the next step.
+This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera video to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done!` for two seconds and advances to the next step.
 
-The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with the camera POV plus the current HUD UI, and its buttons send the same control events as the glasses gestures.
+The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with a portrait camera POV beside a backend-rendered green HUD that mirrors the glasses UI, and its buttons send the same control events as the glasses gestures.
 
 ## What The App Does
 
 - Starts from `Double tap temple to start`
 - Shows `Origami Guide`, `Step N/7`, and the provided step image on the Rokid HUD
 - Captures camera at `1024x768@15fps` and adapts outbound WebRTC to `5fps`
-- Captures the Android HUD screen as a second WebRTC video track at `5fps`
 - Lets the backend perform Overshoot checks every `0.5s`
 - Supports swipe forward/back for manual step navigation
 - Uses tap to toggle automatic checking on or off
@@ -17,7 +16,7 @@ The backend also serves a browser demo at `/demo`. That page receives a composed
 
 ## How It Works
 
-- `Rokid -> Backend` WebRTC: one peer connection with camera, screen, and a `session-events` data channel
+- `Rokid -> Backend` WebRTC: one peer connection with camera video and a `session-events` data channel
 - `Backend -> Overshoot` WebRTC: backend-originated composed reference video for the active step
 - `Backend <-> Overshoot` WebSocket: boolean inference results and keepalive
 - `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
@@ -47,8 +46,17 @@ cp .env.example .env
 
 Optional backend overrides:
 
+- `ORIGAMI_OVERSHOOT_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
+
+You can also toggle Overshoot at runtime:
+
+```bash
+curl -X POST http://<YOUR_BACKEND>:8000/debug/overshoot \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": false}'
+```
 
 ## Run The Backend
 
@@ -90,6 +98,7 @@ adb devices
 ## Assets
 
 - Rokid HUD step images: `rokid/app/src/main/res/drawable-nodpi/origami_step_*.png`
+- Backend demo HUD step images: `backend/assets/step-imgs/origami_step_*.png`
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
 

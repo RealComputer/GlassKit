@@ -22,8 +22,9 @@ HUD/screen output, with controls equivalent to the glasses controls.
 - Overshoot API: keep v0.2 for now because the existing integration should still
   work.
 - Browser demo: single-device only. Attach to the current/latest glasses session.
-- Screen capture: first try actual Android screen capture as a second WebRTC video
-  track. If this is unstable, use backend-rendered HUD composition later.
+- Screen capture: actual Android screen capture was tested on Rokid and is not
+  available to this normal app without privileged MediaProjection permission.
+  The implementation now uses backend-rendered browser HUD composition instead.
 - Assets: copy `tmp/step-imgs/` and `tmp/ref-imgs/` into tracked Android/backend
   asset locations during implementation.
 - Control transport: if a WebRTC connection exists, use a data channel instead of
@@ -59,16 +60,14 @@ Rokid Android app
   - HUD rendering
   - touchpad input
   - camera capture: 1024x768@15 capture, 5 fps WebRTC output
-  - Android screen capture: 5 fps WebRTC output
   - one WebRTC PeerConnection with:
       track 1: camera
-      track 2: screen/HUD capture
       data channel: session-events
 
 Backend FastAPI app
   - aiortc receiver for Rokid media/data channel
   - authoritative origami session state machine
-  - latest camera/screen frame stores
+  - latest camera frame store
   - reference-frame composer for Overshoot input
   - outgoing aiortc/WebRTC stream to Overshoot v0.2
   - Overshoot result websocket + keepalive
@@ -109,7 +108,7 @@ The backend state should include:
 - `auto_check_enabled`: boolean
 - `true_streak`: integer
 - `done_until`: monotonic timestamp or delayed-task handle for the 2-second hold
-- `media_ready`: camera/screen/data channel state
+- `media_ready`: camera/data channel state
 - generation counters for media/Overshoot/step changes
 
 State transitions:
@@ -176,24 +175,10 @@ The client should:
   - capture `1024x768@15`
   - call `adaptOutputFormat(1024, 768, 5)` so encoder/network output is 5 fps
   - prefer hardware H.264 via `DefaultVideoEncoderFactory`
-- Add screen track:
-  - request MediaProjection consent
-  - use WebRTC `ScreenCapturerAndroid` if available in the current WebRTC package
-  - target 5 fps
-  - label or order the track so backend can identify it as `screen`
 - Add `session-events` data channel before creating the offer.
 - Send SDP to backend with `application/sdp`.
 - Queue JSON control messages until the data channel is open.
 - Parse backend state messages and render HUD from those messages only.
-
-Screen-capture Android constraints:
-
-- Because the app targets SDK 36, expect to need foreground-service declarations
-  for media projection and possibly camera streaming.
-- Add a small foreground `StreamingService` if the device/runtime rejects
-  MediaProjection from the activity alone.
-- If MediaProjection is blocked or unstable on the glasses, keep the backend
-  media/control shape and switch the browser demo to backend-rendered HUD overlay.
 
 ## Backend Plan
 
@@ -225,11 +210,9 @@ with a simpler media endpoint:
 
 Backend `aiortc` behavior:
 
-- Add two `recvonly` video transceivers and prefer H.264.
+- Accept the incoming camera video track and prefer H.264.
 - Accept the client-created data channel.
-- Classify incoming video tracks by SDP `mid`, transceiver order, track id, or a
-  startup data-channel metadata message from Android.
-- Store latest camera frame and latest screen frame separately.
+- Store the latest camera frame.
 - Close old peer connections when a new glasses session starts.
 - Send initial HUD/session state over the data channel when it opens.
 
@@ -273,7 +256,7 @@ Use a backend-originated outgoing WebRTC stream to Overshoot:
 When auto-check is disabled:
 
 - Stop or close the Overshoot runtime for the active session.
-- Keep receiving Rokid camera/screen frames for the browser demo.
+- Keep receiving Rokid camera frames for the browser demo.
 
 When auto-check is re-enabled:
 
@@ -306,12 +289,10 @@ Browser `PeerConnection`:
 
 Backend viewer composition:
 
-- Use latest camera frame as the main POV.
-- Overlay or place the latest screen/HUD capture so viewers see actual Android
-  screen capture.
-- If the screen track is missing, render backend HUD state into the video as a
-  fallback placeholder but keep this clearly separated from the preferred actual
-  screen-capture path.
+- Use the latest camera frame as a portrait POV panel.
+- Render the current HUD state in the backend as a matching portrait green HUD
+  panel, using the same step assets as the glasses.
+- Compose the POV and HUD panels side by side for the browser WebRTC stream.
 - Run viewer output at about 5 fps; browser demo latency matters more than high
   quality.
 
@@ -349,7 +330,7 @@ After implementation, update:
   - backend run instructions
   - browser demo URL
   - no OpenAI key required
-  - MediaProjection/screen-capture prompt expectation
+  - backend-rendered demo HUD and Overshoot disable controls
 - `AGENTS.md`
   - replace mocktail/OpenAI architecture with origami/Overshoot/backend WebRTC
   - update commands and key files
@@ -385,7 +366,7 @@ Manual verification:
   advance.
 - A `false` result resets true streak.
 - Step 7 completion shows final state; double-tap returns to initial screen.
-- Browser `/demo` shows live camera POV plus actual screen/HUD capture.
+- Browser `/demo` shows live portrait camera POV plus backend-rendered green HUD.
 - Browser buttons produce the same state transitions as glasses controls.
 - Backend teardown closes Rokid peer, browser peers, and Overshoot streams.
 
@@ -398,20 +379,13 @@ Manual verification:
    state/control.
 4. Refactor Android to the origami HUD and data-channel-driven state.
 5. Add camera-only backend receive path and verify H.264/5 fps behavior.
-6. Add Android screen capture as the second track.
-7. Add browser demo WebRTC viewer and controls.
-8. Add backend reference composition and outbound Overshoot v0.2 runtime.
-9. Connect Overshoot boolean results to the two-hit step progression policy.
-10. Run verification commands and update README/AGENTS.
+6. Add browser demo WebRTC viewer and controls.
+7. Add backend reference composition and outbound Overshoot v0.2 runtime.
+8. Connect Overshoot boolean results to the two-hit step progression policy.
+9. Run verification commands and update README/AGENTS.
 
 ## Main Risks
 
-- MediaProjection may require foreground-service work on the Rokid runtime because
-  the app targets SDK 36.
-- Two simultaneous video encoders on the glasses may increase heat; if needed,
-  lower screen resolution/FPS first, then consider backend-rendered HUD fallback.
-- Track identification for camera vs screen needs to be explicit and tested; use
-  data-channel metadata if SDP/transceiver order is not reliable enough.
 - Overshoot v0.2 may not behave identically with an `aiortc` backend publisher;
   test this before investing deeply in viewer polish.
 - Browser viewer composition may need frame pacing/backpressure handling so a slow

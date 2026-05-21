@@ -1,8 +1,6 @@
 package com.example.origamiguide
 
 import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjection
 import android.util.Log
 import java.nio.ByteBuffer
 import kotlinx.coroutines.CompletableDeferred
@@ -33,7 +31,6 @@ import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpParameters
 import org.webrtc.RtpReceiver
 import org.webrtc.RtpSender
-import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
@@ -45,7 +42,6 @@ import kotlin.coroutines.resumeWithException
 class OrigamiSessionClient(
     private val context: Context,
     private val backendBaseUrl: String,
-    private val screenCaptureIntent: Intent?,
     private val listener: Listener
 ) {
 
@@ -76,9 +72,6 @@ class OrigamiSessionClient(
         private const val CAMERA_HEIGHT = 768
         private const val CAMERA_CAPTURE_FPS = 15
         private const val CAMERA_SEND_FPS = 5
-        private const val SCREEN_WIDTH = 480
-        private const val SCREEN_HEIGHT = 640
-        private const val SCREEN_SEND_FPS = 5
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -99,11 +92,6 @@ class OrigamiSessionClient(
     private var cameraSurfaceHelper: SurfaceTextureHelper? = null
     private var cameraSource: VideoSource? = null
     private var cameraTrack: VideoTrack? = null
-
-    private var screenCapturer: VideoCapturer? = null
-    private var screenSurfaceHelper: SurfaceTextureHelper? = null
-    private var screenSource: VideoSource? = null
-    private var screenTrack: VideoTrack? = null
 
     private val mediaConstraints = MediaConstraints().apply {
         mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
@@ -158,7 +146,6 @@ class OrigamiSessionClient(
         peerConnection = pc
 
         createAndAddCameraTrack(pc)
-        createAndAddScreenTrack(pc)
         setupDataChannel(pc)
 
         val offer = createOffer(pc)
@@ -178,24 +165,16 @@ class OrigamiSessionClient(
 
     private suspend fun stopInternal() = withContext(Dispatchers.Default) {
         stopCapturer(cameraCapturer)
-        stopCapturer(screenCapturer)
         cameraCapturer = null
-        screenCapturer = null
 
         cameraSurfaceHelper?.dispose()
-        screenSurfaceHelper?.dispose()
         cameraSurfaceHelper = null
-        screenSurfaceHelper = null
 
         cameraTrack?.dispose()
-        screenTrack?.dispose()
         cameraTrack = null
-        screenTrack = null
 
         cameraSource?.dispose()
-        screenSource?.dispose()
         cameraSource = null
-        screenSource = null
 
         dataChannel?.close()
         dataChannel = null
@@ -298,39 +277,6 @@ class OrigamiSessionClient(
         }
     }
 
-    private fun createAndAddScreenTrack(pc: PeerConnection) {
-        val projectionIntent = screenCaptureIntent
-        if (projectionIntent == null) {
-            Log.w(TAG, "Screen capture intent missing; sending camera only")
-            return
-        }
-        val capturer = ScreenCapturerAndroid(
-            projectionIntent,
-            object : MediaProjection.Callback() {
-                override fun onStop() {
-                    listener.onError("Screen capture stopped")
-                }
-            }
-        )
-        screenCapturer = capturer
-        screenSurfaceHelper = SurfaceTextureHelper.create(
-            "OrigamiScreenCaptureThread",
-            eglBase.eglBaseContext
-        )
-        screenSource = peerConnectionFactory.createVideoSource(true).apply {
-            adaptOutputFormat(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SEND_FPS)
-        }
-        val source = screenSource ?: return
-        capturer.initialize(screenSurfaceHelper, context, source.capturerObserver)
-        capturer.startCapture(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SEND_FPS)
-
-        screenTrack = peerConnectionFactory.createVideoTrack("screen", source)
-        screenTrack?.setEnabled(true)
-        screenTrack?.let { track ->
-            configureVideoSender(pc.addTrack(track))
-        }
-    }
-
     private fun createCameraCapturer(): VideoCapturer? {
         val enumerator = Camera2Enumerator(context)
         val deviceNames = enumerator.deviceNames
@@ -362,7 +308,6 @@ class OrigamiSessionClient(
                         JSONObject()
                             .put("type", "client.media_ready")
                             .put("camera_track", "camera")
-                            .put("screen_track", if (screenTrack != null) "screen" else JSONObject.NULL)
                     )
                     flushPendingMessages()
                 }
