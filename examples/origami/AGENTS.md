@@ -30,7 +30,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
 - `ORIGAMI_AUTO_CHECK_ENABLED=false` must keep device/browser media alive while preventing Overshoot stream creation; this startup setting is not toggleable at runtime.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` must save timestamped Overshoot input preview JPEGs under a gitignored debug directory without requiring an active Overshoot stream.
-- Backend-originated H.264 streams to Overshoot and the browser demo use LAN-oriented aiortc bitrate defaults to avoid adding another low-bitrate generation.
+- Backend-originated H.264 streams to Overshoot and the browser demo use a LAN-oriented aiortc target/cap while preserving aiortc's native low bitrate floor for congestion recovery.
 
 ## External Service Contract
 

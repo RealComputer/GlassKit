@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -56,8 +57,9 @@ VIDEO_CLOCK_RATE = 90_000
 DEMO_FPS = 5
 OVERSHOOT_FPS = 5
 AIORTC_H264_DEFAULT_BITRATE = 2_000_000
-AIORTC_H264_MIN_BITRATE = 800_000
+AIORTC_H264_MIN_BITRATE = 500_000
 AIORTC_H264_MAX_BITRATE = 3_000_000
+OVERSHOOT_STATS_LOG_INTERVAL_SECONDS = 5.0
 DEBUG_COMPOSITE_INTERVAL_SECONDS = 1.0
 OVERSHOOT_STEP_RESULT_GRACE_SECONDS = 0.6
 DEMO_BACKGROUND_BRIGHTNESS = 0.68
@@ -155,6 +157,7 @@ class OrigamiSession:
     overshoot_lease_ttl_seconds: int | None = None
     overshoot_ws_task: asyncio.Task[None] | None = None
     overshoot_keepalive_task: asyncio.Task[None] | None = None
+    overshoot_stats_task: asyncio.Task[None] | None = None
     active_prompt_text: str | None = None
     guiding_step_started_at: float = 0.0
     overshoot_ignore_results_until: float = 0.0
@@ -1017,6 +1020,14 @@ class OrigamiSessionManager:
                     ),
                     name=f"overshoot-keepalive-{current.session_id}-{generation}",
                 )
+            current.overshoot_stats_task = asyncio.create_task(
+                self._run_overshoot_stats_logger(
+                    current.session_id,
+                    generation,
+                    pc,
+                ),
+                name=f"overshoot-stats-{current.session_id}-{generation}",
+            )
             logger.info(
                 "session=%s overshoot started step=%s stream_id=%s generation=%s",
                 current.session_id,
@@ -1038,18 +1049,106 @@ class OrigamiSessionManager:
         session.overshoot_lease_ttl_seconds = None
         session.overshoot_pc = None
         tasks: list[asyncio.Task[None]] = []
-        for task in (session.overshoot_ws_task, session.overshoot_keepalive_task):
+        for task in (
+            session.overshoot_ws_task,
+            session.overshoot_keepalive_task,
+            session.overshoot_stats_task,
+        ):
             if task is not None:
                 task.cancel()
                 tasks.append(task)
         session.overshoot_ws_task = None
         session.overshoot_keepalive_task = None
+        session.overshoot_stats_task = None
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         if pc is not None:
             await pc.close()
         if stream_id:
             await self._close_overshoot_stream(stream_id)
+
+    async def _run_overshoot_stats_logger(
+        self,
+        session_id: str,
+        generation: int,
+        pc: RTCPeerConnection,
+    ) -> None:
+        previous_bytes: int | None = None
+        previous_packets: int | None = None
+        previous_time: float | None = None
+
+        try:
+            while True:
+                await asyncio.sleep(OVERSHOOT_STATS_LOG_INTERVAL_SECONDS)
+                session = await self._get_session_if_current(session_id, generation)
+                if session is None or session.overshoot_pc is not pc:
+                    return
+
+                try:
+                    stats = await pc.getStats()
+                except Exception as error:
+                    logger.warning(
+                        "session=%s overshoot stats unavailable error=%s",
+                        session_id,
+                        error,
+                    )
+                    continue
+
+                outbound = _find_stats(stats.values(), "outbound-rtp", "video")
+                remote_inbound = _find_stats(
+                    stats.values(), "remote-inbound-rtp", "video"
+                )
+                transport = _find_stats(stats.values(), "transport", None)
+                if outbound is None:
+                    logger.info(
+                        "session=%s overshoot stats unavailable generation=%s",
+                        session_id,
+                        generation,
+                    )
+                    continue
+
+                now = time.monotonic()
+                bytes_sent = _stats_int(outbound, "bytesSent")
+                packets_sent = _stats_int(outbound, "packetsSent")
+                bitrate_bps: float | None = None
+                packet_delta: int | None = None
+                if previous_bytes is not None and previous_time is not None:
+                    elapsed = now - previous_time
+                    byte_delta = bytes_sent - previous_bytes
+                    packet_delta = packets_sent - (previous_packets or 0)
+                    if elapsed > 0 and byte_delta >= 0:
+                        bitrate_bps = byte_delta * 8 / elapsed
+                previous_bytes = bytes_sent
+                previous_packets = packets_sent
+                previous_time = now
+
+                rtt_seconds = _stats_float(remote_inbound, "roundTripTime")
+                fraction_lost = _stats_float(remote_inbound, "fractionLost")
+                packets_lost = _stats_int(remote_inbound, "packetsLost")
+                transport_state = _stats_text(transport, "dtlsState")
+                ice_role = _stats_text(transport, "iceRole")
+
+                logger.info(
+                    "session=%s overshoot outbound stats generation=%s "
+                    "bitrate_kbps=%s packets_sent=%s packet_delta=%s "
+                    "bytes_sent=%s rtt_ms=%s loss_pct=%s packets_lost=%s "
+                    "transport=%s/%s",
+                    session_id,
+                    generation,
+                    _format_kbps(bitrate_bps),
+                    packets_sent,
+                    _format_optional_int(packet_delta),
+                    bytes_sent,
+                    _format_ms(rtt_seconds),
+                    _format_rtcp_loss_pct(fraction_lost),
+                    packets_lost,
+                    transport_state,
+                    ice_role,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("session=%s overshoot stats logger crashed", session_id)
 
     async def _run_overshoot_keepalive(
         self,
@@ -1708,6 +1807,75 @@ def _frame_to_image(
 def _save_jpeg(image: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     image.convert("RGB").save(path, format="JPEG", quality=90, optimize=True)
+
+
+def _find_stats(stats: Iterable[Any], stats_type: str, kind: str | None) -> Any | None:
+    matches = [
+        stat
+        for stat in stats
+        if getattr(stat, "type", None) == stats_type
+        and (kind is None or getattr(stat, "kind", None) == kind)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda stat: _stats_int(stat, "bytesSent"))
+
+
+def _stats_int(stat: Any | None, field_name: str) -> int:
+    if stat is None:
+        return 0
+    value = getattr(stat, field_name, 0)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return 0
+
+
+def _stats_float(stat: Any | None, field_name: str) -> float | None:
+    if stat is None:
+        return None
+    value = getattr(stat, field_name, None)
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _stats_text(stat: Any | None, field_name: str) -> str:
+    if stat is None:
+        return "n/a"
+    value = getattr(stat, field_name, None)
+    if value is None:
+        return "n/a"
+    return str(value)
+
+
+def _format_kbps(value_bps: float | None) -> str:
+    if value_bps is None:
+        return "n/a"
+    return f"{value_bps / 1000:.0f}"
+
+
+def _format_ms(value_seconds: float | None) -> str:
+    if value_seconds is None:
+        return "n/a"
+    return f"{value_seconds * 1000:.0f}"
+
+
+def _format_optional_int(value: int | None) -> str:
+    if value is None:
+        return "n/a"
+    return str(value)
+
+
+def _format_rtcp_loss_pct(fraction_lost: float | None) -> str:
+    if fraction_lost is None:
+        return "n/a"
+    return f"{fraction_lost / 256 * 100:.1f}"
 
 
 def _fit_font(
