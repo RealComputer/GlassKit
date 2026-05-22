@@ -757,7 +757,7 @@ class OrigamiSessionManager:
         screen = "start" if session.phase == PHASE_WAITING else "running"
         message = ""
         if session.phase == PHASE_STEP_DONE:
-            message = "Done!"
+            message = "Done! Next step..."
         elif session.phase == PHASE_COMPLETED:
             message = "Complete. Double tap to reset."
         elif session.phase == PHASE_ERROR:
