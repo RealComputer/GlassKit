@@ -81,11 +81,11 @@ class OrigamiSessionClient(
         private const val CAMERA_HEIGHT = 768
         private const val CAMERA_CAPTURE_FPS = 15
         private const val CAMERA_SEND_FPS = 5
-        private const val CAMERA_MIN_BITRATE_BPS = 2_000_000
-        private const val CAMERA_MAX_BITRATE_BPS = 6_000_000
-        private const val CAMERA_START_BITRATE_KBPS = 3_000
-        private const val CAMERA_MIN_BITRATE_KBPS = 2_000
-        private const val CAMERA_MAX_BITRATE_KBPS = 6_000
+        private const val CAMERA_MIN_BITRATE_BPS = 800_000
+        private const val CAMERA_MAX_BITRATE_BPS = 3_000_000
+        private const val CAMERA_START_BITRATE_KBPS = 2_000
+        private const val CAMERA_MIN_BITRATE_KBPS = 800
+        private const val CAMERA_MAX_BITRATE_KBPS = 3_000
         private const val STATS_LOG_INTERVAL_MS = 5_000L
     }
 
