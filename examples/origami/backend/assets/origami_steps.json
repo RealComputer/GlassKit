@@ -46,6 +46,6 @@
     "title": "Step 7",
     "hud_image": "origami_step_7",
     "reference_image": "ref-imgs/7.jpg",
-    "prompt": "Return true only if the origami model on the tray is fully visible and substantially matches the reference shape; otherwise, return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model is clearly visible, not blocked by a hand, and exactly matches the reference shape; otherwise return false."
   }
 ]
