@@ -16,7 +16,8 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
   - `session.reset`
   - `manual.next`
   - `manual.prev`
-- The Android camera must capture at `1024x768@15fps` and adapt outbound WebRTC to `5fps`.
+- The Android camera must capture at `1024x768@15fps`, adapt outbound WebRTC to `5fps`, and keep explicit LAN-oriented bitrate settings while a media session is active.
+- The Android app must hold wake and Wi-Fi low-latency/high-performance locks only during the active WebRTC media session.
 
 ## Backend Contract
 
@@ -27,6 +28,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
 - `ORIGAMI_OVERSHOOT_ENABLED=false` or `POST /debug/overshoot {"enabled": false}` must keep device/browser media alive while preventing Overshoot stream creation.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` must save timestamped Overshoot input preview JPEGs under a gitignored debug directory without requiring an active Overshoot stream.
+- Backend-originated H.264 streams to Overshoot and the browser demo use LAN-oriented aiortc bitrate defaults to avoid adding another low-bitrate generation.
 
 ## External Service Contract
 

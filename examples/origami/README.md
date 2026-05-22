@@ -8,10 +8,10 @@ The backend also serves a browser demo at `/demo`. That page receives a composed
 
 - Starts from `Double tap temple to start`
 - Shows `Origami Guide`, `Step N/7`, and the provided step image on the Rokid HUD
-- Captures camera at `1024x768@15fps` and adapts outbound WebRTC to `5fps`
+- Captures camera at `1024x768@15fps`, adapts outbound WebRTC to `5fps`, and applies LAN-oriented video bitrate settings
 - Lets the backend perform Overshoot checks every `0.5s`
 - Supports swipe forward/back for manual step navigation
-- Uses tap to toggle automatic checking on or off
+- Lets the browser demo toggle automatic checking on or off
 - Uses double tap to reset back to the start screen
 
 ## How It Works

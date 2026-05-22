@@ -23,6 +23,7 @@ from aiortc import (
     RTCRtpSender,
     RTCSessionDescription,
 )
+from aiortc.codecs import h264 as aiortc_h264
 from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
 from fastapi import HTTPException
@@ -54,6 +55,9 @@ OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE = 1008
 VIDEO_CLOCK_RATE = 90_000
 DEMO_FPS = 5
 OVERSHOOT_FPS = 5
+AIORTC_H264_DEFAULT_BITRATE = 3_000_000
+AIORTC_H264_MIN_BITRATE = 1_500_000
+AIORTC_H264_MAX_BITRATE = 6_000_000
 DEBUG_COMPOSITE_INTERVAL_SECONDS = 1.0
 HUD_WIDTH = 480
 HUD_HEIGHT = 640
@@ -66,6 +70,12 @@ __all__ = [
     "DEFAULT_OVERSHOOT_MODEL",
     "OrigamiSessionManager",
 ]
+
+# aiortc does not expose sender bitrate parameters; tune the H.264 codec module
+# before any backend-originated demo or Overshoot encoders are created.
+setattr(aiortc_h264, "DEFAULT_BITRATE", AIORTC_H264_DEFAULT_BITRATE)
+setattr(aiortc_h264, "MIN_BITRATE", AIORTC_H264_MIN_BITRATE)
+setattr(aiortc_h264, "MAX_BITRATE", AIORTC_H264_MAX_BITRATE)
 
 
 @dataclass

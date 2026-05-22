@@ -1,13 +1,19 @@
 package com.example.origamiguide
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import java.nio.ByteBuffer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -31,6 +37,9 @@ import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpParameters
 import org.webrtc.RtpReceiver
 import org.webrtc.RtpSender
+import org.webrtc.RTCStats
+import org.webrtc.RTCStatsCollectorCallback
+import org.webrtc.RTCStatsReport
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
@@ -72,8 +81,15 @@ class OrigamiSessionClient(
         private const val CAMERA_HEIGHT = 768
         private const val CAMERA_CAPTURE_FPS = 15
         private const val CAMERA_SEND_FPS = 5
+        private const val CAMERA_MIN_BITRATE_BPS = 2_000_000
+        private const val CAMERA_MAX_BITRATE_BPS = 6_000_000
+        private const val CAMERA_START_BITRATE_KBPS = 3_000
+        private const val CAMERA_MIN_BITRATE_KBPS = 2_000
+        private const val CAMERA_MAX_BITRATE_KBPS = 6_000
+        private const val STATS_LOG_INTERVAL_MS = 5_000L
     }
 
+    private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val okHttp = OkHttpClient()
     private val eglBase: EglBase = EglBase.create()
@@ -87,6 +103,9 @@ class OrigamiSessionClient(
     private var peerConnection: PeerConnection? = null
     private var dataChannel: DataChannel? = null
     private var iceGatheringDeferred: CompletableDeferred<Unit>? = null
+    private var statsJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     private var cameraCapturer: VideoCapturer? = null
     private var cameraSurfaceHelper: SurfaceTextureHelper? = null
@@ -138,6 +157,7 @@ class OrigamiSessionClient(
     }
 
     private suspend fun startInternal() = withContext(Dispatchers.Default) {
+        acquireRuntimeLocks()
         val pc = createPeerConnection()
         peerConnection = pc
 
@@ -145,7 +165,11 @@ class OrigamiSessionClient(
         setupDataChannel(pc)
 
         val offer = createOffer(pc)
-        setLocalDescription(pc, offer)
+        val tunedOffer = SessionDescription(
+            offer.type,
+            tuneVideoBitrateSdp(offer.description)
+        )
+        setLocalDescription(pc, tunedOffer)
         waitForIceGatheringComplete(pc)
 
         val localSdp = pc.localDescription?.description ?: error("LocalDescription is null")
@@ -155,11 +179,15 @@ class OrigamiSessionClient(
             normalizeSdp(response.answerSdp)
         )
         setRemoteDescription(pc, answer)
+        startStatsLogging(pc)
         listener.onSessionReady(response.sessionId)
         Log.d(TAG, "Origami WebRTC negotiation complete")
     }
 
     private suspend fun stopInternal() = withContext(Dispatchers.Default) {
+        statsJob?.cancel()
+        statsJob = null
+
         stopCapturer(cameraCapturer)
         cameraCapturer = null
 
@@ -181,6 +209,8 @@ class OrigamiSessionClient(
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null
+
+        releaseRuntimeLocks()
     }
 
     private fun stopCapturer(capturer: VideoCapturer?) {
@@ -287,8 +317,162 @@ class OrigamiSessionClient(
     private fun configureVideoSender(sender: RtpSender?) {
         if (sender == null) return
         val params = sender.parameters ?: return
-        params.degradationPreference = RtpParameters.DegradationPreference.DISABLED
-        sender.parameters = params
+        params.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
+        for (encoding in params.encodings) {
+            encoding.active = true
+            encoding.minBitrateBps = CAMERA_MIN_BITRATE_BPS
+            encoding.maxBitrateBps = CAMERA_MAX_BITRATE_BPS
+            encoding.maxFramerate = CAMERA_SEND_FPS
+            encoding.numTemporalLayers = 1
+            encoding.scaleResolutionDownBy = 1.0
+        }
+        if (!sender.setParameters(params)) {
+            Log.w(TAG, "Failed to apply video sender bitrate parameters")
+        }
+    }
+
+    @SuppressLint("WakelockTimeout")
+    private fun acquireRuntimeLocks() {
+        if (wakeLock?.isHeld != true) {
+            try {
+                val powerManager = appContext.getSystemService(PowerManager::class.java)
+                wakeLock = powerManager
+                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:media")
+                    ?.apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to acquire wake lock", t)
+            }
+        }
+
+        if (wifiLock?.isHeld != true) {
+            try {
+                val wifiManager = appContext.getSystemService(WifiManager::class.java)
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                }
+                wifiLock = wifiManager
+                    ?.createWifiLock(mode, "$TAG:media")
+                    ?.apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to acquire Wi-Fi lock", t)
+            }
+        }
+    }
+
+    private fun releaseRuntimeLocks() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to release wake lock", t)
+        }
+        wakeLock = null
+
+        try {
+            wifiLock?.takeIf { it.isHeld }?.release()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to release Wi-Fi lock", t)
+        }
+        wifiLock = null
+    }
+
+    private fun tuneVideoBitrateSdp(sdp: String): String {
+        val lines = sdp.replace("\r\n", "\n").split("\n")
+        val videoPayloadTypes = mutableSetOf<String>()
+        for (line in lines) {
+            if (line.startsWith("a=rtpmap:") && line.contains("H264/90000", ignoreCase = true)) {
+                videoPayloadTypes += line.substringAfter("a=rtpmap:").substringBefore(" ")
+            }
+        }
+        if (videoPayloadTypes.isEmpty()) return sdp
+
+        val tuned = lines.map { line ->
+            if (!line.startsWith("a=fmtp:")) {
+                line
+            } else {
+                val payloadType = line.substringAfter("a=fmtp:").substringBefore(" ")
+                if (payloadType !in videoPayloadTypes) {
+                    line
+                } else {
+                    appendGoogleBitrateParams(line)
+                }
+            }
+        }
+        return tuned.joinToString("\r\n")
+    }
+
+    private fun appendGoogleBitrateParams(fmtpLine: String): String {
+        val params = fmtpLine.substringAfter(" ", "")
+        if (params.contains("x-google-start-bitrate")) {
+            return fmtpLine
+        }
+        val suffix = listOf(
+            "x-google-min-bitrate=$CAMERA_MIN_BITRATE_KBPS",
+            "x-google-start-bitrate=$CAMERA_START_BITRATE_KBPS",
+            "x-google-max-bitrate=$CAMERA_MAX_BITRATE_KBPS"
+        ).joinToString(";")
+        return if (params.isEmpty()) {
+            "$fmtpLine $suffix"
+        } else {
+            "$fmtpLine;$suffix"
+        }
+    }
+
+    private fun startStatsLogging(pc: PeerConnection) {
+        statsJob?.cancel()
+        statsJob = scope.launch {
+            while (true) {
+                delay(STATS_LOG_INTERVAL_MS)
+                if (peerConnection !== pc) break
+                pc.getStats(object : RTCStatsCollectorCallback {
+                    override fun onStatsDelivered(report: RTCStatsReport) {
+                        logOutboundVideoStats(report)
+                    }
+                })
+            }
+        }
+    }
+
+    private fun logOutboundVideoStats(report: RTCStatsReport) {
+        report.statsMap.values
+            .firstOrNull { stats ->
+                stats.type == "outbound-rtp" &&
+                    (
+                        stats.members["kind"] == "video" ||
+                            stats.members["mediaType"] == "video"
+                    )
+            }
+            ?.let { stats ->
+                Log.d(TAG, "outbound video stats: ${formatVideoStats(stats)}")
+            }
+    }
+
+    private fun formatVideoStats(stats: RTCStats): String {
+        val keys = listOf(
+            "bytesSent",
+            "packetsSent",
+            "retransmittedPacketsSent",
+            "nackCount",
+            "pliCount",
+            "framesEncoded",
+            "frameWidth",
+            "frameHeight",
+            "framesPerSecond",
+            "targetBitrate",
+            "qualityLimitationReason",
+            "qpSum"
+        )
+        return keys
+            .mapNotNull { key -> stats.members[key]?.let { "$key=$it" } }
+            .joinToString(", ")
     }
 
     private fun setupDataChannel(pc: PeerConnection) {
