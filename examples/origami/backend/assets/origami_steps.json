@@ -4,28 +4,28 @@
     "title": "Step 1",
     "hud_image": "origami_step_1",
     "reference_image": "ref-imgs/1.jpg",
-    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model matches the reference shape; otherwise return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model exactly matches the reference shape; otherwise return false."
   },
   {
     "id": "step_2",
     "title": "Step 2",
     "hud_image": "origami_step_2",
     "reference_image": "ref-imgs/2.jpg",
-    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model matches the reference shape; otherwise return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model exactly matches the reference shape; otherwise return false."
   },
   {
     "id": "step_3",
     "title": "Step 3",
     "hud_image": "origami_step_3",
     "reference_image": "ref-imgs/3.jpg",
-    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model matches the reference shape; otherwise return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model exactly matches the reference shape; otherwise return false."
   },
   {
     "id": "step_4",
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model matches the reference shape; otherwise return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model exactly matches the reference shape; otherwise return false."
   },
   {
     "id": "step_5",
@@ -39,7 +39,7 @@
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "prompt": "Return true only if the origami model on the tray is fully visible and matches the reference shape; otherwise, return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model is clearly visible, not blocked by a hand, and exactly matches the reference shape; otherwise return false."
   },
   {
     "id": "step_7",
