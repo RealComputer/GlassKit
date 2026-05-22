@@ -25,7 +25,7 @@
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "prompt": "Return true if the origami model on the tray matches the reference shape; otherwise, return false."
+    "prompt": "Compare the origami model on the tray with the reference shape shown at the top of the image. Return true if the model matches the reference shape; otherwise return false."
   },
   {
     "id": "step_5",
