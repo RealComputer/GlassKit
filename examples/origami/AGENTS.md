@@ -24,7 +24,9 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - The FastAPI backend remains authoritative for session lifecycle, current step, automatic checking, step progression, prompt selection, Overshoot runtime state, and HUD state.
 - The backend serializes each device session through one session event loop.
 - A step passes only after two consecutive Overshoot boolean `true` results; any `false` resets the streak.
-- Manual next/previous controls cancel a pending `Done!` delay.
+- Manual next/previous controls cancel a pending `Done!` delay and update the active step without recreating Overshoot when auto check remains on.
+- While guiding, step changes should keep the existing Overshoot stream alive and patch `/streams/{stream_id}/config/prompt` when the step prompt changes.
+- During the two-second `Done!` phase, incoming Overshoot results are ignored; the stream may remain connected until the next step prompt/reference is active.
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
 - `ORIGAMI_OVERSHOOT_ENABLED=false` or `POST /debug/overshoot {"enabled": false}` must keep device/browser media alive while preventing Overshoot stream creation.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` must save timestamped Overshoot input preview JPEGs under a gitignored debug directory without requiring an active Overshoot stream.
@@ -43,7 +45,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `Rokid -> Backend` (WebRTC): one peer connection with camera video and `session-events` data channel.
 - `Backend -> Overshoot` (WebRTC): backend-originated video stream containing camera POV plus the active reference image.
-- `Backend -> Overshoot` (HTTP): stream creation, keepalive, and stream deletion.
+- `Backend -> Overshoot` (HTTP): stream creation, prompt patching, keepalive, and stream deletion.
 - `Backend <-> Overshoot` (WebSocket): boolean inference results.
 - `Browser <-> Backend` (WebRTC): browser demo receives a composed camera/HUD video feed and sends controls over `demo-events`.
 
@@ -56,7 +58,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 5. Backend enters step 1, publishes `hud.state`, and starts an Overshoot stream for the active step.
 6. Backend samples camera frames, overlays the active reference image header, and publishes that video to Overshoot.
 7. Overshoot results arrive over WebSocket. Two consecutive `true` values mark the step done.
-8. Backend publishes `Done!`, waits two seconds, then advances to the next step.
+8. Backend publishes `Done!`, ignores Overshoot results for two seconds, then advances to the next step without reconnecting the stream.
 9. Swipe forward/back sends manual step navigation.
 10. At completion, double tap sends `session.reset` and returns the HUD to the initial screen.
 11. Browser `/demo` can connect at any time and receives the latest camera/HUD composite plus matching control buttons, including automatic-check toggling.
