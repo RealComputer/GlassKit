@@ -176,14 +176,14 @@ class OrigamiSessionManager:
         overshoot_api_key: str,
         overshoot_model: str,
         steps_path: Path,
-        overshoot_enabled: bool = True,
+        auto_check_available: bool = True,
         save_overshoot_composites: bool = False,
         debug_composite_dir: Path | None = None,
     ) -> None:
         self._overshoot_api_url = overshoot_api_url.rstrip("/")
         self._overshoot_api_key = overshoot_api_key
         self._overshoot_model = overshoot_model
-        self._overshoot_enabled = overshoot_enabled
+        self._auto_check_available = auto_check_available
         self._save_overshoot_composites = save_overshoot_composites
         self._debug_composite_dir = (
             debug_composite_dir
@@ -334,26 +334,6 @@ class OrigamiSessionManager:
         if viewer is not None:
             await viewer.pc.close()
 
-    def overshoot_status(self) -> dict[str, bool]:
-        return {"enabled": self._overshoot_enabled}
-
-    async def set_overshoot_enabled(self, enabled: bool) -> dict[str, bool]:
-        if enabled and not self._overshoot_api_key:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Cannot enable Overshoot because OVERSHOOT_API_KEY is not "
-                    "configured."
-                ),
-            )
-        self._overshoot_enabled = enabled
-        async with self._sessions_lock:
-            sessions = list(self._sessions.values())
-        for session in sessions:
-            await session.queue.put(SessionEvent(kind="overshoot.enabled_changed"))
-        await self._broadcast_demo_state()
-        return self.overshoot_status()
-
     async def destroy_all_sessions(self, reason: str) -> None:
         async with self._sessions_lock:
             session_ids = list(self._sessions.keys())
@@ -377,8 +357,7 @@ class OrigamiSessionManager:
     async def demo_frame_image(self) -> Image.Image:
         session = await self._latest_session()
         if session is None:
-            hud_state = _empty_hud_payload()
-            hud_state["overshoot_enabled"] = self._overshoot_enabled
+            hud_state = _empty_hud_payload(self._auto_check_available)
             return _compose_demo_image(
                 base=_demo_placeholder("Waiting for glasses"),
                 hud_state=hud_state,
@@ -459,7 +438,11 @@ class OrigamiSessionManager:
     async def _send_demo_initial_state(self, channel: RTCDataChannel) -> None:
         session = await self._latest_session()
         payload = (
-            {"type": "demo.state", "message": "Waiting for glasses"}
+            {
+                "type": "demo.state",
+                "message": "Waiting for glasses",
+                "auto_check_available": self._auto_check_available,
+            }
             if session is None
             else self._hud_payload(session)
         )
@@ -530,9 +513,6 @@ class OrigamiSessionManager:
         if event.kind == "client.media_ready":
             await self._publish_hud_state(session)
             return
-        if event.kind == "overshoot.enabled_changed":
-            await self._sync_overshoot_enabled_state(session)
-            return
         if event.kind == "camera.frame":
             await self._maybe_save_overshoot_debug_composite(session)
             if session.phase == PHASE_GUIDING and session.auto_check_enabled:
@@ -554,7 +534,7 @@ class OrigamiSessionManager:
         session.phase = PHASE_GUIDING
         session.step_index = 0
         session.true_streak = 0
-        session.auto_check_enabled = True
+        session.auto_check_enabled = self._auto_check_available
         self._mark_guiding_step_started(session)
         await self._publish_hud_state(session)
         await self._sync_overshoot_for_current_step(session)
@@ -565,7 +545,7 @@ class OrigamiSessionManager:
         session.phase = PHASE_WAITING
         session.step_index = 0
         session.true_streak = 0
-        session.auto_check_enabled = True
+        session.auto_check_enabled = self._auto_check_available
         session.active_prompt_text = None
         session.guiding_step_started_at = 0.0
         session.overshoot_ignore_results_until = 0.0
@@ -599,6 +579,11 @@ class OrigamiSessionManager:
 
     async def _toggle_auto_check(self, session: OrigamiSession) -> None:
         if session.phase not in {PHASE_GUIDING, PHASE_STEP_DONE}:
+            return
+        if not self._auto_check_available:
+            session.auto_check_enabled = False
+            await self._stop_overshoot_runtime(session)
+            await self._publish_hud_state(session)
             return
         session.auto_check_enabled = not session.auto_check_enabled
         session.true_streak = 0
@@ -731,7 +716,7 @@ class OrigamiSessionManager:
             return
         if session.phase in {PHASE_WAITING, PHASE_COMPLETED, PHASE_ERROR}:
             return
-        if not self._overshoot_enabled:
+        if not self._auto_check_available:
             return
         if not session.auto_check_enabled:
             return
@@ -772,8 +757,10 @@ class OrigamiSessionManager:
             "step_id": step.id,
             "step_title": step.title,
             "hud_image": step.hud_image,
-            "auto_check_enabled": session.auto_check_enabled,
-            "overshoot_enabled": self._overshoot_enabled,
+            "auto_check_enabled": (
+                session.auto_check_enabled and self._auto_check_available
+            ),
+            "auto_check_available": self._auto_check_available,
             "true_streak": session.true_streak,
             "message": message,
         }
@@ -789,7 +776,11 @@ class OrigamiSessionManager:
         session = await self._latest_session()
         if session is None:
             await self._broadcast_demo_json(
-                {"type": "demo.state", "message": "Waiting for glasses"}
+                {
+                    "type": "demo.state",
+                    "message": "Waiting for glasses",
+                    "auto_check_available": self._auto_check_available,
+                }
             )
         else:
             await self._broadcast_demo_json(self._hud_payload(session))
@@ -850,7 +841,7 @@ class OrigamiSessionManager:
         )
 
     async def _sync_overshoot_for_current_step(self, session: OrigamiSession) -> None:
-        if not self._overshoot_enabled:
+        if not self._auto_check_available:
             return
         if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
             return
@@ -895,14 +886,6 @@ class OrigamiSessionManager:
             session.session_id,
             session.step_index + 1,
         )
-
-    async def _sync_overshoot_enabled_state(self, session: OrigamiSession) -> None:
-        if self._overshoot_enabled and session.phase == PHASE_GUIDING:
-            if session.auto_check_enabled:
-                await self._sync_overshoot_for_current_step(session)
-        else:
-            await self._stop_overshoot_runtime(session)
-        await self._publish_hud_state(session)
 
     async def _maybe_save_overshoot_debug_composite(
         self, session: OrigamiSession
@@ -1694,7 +1677,7 @@ def _draw_centered_lines(
         y += height + line_gap
 
 
-def _empty_hud_payload() -> dict[str, Any]:
+def _empty_hud_payload(auto_check_available: bool = True) -> dict[str, Any]:
     return {
         "type": "hud.state",
         "screen": "start",
@@ -1705,8 +1688,8 @@ def _empty_hud_payload() -> dict[str, Any]:
         "step_id": "step_1",
         "step_title": "Step 1",
         "hud_image": "origami_step_1",
-        "auto_check_enabled": True,
-        "overshoot_enabled": True,
+        "auto_check_enabled": auto_check_available,
+        "auto_check_available": auto_check_available,
         "true_streak": 0,
         "message": "",
     }

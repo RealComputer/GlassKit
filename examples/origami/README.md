@@ -1,6 +1,6 @@
 # Origami Guide for Rokid Glasses
 
-This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera video to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done!` for two seconds and advances to the next step.
+This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera video to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done! Next step...` for two seconds and advances to the next step.
 
 The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with a backend-rendered green HUD overlaid on the camera POV, and its buttons send the same control events as the glasses gestures.
 
@@ -11,7 +11,7 @@ The backend also serves a browser demo at `/demo`. That page receives a composed
 - Captures camera at `1024x768@15fps`, adapts outbound WebRTC to `5fps`, and applies LAN-oriented video bitrate settings
 - Lets the backend perform Overshoot checks every `0.5s`
 - Supports swipe forward/back for manual step navigation
-- Lets the browser demo toggle automatic checking on or off
+- Lets the browser demo toggle automatic checking on or off when auto check is enabled at backend startup
 - Uses double tap to reset back to the start screen
 
 ## How It Works
@@ -46,19 +46,11 @@ cp .env.example .env
 
 Optional backend overrides:
 
-- `ORIGAMI_OVERSHOOT_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams
+- `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off and the browser demo does not show the toggle.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save timestamped Overshoot input previews once per second while guiding
 - `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to override the default preview directory, `backend/debug/overshoot-composites/`
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
-
-You can also toggle Overshoot at runtime. Turning it back on requires `OVERSHOOT_API_KEY` to be configured.
-
-```bash
-curl -X POST http://<YOUR_BACKEND>:8000/debug/overshoot \
-  -H 'Content-Type: application/json' \
-  -d '{"enabled": false}'
-```
 
 ## Run The Backend
 

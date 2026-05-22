@@ -19,10 +19,6 @@ class WebRTCOfferRequest(BaseModel):
     offer_sdp: str
 
 
-class OvershootEnabledRequest(BaseModel):
-    enabled: bool
-
-
 manager: OrigamiSessionManager | None = None
 
 
@@ -31,9 +27,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global manager
 
     overshoot_api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
-    overshoot_enabled = _env_bool("ORIGAMI_OVERSHOOT_ENABLED", default=True)
-    if overshoot_enabled and not overshoot_api_key:
-        raise RuntimeError("Set OVERSHOOT_API_KEY in backend/.env")
+    auto_check_available = _auto_check_available_from_env()
+    if auto_check_available and not overshoot_api_key:
+        raise RuntimeError(
+            "Set OVERSHOOT_API_KEY in backend/.env or set "
+            "ORIGAMI_AUTO_CHECK_ENABLED=false"
+        )
 
     overshoot_api_url = os.getenv(
         "OVERSHOOT_API_URL",
@@ -53,7 +52,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         overshoot_api_key=overshoot_api_key,
         overshoot_model=overshoot_model,
         steps_path=steps_path,
-        overshoot_enabled=overshoot_enabled,
+        auto_check_available=auto_check_available,
         save_overshoot_composites=_env_bool(
             "ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES",
             default=False,
@@ -94,18 +93,6 @@ async def create_demo_session(payload: WebRTCOfferRequest) -> dict[str, str]:
     return await current.create_demo_session(payload.offer_sdp)
 
 
-@app.get("/debug/overshoot")
-async def get_overshoot_enabled() -> dict[str, bool]:
-    current = require_manager()
-    return current.overshoot_status()
-
-
-@app.post("/debug/overshoot")
-async def set_overshoot_enabled(payload: OvershootEnabledRequest) -> dict[str, bool]:
-    current = require_manager()
-    return await current.set_overshoot_enabled(payload.enabled)
-
-
 def require_manager() -> OrigamiSessionManager:
     if manager is None:
         raise HTTPException(
@@ -119,6 +106,10 @@ def _env_bool(name: str, *, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _auto_check_available_from_env() -> bool:
+    return _env_bool("ORIGAMI_AUTO_CHECK_ENABLED", default=True)
 
 
 DEMO_HTML = """
@@ -241,27 +232,28 @@ DEMO_HTML = """
       <button data-command="session.start">Start</button>
       <button data-command="manual.prev">Previous</button>
       <button data-command="manual.next">Next</button>
-      <button data-command="auto.toggle">Toggle Auto</button>
+      <button id="autoButton" data-command="auto.toggle">Toggle Auto Check</button>
       <button data-command="session.reset">Reset</button>
-      <button id="visionButton" type="button">Vision: --</button>
     </footer>
   </main>
   <script>
     const statusEl = document.getElementById("status");
     const videoEl = document.getElementById("video");
     const buttons = Array.from(document.querySelectorAll("button[data-command]"));
-    const visionButton = document.getElementById("visionButton");
+    const autoButton = document.getElementById("autoButton");
     let pc;
     let dc;
-    let visionEnabled = true;
+    let channelOpen = false;
+    let autoCheckAvailable = false;
 
     function setStatus(text) {
       statusEl.textContent = text;
     }
 
     function setButtons(enabled) {
-      for (const button of buttons) button.disabled = !enabled;
-      visionButton.disabled = !enabled;
+      for (const button of buttons) {
+        button.disabled = !enabled || (button === autoButton && !autoCheckAvailable);
+      }
     }
 
     function send(type) {
@@ -269,28 +261,10 @@ DEMO_HTML = """
       dc.send(JSON.stringify({ type }));
     }
 
-    function updateVisionButton() {
-      visionButton.textContent = `Vision: ${visionEnabled ? "On" : "Off"}`;
-    }
-
-    async function setVisionEnabled(enabled) {
-      const response = await fetch("/debug/overshoot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled }),
-      });
-      if (!response.ok) throw new Error(`Vision toggle failed: HTTP ${response.status}`);
-      const payload = await response.json();
-      visionEnabled = Boolean(payload.enabled);
-      updateVisionButton();
-    }
-
-    async function loadVisionState() {
-      const response = await fetch("/debug/overshoot");
-      if (!response.ok) return;
-      const payload = await response.json();
-      visionEnabled = Boolean(payload.enabled);
-      updateVisionButton();
+    function setAutoCheckAvailable(available) {
+      autoCheckAvailable = Boolean(available);
+      autoButton.hidden = !autoCheckAvailable;
+      setButtons(channelOpen);
     }
 
     function waitForIceGatheringComplete(peerConnection) {
@@ -319,26 +293,24 @@ DEMO_HTML = """
         setStatus(`Connection: ${pc.connectionState}`);
       });
       dc.addEventListener("open", () => {
+        channelOpen = true;
         setButtons(true);
         setStatus("Connected");
       });
       dc.addEventListener("close", () => {
+        channelOpen = false;
         setButtons(false);
         setStatus("Data channel closed");
       });
       dc.addEventListener("message", (event) => {
         try {
           const payload = JSON.parse(event.data);
+          if (typeof payload.auto_check_available === "boolean") {
+            setAutoCheckAvailable(payload.auto_check_available);
+          }
           if (payload.type === "hud.state") {
-            if (typeof payload.overshoot_enabled === "boolean") {
-              visionEnabled = payload.overshoot_enabled;
-              updateVisionButton();
-            }
-            setStatus(
-              `Step ${payload.step_number}/${payload.step_count} | ` +
-              `${payload.phase} | auto ${payload.auto_check_enabled ? "on" : "off"} | ` +
-              `vision ${visionEnabled ? "on" : "off"}`
-            );
+            const step = `Step ${payload.step_number}/${payload.step_count}`;
+            setStatus(payload.screen === "start" ? "Ready" : step);
           } else if (payload.message) {
             setStatus(payload.message);
           }
@@ -365,14 +337,8 @@ DEMO_HTML = """
     for (const button of buttons) {
       button.addEventListener("click", () => send(button.dataset.command));
     }
-    visionButton.addEventListener("click", () => {
-      setVisionEnabled(!visionEnabled).catch((error) => {
-        setStatus(error.message || "Vision toggle failed");
-      });
-    });
 
-    updateVisionButton();
-    loadVisionState().catch(() => {});
+    setAutoCheckAvailable(false);
     connect().catch((error) => {
       setButtons(false);
       setStatus(error.message || "Connection failed");

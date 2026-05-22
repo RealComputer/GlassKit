@@ -28,7 +28,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - While guiding, step changes should keep the existing Overshoot stream alive and patch `/streams/{stream_id}/config/prompt` when the step prompt changes.
 - During the two-second `Done!` phase, incoming Overshoot results are ignored; the stream may remain connected until the next step prompt/reference is active.
 - Turning auto check off stops the Overshoot runtime while keeping the device/browser media session alive.
-- `ORIGAMI_OVERSHOOT_ENABLED=false` or `POST /debug/overshoot {"enabled": false}` must keep device/browser media alive while preventing Overshoot stream creation.
+- `ORIGAMI_AUTO_CHECK_ENABLED=false` must keep device/browser media alive while preventing Overshoot stream creation; this startup setting is not toggleable at runtime.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` must save timestamped Overshoot input preview JPEGs under a gitignored debug directory without requiring an active Overshoot stream.
 - Backend-originated H.264 streams to Overshoot and the browser demo use LAN-oriented aiortc bitrate defaults to avoid adding another low-bitrate generation.
 
@@ -89,7 +89,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `backend/.env`: must define:
   - `OVERSHOOT_API_KEY`
 - Optional backend overrides:
-  - `ORIGAMI_OVERSHOOT_ENABLED`
+  - `ORIGAMI_AUTO_CHECK_ENABLED`
   - `OVERSHOOT_API_URL`
   - `OVERSHOOT_MODEL`
 
