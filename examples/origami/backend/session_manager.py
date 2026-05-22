@@ -28,7 +28,7 @@ from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
 from fastapi import HTTPException
 from origami_config import OrigamiStep, load_origami_steps
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 from websockets import ConnectionClosed
 
 logger = logging.getLogger("uvicorn.error")
@@ -59,6 +59,7 @@ AIORTC_H264_DEFAULT_BITRATE = 2_000_000
 AIORTC_H264_MIN_BITRATE = 800_000
 AIORTC_H264_MAX_BITRATE = 3_000_000
 DEBUG_COMPOSITE_INTERVAL_SECONDS = 1.0
+DEMO_BACKGROUND_BRIGHTNESS = 0.68
 HUD_WIDTH = 480
 HUD_HEIGHT = 640
 HUD_GREEN = (0, 255, 96)
@@ -1428,7 +1429,9 @@ def _compose_demo_image(
     hud_state: dict[str, Any],
     hud_image: Image.Image | None,
 ) -> Image.Image:
-    image = base.convert("RGB")
+    image = ImageEnhance.Brightness(base.convert("RGB")).enhance(
+        DEMO_BACKGROUND_BRIGHTNESS
+    )
     hud = _backend_hud_image(hud_state, hud_image)
     hud = _fit_hud_to_canvas(hud, image.size)
     image_rgba = image.convert("RGBA")
