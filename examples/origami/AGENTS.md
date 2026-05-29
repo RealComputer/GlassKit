@@ -70,7 +70,9 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `app/src/main/java/com/example/origamiguide/MainActivity.kt`: start screen, touchpad gesture mapping, and HUD rendering.
 - `app/src/main/java/com/example/origamiguide/OrigamiSessionClient.kt`: camera WebRTC publishing and `session-events` data channel.
 - `app/src/main/res/layout/activity_main.xml`: monochrome Rokid HUD.
-- `app/src/main/res/drawable-nodpi/origami_step_*.png`: seven step guide images.
+- `app/src/main/assets/origami_steps_svg/origami_step_*.svg`: smooth SVG source versions of the seven step guide images.
+- `app/src/main/res/drawable-anydpi/origami_step_*.xml`: Android vector drawables used by the Rokid HUD for the seven step guide images.
+- `app/src/main/res/drawable-nodpi/origami_step_*.png`: original seven step guide PNGs retained as raster references.
 - `app/build.gradle.kts`: `BACKEND_BASE_URL` BuildConfig value from `rokid/local.properties`.
 
 ## Backend (`./backend/`)
