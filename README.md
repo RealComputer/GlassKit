@@ -2,12 +2,12 @@
 
 **GlassKit is an open-source toolkit for building smart-glasses AI apps.** Your AI coding agent can use the skill, docs, and runnable examples to build apps that understand what wearers see and hear, then guide them in real time.
 
-Today GlassKit starts with Rokid Glasses. The long-term goal is a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
+GlassKit currently focuses on Rokid Glasses. The long-term goal is a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
 
 GlassKit is used by developers building glasses apps for real-world tasks, from manufacturing workflows to field support.
 
 <p align="center">
-  https://glasskit.ai
+  https://glasskit.ai/docs
   &nbsp;&middot;&nbsp;
   https://x.com/GlassKit_ai
   &nbsp;&middot;&nbsp;
