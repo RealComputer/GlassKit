@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ def load_origami_steps(path: Path) -> list[OrigamiStep]:
     for index, item in enumerate(raw, start=1):
         if not isinstance(item, dict):
             raise ValueError(f"step {index} must be an object")
-        steps.append(_parse_step(index, asset_dir, item))
+        steps.append(_parse_step(index, asset_dir, cast("dict[str, Any]", item)))
     return steps
 
 

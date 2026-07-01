@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13.14"
 dependencies = [
     "aiortc>=1.14.0",
-    "fastapi[standard]>=0.135.1",
+    "fastapi[standard]>=0.138.2",
     "httpx>=0.28.1",
     "pillow>=12.2.0",
     "websockets>=16.0",
@@ -14,6 +14,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.4",
-    "ty>=0.0.20",
+    "ruff>=0.15.20",
+    "ty>=0.0.55",
 ]
