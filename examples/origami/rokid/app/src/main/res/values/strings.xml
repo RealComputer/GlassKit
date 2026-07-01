@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Origami Guide</string>
+    <string name="start_hint">Double tap temple to start</string>
+    <string name="connecting_backend">Connecting backend...</string>
+    <string name="step_label">Step %1$d/%2$d</string>
+    <string name="controls_hint">Swipe: previous/next\nDouble tap: reset</string>
+    <string name="start_controls_hint">Double tap temple to start</string>
+    <string name="controls_auto_on">Auto check on\nSwipe: previous/next | Double tap: reset</string>
+    <string name="controls_auto_off">Auto check off\nSwipe: previous/next | Double tap: reset</string>
+    <string name="step_image_description">Origami step guide image</string>
+</resources>
