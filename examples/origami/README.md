@@ -1,18 +1,19 @@
-# Origami Guide for Rokid Glasses
+# Example: Origami Guide (Rokid Glasses/Overshoot)
 
-This example turns Rokid Glasses into a silent origami guide. The HUD shows one of seven folding reference images, the glasses stream camera video to the backend, and the backend proactively checks each fold with Overshoot. After two consecutive `true` checks, the backend shows `Done! Next step...` for two seconds and advances to the next step.
+This app turns Rokid Glasses into a origami guide. The HUD shows folding reference images, and the backend proactively checks each fold with Overshoot.
 
-The backend also serves a browser demo at `/demo`. That page receives a composed WebRTC video feed with a backend-rendered green HUD overlaid on the camera POV, and its buttons send the same control events as the glasses gestures.
+For demo purpose, this app contains a browser demo page. That page simulates what the wearer sees through the glasses, with app controls.
+
+It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
 
 ## What The App Does
 
-- Starts from `Double tap temple to start`
-- Shows `Origami Guide`, `Step N/7`, and the provided step image on the Rokid HUD
-- Captures camera at `1024x768@15fps`, adapts outbound WebRTC to `5fps`, and applies LAN-oriented video bitrate settings
-- Lets the backend perform Overshoot checks every `0.5s`
-- Supports swipe forward/back for manual step navigation
-- Lets the browser demo toggle automatic checking on or off when auto check is enabled at backend startup
-- Uses double tap to reset back to the start screen
+- Shows visual reference for each origami folding step on the Rokid HUD
+- Automatically check the origami state and automatically proceeds every 0.5s. The check is done by Overshoot, combining actual scene frame with a reference image merged into a single image for confirm if the step is confirmed.
+- Control:
+  - Supports swipe forward/back for manual step navigation
+  - Uses double tap to reset back to the start screen
+- Lets the browser demo control the app (toggle automatic checking on or off when auto check is enabled at backend startup)
 
 ## How It Works
 
@@ -21,14 +22,18 @@ The backend also serves a browser demo at `/demo`. That page receives a composed
 - `Backend <-> Overshoot` WebSocket: boolean inference results and keepalive
 - `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
 
-## Requirements
+## Development
+
+See also [AGENTS.md](./AGENTS.md).
+
+### Requirements
 
 - [Rokid Glasses + dev cable](../../docs/how-to-get-rokid-glasses.md)
-- Android Studio with `adb`
-- Python 3.12 with `uv`
+- `adb` for Android
+- `uv` for Python
 - Overshoot API key (`OVERSHOOT_API_KEY`)
 
-## Configuration
+### Configuration
 
 Set the backend URL in `rokid/local.properties`:
 
@@ -44,15 +49,14 @@ cp .env.example .env
 # set OVERSHOOT_API_KEY
 ```
 
-Optional backend overrides:
+Optional backend overrides (you can also specify them inline when you run fastapi server):
 
-- `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off and the browser demo does not show the toggle.
+- `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off.
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save timestamped Overshoot input previews once per second while guiding
-- `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to override the default preview directory, `backend/debug/overshoot-composites/`
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
 
-## Run The Backend
+### Run The Backend
 
 ```bash
 cd backend
@@ -65,52 +69,36 @@ Open the browser demo:
 http://<YOUR_BACKEND>:8000/demo
 ```
 
-## Run The Glasses App
+### Run The Glasses App
 
-Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB, then run the Android app from `rokid/` in Android Studio.
+Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB (see below), then install and run the app via `adb`.
 
 Useful ADB commands:
 
 ```bash
-adb devices
-adb shell cmd wifi status
-adb shell cmd wifi set-wifi-enabled enabled
-adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"'
-adb shell cmd wifi status
+adb devices # confirm your device is visible
+adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
+adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
+adb shell 'cmd wifi connect-network "NAME" wpa2 "PASSWORD"' # set network
+adb shell cmd wifi status # confirm the connection
 ```
 
 Optional wireless ADB:
 
 ```bash
-adb shell ip -f inet addr show wlan0
-ping -c 5 -W 3 <IP>
-adb tcpip 5555
-adb connect <IP>
-adb devices
+adb shell ip -f inet addr show wlan0 # check the glasses IP
+ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
+adb tcpip 5555 # enable remote ADB mode
+adb connect <IP> # connect to the glasses over remote ADB
+adb devices # verify the remote connection (you can unplug the cable afterward)
 ```
 
-## Assets
+### Assets
 
 - Rokid HUD step images: `rokid/app/src/main/res/drawable-nodpi/origami_step_*.png`
 - Backend demo HUD step images: `backend/assets/step-imgs/origami_step_*.png`
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
-
-## Developer Checks
-
-Backend:
-
-```bash
-cd backend
-uv run ty check && uv run ruff check --fix && uv run ruff format
-```
-
-Android:
-
-```bash
-cd rokid
-./gradlew :app:assembleDebug
-```
 
 ## Vision Path Comparison
 

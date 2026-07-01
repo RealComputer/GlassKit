@@ -1,6 +1,6 @@
 # Project Overview
 
-This project is a server-authoritative origami guide for Rokid Glasses. The glasses show a seven-step folding HUD, stream camera video to the backend, and receive backend-driven state updates over a WebRTC data channel. The backend checks the active fold with Overshoot and advances after two consecutive `true` results.
+This project is a server-authoritative origami guide for Rokid Glasses. The glasses show a visual folding guide on HUD, stream camera video to the backend, and receive backend-driven state updates over a WebRTC data channel. The backend checks the active fold with Overshoot and advances after two consecutive `true` results.
 
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, and temple touchpad.
 - Overshoot is a Vision Language Model inference API for live video.
@@ -51,14 +51,14 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## End-to-End Session Flow
 
-1. App launch: Rokid renders the start screen: `Double tap temple to start`.
+1. App launch: Rokid renders the start screen.
 2. Double tap: Rokid creates `/session/media` with camera video and the `session-events` data channel.
 3. Backend creates a fresh single-device session and answers the WebRTC offer.
 4. Rokid opens `session-events` and queues `session.start`.
 5. Backend enters step 1, publishes `hud.state`, and starts an Overshoot stream for the active step.
 6. Backend samples camera frames, overlays the active reference image header, and publishes that video to Overshoot.
 7. Overshoot results arrive over WebSocket. Two consecutive `true` values mark the step done.
-8. Backend publishes `Done!`, ignores Overshoot results for two seconds, then advances to the next step without reconnecting the stream.
+8. Backend publishes done, ignores Overshoot results for two seconds, then advances to the next step without reconnecting the stream.
 9. Swipe forward/back sends manual step navigation.
 10. At completion, double tap sends `session.reset` and returns the HUD to the initial screen.
 11. Browser `/demo` can connect at any time and receives the latest camera/HUD composite plus matching control buttons, including automatic-check toggling.
@@ -87,17 +87,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
 - `.env.example`: required key and optional Overshoot overrides.
 
-# Configuration
-
-- `rokid/local.properties`: must define `BACKEND_BASE_URL` (for example `http://<HOST>:8000`).
-- `backend/.env`: must define:
-  - `OVERSHOOT_API_KEY`
-- Optional backend overrides:
-  - `ORIGAMI_AUTO_CHECK_ENABLED`
-  - `OVERSHOOT_API_URL`
-  - `OVERSHOOT_MODEL`
-
-# Gestures
+# Touchpad controls
 
 - `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen, resets after completion.
 - `KeyEvent.KEYCODE_ENTER`: tap. Consumed by the app and intentionally has no workflow action.
@@ -110,14 +100,12 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 `cd rokid` then:
 
-- `./gradlew :app:assembleDebug`: ALWAYS run after Android changes
+- `./gradlew :app:assembleDebug`: Always run after Android changes
 
 ## Backend
 
 `cd backend` then:
 
-- `uv run ty check && uv run ruff check --fix && uv run ruff format`: ALWAYS run after backend changes
+- `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --env-file .env foo.py`: run a script with env loaded
-- `uv run -- python -c "print('hello')"`: run a one-off Python command. The direct `python` command without uv might not be available.
 - `uv add <package>`: add a package
