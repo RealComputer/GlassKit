@@ -6,15 +6,14 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import com.example.origamiguide.OrigamiSessionClient.HudState
 import com.example.origamiguide.databinding.ActivityMainBinding
 import org.webrtc.PeerConnection
 
-class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
+class MainActivity : ComponentActivity(), OrigamiSessionClient.Listener {
 
     private lateinit var binding: ActivityMainBinding
 
@@ -24,6 +23,18 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
     private var isMediaRunning = false
 
     private val backendBaseUrl: String = BuildConfig.BACKEND_BASE_URL
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            if (pendingStart) {
+                startWorkflow()
+            }
+        } else {
+            pendingStart = false
+            renderStart("Camera permission is required.")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,36 +147,11 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
 
     private fun ensureCameraPermission() {
         if (hasCameraPermission()) return
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.CAMERA),
-            REQ_CAMERA_PERMISSION
-        )
+        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
     private fun hasCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != REQ_CAMERA_PERMISSION) return
-
-        if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            if (pendingStart) {
-                startWorkflow()
-            }
-        } else {
-            pendingStart = false
-            renderStart("Camera permission is required.")
-        }
+        return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onSessionReady(sessionId: String) {
@@ -254,9 +240,5 @@ class MainActivity : AppCompatActivity(), OrigamiSessionClient.Listener {
         binding.tvMessage.visibility = View.INVISIBLE
         binding.tvControls.visibility = View.VISIBLE
         binding.tvControls.text = getString(R.string.start_controls_hint)
-    }
-
-    companion object {
-        private const val REQ_CAMERA_PERMISSION = 1001
     }
 }
