@@ -10,7 +10,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - The Android client stays thin: it renders the HUD, handles camera permission, and maps touchpad gestures into backend commands.
 - The FastAPI backend owns the active session, current step, HUD state, manual and automatic progression, auto-check availability, and Overshoot runtime.
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
-- Browser `/demo` is a backend-connected viewer/controller, not a separate workflow owner.
+- Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
 
 ## Connection Graph
