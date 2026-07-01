@@ -15,17 +15,9 @@ It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
   - Uses double tap to start from the start screen and reset while running or completed
 - Lets the browser demo view the composed camera/HUD feed and send controls, including auto-check toggling when available
 
-## How it Works
-
-- `Rokid -> Backend` WebRTC: one peer connection with camera video and a `session-events` data channel
-- `Backend -> Overshoot` WebRTC: backend-originated composed reference video for the active step
-- `Backend -> Overshoot` HTTP: stream setup, prompt updates, keepalive, and deletion
-- `Backend <-> Overshoot` WebSocket: fold-check results
-- `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
-
 ## Development
 
-See also [AGENTS.md](./AGENTS.md).
+See also [AGENTS.md](./AGENTS.md) for technical details.
 
 ### Requirements
 

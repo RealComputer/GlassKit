@@ -5,7 +5,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Rokid Glasses are Android-based smart glasses with a camera, monochrome HUD, and temple touchpad.
 - Overshoot is a vision-language model inference API for live video.
 
-# Runtime Architecture
+# Architecture
 
 - The Android client stays thin: it renders the HUD, handles camera permission, and maps touchpad gestures into backend commands.
 - The FastAPI backend owns the active session, current step, HUD state, manual and automatic progression, auto-check availability, and Overshoot runtime.
