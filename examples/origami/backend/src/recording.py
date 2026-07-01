@@ -16,6 +16,8 @@ from PIL import Image
 
 logger = logging.getLogger("uvicorn.error")
 
+RECORDER_STOP_JOIN_TIMEOUT_SECONDS = 2.0
+
 
 class OvershootInputRecorder:
     def __init__(
@@ -77,8 +79,14 @@ class OvershootInputRecorder:
 
         self._closed.set()
         if thread.is_alive():
-            await asyncio.to_thread(self._queue.put, None)
-        await asyncio.to_thread(thread.join)
+            self._signal_stop(thread)
+        await asyncio.to_thread(thread.join, RECORDER_STOP_JOIN_TIMEOUT_SECONDS)
+        if thread.is_alive():
+            logger.warning(
+                "overshoot input recording stop timed out path=%s", self.path
+            )
+            return
+
         self._thread = None
 
         if self._error is not None:
@@ -125,6 +133,31 @@ class OvershootInputRecorder:
         finally:
             if container is not None:
                 container.close()
+
+    def _signal_stop(self, thread: threading.Thread) -> None:
+        dropped_on_stop = 0
+        while thread.is_alive():
+            try:
+                self._queue.put_nowait(None)
+                break
+            except queue.Full:
+                dropped_on_stop += self._drop_one_pending_item()
+
+        if dropped_on_stop:
+            self.frames_dropped += dropped_on_stop
+            logger.warning(
+                "overshoot input recording dropped queued frames on stop "
+                "path=%s dropped=%s",
+                self.path,
+                dropped_on_stop,
+            )
+
+    def _drop_one_pending_item(self) -> int:
+        try:
+            item = self._queue.get_nowait()
+        except queue.Empty:
+            return 0
+        return 1 if item is not None else 0
 
     def _open_output(
         self, image: Image.Image
