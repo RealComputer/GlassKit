@@ -15,8 +15,9 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## Connection Graph
 
-- `Rokid -> Backend` WebRTC: camera video plus `session-events` commands.
-- `Backend -> Overshoot` WebRTC/HTTP: composed fold-check video and stream control.
+- `Rokid <-> Backend` WebRTC: camera video upstream plus `session-events` commands and HUD state.
+- `Backend -> Overshoot` WebRTC: composed fold-check video.
+- `Backend -> Overshoot` HTTP: stream setup and control.
 - `Backend <-> Overshoot` WebSocket: fold-check results.
 - `Browser <-> Backend` WebRTC: demo video plus `demo-events` controls.
 
@@ -56,7 +57,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 # Touchpad Controls
 
-- `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen and resets while running or completed.
+- `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen and resets while running, completed, or in an error state.
 - `KeyEvent.KEYCODE_ENTER`: tap. Consumed by the app and intentionally has no workflow action.
 - `KeyEvent.KEYCODE_DPAD_DOWN`: swipe forward. Advances one step manually.
 - `KeyEvent.KEYCODE_DPAD_UP`: swipe backward. Moves one step back manually.
