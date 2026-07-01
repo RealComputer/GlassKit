@@ -75,9 +75,13 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 ## Backend (`./backend/`)
 
-- `main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
-- `session_manager.py`: session loop, aiortc media ingest, Overshoot bridge, boolean result handling, HUD state, and browser demo composition.
-- `origami_config.py`: step config loader.
+- `src/main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
+- `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
+- `src/overshoot_runtime.py`: Overshoot stream lifecycle, prompt updates, WebSocket results, keepalive, and stats logging.
+- `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
+- `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
+- `src/session_state.py`: session data classes and latest-frame buffer.
+- `src/origami_config.py`: step config loader.
 - `assets/origami_steps.json`: seven step definitions and prompts.
 - `assets/step-imgs/*.png`: green browser-demo HUD versions of the step guide images.
 - `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
@@ -113,7 +117,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 `cd backend` then:
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: ALWAYS run after backend changes
-- `uv run --env-file .env fastapi dev main.py --host 0.0.0.0`: start server with env loaded
+- `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
 - `uv run --env-file .env foo.py`: run a script with env loaded
 - `uv run -- python -c "print('hello')"`: run a one-off Python command. The direct `python` command without uv might not be available.
 - `uv add <package>`: add a package

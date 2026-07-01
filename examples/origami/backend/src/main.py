@@ -8,7 +8,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from session_manager import (
+from .session_manager import (
     DEFAULT_OVERSHOOT_API_URL,
     DEFAULT_OVERSHOOT_MODEL,
     OrigamiSessionManager,
@@ -39,7 +39,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         DEFAULT_OVERSHOOT_API_URL,
     ).strip()
     overshoot_model = os.getenv("OVERSHOOT_MODEL", DEFAULT_OVERSHOOT_MODEL).strip()
-    steps_path = Path(__file__).with_name("assets") / "origami_steps.json"
+    steps_path = (
+        Path(__file__).resolve().parent.parent / "assets" / "origami_steps.json"
+    )
     debug_composite_dir_raw = os.getenv(
         "ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR", ""
     ).strip()

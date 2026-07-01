@@ -56,7 +56,7 @@ Optional backend overrides:
 
 ```bash
 cd backend
-uv run --env-file .env fastapi dev main.py --host 0.0.0.0
+uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0
 ```
 
 Open the browser demo:
