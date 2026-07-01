@@ -45,6 +45,8 @@ cp .env.example .env
 Optional backend overrides can also be specified inline when starting FastAPI:
 
 - `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off.
+- `ORIGAMI_RECORD_OVERSHOOT_INPUTS=false` to disable the default recording of real camera frames sent into the Overshoot path for inspection. Recordings are written under `backend/debug/overshoot-inputs` before reference-image composition.
+- `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` to choose where Overshoot input recordings are written
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save Overshoot input previews for debugging
 - `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to choose where debug preview images are written
 - `OVERSHOOT_API_URL`
