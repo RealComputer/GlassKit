@@ -71,11 +71,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @app.post("/session/media")
 async def create_media_session(payload: WebRTCOfferRequest) -> dict[str, str]:
     current = require_manager()
