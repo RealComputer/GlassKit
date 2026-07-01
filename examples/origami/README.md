@@ -1,25 +1,26 @@
 # Example: Origami Guide (Rokid Glasses/Overshoot)
 
-This app turns Rokid Glasses into a origami guide. The HUD shows folding reference images, and the backend proactively checks each fold with Overshoot.
+This app turns Rokid Glasses into an origami guide. The HUD shows folding reference images, and the backend proactively checks each fold with Overshoot.
 
-For demo purpose, this app contains a browser demo page. That page simulates what the wearer sees through the glasses, with app controls.
+For demo purposes, the app includes a browser demo page that simulates what the wearer sees through the glasses and exposes app controls.
 
 It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
 
-## What The App Does
+## What the App Does
 
-- Shows visual reference for each origami folding step on the Rokid HUD
-- Automatically check the origami state and automatically proceeds every 0.5s. The check is done by Overshoot, combining actual scene frame with a reference image merged into a single image for confirm if the step is confirmed.
-- Control:
+- Shows a visual reference for each origami folding step on the Rokid HUD
+- Checks the current fold with Overshoot and advances through the fixed workflow
+- Controls:
   - Supports swipe forward/back for manual step navigation
-  - Uses double tap to reset back to the start screen
-- Lets the browser demo control the app (toggle automatic checking on or off when auto check is enabled at backend startup)
+  - Uses double tap to start from the start screen and reset while running or completed
+- Lets the browser demo view the composed camera/HUD feed and send controls, including auto-check toggling when available
 
-## How It Works
+## How it Works
 
 - `Rokid -> Backend` WebRTC: one peer connection with camera video and a `session-events` data channel
 - `Backend -> Overshoot` WebRTC: backend-originated composed reference video for the active step
-- `Backend <-> Overshoot` WebSocket: boolean inference results and keepalive
+- `Backend -> Overshoot` HTTP: stream setup, prompt updates, keepalive, and deletion
+- `Backend <-> Overshoot` WebSocket: fold-check results
 - `Browser <-> Backend` WebRTC: composed demo video plus a `demo-events` data channel for controls
 
 ## Development
@@ -49,14 +50,15 @@ cp .env.example .env
 # set OVERSHOOT_API_KEY
 ```
 
-Optional backend overrides (you can also specify them inline when you run fastapi server):
+Optional backend overrides can also be specified inline when starting FastAPI:
 
 - `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off.
-- `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save timestamped Overshoot input previews once per second while guiding
+- `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save Overshoot input previews for debugging
+- `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to choose where debug preview images are written
 - `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
 
-### Run The Backend
+### Run the Backend
 
 ```bash
 cd backend
@@ -69,7 +71,7 @@ Open the browser demo:
 http://<YOUR_BACKEND>:8000/demo
 ```
 
-### Run The Glasses App
+### Run the Glasses App
 
 Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB (see below), then install and run the app via `adb`.
 
@@ -104,6 +106,6 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 
 This example uses Overshoot differently from [`../rokid-overshoot-openai-realtime`](../rokid-overshoot-openai-realtime/README.md).
 
-In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend opens its own WebRTC stream to Overshoot. The backend composes the camera view with the active fold reference image, sends that composed stream to Overshoot, and uses the boolean results to drive the fixed origami workflow.
+In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend opens its own WebRTC stream to Overshoot. The backend composes the camera view with the active fold reference image, sends that composed stream to Overshoot, and uses the results to drive the fixed origami workflow.
 
 In the mocktail coach, the glasses stream camera video directly to Overshoot after the backend brokers setup. The backend manages Overshoot prompts and results, but it does not sit in the video path or compose frames.
