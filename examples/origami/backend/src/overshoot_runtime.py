@@ -67,6 +67,7 @@ class OvershootRuntimeMixin:
     _overshoot_http: httpx.AsyncClient
     _overshoot_model: str
     _overshoot_input_recording_dir: Path
+    _overshoot_input_recorder_stop_tasks: set[asyncio.Task[None]]
     _record_overshoot_inputs: bool
     _save_overshoot_composites: bool
     _sessions: dict[str, OrigamiSession]
@@ -180,6 +181,28 @@ class OvershootRuntimeMixin:
             logger.exception("failed to start Overshoot input recorder path=%s", path)
             return None
         return recorder
+
+    def _schedule_overshoot_input_recorder_stop(
+        self,
+        recorder: OvershootInputRecorder,
+    ) -> None:
+        task = asyncio.create_task(
+            self._stop_overshoot_input_recorder(recorder),
+            name=f"overshoot-input-recorder-stop-{recorder.path.stem}",
+        )
+        self._overshoot_input_recorder_stop_tasks.add(task)
+        task.add_done_callback(self._overshoot_input_recorder_stop_tasks.discard)
+
+    async def _stop_overshoot_input_recorder(
+        self,
+        recorder: OvershootInputRecorder,
+    ) -> None:
+        try:
+            await recorder.stop()
+        except Exception:
+            logger.exception(
+                "failed to stop Overshoot input recorder path=%s", recorder.path
+            )
 
     async def _start_overshoot_runtime(self, session: OrigamiSession) -> None:
         step = self._steps[session.step_index]
@@ -323,10 +346,10 @@ class OvershootRuntimeMixin:
         session.overshoot_stats_task = None
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if recorder is not None:
+            self._schedule_overshoot_input_recorder_stop(recorder)
         if pc is not None:
             await pc.close()
-        if recorder is not None:
-            await recorder.stop()
         if stream_id:
             await self._close_overshoot_stream(stream_id)
 

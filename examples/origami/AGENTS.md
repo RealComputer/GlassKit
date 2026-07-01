@@ -48,7 +48,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
 - `src/overshoot_runtime.py`: Overshoot stream lifecycle, prompt updates, WebSocket results, keepalive, and stats logging.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
-- `src/recording.py`: non-blocking HEVC MP4 recording for pre-composition Overshoot input frames.
+- `src/recording.py`: non-blocking H.264 MP4 recording for pre-composition Overshoot input frames.
 - `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes and latest-frame buffer.
 - `src/origami_config.py`: step config loader.

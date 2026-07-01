@@ -23,7 +23,7 @@ class OvershootInputRecorder:
         path: Path,
         *,
         fps: int,
-        codec_name: str = "libx265",
+        codec_name: str = "libx264",
         max_queue_size: int = 120,
     ) -> None:
         self.path = path
@@ -76,12 +76,8 @@ class OvershootInputRecorder:
             return
 
         self._closed.set()
-        while thread.is_alive():
-            try:
-                self._queue.put_nowait(None)
-                break
-            except queue.Full:
-                await asyncio.sleep(0.01)
+        if thread.is_alive():
+            await asyncio.to_thread(self._queue.put, None)
         await asyncio.to_thread(thread.join)
         self._thread = None
 
@@ -143,10 +139,9 @@ class OvershootInputRecorder:
         stream.pix_fmt = "yuv420p"
         stream.time_base = Fraction(1, self._fps)
         stream.codec_context.time_base = Fraction(1, self._fps)
-        if self._codec_name == "libx265":
+        if self._codec_name == "libx264":
             stream.codec_context.options = {
                 "preset": "ultrafast",
-                "x265-params": "log-level=error",
             }
         return container, stream, (width, height)
 
