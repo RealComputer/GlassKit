@@ -7,11 +7,18 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 # Runtime Architecture
 
-- The Android client stays thin: it renders the HUD, handles camera permission and touchpad gestures, publishes camera video to the backend, and sends gesture commands.
+- The Android client stays thin: it renders the HUD, handles camera permission, and maps touchpad gestures into backend commands.
 - The FastAPI backend owns the active session, current step, HUD state, manual and automatic progression, auto-check availability, and Overshoot runtime.
-- Overshoot only sees backend-composed video: the backend combines the camera view with the active reference image, sends that stream to Overshoot, and consumes fold-check results.
-- Browser `/demo` is a backend-connected viewer/controller. It receives the composed camera/HUD feed and sends the same workflow controls as the glasses.
+- Overshoot only sees backend-composed video, not a direct Rokid stream.
+- Browser `/demo` is a backend-connected viewer/controller, not a separate workflow owner.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
+
+## Connection Graph
+
+- `Rokid -> Backend` WebRTC: camera video plus `session-events` commands.
+- `Backend -> Overshoot` WebRTC/HTTP: composed fold-check video and stream control.
+- `Backend <-> Overshoot` WebSocket: fold-check results.
+- `Browser <-> Backend` WebRTC: demo video plus `demo-events` controls.
 
 ## Session Flow
 
