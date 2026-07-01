@@ -1,9 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Rokid origami guide backend with WebRTC ingest and Overshoot checking"
-readme = "README.md"
-requires-python = ">=3.13.14"
+requires-python = ">=3.13"
 dependencies = [
     "aiortc>=1.14.0",
     "fastapi[standard]>=0.138.2",
