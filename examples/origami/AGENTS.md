@@ -7,12 +7,21 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 # Runtime Architecture
 
-- The Android client stays thin: it renders the HUD, handles camera permission and touchpad gestures, publishes camera video through `/session/media`, and sends gesture commands over `session-events`.
-- The FastAPI backend owns the single active device session, current step, HUD state, manual and automatic progression, auto-check availability, and Overshoot runtime.
-- The backend composes camera frames with the active reference image, opens its own WebRTC stream to Overshoot, updates prompts and stream state over HTTP, and receives fold-check results over WebSocket.
-- Overshoot results and manual navigation both flow through the backend session loop, so the backend remains the only place that advances steps.
+- The Android client stays thin: it renders the HUD, handles camera permission and touchpad gestures, publishes camera video to the backend, and sends gesture commands.
+- The FastAPI backend owns the active session, current step, HUD state, manual and automatic progression, auto-check availability, and Overshoot runtime.
+- Overshoot only sees backend-composed video: the backend combines the camera view with the active reference image, sends that stream to Overshoot, and consumes fold-check results.
+- Browser `/demo` is a backend-connected viewer/controller. It receives the composed camera/HUD feed and sends the same workflow controls as the glasses.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
-- Browser `/demo` connects through `/demo/session`, receives the composed camera/HUD video feed, and sends controls over `demo-events`.
+
+## Session Flow
+
+1. Rokid shows the start screen.
+2. Double tap opens a backend media session and starts the origami workflow.
+3. The backend enters the first step, publishes HUD state, and starts Overshoot when auto check is available.
+4. The backend sends composed camera/reference video to Overshoot.
+5. Overshoot results return to the backend, and the backend decides whether to advance the step.
+6. Swipe controls and browser demo controls send manual navigation commands to the backend.
+7. Completion or reset returns the HUD to the start screen.
 
 # Key Files
 
