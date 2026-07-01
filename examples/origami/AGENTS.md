@@ -55,13 +55,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
 - `.env.example`: required key and optional Overshoot overrides.
 
-# Touchpad Controls
-
-- `KeyEvent.KEYCODE_BACK` / Android back callback: Rokid double tap. Starts from the initial screen and resets while running, completed, or in an error state.
-- `KeyEvent.KEYCODE_ENTER`: tap. Consumed by the app and intentionally has no workflow action.
-- `KeyEvent.KEYCODE_DPAD_DOWN`: swipe forward. Advances one step manually.
-- `KeyEvent.KEYCODE_DPAD_UP`: swipe backward. Moves one step back manually.
-
 # Commands
 
 ## Rokid

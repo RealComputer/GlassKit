@@ -71,20 +71,24 @@ class MainActivity : ComponentActivity(), OrigamiSessionClient.Listener {
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_ENTER -> {
+                // Rokid tap has no workflow action.
                 true
             }
 
             KeyEvent.KEYCODE_DPAD_DOWN -> {
+                // Rokid swipe forward.
                 sessionClient?.sendManualNext()
                 true
             }
 
             KeyEvent.KEYCODE_DPAD_UP -> {
+                // Rokid swipe backward.
                 sessionClient?.sendManualPrev()
                 true
             }
 
             KeyEvent.KEYCODE_BACK -> {
+                // Rokid double tap; Android back callback uses the same handler.
                 handleDoubleTap()
                 true
             }
@@ -95,6 +99,7 @@ class MainActivity : ComponentActivity(), OrigamiSessionClient.Listener {
 
     private fun handleDoubleTap() {
         val phase = currentHudState?.phase
+        // Double tap starts from idle/waiting; every other state resets.
         if (!isMediaRunning || phase == null || phase == "WAITING_FOR_START") {
             startWorkflow()
             return
