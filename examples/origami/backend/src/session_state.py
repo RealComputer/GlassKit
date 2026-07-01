@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiortc import RTCPeerConnection
 from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
 
 from .constants import PHASE_WAITING
+
+if TYPE_CHECKING:
+    from .recording import OvershootInputRecorder
 
 
 @dataclass
@@ -88,6 +91,7 @@ class OrigamiSession:
     overshoot_ws_task: asyncio.Task[None] | None = None
     overshoot_keepalive_task: asyncio.Task[None] | None = None
     overshoot_stats_task: asyncio.Task[None] | None = None
+    overshoot_input_recorder: OvershootInputRecorder | None = None
     active_prompt_text: str | None = None
     guiding_step_started_at: float = 0.0
     overshoot_ignore_results_until: float = 0.0

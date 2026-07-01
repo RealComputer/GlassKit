@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from fractions import Fraction
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiortc import (
     MediaStreamTrack,
@@ -26,8 +26,11 @@ from .constants import (
     OVERSHOOT_FPS,
     VIDEO_CLOCK_RATE,
 )
-from .rendering import _compose_reference_image, _demo_placeholder, _frame_to_image
+from .rendering import _compose_reference_image, _frame_to_image
 from .session_state import OrigamiSession
+
+if TYPE_CHECKING:
+    from .recording import OvershootInputRecorder
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -68,23 +71,28 @@ class ReferenceCompositeTrack(TimedVideoTrack):
         self,
         manager: Any,
         session: OrigamiSession,
+        recorder: OvershootInputRecorder | None = None,
     ) -> None:
         super().__init__(fps=OVERSHOOT_FPS)
         self._manager = manager
         self._session = session
+        self._recorder = recorder
         self._last_frame_id: int | None = None
 
     async def recv(self) -> VideoFrame:
-        await self._wait_tick()
-        item = await self._session.camera_frames.wait_for_new(
-            self._last_frame_id,
-            timeout_seconds=0.2,
-        )
-        if item is not None:
-            self._last_frame_id = item[0]
-            camera = _frame_to_image(item[1], fallback_size=(1024, 768))
-        else:
-            camera = _demo_placeholder("Waiting for camera")
+        item: tuple[int, VideoFrame] | None = None
+        while item is None:
+            await self._wait_tick()
+            item = await self._session.camera_frames.wait_for_new(
+                self._last_frame_id,
+                timeout_seconds=0.2,
+            )
+
+        self._last_frame_id = item[0]
+        camera = _frame_to_image(item[1], fallback_size=(1024, 768))
+        if self._recorder is not None:
+            self._recorder.record(camera)
+
         step = self._manager.current_step_for(self._session)
         reference = self._manager.reference_image_for(step)
         return self._video_frame_from_image(

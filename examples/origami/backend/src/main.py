@@ -48,6 +48,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     debug_composite_dir = (
         Path(debug_composite_dir_raw).expanduser() if debug_composite_dir_raw else None
     )
+    input_recording_dir_raw = os.getenv(
+        "ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR", ""
+    ).strip()
+    input_recording_dir = (
+        Path(input_recording_dir_raw).expanduser() if input_recording_dir_raw else None
+    )
 
     manager = OrigamiSessionManager(
         overshoot_api_url=overshoot_api_url,
@@ -60,6 +66,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             default=False,
         ),
         debug_composite_dir=debug_composite_dir,
+        record_overshoot_inputs=_env_bool(
+            "ORIGAMI_RECORD_OVERSHOOT_INPUTS",
+            default=True,
+        ),
+        overshoot_input_recording_dir=input_recording_dir,
     )
     try:
         yield

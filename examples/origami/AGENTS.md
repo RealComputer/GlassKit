@@ -12,6 +12,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
 - Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
+- The backend records the real camera frames sent into the Overshoot path before reference-image composition by default. Recordings are written under `backend/debug/overshoot-inputs` unless `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` overrides the location, and `ORIGAMI_RECORD_OVERSHOOT_INPUTS=false` disables this recording.
 
 ## Connection Graph
 
@@ -47,6 +48,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
 - `src/overshoot_runtime.py`: Overshoot stream lifecycle, prompt updates, WebSocket results, keepalive, and stats logging.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
+- `src/recording.py`: non-blocking HEVC MP4 recording for pre-composition Overshoot input frames.
 - `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes and latest-frame buffer.
 - `src/origami_config.py`: step config loader.

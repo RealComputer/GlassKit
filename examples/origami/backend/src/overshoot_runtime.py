@@ -18,6 +18,7 @@ from .constants import (
     DEBUG_COMPOSITE_INTERVAL_SECONDS,
     DEFAULT_OVERSHOOT_MODE,
     DEFAULT_OVERSHOOT_PROCESSING,
+    OVERSHOOT_FPS,
     OVERSHOOT_STATS_LOG_INTERVAL_SECONDS,
     OVERSHOOT_WS_AUTH_FAILURE_CLOSE_CODE,
     OVERSHOOT_WS_MAX_RECONNECT_ATTEMPTS,
@@ -35,6 +36,7 @@ from .overshoot_payloads import (
     _response_text,
 )
 from .origami_config import OrigamiStep
+from .recording import OvershootInputRecorder
 from .rendering import _compose_reference_image, _frame_to_image, _save_jpeg
 from .rtc_media import (
     ReferenceCompositeTrack,
@@ -64,6 +66,8 @@ class OvershootRuntimeMixin:
     _overshoot_api_url: str
     _overshoot_http: httpx.AsyncClient
     _overshoot_model: str
+    _overshoot_input_recording_dir: Path
+    _record_overshoot_inputs: bool
     _save_overshoot_composites: bool
     _sessions: dict[str, OrigamiSession]
     _sessions_lock: asyncio.Lock
@@ -156,6 +160,27 @@ class OvershootRuntimeMixin:
         except Exception:
             logger.exception("failed to save Overshoot debug composite to %s", path)
 
+    def _start_overshoot_input_recorder(
+        self,
+        session: OrigamiSession,
+        generation: int,
+    ) -> OvershootInputRecorder | None:
+        if not self._record_overshoot_inputs:
+            return None
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        path = self._overshoot_input_recording_dir / (
+            f"{timestamp}_step-{session.step_index + 1:02d}_"
+            f"generation-{generation:04d}_{session.session_id[:8]}.mp4"
+        )
+        recorder = OvershootInputRecorder(path, fps=OVERSHOOT_FPS)
+        try:
+            recorder.start()
+        except Exception:
+            logger.exception("failed to start Overshoot input recorder path=%s", path)
+            return None
+        return recorder
+
     async def _start_overshoot_runtime(self, session: OrigamiSession) -> None:
         step = self._steps[session.step_index]
         generation = session.overshoot_generation + 1
@@ -184,7 +209,9 @@ class OvershootRuntimeMixin:
 
         session.overshoot_pc = pc
         created_stream_id: str | None = None
-        pc.addTrack(ReferenceCompositeTrack(self, session))
+        recorder = self._start_overshoot_input_recorder(session, generation)
+        session.overshoot_input_recorder = recorder
+        pc.addTrack(ReferenceCompositeTrack(self, session, recorder))
         for transceiver in pc.getTransceivers():
             if transceiver.sender and transceiver.sender.track:
                 _prefer_codec(transceiver, "video/H264", sender=True)
@@ -277,9 +304,11 @@ class OvershootRuntimeMixin:
         session.overshoot_generation += 1
         stream_id = session.overshoot_stream_id
         pc = session.overshoot_pc
+        recorder = session.overshoot_input_recorder
         session.overshoot_stream_id = None
         session.overshoot_lease_ttl_seconds = None
         session.overshoot_pc = None
+        session.overshoot_input_recorder = None
         tasks: list[asyncio.Task[None]] = []
         for task in (
             session.overshoot_ws_task,
@@ -296,6 +325,8 @@ class OvershootRuntimeMixin:
             await asyncio.gather(*tasks, return_exceptions=True)
         if pc is not None:
             await pc.close()
+        if recorder is not None:
+            await recorder.stop()
         if stream_id:
             await self._close_overshoot_stream(stream_id)
 

@@ -68,6 +68,8 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         auto_check_available: bool = True,
         save_overshoot_composites: bool = False,
         debug_composite_dir: Path | None = None,
+        record_overshoot_inputs: bool = True,
+        overshoot_input_recording_dir: Path | None = None,
     ) -> None:
         self._overshoot_api_url = overshoot_api_url.rstrip("/")
         self._overshoot_api_key = overshoot_api_key
@@ -78,6 +80,12 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
             debug_composite_dir
             if debug_composite_dir is not None
             else steps_path.parent.parent / "debug" / "overshoot-composites"
+        )
+        self._record_overshoot_inputs = record_overshoot_inputs
+        self._overshoot_input_recording_dir = (
+            overshoot_input_recording_dir
+            if overshoot_input_recording_dir is not None
+            else steps_path.parent.parent / "debug" / "overshoot-inputs"
         )
         self._steps = load_origami_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
