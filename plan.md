@@ -12,7 +12,7 @@ The command `glasskit eval ...` would be nicer if GlassKit later ships a broader
 
 Use these terms consistently:
 
-- Eval suite: the directory passed to the CLI. It contains one or more evaluation cases. This replaces the ambiguous use of both "dataset" and "fixtures" in the earlier draft.
+- Eval suite: the directory passed to the CLI. It contains one or more evaluation cases.
 - Case: one video plus its expected results YAML. A case may cover one origami step, several targets from the same video, or a longer clip.
 - Target: the generic unit that the CLI asks the adapter to evaluate. In origami, a target maps naturally to a folding step such as `step_1`. In a task graph or object-detection app, a target can map to a detector, graph node, split, inventory scan, or other stable app-defined id.
 - Sample: one timestamped frame, or one expanded timestamp inside a labeled range.
@@ -20,7 +20,6 @@ Use these terms consistently:
 - Observation: the adapter or model output before comparison.
 - Result: the pass, fail, ignored, or error outcome after comparing an observation with an expectation.
 - Gate: an aggregate threshold that controls process success, such as a minimum pass rate.
-- Fixture: reserve this mostly for code tests, such as pytest fixture data. Do not use it as the primary user-facing term for recorded app eval data.
 
 ## Non-goals for the First Version
 
