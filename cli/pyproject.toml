@@ -1,0 +1,35 @@
+[project]
+name = "gk"
+version = "0.1.0"
+description = "GlassKit command-line tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "av",
+    "pillow",
+    "pydantic>=2",
+    "pyyaml",
+    "rich",
+    "typer",
+]
+
+[project.scripts]
+gk = "gk.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "ty",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

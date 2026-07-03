@@ -95,6 +95,37 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
 
+### Recorded-Video Evals
+
+The backend includes a `gk eval` adapter at `backend/eval_adapter.py`. It evaluates recorded camera-input videos from files, composes the same reference-image header used by the live Overshoot path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with `expected.yaml`.
+
+Create eval cases from existing Overshoot input recordings by running the app with `ORIGAMI_RECORD_OVERSHOOT_INPUTS=true`, copying a generated MP4 from `backend/debug/overshoot-inputs` into an eval-suite case directory, and manually labeling stable timestamp ranges in `expected.yaml`. Leave transition, occluded, or ambiguous windows undeclared.
+
+Local development command:
+
+```bash
+cd backend
+uv run \
+  --with-editable ../../../cli \
+  --env-file .env \
+  gk eval run \
+  --adapter eval_adapter.py:create_evaluator \
+  --suite eval-suite \
+  --min-pass-rate 0.9
+```
+
+Validate labels and adapter importability without model evaluation:
+
+```bash
+cd backend
+uv run \
+  --with-editable ../../../cli \
+  --env-file .env \
+  gk eval validate \
+  --adapter eval_adapter.py:create_evaluator \
+  --suite eval-suite
+```
+
 ## Vision Path Comparison
 
 This example uses Overshoot differently from [`../rokid-overshoot-openai-realtime`](../rokid-overshoot-openai-realtime/README.md).

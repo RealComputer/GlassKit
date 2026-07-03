@@ -23,6 +23,7 @@ from .constants import (
     OVERSHOOT_STREAM_STATUS_POLL_SECONDS,
     PHASE_GUIDING,
 )
+from .fold_check import compose_fold_check_image
 from .origami_config import OrigamiStep
 from .overshoot_payloads import (
     _compact_json,
@@ -30,7 +31,7 @@ from .overshoot_payloads import (
     _response_text,
 )
 from .recording import OvershootInputRecorder
-from .rendering import _compose_reference_image, _frame_to_image, _save_jpeg
+from .rendering import _frame_to_image, _save_jpeg
 from .session_state import OrigamiSession, SessionEvent
 
 logger = logging.getLogger("uvicorn.error")
@@ -124,7 +125,7 @@ class OvershootRuntimeMixin:
         step = self.current_step_for(session)
         camera = _frame_to_image(camera_item[1], fallback_size=(1024, 768))
         reference = self.reference_image_for(step)
-        image = _compose_reference_image(camera, reference, "Reference shape")
+        image = compose_fold_check_image(camera, reference)
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         path = self._debug_composite_dir / (
             f"{timestamp}_step-{session.step_index + 1:02d}_"
@@ -687,7 +688,7 @@ class OvershootRuntimeMixin:
 
                 step = self.current_step_for(session)
                 reference = self.reference_image_for(step)
-                image = _compose_reference_image(camera, reference, "Reference shape")
+                image = compose_fold_check_image(camera, reference)
                 if image.size != frame_size:
                     image = image.resize(frame_size, Image.Resampling.LANCZOS)
 

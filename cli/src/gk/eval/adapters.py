@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+import importlib
+import importlib.util
+import inspect
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+from .models import (
+    AdapterConfig,
+    AdapterLoadError,
+    FrameSample,
+    JSONValue,
+    TargetContext,
+)
+
+
+async def load_evaluator(adapter_target: str, config: AdapterConfig) -> Any:
+    target = _load_target(adapter_target)
+    if _looks_like_frame_function(target):
+        return _FunctionEvaluator(target)
+
+    try:
+        result = target(config) if _callable_accepts_config(target) else target()
+        evaluator = await _maybe_await(result)
+    except Exception as error:
+        raise AdapterLoadError(
+            f"adapter factory {adapter_target!r} failed: {error}"
+        ) from error
+
+    if _has_evaluate(evaluator):
+        return _ObjectEvaluator(evaluator)
+    if callable(evaluator) and _looks_like_frame_function(evaluator):
+        return _FunctionEvaluator(evaluator)
+    raise AdapterLoadError(
+        f"adapter {adapter_target!r} did not return an object with evaluate(...)"
+    )
+
+
+def _load_target(adapter_target: str) -> Callable[..., Any]:
+    if ":" not in adapter_target:
+        raise AdapterLoadError(
+            f"adapter must be '<module-or-file>:<callable>', got {adapter_target!r}"
+        )
+    module_ref, object_ref = adapter_target.split(":", 1)
+    module_ref = module_ref.strip()
+    object_ref = object_ref.strip()
+    if not module_ref or not object_ref:
+        raise AdapterLoadError(
+            f"adapter must be '<module-or-file>:<callable>', got {adapter_target!r}"
+        )
+
+    module = _load_module(module_ref)
+    value: Any = module
+    for part in object_ref.split("."):
+        if not hasattr(value, part):
+            raise AdapterLoadError(f"adapter target not found: {adapter_target}")
+        value = getattr(value, part)
+    if not callable(value):
+        raise AdapterLoadError(f"adapter target is not callable: {adapter_target}")
+    return value
+
+
+def _load_module(module_ref: str) -> ModuleType:
+    path = Path(module_ref)
+    if module_ref.endswith(".py") or path.exists():
+        path = path.expanduser().resolve()
+        if not path.exists():
+            raise AdapterLoadError(f"adapter file does not exist: {path}")
+        module_name = f"gk_eval_adapter_{abs(hash(path))}"
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise AdapterLoadError(f"could not load adapter file: {path}")
+        parent = str(path.parent)
+        if parent not in sys.path:
+            sys.path.insert(0, parent)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception as error:
+            raise AdapterLoadError(
+                f"adapter import failed for {path}: {error}"
+            ) from error
+        return module
+
+    try:
+        return importlib.import_module(module_ref)
+    except Exception as error:
+        raise AdapterLoadError(
+            f"adapter import failed for module {module_ref!r}: {error}"
+        ) from error
+
+
+def _looks_like_frame_function(value: Any) -> bool:
+    if not callable(value):
+        return False
+    try:
+        signature = inspect.signature(value)
+    except (TypeError, ValueError):
+        return False
+    positional = [
+        parameter
+        for parameter in signature.parameters.values()
+        if parameter.kind
+        in {
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        }
+    ]
+    if len(positional) < 2:
+        return False
+    first = positional[0].name
+    second = positional[1].name
+    return (first, second) in {
+        ("image", "target_id"),
+        ("sample", "target"),
+    }
+
+
+def _callable_accepts_config(value: Callable[..., Any]) -> bool:
+    try:
+        signature = inspect.signature(value)
+    except (TypeError, ValueError):
+        return True
+    required = [
+        parameter
+        for parameter in signature.parameters.values()
+        if parameter.default is inspect.Parameter.empty
+        and parameter.kind
+        in {
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        }
+    ]
+    return bool(required)
+
+
+def _has_evaluate(value: Any) -> bool:
+    return callable(getattr(value, "evaluate", None))
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+class _FunctionEvaluator:
+    def __init__(self, function: Callable[..., Any]) -> None:
+        self._function = function
+        self._signature = inspect.signature(function)
+        self._style = self._detect_style()
+
+    async def evaluate(self, sample: FrameSample, target: TargetContext) -> JSONValue:
+        if self._style == "image_target_id":
+            result = self._function(sample.image, target.id)
+        else:
+            result = self._function(sample, target)
+        return await _maybe_await(result)
+
+    async def evaluate_many(
+        self, samples: list[FrameSample], target: TargetContext
+    ) -> list[JSONValue]:
+        return [await self.evaluate(sample, target) for sample in samples]
+
+    async def close(self) -> None:
+        return None
+
+    def _detect_style(self) -> str:
+        positional = [
+            parameter
+            for parameter in self._signature.parameters.values()
+            if parameter.kind
+            in {
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            }
+        ]
+        return (
+            "image_target_id"
+            if (positional[0].name, positional[1].name) == ("image", "target_id")
+            else "sample_target"
+        )
+
+
+class _ObjectEvaluator:
+    def __init__(self, evaluator: Any) -> None:
+        self._evaluator = evaluator
+
+    async def evaluate(self, sample: FrameSample, target: TargetContext) -> JSONValue:
+        return await _maybe_await(self._evaluator.evaluate(sample, target))
+
+    async def evaluate_many(
+        self, samples: list[FrameSample], target: TargetContext
+    ) -> list[JSONValue]:
+        evaluate_many = getattr(self._evaluator, "evaluate_many", None)
+        if callable(evaluate_many):
+            return await _maybe_await(evaluate_many(samples, target))
+        return [await self.evaluate(sample, target) for sample in samples]
+
+    async def close(self) -> None:
+        close = getattr(self._evaluator, "close", None)
+        if callable(close):
+            await _maybe_await(close())

@@ -47,11 +47,13 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
 - `src/overshoot_runtime.py`: Overshoot stream lifecycle, LiveKit publishing, chat-completion prompt loop, keepalive, and stream cleanup.
+- `src/fold_check.py`: shared fold-check helpers for reference composition, step loading, and boolean result parsing.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
 - `src/recording.py`: non-blocking video recording for pre-composition Overshoot input frames.
 - `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes and latest-frame buffer.
 - `src/origami_config.py`: step config loader.
+- `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames to Overshoot chat completions without LiveKit.
 - `assets/origami_steps.json`: seven step definitions and prompts.
 - `assets/step-imgs/*.png`: green browser-demo HUD versions of the step guide images.
 - `assets/ref-imgs/*.jpg`: active step reference images used for Overshoot composition.
@@ -71,4 +73,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
+- `uv run --with-editable ../../../cli --env-file .env gk eval validate --adapter eval_adapter.py:create_evaluator --suite eval-suite`: validate a local recorded-video eval suite
+- `uv run --with-editable ../../../cli --env-file .env gk eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`: run a local recorded-video eval suite
 - `uv add <package>`: add a package

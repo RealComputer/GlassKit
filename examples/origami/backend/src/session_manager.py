@@ -26,11 +26,11 @@ from .constants import (
     PHASE_STEP_DONE,
     PHASE_WAITING,
 )
-from .origami_config import OrigamiStep, load_origami_steps
+from .fold_check import load_fold_check_steps, parse_fold_check_result
+from .origami_config import OrigamiStep
 from .overshoot_payloads import (
     _compact_json,
     _parse_json_object,
-    _parse_overshoot_boolean,
     _payload_received_at,
 )
 from .overshoot_runtime import OvershootRuntimeMixin
@@ -87,7 +87,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         )
         self._overshoot_input_recorder_stop_tasks: set[asyncio.Task[None]] = set()
         self._overshoot_video_source_close_tasks: set[asyncio.Task[None]] = set()
-        self._steps = load_origami_steps(steps_path)
+        self._steps = load_fold_check_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
         self._overshoot_http = httpx.AsyncClient(
@@ -535,7 +535,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
             )
             return
 
-        observed = _parse_overshoot_boolean(payload)
+        observed = parse_fold_check_result(payload)
         if observed is None:
             logger.info(
                 "session=%s ignoring non-boolean overshoot payload=%s",
