@@ -4,16 +4,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .models import CompareOutcome, SampleExpectation
-
-SUPPORTED_COMPARE_MODES = {
-    "exact",
-    "numeric",
-    "json_subset",
-    "set_equals",
-    "set_contains_any",
-    "set_contains_all",
-}
+from .models import SUPPORTED_COMPARE_MODES, CompareOutcome, SampleExpectation
 
 
 def compare_observation(observation: Any, sample: SampleExpectation) -> CompareOutcome:
@@ -78,6 +69,8 @@ def _extract_field(observation: Any, field: str | None) -> tuple[Any, str | None
             current = current[part]
             continue
         if isinstance(current, Sequence) and not isinstance(current, str | bytes):
+            if not part.isdecimal():
+                return None, f"missing field: {field}"
             try:
                 current = current[int(part)]
             except (ValueError, IndexError):

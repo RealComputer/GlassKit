@@ -63,6 +63,15 @@ def test_set_contains_all() -> None:
     assert outcome.passed
 
 
+def test_negative_list_indexes_are_missing_fields() -> None:
+    sample = _sample(expected="last", field="items.-1")
+
+    outcome = compare_observation({"items": ["first", "last"]}, sample)
+
+    assert not outcome.passed
+    assert outcome.reason == "missing field: items.-1"
+
+
 def _sample(
     *,
     expected: object,

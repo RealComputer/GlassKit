@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Protocol
@@ -8,6 +9,7 @@ from typing import Any, Protocol
 from .adapters import load_evaluator
 from .compare import compare_observation
 from .expectations import load_eval_suite
+from .json_values import json_value_error
 from .models import (
     AdapterConfig,
     AdapterRuntimeError,
@@ -148,7 +150,7 @@ async def run_eval(
                     if callbacks is not None:
                         callbacks.on_result(result)
     finally:
-        await evaluator.close()
+        await _close_evaluator(evaluator)
 
     gate_results = _apply_quality_gates(suite, results, options)
     report = EvalRunReport(
@@ -196,21 +198,50 @@ async def _evaluate_samples(
         return []
     try:
         observations = await evaluator.evaluate_many(frames, target)
-        if len(observations) != len(samples):
-            raise AdapterRuntimeError(
-                f"adapter returned {len(observations)} observations for "
-                f"{len(samples)} samples"
-            )
-        return [
-            (sample, observation, None)
-            for sample, observation in zip(samples, observations, strict=True)
-        ]
     except Exception as error:
         if not options.keep_going:
             raise AdapterRuntimeError(
                 f"adapter failed for target {target.id!r}: {error}"
             ) from error
         return [(sample, None, error) for sample in samples]
+    if len(observations) != len(samples):
+        error = AdapterRuntimeError(
+            f"adapter returned {len(observations)} observations for "
+            f"{len(samples)} samples"
+        )
+        if not options.keep_going:
+            raise error
+        return [(sample, None, error) for sample in samples]
+
+    results: list[tuple[SampleExpectation, Any, Exception | None]] = []
+    for sample, observation in zip(samples, observations, strict=True):
+        if error_message := json_value_error(observation, label="observation"):
+            error = AdapterRuntimeError(
+                "adapter returned non-JSON observation for "
+                f"{sample.case_name}/{sample.target_id} sample "
+                f"{sample.sample_index}: {error_message}"
+            )
+            if not options.keep_going:
+                raise error
+            results.append((sample, None, error))
+            continue
+        results.append((sample, observation, None))
+    return results
+
+
+async def _close_evaluator(evaluator: Any) -> None:
+    active_error = sys.exc_info()[1]
+    try:
+        await evaluator.close()
+    except Exception as close_error:
+        if active_error is not None:
+            active_error.add_note(
+                f"adapter close failed while handling previous error: {close_error}"
+            )
+            return
+        raise AdapterRuntimeError(
+            f"adapter close failed: {close_error}"
+        ) from close_error
 
 
 def _result_for_observation(

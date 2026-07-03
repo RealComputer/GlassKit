@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,7 +13,8 @@ from pydantic import (
     model_validator,
 )
 
-from .models import EvalConfigError
+from .json_values import json_value_error
+from .models import SUPPORTED_COMPARE_MODES, EvalConfigError
 
 DEFAULT_EVERY_S = 0.5
 
@@ -37,6 +39,11 @@ class RawCompare(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        if stripped not in SUPPORTED_COMPARE_MODES:
+            supported = ", ".join(sorted(SUPPORTED_COMPARE_MODES))
+            raise ValueError(
+                f"unsupported compare mode {stripped!r}; expected one of: {supported}"
+            )
         return stripped
 
     @field_validator("tolerance", mode="before")
@@ -63,6 +70,13 @@ class RawSampleBlock(_SchemaModel):
     every_s: float | None = None
     field: str | None = None
     compare: RawCompare | None = None
+
+    @field_validator("expect")
+    @classmethod
+    def _validate_expect(cls, value: Any) -> Any:
+        if error := json_value_error(value, label="expect"):
+            raise ValueError(error)
+        return value
 
     @field_validator("range_", mode="before")
     @classmethod
@@ -296,6 +310,8 @@ def _number(
         parsed = float(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"{label} must be a number") from error
+    if not math.isfinite(parsed):
+        raise ValueError(f"{label} must be finite")
     if minimum is not None:
         if exclusive_minimum and parsed <= minimum:
             raise ValueError(f"{label} must be greater than {minimum:g}")

@@ -146,6 +146,74 @@ def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
         load_eval_suite(case_dir.parent)
 
 
+@pytest.mark.parametrize(
+    "sample_yaml",
+    [
+        """
+              - at: .nan
+                expect: true
+        """,
+        """
+              - range: [0.0, .inf]
+                expect: true
+        """,
+    ],
+)
+def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -> None:
+    case_dir = _case_dir(
+        tmp_path,
+        f"""
+        version: 1
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+{sample_yaml}
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="finite"):
+        load_eval_suite(case_dir.parent)
+
+
+def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
+    case_dir = _case_dir(
+        tmp_path,
+        """
+        version: 1
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+                compare:
+                  mode: typo_mode
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="unsupported compare mode"):
+        load_eval_suite(case_dir.parent)
+
+
+def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
+    case_dir = _case_dir(
+        tmp_path,
+        """
+        version: 1
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: 2026-01-01
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="JSON-like"):
+        load_eval_suite(case_dir.parent)
+
+
 def _case_dir(tmp_path: Path, expected_yaml: str) -> Path:
     case_dir = tmp_path / "suite" / "case-001"
     case_dir.mkdir(parents=True)

@@ -13,6 +13,17 @@ type JSONValue = (
 )
 type ResultStatus = Literal["passed", "failed", "error"]
 
+SUPPORTED_COMPARE_MODES = frozenset(
+    {
+        "exact",
+        "numeric",
+        "json_subset",
+        "set_equals",
+        "set_contains_any",
+        "set_contains_all",
+    }
+)
+
 
 class EvalError(Exception):
     """Base exception for user-facing eval failures."""

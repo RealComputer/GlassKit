@@ -232,6 +232,8 @@ thresholds:
 
 Every run also includes an `adapter_errors` gate. The run only succeeds if the adapter produced no runtime or comparison errors and every configured quality gate passed.
 
+Failed comparisons are intentionally controlled by quality gates instead of a built-in default failure policy. If you run without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are reported in the summary and JSON output but do not make the command exit nonzero; adapter, runtime, or comparison errors still fail through the `adapter_errors` gate. Configure a pass-rate or max-failures gate for CI or any run where failed observations should fail the command.
+
 CLI gates are useful for one-off CI jobs or local experiments:
 
 ```bash

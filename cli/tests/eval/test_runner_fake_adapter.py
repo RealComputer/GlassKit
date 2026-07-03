@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
-from gk.eval.models import RunOptions
+import pytest
+
+from gk.eval.models import AdapterRuntimeError, RunOptions
 from gk.eval.runner import run_eval
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -28,6 +31,16 @@ def test_runner_applies_suite_level_per_target_gates(tmp_path: Path) -> None:
 
 def test_runner_skips_filtered_out_suite_target_gates(tmp_path: Path) -> None:
     asyncio.run(_run_filtered_suite_target_gate_test(tmp_path))
+
+
+def test_runner_records_non_json_adapter_observations_with_keep_going(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_non_json_adapter_observation_test(tmp_path))
+
+
+def test_runner_preserves_eval_error_when_close_also_fails(tmp_path: Path) -> None:
+    asyncio.run(_run_close_error_masking_test(tmp_path))
 
 
 async def _run_committed_fixture_test(tmp_path: Path) -> None:
@@ -239,3 +252,101 @@ def create_evaluator(config):
     assert "suite_step_1_min_pass_rate" in gate_names
     assert "suite_step_2_min_pass_rate" not in gate_names
     assert report.success
+
+
+async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:
+    suite_dir = tmp_path / "suite"
+    case_dir = suite_dir / "case-001"
+    case_dir.mkdir(parents=True)
+    (case_dir / "expected.yaml").write_text(
+        f"""
+version: 1
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [object() for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return object()
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "report.json"
+
+    report = await run_eval(
+        RunOptions(
+            suite_path=suite_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            keep_going=True,
+            output_json=output_json,
+        )
+    )
+
+    assert report.error_count == 1
+    assert output_json.exists()
+    data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert data["results"][0]["status"] == "error"
+    assert "non-JSON observation" in data["results"][0]["reason"]
+
+
+async def _run_close_error_masking_test(tmp_path: Path) -> None:
+    suite_dir = tmp_path / "suite"
+    case_dir = suite_dir / "case-001"
+    case_dir.mkdir(parents=True)
+    (case_dir / "expected.yaml").write_text(
+        f"""
+version: 1
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        raise RuntimeError("evaluation failed")
+
+    async def evaluate(self, sample, target):
+        raise RuntimeError("evaluation failed")
+
+    async def close(self):
+        raise RuntimeError("close failed")
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AdapterRuntimeError, match="evaluation failed") as exc_info:
+        await run_eval(
+            RunOptions(
+                suite_path=suite_dir,
+                adapter=f"{adapter_path}:create_evaluator",
+            )
+        )
+    assert "close failed" not in str(exc_info.value)
+    assert any("close failed" in note for note in exc_info.value.__notes__)

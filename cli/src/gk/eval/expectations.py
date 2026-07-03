@@ -179,6 +179,8 @@ def _resolve_video_path(case_dir: Path, raw_video: Any) -> Path:
         path = (case_dir / raw_video).resolve()
         if not path.exists():
             raise EvalConfigError(f"video file does not exist: {path}")
+        if not path.is_file():
+            raise EvalConfigError(f"video path is not a file: {path}")
         if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
             raise EvalConfigError(f"unsupported video file type: {path}")
         return path
