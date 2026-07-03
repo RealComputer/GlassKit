@@ -1,12 +1,12 @@
-# GlassKit Eval CLI Plan
+# GlassKit CLI Eval Plan
 
 ## Goal
 
 Build a reusable recorded-video evaluation tool for GlassKit apps. The first practical target is `examples/origami`, where prompt and fold-check changes currently require repeated physical runs on Rokid Glasses, but the design should also fit later apps such as `rokid-overshoot-openai-realtime` and `rokid-rfdetr` once they get their own adapters and eval suites.
 
-The proposed public package name is `glasskit-eval`. The Python module should be `glasskit_eval`, the repo directory should be `tools/eval`, and the primary console command should be `glasskit-eval`.
+The proposed public package name is `gk`. The Python module should be `gk`, the repo directory should be `cli`, and the primary console command should be `gk`. The recorded-video evaluator should be implemented as the `gk eval` subcommand family from the start.
 
-The command `glasskit eval ...` would be nicer if GlassKit later ships a broader top-level CLI. For the MVP, avoid claiming a global `glasskit` command too early. We can add a compatibility wrapper later if the top-level CLI becomes real.
+The PyPI name `glasskit` is already taken. Reserving `gk` gives GlassKit a short top-level CLI namespace that can later grow beyond eval without renaming this tool.
 
 ## Terms
 
@@ -50,36 +50,39 @@ The MVP should evaluate model observations, not full live sessions. In concrete 
 
 ## Package Layout
 
-Add a new package under `tools/eval/`.
+Add a new package under `cli/`.
 
 ```text
-tools/eval/
+cli/
   pyproject.toml
   README.md
-  src/glasskit_eval/
+  src/gk/
     __init__.py
     cli.py
-    adapters.py
-    compare.py
-    expectations.py
-    models.py
-    report.py
-    runner.py
-    video.py
+    eval/
+      __init__.py
+      adapters.py
+      compare.py
+      expectations.py
+      models.py
+      report.py
+      runner.py
+      video.py
   tests/
-    test_expectations.py
-    test_compare.py
-    test_adapter_loading.py
-    test_runner_fake_adapter.py
+    eval/
+      test_expectations.py
+      test_compare.py
+      test_adapter_loading.py
+      test_runner_fake_adapter.py
 ```
 
 Use a normal `pyproject.toml` console-script entry point.
 
 ```toml
 [project]
-name = "glasskit-eval"
+name = "gk"
 version = "0.1.0"
-description = "Recorded-video evaluation CLI for GlassKit apps"
+description = "GlassKit command-line tools"
 requires-python = ">=3.12"
 dependencies = [
   "av",
@@ -91,7 +94,7 @@ dependencies = [
 ]
 
 [project.scripts]
-glasskit-eval = "glasskit_eval.cli:app"
+gk = "gk.cli:app"
 
 [dependency-groups]
 dev = [
@@ -105,22 +108,38 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 ```
 
-Recommended runtime dependencies are `av` for video decoding, `pillow` for RGB frame images, `pydantic` for schema validation, `pyyaml` for human-authored YAML, `rich` for CLI output, and `typer` for multi-command CLI ergonomics. Keep `rich` isolated to `report.py` and CLI presentation; `runner.py`, `compare.py`, `expectations.py`, and `video.py` should be usable without terminal formatting concerns.
+`[project.scripts]` is what makes the installed executable exist. The `gk = "gk.cli:app"` entry means installing the package creates a `gk` command that imports `gk.cli` and calls `app`.
+
+`[build-system]` tells Python packaging tools how to build the package into installable artifacts. Here it says to install `uv_build` at build time and use it as the build backend.
+
+Recommended runtime dependencies are `av` for video decoding, `pillow` for RGB frame images, `pydantic` for schema validation, `pyyaml` for human-authored YAML, `rich` for CLI output, and `typer` for multi-command CLI ergonomics. Keep `rich` isolated to `gk/eval/report.py` and CLI presentation; `runner.py`, `compare.py`, `expectations.py`, and `video.py` should be usable without terminal formatting concerns.
 
 Do not add app/model SDKs to the core package. In particular, the reusable CLI package should not depend on FastAPI, aiortc, OpenAI SDKs, Overshoot app code, Roboflow, RF-DETR, PyTorch, `inference`, OpenCV, or MoviePy. Those dependencies belong in app adapters or target backend projects.
 
 ## Invocation Model
 
-The tool is a normal Python package with a console script named `glasskit-eval`. `uvx` is a good future distribution path, but it should not be central to the MVP design because adapters often need to import the target backend's local modules and use the target backend's lockfile.
+The tool is a normal Python package named `gk` with a console script named `gk`. The normal published-package invocation should be `uv run --with gk gk eval ...`, run from the target app project or backend directory. This works better than isolated `uvx` for this use case because adapters often need to import the target backend's local modules and use the target backend's lockfile.
 
-During local development, prefer running the CLI inside the target backend project. This fixes the import-path issue in repo-root commands because the backend directory becomes the current working directory, so `eval_adapter.py` can import modules such as `src.origami_config` and `src.rendering` naturally.
+For an external app after `gk` is published:
+
+```bash
+cd my-glasses-app/backend
+uv run \
+  --with gk \
+  --env-file .env \
+  gk eval run \
+  --adapter eval_adapter.py:create_evaluator \
+  --suite eval-suite
+```
+
+For local GlassKit development before publishing, run the local CLI package in editable mode from the target backend project. This fixes the import-path issue because the backend directory becomes the current working directory, so `eval_adapter.py` can import modules such as `src.origami_config` and `src.rendering` naturally.
 
 ```bash
 cd examples/origami/backend
 uv run \
-  --with-editable ../../../tools/eval \
+  --with-editable ../../../cli \
   --env-file .env \
-  glasskit-eval run \
+  gk eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite
 ```
@@ -131,27 +150,25 @@ If a repo-root command is needed, explicitly set the backend import path.
 PYTHONPATH=examples/origami/backend \
 uv run \
   --project examples/origami/backend \
-  --with ./tools/eval \
+  --with ./cli \
   --env-file examples/origami/backend/.env \
-  glasskit-eval run \
+  gk eval run \
   --adapter examples/origami/backend/eval_adapter.py:create_evaluator \
   --suite examples/origami/backend/eval-suite
 ```
 
-After the package is published or otherwise distributed, users can run it as a standalone tool.
+An isolated tool run is still possible for adapters that have no local app imports or when all app dependencies are explicitly added to the tool environment, but it should not be the primary documented workflow for app evaluation.
 
-```bash
-uvx --from glasskit-eval glasskit-eval run --adapter path/to/eval_adapter.py:create_evaluator --suite path/to/eval-suite
-```
+## Publishing Plan
 
-A future broader GlassKit CLI could expose this as `uvx --from glasskit glasskit eval ...`, but that should be a wrapper around the same package logic rather than a separate architecture.
+Reserve the `gk` PyPI name early with a minimal but real package once the `cli` skeleton exists. The first published version can expose `gk --help` and `gk eval --help` before the full evaluator is complete, but it should not be an empty placeholder. This keeps the package name available while still giving early external users a normal install path.
 
 ## CLI Commands
 
-- `glasskit-eval run`: run all cases in an eval suite, print live progress, print a summary, and exit non-zero if any quality gate fails.
-- `glasskit-eval validate`: validate expected-result YAML, video file references, adapter importability, target references, and expanded sample counts without running model evaluation.
-- `glasskit-eval list-samples`: print the expanded sample schedule for debugging labels and transition windows.
-- `glasskit-eval init-case`: optional helper that creates a case directory with a starter `expected.yaml` for a video.
+- `gk eval run`: run all cases in an eval suite, print live progress, print a summary, and exit non-zero if any quality gate fails.
+- `gk eval validate`: validate expected-result YAML, video file references, adapter importability, target references, and expanded sample counts without running model evaluation.
+- `gk eval list-samples`: print the expanded sample schedule for debugging labels and transition windows.
+- `gk eval init-case`: optional helper that creates a case directory with a starter `expected.yaml` for a video.
 
 The MVP only needs `run` and `validate`; `list-samples` is very useful if expectation ranges are confusing, so it should be implemented early if it is cheap.
 
@@ -409,7 +426,7 @@ The first CLI should not know about recipe selection, speech, HUD rendering, or 
 
 ## Test Strategy for the CLI Package
 
-Use pytest for the CLI package tests. Add it as a dev dependency with `uv add --dev pytest` from `tools/eval` once the package exists.
+Use pytest for the CLI package tests. Add it as a dev dependency with `uv add --dev pytest` from `cli` once the package exists.
 
 Unit-test expectation parsing and range expansion, including `[start, end)` boundaries, per-block `every_s`, ignored windows, sparse timestamps, invalid overlaps, optional YAML fields, and out-of-duration timestamps.
 
@@ -423,13 +440,13 @@ Add one optional origami integration smoke test that validates eval-suite parsin
 
 ## Implementation Phases
 
-Phase 1: create the `tools/eval` package, define schemas and types, implement `validate`, implement video sample expansion and decoding, implement adapter loading, implement fake-adapter pytest tests, and print a basic summary.
+Phase 1: create the `cli` package, define schemas and types, implement `gk eval validate`, implement video sample expansion and decoding, implement adapter loading, implement fake-adapter pytest tests, and print a basic summary.
 
 Phase 2: implement comparison modes, quality gates, live progress output, `list-samples`, `--verbose`, `--keep-going`, `--output-json`, `--artifacts-dir`, `--save-failures`, and polished failure summaries.
 
 Phase 3: refactor origami shared fold-check helpers, migrate/refactor the origami Overshoot path toward the newer stream plus `/chat/completions` API where practical, add `examples/origami/backend/eval_adapter.py`, and create the first small origami demonstration eval suite from recorded inputs.
 
-Phase 4: document eval-suite creation and CLI usage in `tools/eval/README.md` and link it from `examples/origami/README.md`.
+Phase 4: document eval-suite creation and CLI usage in `cli/README.md` and link it from `examples/origami/README.md`.
 
 Phase 5: keep later-example support at the core CLI and adapter-contract level only. Do not modify `rokid-rfdetr` or `rokid-overshoot-openai-realtime` until there is a concrete need to add their adapters and eval suites.
 
