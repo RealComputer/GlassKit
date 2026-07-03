@@ -9,7 +9,6 @@ dependencies = [
     "httpx>=0.28.1",
     "livekit>=1.1.13",
     "pillow>=12.2.0",
-    "websockets>=16.0",
 ]
 
 [dependency-groups]
