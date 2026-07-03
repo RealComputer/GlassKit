@@ -138,15 +138,13 @@ class OvershootRuntimeMixin:
     def _start_overshoot_input_recorder(
         self,
         session: OrigamiSession,
-        generation: int,
     ) -> OvershootInputRecorder | None:
         if not self._record_overshoot_inputs:
             return None
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         path = self._overshoot_input_recording_dir / (
-            f"{timestamp}_step-{session.step_index + 1:02d}_"
-            f"generation-{generation:04d}_{session.session_id[:8]}.mp4"
+            f"{timestamp}_session-{session.session_id[:8]}.mp4"
         )
         recorder = OvershootInputRecorder(path, fps=OVERSHOOT_FPS)
         try:
@@ -257,7 +255,7 @@ class OvershootRuntimeMixin:
                 await self._close_overshoot_stream(stream_id)
                 return
 
-            recorder = self._start_overshoot_input_recorder(current, generation)
+            recorder = self._start_overshoot_input_recorder(current)
             current.overshoot_stream_id = stream_id
             current.overshoot_lease_ttl_seconds = ttl_seconds
             current.overshoot_room = room
