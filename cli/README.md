@@ -6,6 +6,16 @@ Use `gk eval` when you have a video recording of an app workflow and a YAML file
 
 The CLI is app-agnostic. It owns eval-suite discovery, YAML parsing, timestamp expansion, video decoding, adapter loading, comparison, reporting, failure artifacts, and quality gates. App-specific model clients, prompts, parsers, and workflow helpers belong in adapters that live with the app being evaluated.
 
+## Who This Is For
+
+`gk eval` is for developers building smart-glasses apps who want repeatable, offline checks against recorded camera video. The current happy path assumes you have a Python backend or adapter environment managed by `uv`, recorded videos of the app workflow you want to test, and a Python adapter that can call your app logic, model backend, or local detector for individual video frames.
+
+The tool is designed for frame-level observation quality: "at this timestamp, did the app or model report the expected JSON-like value for this target?" It works well for binary checks, classifiers, object lists, scores, and structured observations that can be compared with exact, numeric, subset, or set-style comparison modes.
+
+You do not need to use GlassKit's example apps or run from this repository. Your eval suite, videos, adapter, secrets, model clients, and app dependencies should live in your own app repo. The CLI only needs a Python import environment where the adapter can run.
+
+Some workflows are intentionally not first-class yet, including live device evals, clip-level temporal evaluation, non-Python adapter runtimes, and app state-machine replay. If your use case does not fit the current model, please open an issue at <https://github.com/RealComputer/GlassKit/issues>. We want to expand support based on real app needs.
+
 ## Run From Your App Repo
 
 Use the CLI from the app repository that contains the eval suite, adapter, app dependencies, and environment files. You do not need a GlassKit checkout to run evals. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
