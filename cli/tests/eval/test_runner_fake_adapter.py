@@ -10,9 +10,19 @@ from PIL import Image
 from gk.eval.models import RunOptions
 from gk.eval.runner import run_eval
 
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
-def test_runner_evaluates_synthetic_video_with_fake_adapter(tmp_path: Path) -> None:
-    asyncio.run(_run_synthetic_video_test(tmp_path))
+
+def test_runner_evaluates_committed_fixture_with_fake_adapter(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_committed_fixture_test(tmp_path))
+
+
+def test_runner_saves_failure_artifacts_for_committed_fixture(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_committed_fixture_artifact_test(tmp_path))
 
 
 def test_runner_applies_suite_level_per_target_gates(tmp_path: Path) -> None:
@@ -23,30 +33,8 @@ def test_runner_skips_filtered_out_suite_target_gates(tmp_path: Path) -> None:
     asyncio.run(_run_filtered_suite_target_gate_test(tmp_path))
 
 
-async def _run_synthetic_video_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_dir = suite_dir / "fold-step-001"
-    case_dir.mkdir(parents=True)
-    video_path = case_dir / "video.mp4"
-    _write_video(video_path)
-    (case_dir / "expected.yaml").write_text(
-        """
-version: 1
-video: video.mp4
-targets:
-  step_1:
-    samples:
-      - range: [0.0, 1.0]
-        every_s: 0.5
-        expect: false
-      - range: [1.0, 2.0]
-        every_s: 0.5
-        expect: true
-thresholds:
-  min_pass_rate: 1.0
-        """,
-        encoding="utf-8",
-    )
+async def _run_committed_fixture_test(tmp_path: Path) -> None:
+    suite_dir = FIXTURES / "eval_suites" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
     adapter_path.write_text(
         """
@@ -76,6 +64,46 @@ def create_evaluator(config):
     assert report.success
     assert report.evaluated_count == 4
     assert report.passed_count == 4
+
+
+async def _run_committed_fixture_artifact_test(tmp_path: Path) -> None:
+    suite_dir = FIXTURES / "eval_suites" / "two-state"
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [False for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return False
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            suite_path=suite_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            artifacts_dir=tmp_path / "artifacts",
+            save_failures=True,
+        )
+    )
+
+    failed = [result for result in report.results if result.status == "failed"]
+    assert not report.success
+    assert len(failed) == 2
+    for result in failed:
+        assert result.artifact_image is not None
+        assert result.artifact_json is not None
+        assert Path(result.artifact_image).exists()
+        assert Path(result.artifact_json).exists()
 
 
 async def _run_suite_per_target_gate_test(tmp_path: Path) -> None:

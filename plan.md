@@ -5,7 +5,6 @@ This file tracks remaining and future work for the `gk eval` recorded-video eval
 ## Priorities
 
 - Prepare the `gk` package for publication by confirming package metadata, release workflow, versioning policy, and PyPI name availability before the first public release.
-- Add a tiny committed synthetic video fixture set under `cli/tests/fixtures/videos` with matching eval suites and a maintainer-only regeneration script such as `cli/tests/fixtures/generate-videos.sh`. Ordinary pytest runs should not require a system `ffmpeg` executable.
 - Decide the storage policy for realistic eval suites before committing any real recordings. Use external storage, Git LFS, or artifact buckets only after making an explicit privacy and repository-size decision.
 - Profile long sparse videos, such as 30 minute recordings with a small number of labeled timestamps. If sequential decoding is materially slow, add sparse PyAV seeking while preserving timestamp normalization to clip start and nearest-frame selection correctness.
 - Add clip-level evaluation support only when an app needs temporal model observations. This should be an optional protocol and schema extension rather than changing the frame-sample adapter contract.
@@ -15,12 +14,10 @@ This file tracks remaining and future work for the `gk eval` recorded-video eval
 
 ## Test Backlog
 
-- Cover committed synthetic videos that exercise normal landscape decoding, portrait-aspect decoding, sample scheduling, pass/fail aggregation, and failure artifact saving.
 - Keep real Origami/Overshoot eval runs as explicit local smoke checks, not default package tests, unless they are guarded by required environment variables and skipped by default.
 - Add regression coverage whenever video seeking is introduced, especially for non-zero start timestamps, WebM/container duration fallbacks, and sparse samples near keyframe boundaries.
 
 ## Documentation Backlog
 
-- Link the CLI README from broader project docs when the command is ready to present as a supported tool.
 - Document any future storage location for realistic eval suites once that policy exists.
 - Add release notes for the first published package, including the adapter contract and the supported eval-suite schema version.

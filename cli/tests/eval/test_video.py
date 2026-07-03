@@ -7,7 +7,9 @@ import av
 from PIL import Image
 
 from gk.eval.models import ComparisonConfig, SampleExpectation
-from gk.eval.video import _stream_duration_s, decode_sample_frames
+from gk.eval.video import _stream_duration_s, decode_sample_frames, probe_video
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def test_decode_sample_frames_normalizes_non_zero_start_time(tmp_path: Path) -> None:
@@ -35,6 +37,26 @@ def test_container_duration_uses_microsecond_time_base() -> None:
         average_rate = None
 
     assert _stream_duration_s(Container(), Stream()) == 2.0
+
+
+def test_probe_video_reads_committed_portrait_fixture_dimensions() -> None:
+    metadata = probe_video(FIXTURES / "videos" / "portrait-96x128.mp4")
+
+    assert metadata.width == 96
+    assert metadata.height == 128
+
+
+def test_decode_sample_frames_uses_committed_fixture() -> None:
+    video_path = FIXTURES / "videos" / "two-state-64x64.mp4"
+    samples = [
+        _sample(timestamp_s=0.0, sample_index=0, video_path=video_path),
+        _sample(timestamp_s=1.0, sample_index=1, video_path=video_path),
+    ]
+
+    decoded = decode_sample_frames(video_path, samples, case_name="case")
+
+    assert decoded[0].image.size == (64, 64)
+    assert decoded[1].image.size == (64, 64)
 
 
 def _write_video(
