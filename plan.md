@@ -18,7 +18,7 @@ Use these terms consistently:
 - Sample: one timestamped frame, or one expanded timestamp inside a labeled range.
 - Expectation: the expected value and comparison config for a sample or range.
 - Observation: the adapter or model output before comparison.
-- Result: the pass, fail, ignored, or error outcome after comparing an observation with an expectation.
+- Result: the pass, fail, or error outcome after comparing an observation with an expectation.
 - Gate: an aggregate threshold that controls process success, such as a minimum pass rate.
 
 ## Non-goals
@@ -242,39 +242,34 @@ eval-suite/
 
 `expected.yaml` may explicitly name the video, or the CLI may default to the only supported video file in the case directory. Explicit `video` is preferred but should be optional when there is exactly one supported video file.
 
-Non-essential fields should be optional. Required data should be minimal: the CLI needs to find a video, find targets, expand samples, and know expected values for non-ignored samples. `version`, `description`, `sampling`, `label`, `workflow`, `thresholds`, `field`, and `compare` should all have defaults or be optional.
+Non-essential fields should be optional. Required data should be minimal: the CLI needs to find a video, find targets, expand samples, and know expected values for declared samples. `version`, `description`, `sampling`, `label`, `workflow`, `thresholds`, `field`, and `compare` should all have defaults or be optional.
 
 ```yaml
 version: 1
 video: video.mp4
 description: First origami prompt eval after a fold-check prompt update.
 sampling:
-  interval_s: 0.2
+  every_s: 0.5
 targets:
   step_1:
     label: Step 1
-    default:
-      expect: false
     samples:
       - range: [0.0, 6.8]
         expect: false
       - range: [7.4, 11.8]
         expect: true
-      - range: [6.8, 7.4]
-        mode: ignore
   step_2:
     samples:
       - range: [12.0, 18.4]
         expect: false
+        every_s: 1.0
       - range: [19.0, 23.6]
         expect: true
-      - range: [18.4, 19.0]
-        mode: ignore
 ```
 
-Ranges use seconds from the start of the video and should be interpreted as `[start, end)` so adjacent ranges do not double-sample the boundary. `interval_s` defaults to `0.2` at the case level, but individual sample blocks may override it with `every_s`.
+Ranges use seconds from the start of the video and should be interpreted as `[start, end)` so adjacent ranges do not double-sample the boundary. The case-level `sampling.every_s` defaults to `0.5`; individual sample blocks may override it with their own `every_s`. Use larger intervals such as `1.0` or `2.0` for long stable negative ranges when remote model calls are expensive.
 
-Use `mode: ignore` for ambiguous transition windows where hands occlude the object, the fold is in motion, or a human would not confidently label the frame. Ignored samples should be counted in eval-suite diagnostics but excluded from pass-rate gates.
+Only declared `range` and `at` samples are processed. Any video time not covered by a sample block is skipped and does not appear in pass-rate gates. For ambiguous transition windows where hands occlude the object, the fold is in motion, or a human would not confidently label the frame, prefer leaving the time range undeclared instead of adding an explicit ignore block. A later optional annotation such as `mode: ignore` or `note` can be added if label-review tooling needs explicit skipped regions, but it should not be part of the MVP happy path.
 
 For sparse targets, support exact timestamps.
 
@@ -347,10 +342,10 @@ The default mode is inferred from the expected value: booleans and strings use `
 2. Load the adapter factory and create one evaluator per run.
 3. Discover case directories under the eval-suite path.
 4. Parse each `expected.yaml` and expand ranges into timestamped sample expectations.
-5. Validate that each case has at least one non-ignored sample and that timestamps fit inside the video duration.
+5. Validate that each case has at least one expected sample and that declared timestamps fit inside the video duration.
 6. Decode frames with PyAV. Seek by timestamp for sparse schedules, and prefer sequential decode for dense schedules.
 7. For each case and target, call `evaluate_many` when available; otherwise call `evaluate` for each sample.
-8. Compare observed values with expected values and record pass/fail/ignored/error results.
+8. Compare observed values with expected values and record pass/fail/error results.
 9. Print progress while running, with failures shown immediately and verbose per-sample output behind `--verbose`.
 10. Aggregate results by case, target, comparison mode, and expected value, then apply quality gates and exit with status code `0` or `1`.
 
@@ -360,14 +355,14 @@ The runner should keep sample order deterministic: cases sorted by directory nam
 
 During a run, print the current case, video, target, sample count, and pass/fail progress. In normal mode, avoid printing every passing sample; print failures as they happen with timestamp, target id, expected value, observed value, and reason.
 
-At the end, print a summary table with total samples, ignored samples, passed samples, failed samples, pass rate, and gate status. Also print a per-target table and a small failure list capped by `--max-failures-to-print`, defaulting to 20.
+At the end, print a summary table with total evaluated samples, passed samples, failed samples, error samples, pass rate, and gate status. Also print a per-target table and a small failure list capped by `--max-failures-to-print`, defaulting to 20.
 
 Example final shape:
 
 ```text
 Eval suite: examples/origami/backend/eval-suite
 Cases: 2 passed, 1 failed
-Samples: 438 evaluated, 27 ignored, 399 passed, 39 failed
+Samples: 438 evaluated, 399 passed, 39 failed, 0 errors
 Pass rate: 91.1% (gate: >= 90.0%, passed)
 
 By target
@@ -414,7 +409,7 @@ Use the existing recording path first. Run the app with `ORIGAMI_RECORD_OVERSHOO
 
 It is also fine for an eval video to contain multiple origami steps. The MVP still focuses on evaluating model observations at labeled time ranges, not verifying that the workflow automatically transitions through those steps.
 
-Manually label expected ranges in `expected.yaml`. Prefer broad stable windows and explicit ignored transition windows over dense point-by-point labels. For origami, use `false` for frames where the current target is not yet complete, `true` for stable frames where it clearly matches the reference, and `ignore` for folding motion, occlusion, and hard-to-see frames.
+Manually label expected ranges in `expected.yaml`. Prefer broad stable windows over dense point-by-point labels, and leave transition or ambiguous windows undeclared. For origami, use `false` for frames where the current target is not yet complete and `true` for stable frames where it clearly matches the reference. Do not process folding motion, occlusion, and hard-to-see frames in the MVP unless a future label-review feature needs explicit skipped-region annotations.
 
 Real eval suites should not be committed directly to this repository unless they are small, public demonstration assets. Keep realistic videos local or in external storage until there is a storage policy, possibly with Git LFS or an artifact bucket.
 
@@ -432,7 +427,7 @@ The first CLI should not know about recipe selection, speech, HUD rendering, or 
 
 Use pytest for the CLI package tests. Add it as a dev dependency with `uv add --dev pytest` from `cli` once the package exists.
 
-Unit-test expectation parsing and range expansion, including `[start, end)` boundaries, per-block `every_s`, ignored windows, sparse timestamps, invalid overlaps, optional YAML fields, and out-of-duration timestamps.
+Unit-test expectation parsing and range expansion, including `[start, end)` boundaries, case-level and per-block `every_s`, unlabeled gaps, sparse timestamps, invalid overlaps, optional YAML fields, and out-of-duration timestamps.
 
 Unit-test comparison modes with booleans, enums, numbers with tolerance, missing fields, object subsets, and set operations.
 
@@ -459,4 +454,4 @@ Phase 5: keep later-example support at the core CLI and adapter-contract level o
 - Local origami evals should call the real runtime model backend so prompt and model behavior are actually tested. Core package tests should use fake adapters and should not require network access or paid APIs.
 - Small public demonstration videos can live in the repo if needed, but realistic eval suites should not be committed directly until there is a storage policy.
 - Continuous full-run transition testing is out of scope for this tool's MVP. A single eval video may contain multiple app steps or targets, but this tool should focus on model response quality at labeled timestamps.
-- Manual timestamps from video time zero plus ignored transition windows are enough for the first useful version.
+- Manual timestamps from video time zero plus unlabeled transition windows are enough for the first useful version.
