@@ -7,6 +7,7 @@ dependencies = [
     "av>=16.1.0",
     "fastapi[standard]>=0.138.2",
     "httpx>=0.28.1",
+    "livekit>=1.1.13",
     "pillow>=12.2.0",
     "websockets>=16.0",
 ]
