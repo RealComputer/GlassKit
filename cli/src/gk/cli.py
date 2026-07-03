@@ -10,6 +10,7 @@ import yaml
 from rich.console import Console
 
 from .eval.expectations import load_eval_suite
+from .eval.init_case import init_eval_case
 from .eval.models import EvalError, RunOptions
 from .eval.report import (
     ConsoleReporter,
@@ -172,6 +173,38 @@ def eval_list_samples(
         Console().print(f"[red]Could not list samples[/red]: {error}")
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
+
+
+@eval_app.command("init-case")
+def eval_init_case(
+    suite: Annotated[Path, typer.Option("--suite", help="Eval suite directory.")],
+    case: Annotated[str, typer.Option("--case", help="Case directory name.")],
+    video: Annotated[Path, typer.Option("--video", help="Source video file.")],
+    target: Annotated[str, typer.Option("--target", help="Initial target id.")],
+    label: Annotated[
+        str | None,
+        typer.Option("--label", help="Optional label for the initial target."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite expected.yaml and case video."),
+    ] = False,
+) -> None:
+    try:
+        result = init_eval_case(
+            suite_path=suite,
+            case_name=case,
+            source_video=video,
+            target_id=target,
+            target_label=label,
+            force=force,
+        )
+    except EvalError as error:
+        Console().print(f"[red]Could not initialize case[/red]: {error}")
+        raise typer.Exit(2) from error
+    Console().print(f"Created case: {result.case_dir}")
+    Console().print(f"Video: {result.video_path}")
+    Console().print(f"Expected: {result.expected_path}")
 
 
 def _load_config(path: Path | None) -> dict[str, Any]:

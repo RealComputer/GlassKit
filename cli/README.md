@@ -77,6 +77,17 @@ List expanded samples:
 gk eval list-samples --suite eval-suite
 ```
 
+Create a starter case from an existing video:
+
+```bash
+gk eval init-case \
+  --suite eval-suite \
+  --case fold-step-001 \
+  --video path/to/video.mp4 \
+  --target step_1 \
+  --label "Step 1"
+```
+
 Run evaluation with quality gates and optional failure artifacts:
 
 ```bash

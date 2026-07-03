@@ -126,6 +126,26 @@ def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
         load_eval_suite(case_dir.parent)
 
 
+def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
+    case_dir = _case_dir(
+        tmp_path,
+        """
+        version: 1
+        video: video.mp4
+        sampling:
+          every_s: false
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: false
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match=r"sampling\.every_s"):
+        load_eval_suite(case_dir.parent)
+
+
 def _case_dir(tmp_path: Path, expected_yaml: str) -> Path:
     case_dir = tmp_path / "suite" / "case-001"
     case_dir.mkdir(parents=True)
