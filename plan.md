@@ -439,6 +439,12 @@ Unit-test adapter loading with a temporary file adapter and an import-path adapt
 
 Integration-test the runner with a generated tiny MP4 and a fake adapter that returns deterministic values based on timestamp and target id. Do not call paid or remote model APIs in default package tests.
 
+The committed CLI test videos should be synthetic, tiny, public, and reproducible. They should not contain real glasses recordings, real rooms, people, screens, or Origami app data. Good enough fixtures are low-resolution clips such as 64x64 or 96x128, 2-5 seconds long, 4-5 fps, with obvious visual states like solid colors, a moving square, or a simple timestamp-independent pattern. The fake adapter can key off timestamp and target id, so the video pixels only need to prove that decoding, seeking, sampling, and artifact saving work.
+
+Prefer committing a very small generated fixture set under `cli/tests/fixtures/videos` together with matching `expected.yaml` files, because ordinary pytest runs should not require a system `ffmpeg` executable. Also add a regeneration script such as `cli/tests/fixtures/generate-videos.sh` that uses `ffmpeg` filter sources to recreate the committed files. The script is for maintainers and CI refresh jobs, not a required step for every test run. If the videos ever become too large or platform-specific, switch those tests to generate clips in `tmp_path` behind a `requires_ffmpeg` pytest marker.
+
+Initial committed fixtures can be minimal: one two-state clip for range expansion and pass/fail aggregation, one portrait-aspect clip to catch orientation and dimensions similar to Origami recordings, and optionally one short clip used by `--save-failures` artifact tests. Keep each file small enough that reviewing and cloning the repo remains painless.
+
 Add one optional origami integration smoke test that validates eval-suite parsing and adapter importability, guarded so it only runs when the required env vars are present.
 
 ## Implementation Phases
