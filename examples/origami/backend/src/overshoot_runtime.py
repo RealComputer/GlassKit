@@ -18,6 +18,7 @@ from .constants import (
     OVERSHOOT_KEEPALIVE_INTERVAL_SECONDS,
     OVERSHOOT_PROMPT_INTERVAL_SECONDS,
     OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
+    OVERSHOOT_RECONNECT_INGEST_TIMEOUT_SECONDS,
     OVERSHOOT_STREAM_READY_TIMEOUT_SECONDS,
     OVERSHOOT_STREAM_STATUS_POLL_SECONDS,
     PHASE_GUIDING,
@@ -48,6 +49,7 @@ class OvershootRuntimeMixin:
     _overshoot_model: str
     _overshoot_input_recording_dir: Path
     _overshoot_input_recorder_stop_tasks: set[asyncio.Task[None]]
+    _overshoot_video_source_close_tasks: set[asyncio.Task[None]]
     _record_overshoot_inputs: bool
     _save_overshoot_composites: bool
     _sessions: dict[str, OrigamiSession]
@@ -176,6 +178,32 @@ class OvershootRuntimeMixin:
                 "failed to stop Overshoot input recorder path=%s", recorder.path
             )
 
+    def _schedule_overshoot_video_source_close(
+        self,
+        source: rtc.VideoSource,
+        session_id: str,
+    ) -> None:
+        task = asyncio.create_task(
+            self._close_overshoot_video_source(source, session_id),
+            name=f"overshoot-video-source-close-{session_id}",
+        )
+        self._overshoot_video_source_close_tasks.add(task)
+        task.add_done_callback(self._overshoot_video_source_close_tasks.discard)
+
+    async def _close_overshoot_video_source(
+        self,
+        source: rtc.VideoSource,
+        session_id: str,
+    ) -> None:
+        try:
+            await source.aclose()
+        except Exception:
+            logger.warning(
+                "session=%s failed to close old Overshoot video source",
+                session_id,
+                exc_info=True,
+            )
+
     async def _start_overshoot_runtime(self, session: OrigamiSession) -> None:
         first_item = await session.camera_frames.latest()
         if first_item is None:
@@ -211,76 +239,12 @@ class OvershootRuntimeMixin:
                 )
             created_stream_id = stream_id
 
-            room = rtc.Room()
-
-            @room.on("connection_state_changed")
-            def on_connection_state_changed(state: Any) -> None:
-                logger.info(
-                    "session=%s overshoot livekit state=%s generation=%s",
-                    session.session_id,
-                    state,
-                    generation,
-                )
-
-            @room.on("reconnecting")
-            def on_reconnecting() -> None:
-                logger.info(
-                    "session=%s overshoot livekit reconnecting generation=%s",
-                    session.session_id,
-                    generation,
-                )
-
-            @room.on("reconnected")
-            def on_reconnected() -> None:
-                logger.info(
-                    "session=%s overshoot livekit reconnected generation=%s",
-                    session.session_id,
-                    generation,
-                )
-
-            @room.on("disconnected")
-            def on_disconnected(*args: Any) -> None:
-                reason = args[0] if args else None
-                logger.info(
-                    "session=%s overshoot livekit disconnected reason=%s generation=%s",
-                    session.session_id,
-                    reason,
-                    generation,
-                )
-                asyncio.create_task(
-                    self._notify_overshoot_closed(
-                        session.session_id,
-                        generation,
-                        f"livekit_disconnected:{reason}",
-                    )
-                )
-
-            await room.connect(
-                publish_url,
-                publish_token,
-                options=rtc.RoomOptions(auto_subscribe=False, dynacast=False),
-            )
-
-            source = rtc.VideoSource(frame_size[0], frame_size[1])
-            track = rtc.LocalVideoTrack.create_video_track(
-                "origami-reference-composite",
-                source,
-            )
-            publication = await room.local_participant.publish_track(
-                track,
-                rtc.TrackPublishOptions(
-                    source=rtc.TrackSource.SOURCE_CAMERA,
-                    simulcast=False,
-                    video_codec=rtc.VideoCodec.H264,
-                    video_encoding=rtc.VideoEncoding(
-                        max_framerate=OVERSHOOT_FPS,
-                        max_bitrate=OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
-                    ),
-                    degradation_preference=cast(
-                        Any,
-                        rtc.DegradationPreference.MAINTAIN_RESOLUTION,
-                    ),
-                ),
+            room, source, publication = await self._connect_overshoot_livekit_publisher(
+                session=session,
+                generation=generation,
+                publish_url=publish_url,
+                publish_token=publish_token,
+                frame_size=frame_size,
             )
 
             current = await self._get_session_if_current(
@@ -299,12 +263,20 @@ class OvershootRuntimeMixin:
             current.overshoot_room = room
             current.overshoot_video_source = source
             current.overshoot_frame_size = frame_size
+            current.overshoot_publish_url = publish_url
             current.overshoot_publish_token = publish_token
+            current.overshoot_publisher_epoch = 1
+            current.overshoot_prompt_resume_publisher_epoch = 0
+            current.overshoot_prompt_resume_after_publisher_epoch = 0
+            current.overshoot_prompt_resume_after_frame_at_ms = None
+            current.overshoot_prompt_resume_deadline_at = 0.0
+            current.overshoot_livekit_recovering = False
             current.overshoot_input_recorder = recorder
             current.overshoot_publish_task = asyncio.create_task(
                 self._run_overshoot_livekit_publisher(
                     current.session_id,
                     generation,
+                    current.overshoot_publisher_epoch,
                     source,
                     frame_size,
                     recorder,
@@ -355,6 +327,253 @@ class OvershootRuntimeMixin:
             await self._stop_overshoot_runtime(session)
             raise
 
+    async def _connect_overshoot_livekit_publisher(
+        self,
+        *,
+        session: OrigamiSession,
+        generation: int,
+        publish_url: str,
+        publish_token: str,
+        frame_size: tuple[int, int],
+    ) -> tuple[rtc.Room, rtc.VideoSource, Any]:
+        room = rtc.Room()
+        source: rtc.VideoSource | None = None
+
+        @room.on("connection_state_changed")
+        def on_connection_state_changed(state: Any) -> None:
+            logger.info(
+                "session=%s overshoot livekit state=%s generation=%s",
+                session.session_id,
+                state,
+                generation,
+            )
+
+        @room.on("reconnecting")
+        def on_reconnecting() -> None:
+            logger.info(
+                "session=%s overshoot livekit reconnecting generation=%s",
+                session.session_id,
+                generation,
+            )
+
+        @room.on("reconnected")
+        def on_reconnected() -> None:
+            logger.info(
+                "session=%s overshoot livekit reconnected generation=%s",
+                session.session_id,
+                generation,
+            )
+
+        @room.on("disconnected")
+        def on_disconnected(*args: Any) -> None:
+            reason = args[0] if args else None
+            logger.info(
+                "session=%s overshoot livekit disconnected reason=%s generation=%s",
+                session.session_id,
+                reason,
+                generation,
+            )
+            self._schedule_overshoot_livekit_reconnect(
+                session,
+                generation,
+                room,
+                reason,
+            )
+
+        try:
+            await room.connect(
+                publish_url,
+                publish_token,
+                options=rtc.RoomOptions(auto_subscribe=False, dynacast=False),
+            )
+
+            source = rtc.VideoSource(frame_size[0], frame_size[1])
+            track = rtc.LocalVideoTrack.create_video_track(
+                "origami-reference-composite",
+                source,
+            )
+            publication = await room.local_participant.publish_track(
+                track,
+                _overshoot_track_publish_options(),
+            )
+            return room, source, publication
+        except BaseException:
+            if source is not None:
+                await source.aclose()
+            await room.disconnect()
+            raise
+
+    def _schedule_overshoot_livekit_reconnect(
+        self,
+        session: OrigamiSession,
+        generation: int,
+        disconnected_room: rtc.Room,
+        reason: Any,
+    ) -> None:
+        if session.overshoot_generation != generation:
+            return
+        if session.overshoot_room is not disconnected_room:
+            return
+        reconnect_task = session.overshoot_reconnect_task
+        if reconnect_task is not None and not reconnect_task.done():
+            return
+
+        session.overshoot_livekit_recovering = True
+        session.overshoot_prompt_resume_publisher_epoch = (
+            session.overshoot_publisher_epoch + 1
+        )
+        task = asyncio.create_task(
+            self._recover_overshoot_livekit_connection(
+                session.session_id,
+                generation,
+                disconnected_room,
+                reason,
+            ),
+            name=f"overshoot-livekit-reconnect-{session.session_id}-{generation}",
+        )
+        session.overshoot_reconnect_task = task
+
+        def on_done(done_task: asyncio.Task[None]) -> None:
+            if session.overshoot_reconnect_task is done_task:
+                session.overshoot_reconnect_task = None
+            try:
+                done_task.result()
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception(
+                    "session=%s overshoot livekit reconnect task crashed",
+                    session.session_id,
+                )
+
+        task.add_done_callback(on_done)
+
+    async def _recover_overshoot_livekit_connection(
+        self,
+        session_id: str,
+        generation: int,
+        disconnected_room: rtc.Room,
+        reason: Any,
+    ) -> None:
+        new_room: rtc.Room | None = None
+        new_source: rtc.VideoSource | None = None
+        committed = False
+        try:
+            session = await self._get_session_if_current(session_id, generation)
+            if session is None or session.overshoot_room is not disconnected_room:
+                return
+
+            publish_url = session.overshoot_publish_url
+            publish_token = session.overshoot_publish_token
+            frame_size = session.overshoot_frame_size
+            stream_id = session.overshoot_stream_id
+            recorder = session.overshoot_input_recorder
+            if publish_url is None or publish_token is None or frame_size is None:
+                logger.error(
+                    "session=%s overshoot livekit reconnect missing credentials "
+                    "generation=%s",
+                    session_id,
+                    generation,
+                )
+                await self._notify_overshoot_closed(
+                    session_id,
+                    generation,
+                    "livekit_reconnect_missing_credentials",
+                )
+                return
+
+            logger.warning(
+                "session=%s overshoot livekit reconnecting after disconnect "
+                "reason=%s generation=%s",
+                session_id,
+                reason,
+                generation,
+            )
+            old_publish_task = session.overshoot_publish_task
+            session.overshoot_publish_task = None
+            if old_publish_task is not None:
+                old_publish_task.cancel()
+                await asyncio.gather(old_publish_task, return_exceptions=True)
+
+            resume_after_frame_at_ms = (
+                await self._overshoot_last_frame_at_ms(stream_id)
+                if stream_id is not None
+                else None
+            )
+
+            (
+                new_room,
+                new_source,
+                publication,
+            ) = await self._connect_overshoot_livekit_publisher(
+                session=session,
+                generation=generation,
+                publish_url=publish_url,
+                publish_token=publish_token,
+                frame_size=frame_size,
+            )
+            if not new_room.isconnected():
+                raise RuntimeError("Overshoot LiveKit publisher disconnected on join")
+
+            current = await self._get_session_if_current(session_id, generation)
+            if current is None or current.overshoot_room is not disconnected_room:
+                return
+
+            old_source = current.overshoot_video_source
+            current.overshoot_publisher_epoch += 1
+            publisher_epoch = current.overshoot_publisher_epoch
+            current.overshoot_room = new_room
+            current.overshoot_video_source = new_source
+            current.overshoot_prompt_resume_after_publisher_epoch = (
+                publisher_epoch if resume_after_frame_at_ms is not None else 0
+            )
+            current.overshoot_prompt_resume_after_frame_at_ms = resume_after_frame_at_ms
+            current.overshoot_prompt_resume_deadline_at = (
+                time.monotonic() + OVERSHOOT_RECONNECT_INGEST_TIMEOUT_SECONDS
+                if resume_after_frame_at_ms is not None
+                else 0.0
+            )
+            current.overshoot_publish_task = asyncio.create_task(
+                self._run_overshoot_livekit_publisher(
+                    current.session_id,
+                    generation,
+                    publisher_epoch,
+                    new_source,
+                    frame_size,
+                    recorder,
+                ),
+                name=f"overshoot-publisher-{current.session_id}-{generation}",
+            )
+            committed = True
+            if old_source is not None and old_source is not new_source:
+                self._schedule_overshoot_video_source_close(old_source, session_id)
+            logger.info(
+                "session=%s overshoot livekit reconnected generation=%s "
+                "publisher_epoch=%s livekit_track=%s",
+                session_id,
+                generation,
+                publisher_epoch,
+                publication.sid,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "session=%s overshoot livekit reconnect failed",
+                session_id,
+            )
+            await self._notify_overshoot_closed(
+                session_id,
+                generation,
+                "livekit_reconnect_failed",
+            )
+        finally:
+            if not committed:
+                if new_source is not None:
+                    await new_source.aclose()
+                if new_room is not None:
+                    await new_room.disconnect()
+
     async def _create_overshoot_stream(self) -> dict[str, Any]:
         for attempt, delay in enumerate((0.0, *_CREATE_STREAM_RETRY_DELAYS), start=1):
             if delay:
@@ -387,25 +606,37 @@ class OvershootRuntimeMixin:
         room = session.overshoot_room
         source = session.overshoot_video_source
         recorder = session.overshoot_input_recorder
+        reconnect_task = session.overshoot_reconnect_task
         session.overshoot_stream_id = None
         session.overshoot_lease_ttl_seconds = None
         session.overshoot_room = None
         session.overshoot_video_source = None
         session.overshoot_frame_size = None
+        session.overshoot_publish_url = None
         session.overshoot_publish_token = None
+        session.overshoot_publisher_epoch = 0
+        session.overshoot_prompt_resume_publisher_epoch = 0
+        session.overshoot_prompt_resume_after_publisher_epoch = 0
+        session.overshoot_prompt_resume_after_frame_at_ms = None
+        session.overshoot_prompt_resume_deadline_at = 0.0
+        session.overshoot_livekit_recovering = False
         session.overshoot_input_recorder = None
         tasks: list[asyncio.Task[None]] = []
+        current_task = asyncio.current_task()
         for task in (
             session.overshoot_publish_task,
             session.overshoot_prompt_task,
             session.overshoot_keepalive_task,
+            reconnect_task,
         ):
             if task is not None:
                 task.cancel()
-                tasks.append(task)
+                if task is not current_task:
+                    tasks.append(task)
         session.overshoot_publish_task = None
         session.overshoot_prompt_task = None
         session.overshoot_keepalive_task = None
+        session.overshoot_reconnect_task = None
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         if recorder is not None:
@@ -421,6 +652,7 @@ class OvershootRuntimeMixin:
         self,
         session_id: str,
         generation: int,
+        publisher_epoch: int,
         source: rtc.VideoSource,
         frame_size: tuple[int, int],
         recorder: OvershootInputRecorder | None,
@@ -466,13 +698,29 @@ class OvershootRuntimeMixin:
                     timestamp_us=int(time.monotonic() * 1_000_000),
                 )
                 frame_count += 1
+                if (
+                    session.overshoot_livekit_recovering
+                    and publisher_epoch
+                    >= session.overshoot_prompt_resume_publisher_epoch
+                ):
+                    session.overshoot_livekit_recovering = False
+                    session.overshoot_prompt_resume_publisher_epoch = 0
+                    logger.info(
+                        "session=%s overshoot prompts resumed after "
+                        "post-reconnect frame generation=%s publisher_epoch=%s",
+                        session_id,
+                        generation,
+                        publisher_epoch,
+                    )
                 now = time.monotonic()
                 if now - last_log_at >= 30.0:
                     logger.info(
-                        "session=%s overshoot published frames=%s generation=%s",
+                        "session=%s overshoot published frames=%s generation=%s "
+                        "publisher_epoch=%s",
                         session_id,
                         frame_count,
                         generation,
+                        publisher_epoch,
                     )
                     last_log_at = now
         except asyncio.CancelledError:
@@ -513,9 +761,16 @@ class OvershootRuntimeMixin:
                         )
                     )
                     return
-                token = _publish_token_from_response(data)
-                if token:
-                    session.overshoot_publish_token = token
+                publish_url, publish_token = _publish_details_from_response(data)
+                if publish_url:
+                    session.overshoot_publish_url = publish_url
+                if publish_token:
+                    session.overshoot_publish_token = publish_token
+                    if session.overshoot_room is not None:
+                        _apply_livekit_publish_token(
+                            session.overshoot_room,
+                            publish_token,
+                        )
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -588,9 +843,75 @@ class OvershootRuntimeMixin:
                 if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
                     await asyncio.sleep(0.1)
                     continue
+                if (
+                    session.overshoot_livekit_recovering
+                    or session.overshoot_publisher_epoch
+                    < session.overshoot_prompt_resume_publisher_epoch
+                ):
+                    await asyncio.sleep(0.1)
+                    continue
+                resume_after_frame_at_ms = (
+                    session.overshoot_prompt_resume_after_frame_at_ms
+                )
+                if resume_after_frame_at_ms is not None:
+                    gate_publisher_epoch = (
+                        session.overshoot_prompt_resume_after_publisher_epoch
+                    )
+                    gate_deadline_at = session.overshoot_prompt_resume_deadline_at
+                    last_frame_at_ms = await self._overshoot_last_frame_at_ms(stream_id)
+                    current = await self._get_session_if_current(
+                        session_id,
+                        generation,
+                    )
+                    if current is None:
+                        return
+                    if (
+                        current.overshoot_prompt_resume_after_frame_at_ms
+                        != resume_after_frame_at_ms
+                        or current.overshoot_prompt_resume_after_publisher_epoch
+                        != gate_publisher_epoch
+                    ):
+                        continue
+                    if (
+                        current.overshoot_livekit_recovering
+                        or current.overshoot_publisher_epoch < gate_publisher_epoch
+                    ):
+                        await asyncio.sleep(0.1)
+                        continue
+                    if (
+                        last_frame_at_ms is None
+                        or last_frame_at_ms <= resume_after_frame_at_ms
+                    ):
+                        if (
+                            gate_deadline_at > 0
+                            and time.monotonic() >= gate_deadline_at
+                        ):
+                            logger.error(
+                                "session=%s overshoot reconnect ingest timed out "
+                                "generation=%s publisher_epoch=%s baseline_ms=%s "
+                                "last_frame_at_ms=%s",
+                                session_id,
+                                generation,
+                                gate_publisher_epoch,
+                                resume_after_frame_at_ms,
+                                last_frame_at_ms,
+                            )
+                            await self._notify_overshoot_closed(
+                                session_id,
+                                generation,
+                                "reconnect_ingest_timeout",
+                            )
+                            return
+                        await asyncio.sleep(OVERSHOOT_STREAM_STATUS_POLL_SECONDS)
+                        continue
+                    current.overshoot_prompt_resume_after_publisher_epoch = 0
+                    current.overshoot_prompt_resume_after_frame_at_ms = None
+                    current.overshoot_prompt_resume_deadline_at = 0.0
+                    session = current
 
                 step_index = session.step_index
                 prompt = self.current_step_for(session).prompt
+                publisher_epoch = session.overshoot_publisher_epoch
                 completion = await self._post_overshoot_chat_completion(
                     stream_id=stream_id,
                     session_id=session_id,
@@ -612,6 +933,21 @@ class OvershootRuntimeMixin:
                     )
                     if current is None:
                         return
+                    if (
+                        current.overshoot_livekit_recovering
+                        or current.overshoot_prompt_resume_after_frame_at_ms is not None
+                        or current.overshoot_publisher_epoch != publisher_epoch
+                    ):
+                        logger.info(
+                            "session=%s overshoot completion ignored during "
+                            "publisher recovery generation=%s request_epoch=%s "
+                            "current_epoch=%s",
+                            session_id,
+                            generation,
+                            publisher_epoch,
+                            current.overshoot_publisher_epoch,
+                        )
+                        continue
                     await current.queue.put(
                         SessionEvent(
                             kind="overshoot.result",
@@ -640,6 +976,29 @@ class OvershootRuntimeMixin:
                 generation,
                 "prompt_loop_failed",
             )
+
+    async def _overshoot_last_frame_at_ms(self, stream_id: str) -> int | None:
+        try:
+            response = await self._overshoot_http.get(f"/streams/{stream_id}")
+        except httpx.HTTPError as error:
+            logger.warning(
+                "stream=%s status poll failed error=%s",
+                stream_id,
+                error,
+            )
+            return None
+        if not response.is_success:
+            logger.warning(
+                "stream=%s status poll failed status=%s body=%s",
+                stream_id,
+                response.status_code,
+                _response_text(response),
+            )
+            return None
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+        return _parse_positive_int(data.get("last_frame_at_ms"))
 
     async def _wait_for_overshoot_first_frame(
         self,
@@ -832,6 +1191,30 @@ def _publish_details_from_response(data: dict[str, Any]) -> tuple[str, str]:
 
 def _publish_token_from_response(data: dict[str, Any]) -> str:
     return _publish_details_from_response(data)[1]
+
+
+def _overshoot_track_publish_options() -> rtc.TrackPublishOptions:
+    return rtc.TrackPublishOptions(
+        source=rtc.TrackSource.SOURCE_CAMERA,
+        simulcast=False,
+        video_codec=rtc.VideoCodec.H264,
+        video_encoding=rtc.VideoEncoding(
+            max_framerate=OVERSHOOT_FPS,
+            max_bitrate=OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
+        ),
+        degradation_preference=cast(
+            Any,
+            rtc.DegradationPreference.MAINTAIN_RESOLUTION,
+        ),
+    )
+
+
+def _apply_livekit_publish_token(room: rtc.Room, publish_token: str) -> None:
+    room_with_private_state = cast(Any, room)
+    if getattr(room_with_private_state, "_token", None) == publish_token:
+        return
+    setattr(room_with_private_state, "_token", publish_token)
+    room_with_private_state.emit("token_refreshed")
 
 
 def _livekit_video_frame_from_image(image: Image.Image) -> rtc.VideoFrame:

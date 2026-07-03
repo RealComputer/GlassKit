@@ -12,7 +12,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
 - Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
-- Overshoot v1beta uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
+- The latest Overshoot API uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
 - The backend records the real camera frames sent into the Overshoot path before reference-image composition by default. Recordings are written under `backend/debug/overshoot-inputs` unless `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` overrides the location, and `ORIGAMI_RECORD_OVERSHOOT_INPUTS=false` disables this recording.
 
 ## Connection Graph

@@ -99,6 +99,6 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 
 This example uses Overshoot differently from [`../rokid-overshoot-openai-realtime`](../rokid-overshoot-openai-realtime/README.md).
 
-In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend opens its own WebRTC stream to Overshoot. The backend composes the camera view with the active fold reference image, sends that composed stream to Overshoot, and uses the results to drive the fixed origami workflow.
+In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend creates an Overshoot stream, publishes the composed camera/reference video into the returned LiveKit room, prompts chat completions against the latest ingested frame, and uses those results to drive the fixed origami workflow.
 
 In the mocktail coach, the glasses stream camera video directly to Overshoot after the backend brokers setup. The backend manages Overshoot prompts and results, but it does not sit in the video path or compose frames.

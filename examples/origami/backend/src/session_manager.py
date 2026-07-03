@@ -86,6 +86,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
             else steps_path.parent.parent / "debug" / "overshoot-inputs"
         )
         self._overshoot_input_recorder_stop_tasks: set[asyncio.Task[None]] = set()
+        self._overshoot_video_source_close_tasks: set[asyncio.Task[None]] = set()
         self._steps = load_origami_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
@@ -114,6 +115,9 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         recorder_stop_tasks = list(self._overshoot_input_recorder_stop_tasks)
         if recorder_stop_tasks:
             await asyncio.gather(*recorder_stop_tasks, return_exceptions=True)
+        source_close_tasks = list(self._overshoot_video_source_close_tasks)
+        if source_close_tasks:
+            await asyncio.gather(*source_close_tasks, return_exceptions=True)
 
         await self._overshoot_http.aclose()
 
