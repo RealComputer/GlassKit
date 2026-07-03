@@ -21,7 +21,7 @@ Use these terms consistently:
 - Result: the pass, fail, ignored, or error outcome after comparing an observation with an expectation.
 - Gate: an aggregate threshold that controls process success, such as a minimum pass rate.
 
-## Non-goals for the First Version
+## Non-goals
 
 - Do not auto-generate `expected.yaml` with a stronger and slower VLM in the first version. Manual expected ranges are the source of truth for now.
 - Do not require a physical Rokid device during CLI execution. Creating useful eval videos may still require a real run, but evaluation should run from files.
@@ -46,7 +46,7 @@ The CLI should own generic recorded-video mechanics: eval-suite discovery, video
 
 Each app should own app-specific observation logic through a small adapter. The adapter is responsible for using the same prompts, reference images, model clients, parsers, and workflow helpers that the live runtime uses. This keeps the CLI reusable and avoids baking Overshoot, OpenAI, RF-DETR, origami, or recipe-specific concepts into the core package.
 
-The MVP should evaluate model observations, not full live sessions. In concrete terms, for each expected sample the CLI calls the adapter with a decoded frame or batch of frames and a target context, receives a JSON-like observation, and compares it with the expected value. A later session replay mode can feed observations through a workflow state machine to verify automatic transitions, but the first high-value test is whether the active visual evaluator returns the expected data on recorded media.
+The MVP should evaluate model observations, not full live sessions. In concrete terms, for each expected sample the CLI calls the adapter with a decoded frame or batch of frames and a target context, receives a JSON-like observation, and compares it with the expected value.
 
 ## Package Layout
 
