@@ -25,6 +25,6 @@ Default tests must not require real glasses recordings, network access, paid mod
 
 When testing against the local `tmp` suite, prefer a temporary fake adapter unless the purpose is specifically to test a real model backend. That verifies discovery, validation, timestamp expansion, video decoding, adapter calls, comparison, reporting, and gates without making external API calls.
 
-If adding committed video fixtures, keep them tiny, synthetic, public, and reproducible under `cli/tests/fixtures/`, with a maintainer-only regeneration script. Ordinary pytest runs should consume committed files and should not require a system `ffmpeg` executable.
+Committed video fixtures live under `cli/tests/fixtures/`. Keep them tiny, synthetic, public, and reproducible with `cli/tests/fixtures/generate-videos.sh`. Ordinary pytest runs should consume committed files and should not require a system `ffmpeg` executable or generate videos at test runtime. If a video edge case is worth default coverage, add a committed synthetic fixture for it.
 
 Keep Markdown prose soft-wrapped. Do not commit generated videos, realistic local recordings, `.venv`, pytest caches, Ruff caches, or `__pycache__` files.

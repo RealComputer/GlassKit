@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from fractions import Fraction
 from pathlib import Path
-
-import av
-from PIL import Image
 
 from gk.eval.models import ComparisonConfig, SampleExpectation
 from gk.eval.video import _stream_duration_s, decode_sample_frames, probe_video
@@ -12,9 +8,8 @@ from gk.eval.video import _stream_duration_s, decode_sample_frames, probe_video
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-def test_decode_sample_frames_normalizes_non_zero_start_time(tmp_path: Path) -> None:
-    video_path = tmp_path / "offset.mp4"
-    _write_video(video_path, pts_offset=20, fps=2, frames=4)
+def test_decode_sample_frames_normalizes_non_zero_start_time() -> None:
+    video_path = FIXTURES / "videos" / "offset-start-64x64.mp4"
     samples = [
         _sample(timestamp_s=0.0, sample_index=0, video_path=video_path),
         _sample(timestamp_s=1.0, sample_index=1, video_path=video_path),
@@ -57,26 +52,6 @@ def test_decode_sample_frames_uses_committed_fixture() -> None:
 
     assert decoded[0].image.size == (64, 64)
     assert decoded[1].image.size == (64, 64)
-
-
-def _write_video(
-    path: Path, *, pts_offset: int = 0, fps: int = 4, frames: int = 8
-) -> None:
-    with av.open(str(path), "w") as container:
-        stream = container.add_stream("mpeg4", rate=fps)
-        stream.width = 64
-        stream.height = 64
-        stream.pix_fmt = "yuv420p"
-        for index in range(frames):
-            color = "black" if index < frames // 2 else "white"
-            image = Image.new("RGB", (64, 64), color)
-            frame = av.VideoFrame.from_image(image)
-            frame.pts = pts_offset + index
-            frame.time_base = Fraction(1, fps)
-            for packet in stream.encode(frame):
-                container.mux(packet)
-        for packet in stream.encode():
-            container.mux(packet)
 
 
 def _sample(

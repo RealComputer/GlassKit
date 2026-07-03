@@ -15,6 +15,13 @@ ffmpeg -hide_banner -loglevel error -y \
   "$videos_dir/two-state-64x64.mp4"
 
 ffmpeg -hide_banner -loglevel error -y \
+  -f lavfi -i "color=c=black:s=64x64:r=2:d=2" \
+  -vf "setpts=PTS+10/TB,format=yuv420p" \
+  -c:v mpeg4 \
+  -q:v 5 \
+  "$videos_dir/offset-start-64x64.mp4"
+
+ffmpeg -hide_banner -loglevel error -y \
   -f lavfi -i "testsrc2=s=96x128:r=4:d=1" \
   -vf "format=yuv420p" \
   -c:v mpeg4 \

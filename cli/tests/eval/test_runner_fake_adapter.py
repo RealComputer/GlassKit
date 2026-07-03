@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from fractions import Fraction
 from pathlib import Path
-
-import av
-from PIL import Image
 
 from gk.eval.models import RunOptions
 from gk.eval.runner import run_eval
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+TWO_STATE_VIDEO = (FIXTURES / "videos" / "two-state-64x64.mp4").as_posix()
 
 
 def test_runner_evaluates_committed_fixture_with_fake_adapter(
@@ -110,7 +107,6 @@ async def _run_suite_per_target_gate_test(tmp_path: Path) -> None:
     suite_dir = tmp_path / "suite"
     case_dir = suite_dir / "case-001"
     case_dir.mkdir(parents=True)
-    _write_video(case_dir / "video.mp4")
     (suite_dir / "suite.yaml").write_text(
         """
 thresholds:
@@ -121,9 +117,9 @@ thresholds:
         encoding="utf-8",
     )
     (case_dir / "expected.yaml").write_text(
-        """
+        f"""
 version: 1
-video: video.mp4
+video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
     samples:
@@ -177,8 +173,6 @@ async def _run_filtered_suite_target_gate_test(tmp_path: Path) -> None:
     case_2 = suite_dir / "case-002"
     case_1.mkdir(parents=True)
     case_2.mkdir(parents=True)
-    _write_video(case_1 / "video.mp4")
-    _write_video(case_2 / "video.mp4")
     (suite_dir / "suite.yaml").write_text(
         """
 thresholds:
@@ -191,9 +185,9 @@ thresholds:
         encoding="utf-8",
     )
     (case_1 / "expected.yaml").write_text(
-        """
+        f"""
 version: 1
-video: video.mp4
+video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
     samples:
@@ -203,9 +197,9 @@ targets:
         encoding="utf-8",
     )
     (case_2 / "expected.yaml").write_text(
-        """
+        f"""
 version: 1
-video: video.mp4
+video: "{TWO_STATE_VIDEO}"
 targets:
   step_2:
     samples:
@@ -245,21 +239,3 @@ def create_evaluator(config):
     assert "suite_step_1_min_pass_rate" in gate_names
     assert "suite_step_2_min_pass_rate" not in gate_names
     assert report.success
-
-
-def _write_video(path: Path, *, fps: int = 4, frames: int = 8) -> None:
-    with av.open(str(path), "w") as container:
-        stream = container.add_stream("mpeg4", rate=fps)
-        stream.width = 64
-        stream.height = 64
-        stream.pix_fmt = "yuv420p"
-        for index in range(frames):
-            color = "black" if index < frames // 2 else "white"
-            image = Image.new("RGB", (64, 64), color)
-            frame = av.VideoFrame.from_image(image)
-            frame.pts = index
-            frame.time_base = Fraction(1, fps)
-            for packet in stream.encode(frame):
-                container.mux(packet)
-        for packet in stream.encode():
-            container.mux(packet)
