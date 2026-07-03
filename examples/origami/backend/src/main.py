@@ -9,7 +9,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from .session_manager import (
-    DEFAULT_OVERSHOOT_API_URL,
     DEFAULT_OVERSHOOT_MODEL,
     OrigamiSessionManager,
 )
@@ -34,10 +33,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "ORIGAMI_AUTO_CHECK_ENABLED=false"
         )
 
-    overshoot_api_url = os.getenv(
-        "OVERSHOOT_API_URL",
-        DEFAULT_OVERSHOOT_API_URL,
-    ).strip()
     overshoot_model = os.getenv("OVERSHOOT_MODEL", DEFAULT_OVERSHOOT_MODEL).strip()
     steps_path = (
         Path(__file__).resolve().parent.parent / "assets" / "origami_steps.json"
@@ -56,7 +51,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     )
 
     manager = OrigamiSessionManager(
-        overshoot_api_url=overshoot_api_url,
         overshoot_api_key=overshoot_api_key,
         overshoot_model=overshoot_model,
         steps_path=steps_path,

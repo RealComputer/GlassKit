@@ -49,7 +49,6 @@ Optional backend overrides can also be specified inline when starting FastAPI:
 - `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` to choose where Overshoot input recordings are written
 - `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save Overshoot input previews for debugging
 - `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to choose where debug preview images are written
-- `OVERSHOOT_API_URL`
 - `OVERSHOOT_MODEL`
 
 ### Run the Backend

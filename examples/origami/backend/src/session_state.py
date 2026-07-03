@@ -12,6 +12,8 @@ from av import VideoFrame
 from .constants import PHASE_WAITING
 
 if TYPE_CHECKING:
+    from livekit import rtc
+
     from .recording import OvershootInputRecorder
 
 
@@ -85,12 +87,15 @@ class OrigamiSession:
     track_tasks: list[asyncio.Task[None]] = field(default_factory=list)
     done_task: asyncio.Task[None] | None = None
     overshoot_generation: int = 0
-    overshoot_pc: RTCPeerConnection | None = None
     overshoot_stream_id: str | None = None
     overshoot_lease_ttl_seconds: int | None = None
-    overshoot_ws_task: asyncio.Task[None] | None = None
+    overshoot_room: rtc.Room | None = None
+    overshoot_video_source: rtc.VideoSource | None = None
+    overshoot_frame_size: tuple[int, int] | None = None
+    overshoot_publish_token: str | None = None
+    overshoot_publish_task: asyncio.Task[None] | None = None
+    overshoot_prompt_task: asyncio.Task[None] | None = None
     overshoot_keepalive_task: asyncio.Task[None] | None = None
-    overshoot_stats_task: asyncio.Task[None] | None = None
     overshoot_input_recorder: OvershootInputRecorder | None = None
     active_prompt_text: str | None = None
     guiding_step_started_at: float = 0.0

@@ -51,7 +51,6 @@ from .session_state import DemoViewer, OrigamiSession, SessionEvent
 logger = logging.getLogger("uvicorn.error")
 
 __all__ = [
-    "DEFAULT_OVERSHOOT_API_URL",
     "DEFAULT_OVERSHOOT_MODEL",
     "OrigamiSessionManager",
 ]
@@ -61,7 +60,6 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
     def __init__(
         self,
         *,
-        overshoot_api_url: str,
         overshoot_api_key: str,
         overshoot_model: str,
         steps_path: Path,
@@ -71,7 +69,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         record_overshoot_inputs: bool = True,
         overshoot_input_recording_dir: Path | None = None,
     ) -> None:
-        self._overshoot_api_url = overshoot_api_url.rstrip("/")
+        self._overshoot_api_url = DEFAULT_OVERSHOOT_API_URL
         self._overshoot_api_key = overshoot_api_key
         self._overshoot_model = overshoot_model
         self._auto_check_available = auto_check_available
@@ -93,7 +91,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
         self._overshoot_http = httpx.AsyncClient(
             base_url=self._overshoot_api_url,
-            timeout=httpx.Timeout(20.0),
+            timeout=httpx.Timeout(30.0, connect=10.0),
             headers={"Authorization": f"Bearer {self._overshoot_api_key}"},
         )
         self._sessions: dict[str, OrigamiSession] = {}
@@ -501,6 +499,8 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         payload: dict[str, Any],
     ) -> None:
         if payload.get("generation") != session.overshoot_generation:
+            return
+        if payload.get("step_index") != session.step_index:
             return
         if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
             return

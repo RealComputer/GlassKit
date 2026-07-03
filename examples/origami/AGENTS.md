@@ -12,14 +12,14 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
 - Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops Overshoot while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables Overshoot stream creation for the whole backend process.
+- Overshoot v1beta uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
 - The backend records the real camera frames sent into the Overshoot path before reference-image composition by default. Recordings are written under `backend/debug/overshoot-inputs` unless `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` overrides the location, and `ORIGAMI_RECORD_OVERSHOOT_INPUTS=false` disables this recording.
 
 ## Connection Graph
 
 - `Rokid <-> Backend` WebRTC: camera video upstream plus `session-events` commands and HUD state.
-- `Backend -> Overshoot` WebRTC: composed fold-check video.
-- `Backend -> Overshoot` HTTP: stream setup and control.
-- `Backend <-> Overshoot` WebSocket: fold-check results.
+- `Backend -> Overshoot` LiveKit/WebRTC: composed fold-check video.
+- `Backend -> Overshoot` HTTP: stream setup, stream status polling, keepalive, chat-completion fold checks, and stream deletion.
 - `Browser <-> Backend` WebRTC: demo video plus `demo-events` controls.
 
 ## Session Flow
@@ -27,8 +27,8 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 1. Rokid shows the start screen.
 2. Double tap opens a backend media session and starts the origami workflow.
 3. The backend enters the first step, publishes HUD state, and starts Overshoot when auto check is available.
-4. The backend sends composed camera/reference video to Overshoot.
-5. Overshoot results return to the backend, and the backend decides whether to advance the step.
+4. The backend sends composed camera/reference video to the Overshoot LiveKit room.
+5. The backend prompts Overshoot chat completions against the latest ingested stream frame, parses the boolean response, and decides whether to advance the step.
 6. Swipe controls and browser demo controls send manual navigation commands to the backend.
 7. Completion or reset returns the HUD to the start screen.
 
@@ -46,7 +46,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `src/main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
-- `src/overshoot_runtime.py`: Overshoot stream lifecycle, prompt updates, WebSocket results, keepalive, and stats logging.
+- `src/overshoot_runtime.py`: Overshoot stream lifecycle, LiveKit publishing, chat-completion prompt loop, keepalive, and stream cleanup.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
 - `src/recording.py`: non-blocking video recording for pre-composition Overshoot input frames.
 - `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
