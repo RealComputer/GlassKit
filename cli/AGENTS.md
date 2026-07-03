@@ -6,6 +6,12 @@ Keep the core CLI app-agnostic. The core package may handle eval-suite discovery
 
 The public CLI is for users, so document user workflows in `README.md`. This `AGENTS.md` is for developers changing the CLI internals, tests, packaging, or adapter contract.
 
+Keep YAML schema validation in `src/gk/eval/schemas.py` with Pydantic models, then convert parsed data into the dataclasses in `src/gk/eval/models.py` and `src/gk/eval/expectations.py`. Do not bypass the schema layer for new eval-suite fields.
+
+When changing `gk eval init-case`, keep generated cases loadable by `load_eval_suite`. Case names must remain a single directory name under the requested suite, and reused in-case videos must be written to `expected.yaml` relative to the case directory.
+
+When changing video decoding, preserve the timing invariants covered by the review fixes: sample timestamps are seconds from the start of the clip, frame PTS values may have a non-zero start offset, and PyAV container duration is expressed in microseconds. Add regression tests for any new seek or duration path.
+
 Use `uv` from this directory for package work:
 
 - `uv run pytest`: run the CLI tests
@@ -18,5 +24,7 @@ Use `uv` from this directory for package work:
 Default tests must not require real glasses recordings, network access, paid model APIs, or a physical Rokid device. Use synthetic videos and fake adapters for committed tests. Local smoke tests may use ignored data under the repository-root `tmp/` directory; the current convention is `tmp/origami-full-run-eval-suite/full-run/video.mp4` with `expected.yaml`.
 
 When testing against the local `tmp` suite, prefer a temporary fake adapter unless the purpose is specifically to test a real model backend. That verifies discovery, validation, timestamp expansion, video decoding, adapter calls, comparison, reporting, and gates without making external API calls.
+
+If adding committed video fixtures, keep them tiny, synthetic, public, and reproducible under `cli/tests/fixtures/`, with a maintainer-only regeneration script. Ordinary pytest runs should consume committed files and should not require a system `ffmpeg` executable.
 
 Keep Markdown prose soft-wrapped. Do not commit generated videos, realistic local recordings, `.venv`, pytest caches, Ruff caches, or `__pycache__` files.
