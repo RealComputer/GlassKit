@@ -6,39 +6,31 @@ Use `gk eval` when you have a video recording of an app workflow and a YAML file
 
 The CLI is app-agnostic. It owns eval-suite discovery, YAML parsing, timestamp expansion, video decoding, adapter loading, comparison, reporting, failure artifacts, and quality gates. App-specific model clients, prompts, parsers, and workflow helpers belong in adapters that live with the app being evaluated.
 
-## Install During Local Development
+## Run From Your App Repo
 
-The CLI package is normally run through `uv` from the repository while it is under active development. Run it from the app backend directory when your adapter imports local backend modules:
-
-```bash
-cd examples/origami/backend
-uv run \
-  --with-editable ../../../cli \
-  --env-file .env \
-  gk eval run \
-  --adapter eval_adapter.py:create_evaluator \
-  --suite eval-suite
-```
-
-For a repo-root run, set the backend import path explicitly and run with the backend project environment:
+Use the CLI from the app repository that contains the eval suite, adapter, app dependencies, and environment files. You do not need a GlassKit checkout to run evals. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
 
 ```bash
-PYTHONPATH=examples/origami/backend \
-uv run \
-  --project examples/origami/backend \
-  --with ./cli \
-  --env-file examples/origami/backend/.env \
-  gk eval run \
-  --adapter examples/origami/backend/eval_adapter.py:create_evaluator \
-  --suite examples/origami/backend/eval-suite
+cd path/to/your-app
+uv run --with gk gk eval --help
 ```
+
+Run from the directory where your adapter can import the app modules it needs. If your app is a `uv` project, `uv run --with gk ...` uses that project environment plus the `gk` CLI package. If you already installed the command another way, you can drop the `uv run --with gk` prefix and run `gk eval ...` directly.
 
 Run help when you need the exact options for the installed version:
 
 ```bash
-uv run --with-editable ./cli gk --help
-uv run --with-editable ./cli gk eval --help
-uv run --with-editable ./cli gk eval run --help
+uv run --with gk gk --help
+uv run --with gk gk eval --help
+uv run --with gk gk eval run --help
+```
+
+Pass app environment files or extra runtime settings through `uv` in the same command:
+
+```bash
+uv run --with gk --env-file .env gk eval run \
+  --adapter eval_adapter.py:create_evaluator \
+  --suite eval-suite
 ```
 
 ## Quick Start
@@ -46,7 +38,7 @@ uv run --with-editable ./cli gk eval run --help
 Create a starter case from a video:
 
 ```bash
-gk eval init-case \
+uv run --with gk gk eval init-case \
   --suite eval-suite \
   --case fold-step-001 \
   --video path/to/recording.mp4 \
@@ -57,14 +49,14 @@ gk eval init-case \
 Edit `eval-suite/fold-step-001/expected.yaml` so the sample timestamps and expected values match the video. Validate the suite before running a model-backed adapter:
 
 ```bash
-gk eval validate --suite eval-suite
-gk eval list-samples --suite eval-suite
+uv run --with gk gk eval validate --suite eval-suite
+uv run --with gk gk eval list-samples --suite eval-suite
 ```
 
 Run the eval with an adapter:
 
 ```bash
-gk eval run \
+uv run --with gk gk eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --min-pass-rate 0.9 \
@@ -233,7 +225,7 @@ Every run also includes an `adapter_errors` gate. The run only succeeds if the a
 CLI gates are useful for one-off CI jobs or local experiments:
 
 ```bash
-gk eval run \
+uv run --with gk gk eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --min-pass-rate 0.9 \
@@ -250,7 +242,7 @@ gk eval run \
 `init-case` creates a case directory, copies the source video into it when needed, and writes a starter `expected.yaml`:
 
 ```bash
-gk eval init-case \
+uv run --with gk gk eval init-case \
   --suite eval-suite \
   --case fold-step-001 \
   --video recordings/fold-step-001.mp4 \
@@ -265,9 +257,9 @@ The case name must be a single directory name under the suite. If the source vid
 `validate` checks suite structure, YAML schema, video readability, sample timestamps, and optional adapter importability:
 
 ```bash
-gk eval validate --suite eval-suite
-gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
-gk eval validate --suite eval-suite --case fold-step-001
+uv run --with gk gk eval validate --suite eval-suite
+uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
+uv run --with gk gk eval validate --suite eval-suite --case fold-step-001
 ```
 
 Use validation before long or paid model evals. It catches most local mistakes without sending frames to a backend, unless you pass `--adapter`.
@@ -277,8 +269,8 @@ Use validation before long or paid model evals. It catches most local mistakes w
 `list-samples` prints the expanded sample schedule:
 
 ```bash
-gk eval list-samples --suite eval-suite
-gk eval list-samples --suite eval-suite --case fold-step-001
+uv run --with gk gk eval list-samples --suite eval-suite
+uv run --with gk gk eval list-samples --suite eval-suite --case fold-step-001
 ```
 
 This is the quickest way to confirm that your ranges, point samples, fields, and comparison modes expand as intended.
@@ -288,7 +280,7 @@ This is the quickest way to confirm that your ranges, point samples, fields, and
 `run` decodes sample frames, calls the adapter, compares results, applies gates, prints a summary, and optionally writes JSON and failure artifacts:
 
 ```bash
-gk eval run \
+uv run --with gk gk eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --case fold-step-001 \
@@ -493,14 +485,14 @@ Keep retries, response parsing, prompt construction, and backend-specific error 
 Start with validation:
 
 ```bash
-gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
+uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
 ```
 
 Then list samples and run one case:
 
 ```bash
-gk eval list-samples --suite eval-suite --case fold-step-001
-gk eval run --suite eval-suite --case fold-step-001 --adapter eval_adapter.py:create_evaluator --verbose
+uv run --with gk gk eval list-samples --suite eval-suite --case fold-step-001
+uv run --with gk gk eval run --suite eval-suite --case fold-step-001 --adapter eval_adapter.py:create_evaluator --verbose
 ```
 
 If the adapter is unstable or expensive, add `--keep-going --save-failures --output-json tmp/eval-results.json`. The saved failure images show exactly what frame the adapter saw, and the JSON report includes the raw observation, extracted field, comparison mode, and reason for each sample.
@@ -529,4 +521,4 @@ Put reusable target metadata in `workflow.targets` or `targets.<id>.config`.
 
 Put pass/fail policy in `thresholds`, `suite.yaml`, or CLI gate options.
 
-Do not add app-specific model dependencies to the `gk` package just to make an adapter work. Run the CLI from the app environment or use `PYTHONPATH` so the adapter can import the app code it already depends on.
+Do not add app-specific model dependencies to the `gk` package just to make an adapter work. Run `uv run --with gk gk eval ...` from the app environment, or set `PYTHONPATH` so the adapter can import the app code it already depends on.
