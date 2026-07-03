@@ -27,9 +27,5 @@ dev = [
 requires = ["uv_build>=0.9.0,<0.12.0"]
 build-backend = "uv_build"
 
-[tool.ruff]
-line-length = 88
-target-version = "py312"
-
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
