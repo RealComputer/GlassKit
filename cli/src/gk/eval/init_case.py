@@ -29,7 +29,7 @@ def init_eval_case(
     target_id = target_id.strip()
     if not case_name:
         raise EvalConfigError("case name must not be empty")
-    if Path(case_name).name != case_name:
+    if case_name in {".", ".."} or Path(case_name).name != case_name:
         raise EvalConfigError("case name must be a single directory name")
     if not target_id:
         raise EvalConfigError("target id must not be empty")
@@ -43,7 +43,11 @@ def init_eval_case(
 
     if suite_path.exists() and not suite_path.is_dir():
         raise EvalConfigError(f"eval suite path is not a directory: {suite_path}")
-    case_dir = suite_path / case_name
+    case_dir = (suite_path / case_name).resolve()
+    try:
+        case_dir.relative_to(suite_path)
+    except ValueError as exc:
+        raise EvalConfigError("case path must stay inside the eval suite") from exc
     if case_dir.exists() and not case_dir.is_dir():
         raise EvalConfigError(f"case path is not a directory: {case_dir}")
     expected_path = case_dir / "expected.yaml"
@@ -59,7 +63,7 @@ def init_eval_case(
 
     expected_path.write_text(
         _expected_yaml_template(
-            video_name=video_path.name,
+            video_name=video_path.relative_to(case_dir).as_posix(),
             target_id=target_id,
             target_label=target_label.strip() if target_label else None,
         ),
