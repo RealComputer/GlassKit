@@ -33,8 +33,10 @@ Use these terms consistently:
 
 - `examples/origami` is server-authoritative. The Android app streams camera video to the FastAPI backend, and the backend owns session phase, step index, HUD state, auto-check enablement, Overshoot prompt switching, and step advancement.
 - Origami step definitions already live in `examples/origami/backend/assets/origami_steps.json`. Each step has a stable `id`, title, HUD image, reference image, and prompt.
-- Origami sends composed images to Overshoot: the raw camera frame is converted to a PIL image, a reference-image header is added by `_compose_reference_image`, and the composed video track is sent through `ReferenceCompositeTrack`.
-- Origami currently records the pre-composition camera frames sent into the Overshoot path. `ORIGAMI_RECORD_OVERSHOOT_INPUTS=true` writes MP4s under `backend/debug/overshoot-inputs` by default. This is a good starting point for eval cases because the offline evaluator can reuse the same reference composition code.
+- Origami now uses Overshoot v1beta for the live app path. The backend creates an Overshoot stream, publishes backend-composed camera/reference frames into the returned LiveKit room, waits for frame ingestion, and calls `/chat/completions` against `ovs://streams/<stream_id>?frame_index=-1`.
+- Origami composes images before sending them to Overshoot: the raw camera frame is converted to a PIL image, a reference-image header is added by `_compose_reference_image`, and the composed image is published through the LiveKit video source.
+- Origami currently records the pre-composition camera frames sent into the Overshoot path. `ORIGAMI_RECORD_OVERSHOOT_INPUTS=true` writes session MP4s under `backend/debug/overshoot-inputs` by default. This is a good starting point for eval cases because the offline evaluator can reuse the same reference composition code.
+- `examples/origami/overshoot-docs.md` contains the full Overshoot docs snapshot used for this migration. It documents both stream references such as `ovs://streams/<id>?frame_index=-1` and ordinary chat-completion image/video content such as `data:image/jpeg;base64,...`.
 - Origami result parsing is boolean-only today. `_parse_overshoot_boolean` accepts booleans, boolean strings, JSON strings, and common object fields such as `matches`, `match`, `result`, `value`, and `ok`.
 - Origami step advancement is not identical to one-frame evaluation. The live state machine ignores stale results, waits through a 0.6 second settle window after step entry, requires two consecutive true results, marks the step done, then auto-advances after 2.0 seconds. This transition policy should stay in the live app for now rather than becoming part of the eval CLI MVP.
 - `rokid-overshoot-openai-realtime` already needs richer observations than origami. It parses structured JSON and evaluates booleans, enums, numeric thresholds, repeated rising edges, inventory lists, and recipe step state.
@@ -215,7 +217,7 @@ class BatchFrameEvaluator(FrameEvaluator, Protocol):
     async def evaluate_many(self, samples: list[FrameSample], target: TargetContext) -> list[JSONValue]: ...
 ```
 
-The runner should prefer `evaluate_many` when available and fall back to `evaluate`. This matters for Overshoot-style streams, where one stream per case or target may be much cheaper and closer to runtime behavior than one model request per sample.
+The runner should prefer `evaluate_many` when available and fall back to `evaluate`. This matters for remote VLM adapters, where batching can reuse an HTTP client, share prompt setup, control concurrency, and optionally benefit from provider-side prompt caches.
 
 For clip-level models, add a later optional protocol rather than forcing it into the first frame protocol.
 
@@ -396,11 +398,13 @@ The process should exit non-zero for schema errors, adapter import errors, video
 
 Add an origami adapter at `examples/origami/backend/eval_adapter.py`. It should load `assets/origami_steps.json`, map each target id to the existing `OrigamiStep`, reuse the existing reference images, compose the same model input image used by the live Overshoot path, call the selected runtime model backend, and return the parsed boolean observation.
 
-Before writing the adapter, refactor the live origami backend slightly so shared logic has public names and no test-specific duplication. Good candidates are a new `src/fold_check.py` or `src/origami_evaluation.py` module with `compose_fold_check_image(camera, reference, label="Reference shape")`, `parse_fold_check_result(payload)`, and `load_fold_check_steps(path)`. `ReferenceCompositeTrack` and the adapter should both call `compose_fold_check_image`; `session_manager` and the adapter should both call `parse_fold_check_result`.
+Before writing the adapter, refactor the live origami backend slightly so shared logic has public names and no test-specific duplication. Good candidates are a new `src/fold_check.py` or `src/origami_evaluation.py` module with `compose_fold_check_image(camera, reference, label="Reference shape")`, `parse_fold_check_result(payload)`, and `load_fold_check_steps(path)`. The LiveKit publisher path in `overshoot_runtime.py` and the adapter should both call `compose_fold_check_image`; `session_manager` and the adapter should both call `parse_fold_check_result`.
 
-The current origami runtime uses the older Overshoot streaming/result shape. Newer Overshoot docs describe a v1beta flow: create a stream, publish media, then query any model through an OpenAI-compatible `/chat/completions` request using `ovs://streams/{stream_id}` references to frames or segments. That is a better fit for eval because it can ask about explicit sample frames or bounded clips rather than waiting for streaming websocket results to line up with sample timestamps. Relevant docs are `https://docs.overshoot.ai/llms.txt`, `https://docs.overshoot.ai/api-reference/core-flow`, `https://docs.overshoot.ai/api-reference/chat-completions`, and `https://docs.overshoot.ai/api-reference/stream-media-urls`.
+The live origami app has already migrated to Overshoot v1beta LiveKit publishing plus explicit chat-completion prompts. That live path is still appropriate for real-time auto-check because it keeps a current stream frame available for low-latency prompts.
 
-Plan to migrate/refactor the origami app toward this newer Overshoot API as part of the adapter work. The live app can still run real-time fold checks, but the shared model client should expose a reusable operation like "publish composed frames to a stream, then request a structured result for a frame or clip". The adapter can replay composed frames from a case into a stream and issue `/chat/completions` calls using `frame_index`, `timestamp_ms`, or `video_url` segment references. The CLI contract does not need to know these Overshoot details.
+The eval adapter should not recreate the live stream pipeline unless we specifically want to test streaming ingestion. Overshoot can be used through `/chat/completions` without streaming video, so the adapter should compose each sampled frame locally and send it directly as an `image_url` data URL such as `data:image/jpeg;base64,...`. This removes LiveKit setup, stream readiness polling, keepalive, stream cleanup, and frame/result alignment from the eval path.
+
+For short motion-sensitive checks, add clip-level support later. The default origami MVP should stay single-frame because fold completion is a visual state check and the existing expected YAML is timestamp/range based.
 
 Origami should keep the live two-true advancement policy in `session_manager.py`; the recorded-video observation test should not duplicate that policy in the MVP. Add a later session-replay test only after the frame/clip observation tests are useful and stable.
 
@@ -444,7 +448,7 @@ Phase 1: create the `cli` package, define schemas and types, implement `gk eval 
 
 Phase 2: implement comparison modes, quality gates, live progress output, `list-samples`, `--verbose`, `--keep-going`, `--output-json`, `--artifacts-dir`, `--save-failures`, and polished failure summaries.
 
-Phase 3: refactor origami shared fold-check helpers, migrate/refactor the origami Overshoot path toward the newer stream plus `/chat/completions` API where practical, add `examples/origami/backend/eval_adapter.py`, and create the first small origami demonstration eval suite from recorded inputs.
+Phase 3: refactor origami shared fold-check helpers, add a no-stream Overshoot chat-completion client for composed frame images, add `examples/origami/backend/eval_adapter.py`, and create the first small origami demonstration eval suite from recorded inputs.
 
 Phase 4: document eval-suite creation and CLI usage in `cli/README.md` and link it from `examples/origami/README.md`.
 
