@@ -411,7 +411,11 @@ It is also fine for an eval video to contain multiple origami steps. The MVP sti
 
 Manually label expected ranges in `expected.yaml`. Prefer broad stable windows over dense point-by-point labels, and leave transition or ambiguous windows undeclared. For origami, use `false` for frames where the current target is not yet complete and `true` for stable frames where it clearly matches the reference. Do not process folding motion, occlusion, and hard-to-see frames in the MVP unless a future label-review feature needs explicit skipped-region annotations.
 
+For local CLI behavior checks, keep private smoke fixtures under the repository-root `tmp/` directory, which is gitignored. The current working convention is `tmp/origami-full-run-eval-suite/full-run/video.mp4` plus `expected.yaml`. This fixture can use a short active target set and rough labels because its purpose is to confirm CLI decoding, scheduling, adapter calls, and reporting quickly; do not spend time optimizing it as a model-quality benchmark unless that becomes a separate task.
+
 Real eval suites should not be committed directly to this repository unless they are small, public demonstration assets. Keep realistic videos local or in external storage until there is a storage policy, possibly with Git LFS or an artifact bucket.
+
+Never commit realistic local recording videos from `tmp/` to Git. If a video is useful as a public sample later, copy only a small non-sensitive clip into a tracked sample location after making an explicit storage decision.
 
 ## Support for Later Examples
 
