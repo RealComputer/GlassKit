@@ -43,6 +43,10 @@ def test_runner_preserves_eval_error_when_close_also_fails(tmp_path: Path) -> No
     asyncio.run(_run_close_error_masking_test(tmp_path))
 
 
+def test_runner_handles_malformed_evaluate_many_return(tmp_path: Path) -> None:
+    asyncio.run(_run_malformed_evaluate_many_return_test(tmp_path))
+
+
 async def _run_committed_fixture_test(tmp_path: Path) -> None:
     suite_dir = FIXTURES / "eval_suites" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
@@ -350,3 +354,59 @@ def create_evaluator(config):
         )
     assert "close failed" not in str(exc_info.value)
     assert any("close failed" in note for note in exc_info.value.__notes__)
+
+
+async def _run_malformed_evaluate_many_return_test(tmp_path: Path) -> None:
+    suite_dir = tmp_path / "suite"
+    case_dir = suite_dir / "case-001"
+    case_dir.mkdir(parents=True)
+    (case_dir / "expected.yaml").write_text(
+        f"""
+version: 1
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return None
+
+    async def evaluate(self, sample, target):
+        return True
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            suite_path=suite_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            keep_going=True,
+        )
+    )
+
+    assert report.error_count == 1
+    assert report.results[0].status == "error"
+    assert "adapter failed for target 'step_1'" in report.results[0].reason
+
+    with pytest.raises(AdapterRuntimeError, match="adapter failed for target 'step_1'"):
+        await run_eval(
+            RunOptions(
+                suite_path=suite_dir,
+                adapter=f"{adapter_path}:create_evaluator",
+            )
+        )

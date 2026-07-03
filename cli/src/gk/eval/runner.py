@@ -198,23 +198,28 @@ async def _evaluate_samples(
         return []
     try:
         observations = await evaluator.evaluate_many(frames, target)
-    except Exception as error:
-        if not options.keep_going:
+        observation_count = len(observations)
+        if observation_count != len(samples):
             raise AdapterRuntimeError(
-                f"adapter failed for target {target.id!r}: {error}"
-            ) from error
-        return [(sample, None, error) for sample in samples]
-    if len(observations) != len(samples):
-        error = AdapterRuntimeError(
-            f"adapter returned {len(observations)} observations for "
-            f"{len(samples)} samples"
-        )
+                f"adapter returned {observation_count} observations for "
+                f"{len(samples)} samples"
+            )
+        observation_items = list(observations)
+        if len(observation_items) != len(samples):
+            raise AdapterRuntimeError(
+                f"adapter returned {len(observation_items)} iterable observations "
+                f"for {len(samples)} samples"
+            )
+    except Exception as error:
+        runtime_error = _adapter_runtime_error(error, target)
         if not options.keep_going:
-            raise error
-        return [(sample, None, error) for sample in samples]
+            if runtime_error is error:
+                raise runtime_error from None
+            raise runtime_error from error
+        return [(sample, None, runtime_error) for sample in samples]
 
     results: list[tuple[SampleExpectation, Any, Exception | None]] = []
-    for sample, observation in zip(samples, observations, strict=True):
+    for sample, observation in zip(samples, observation_items, strict=True):
         if error_message := json_value_error(observation, label="observation"):
             error = AdapterRuntimeError(
                 "adapter returned non-JSON observation for "
@@ -227,6 +232,12 @@ async def _evaluate_samples(
             continue
         results.append((sample, observation, None))
     return results
+
+
+def _adapter_runtime_error(error: Exception, target: TargetContext) -> Exception:
+    if isinstance(error, AdapterRuntimeError):
+        return error
+    return AdapterRuntimeError(f"adapter failed for target {target.id!r}: {error}")
 
 
 async def _close_evaluator(evaluator: Any) -> None:
