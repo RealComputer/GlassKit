@@ -352,6 +352,14 @@ def _apply_quality_gates(
         gates.extend(
             _target_pass_rate_gates(results, min_target_pass_rate, "all_targets")
         )
+    else:
+        gates.extend(
+            _configured_target_pass_rate_gates(
+                results,
+                global_thresholds,
+                "suite",
+            )
+        )
 
     for case in suite.cases:
         case_results = [result for result in results if result.case_name == case.name]
@@ -412,6 +420,24 @@ def _target_pass_rate_gates(
         )
         for target_id, target_results in sorted(grouped.items())
     ]
+
+
+def _configured_target_pass_rate_gates(
+    results: list[SampleResult], thresholds: Thresholds, prefix: str
+) -> list[GateResult]:
+    gates: list[GateResult] = []
+    for target_id, threshold in thresholds.per_target.items():
+        if threshold.min_pass_rate is None:
+            continue
+        target_results = [result for result in results if result.target_id == target_id]
+        gates.append(
+            _pass_rate_gate(
+                f"{prefix}_{target_id}_min_pass_rate",
+                target_results,
+                threshold.min_pass_rate,
+            )
+        )
+    return gates
 
 
 def _pass_rate_gate(

@@ -63,10 +63,14 @@ def decode_sample_frames(
             frame_rate = _average_rate(stream)
             pending_index = 0
             frame_index = -1
+            first_timestamp_s: float | None = None
             previous: tuple[VideoFrame, float, int] | None = None
             for frame in container.decode(stream):
                 frame_index += 1
-                timestamp_s = _frame_timestamp_s(frame, frame_index, frame_rate)
+                raw_timestamp_s = _frame_timestamp_s(frame, frame_index, frame_rate)
+                if first_timestamp_s is None:
+                    first_timestamp_s = raw_timestamp_s
+                timestamp_s = max(0.0, raw_timestamp_s - first_timestamp_s)
                 while (
                     pending_index < len(ordered)
                     and ordered[pending_index].timestamp_s <= timestamp_s
@@ -142,11 +146,11 @@ def _video_stream(container: av.container.InputContainer) -> Any:
     return stream
 
 
-def _stream_duration_s(container: av.container.InputContainer, stream: Any) -> float:
+def _stream_duration_s(container: Any, stream: Any) -> float:
     if stream.duration is not None and stream.time_base is not None:
         return float(stream.duration * stream.time_base)
     if container.duration is not None:
-        return float(container.duration * av.time_base)
+        return float(container.duration / av.time_base)
     if stream.frames and stream.average_rate:
         return float(stream.frames / stream.average_rate)
     return 0.0
