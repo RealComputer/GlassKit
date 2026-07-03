@@ -19,6 +19,10 @@ def test_runner_applies_suite_level_per_target_gates(tmp_path: Path) -> None:
     asyncio.run(_run_suite_per_target_gate_test(tmp_path))
 
 
+def test_runner_skips_filtered_out_suite_target_gates(tmp_path: Path) -> None:
+    asyncio.run(_run_filtered_suite_target_gate_test(tmp_path))
+
+
 async def _run_synthetic_video_test(tmp_path: Path) -> None:
     suite_dir = tmp_path / "suite"
     case_dir = suite_dir / "fold-step-001"
@@ -137,6 +141,82 @@ def create_evaluator(config):
     )
     assert not gate.passed
     assert not report.success
+
+
+async def _run_filtered_suite_target_gate_test(tmp_path: Path) -> None:
+    suite_dir = tmp_path / "suite"
+    case_1 = suite_dir / "case-001"
+    case_2 = suite_dir / "case-002"
+    case_1.mkdir(parents=True)
+    case_2.mkdir(parents=True)
+    _write_video(case_1 / "video.mp4")
+    _write_video(case_2 / "video.mp4")
+    (suite_dir / "suite.yaml").write_text(
+        """
+thresholds:
+  per_target:
+    step_1:
+      min_pass_rate: 1.0
+    step_2:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    (case_1 / "expected.yaml").write_text(
+        """
+version: 1
+video: video.mp4
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    (case_2 / "expected.yaml").write_text(
+        """
+version: 1
+video: video.mp4
+targets:
+  step_2:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [True for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return True
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            suite_path=suite_dir,
+            case_filter="case-001",
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    gate_names = {gate.name for gate in report.gate_results}
+    assert "suite_step_1_min_pass_rate" in gate_names
+    assert "suite_step_2_min_pass_rate" not in gate_names
+    assert report.success
 
 
 def _write_video(path: Path, *, fps: int = 4, frames: int = 8) -> None:

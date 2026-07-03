@@ -358,6 +358,7 @@ def _apply_quality_gates(
                 results,
                 global_thresholds,
                 "suite",
+                fail_empty_targets=options.case_filter is None,
             )
         )
 
@@ -423,13 +424,19 @@ def _target_pass_rate_gates(
 
 
 def _configured_target_pass_rate_gates(
-    results: list[SampleResult], thresholds: Thresholds, prefix: str
+    results: list[SampleResult],
+    thresholds: Thresholds,
+    prefix: str,
+    *,
+    fail_empty_targets: bool,
 ) -> list[GateResult]:
     gates: list[GateResult] = []
     for target_id, threshold in thresholds.per_target.items():
         if threshold.min_pass_rate is None:
             continue
         target_results = [result for result in results if result.target_id == target_id]
+        if not target_results and not fail_empty_targets:
+            continue
         gates.append(
             _pass_rate_gate(
                 f"{prefix}_{target_id}_min_pass_rate",
