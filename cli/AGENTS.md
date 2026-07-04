@@ -4,13 +4,10 @@ This package provides the `gk` command. Its current command group is recorded-vi
 
 ## Architecture
 
-`src/gk/cli.py` wires the Typer app and exposes `gk eval run`, `validate`, `list-samples`, and `init-case`. Keep command handlers thin: parse CLI options, load optional config, call eval modules, print reports, and translate user-facing failures to exit codes.
-
-The eval pipeline is app-agnostic. `expectations.py` discovers suites and cases, loads `suite.yaml` or `eval.yaml`, expands `expected.yaml` sample blocks, and resolves case videos. `schemas.py` owns Pydantic validation for YAML shape. `video.py` probes and decodes requested frames with PyAV. `adapters.py` imports adapter targets from `module:callable` or `file.py:callable` and normalizes function or object evaluators. `compare.py` evaluates JSON-like observations, and `runner.py` coordinates validation, adapter execution, failure artifacts, JSON output, and quality gates. App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repo.
-
-`README.md` is user-facing. Keep it detailed and friendly, with examples written as if users are running from their own app repo using commands like `uv run --with gk gk eval ...`. This file is for developers changing CLI internals, tests, packaging, or the adapter contract.
-
-Default pytest must stay offline and reasonably fast. Use synthetic videos and fake adapters for tests. Committed video fixtures live under `tests/fixtures/videos/`; keep them reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs should not require a system `ffmpeg` executable. If a video edge case needs default coverage, add a committed synthetic fixture for it.
+- `src/gk/cli.py` wires the Typer app and exposes `gk eval run`, `validate`, `list-samples`, and `init-case`.
+- The eval pipeline is app-agnostic. `expectations.py` discovers suites and cases, loads `suite.yaml` or `eval.yaml`, expands `expected.yaml` sample blocks, and resolves case videos. `schemas.py` owns Pydantic validation for YAML shape. `video.py` probes and decodes requested frames with PyAV. `adapters.py` imports adapter targets from `module:callable` or `file.py:callable` and normalizes function or object evaluators. `compare.py` evaluates JSON-like observations, and `runner.py` coordinates validation, adapter execution, failure artifacts, JSON output, and quality gates. App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repo.
+- `README.md` is user-facing. Keep it detailed and friendly, with examples written as if users are running from their own app repo using commands like `uv run --with gk gk eval ...`. This file is for developers changing CLI internals, tests, packaging, or the adapter contract.
+- Default pytest must stay offline. Use synthetic videos and fake adapters for tests. Committed video fixtures live under `tests/fixtures/videos/`; keep them reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs should not require a system `ffmpeg` executable. If a video edge case needs default coverage, add a committed synthetic fixture for it.
 
 ## Key Files
 
