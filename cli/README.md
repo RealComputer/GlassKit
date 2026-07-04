@@ -2,7 +2,7 @@
 
 `gk` is the GlassKit command-line package. Its first command family is `gk eval`, a recorded-video evaluator for smart-glasses apps.
 
-Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. `gk eval` lets you record a workflow once, label the important moments, and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
+Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. Given a recording of a workflow, `gk eval` lets you label the important moments and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
 
 The current implementation assumes you use a `uv`-managed Python pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
 
