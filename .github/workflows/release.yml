@@ -111,7 +111,7 @@ jobs:
             if [[ -n "${PREVIOUS_TAG}" ]]; then
               echo
               echo "CLI changes since ${PREVIOUS_TAG}:"
-              git log --format='- %s (%h)' "${PREVIOUS_TAG}..${GITHUB_REF_NAME}" -- cli > /tmp/cli-release-changes.txt
+              git log --format='- %s (%h)' "${PREVIOUS_TAG}..${GITHUB_REF_NAME}" -- . > /tmp/cli-release-changes.txt
               if [[ -s /tmp/cli-release-changes.txt ]]; then
                 cat /tmp/cli-release-changes.txt
               else
