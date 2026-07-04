@@ -2,30 +2,20 @@
 
 `gk` is the GlassKit command-line package. Its first command family is `gk eval`, a recorded-video evaluator for smart-glasses apps.
 
-Use `gk eval` when you have a video recording of an app workflow and a YAML file describing what the app should recognize at specific timestamps. The CLI expands the expected samples, decodes the relevant video frames, calls your adapter, compares the adapter result with the expected value, prints a report, and exits according to configured quality gates.
+Are you tired of manually repeating physical vision-enabled smart glasses app test over and over? `gk eval` is for you! You prepare video recording for the target workflow, YAML file describing how it's processed at specific timestamps, and an app adapter that connects this cli and your app. And you can do an automatic eval/test for your vision part of you app!
 
-The CLI is app-agnostic. It owns eval-suite discovery, YAML parsing, timestamp expansion, video decoding, adapter loading, comparison, reporting, failure artifacts, and quality gates. App-specific model clients, prompts, parsers, and workflow helpers belong in adapters that live with the app being evaluated.
+The current implementation assumes you have a `uv` managed pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
 
-## Who This Is For
+## Install
 
-`gk eval` is for developers building smart-glasses apps who want repeatable, offline checks against recorded camera video. The current happy path assumes you have a Python backend or adapter environment managed by `uv`, recorded videos of the app workflow you want to test, and a Python adapter that can call your app logic, model backend, or local detector for individual video frames.
-
-The tool is designed for frame-level observation quality: "at this timestamp, did the app or model report the expected JSON-like value for this target?" It works well for binary checks, classifiers, object lists, scores, and structured observations that can be compared with exact, numeric, subset, or set-style comparison modes.
-
-You do not need to use GlassKit's example apps or run from this repository. Your eval suite, videos, adapter, secrets, model clients, and app dependencies should live in your own app repo. The CLI only needs a Python import environment where the adapter can run.
-
-Some workflows are intentionally not first-class yet, including live device evals, clip-level temporal evaluation, non-Python adapter runtimes, and app state-machine replay. If your use case does not fit the current model, please open an issue at <https://github.com/RealComputer/GlassKit/issues>. We want to expand support based on real app needs.
-
-## Run From Your App Repo
-
-Use the CLI from the app repository that contains the eval suite, adapter, app dependencies, and environment files. You do not need a GlassKit checkout to run evals. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
+Use the CLI from the app repository that contains the eval suite, adapter, app dependencies, and environment files. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
 
 ```bash
 cd path/to/your-app
 uv run --with gk gk eval --help
 ```
 
-Run from the directory where your adapter can import the app modules it needs. If your app is a `uv` project, `uv run --with gk ...` uses that project environment plus the `gk` CLI package. If you already installed the command another way, you can drop the `uv run --with gk` prefix and run `gk eval ...` directly.
+If you already installed the command another way (`uv add --dev gk`), you can drop the `uv run --with gk` prefix and run `gk eval ...` directly.
 
 Run help when you need the exact options for the installed version:
 
@@ -139,23 +129,15 @@ Use ranges for stable windows where the expected answer should be unchanged. Use
 
 ### Case Fields
 
-`version` must be `1`.
-
-`video` is an optional path to the case video, resolved relative to the case directory. If it is omitted, the case directory must contain exactly one supported video file.
-
-`description` is optional and only for humans.
-
-`sampling.every_s` sets the default sample interval for `range` blocks in the case. The default is `0.5` seconds.
-
-`workflow.targets` is optional metadata matched to targets by each entry's `id`. Each entry must have `id`; `label` is optional; extra fields are passed to the adapter as `target.config` unless overridden by `targets.<id>.config`.
-
-`targets.<target_id>.label` is optional display text for reports.
-
-`targets.<target_id>.config` is optional adapter-specific metadata for that target. This is where you can put prompt ids, reference image paths, class names, or other app-level data that the core CLI should not know about.
-
-`targets.<target_id>.samples` is the required list of labeled sample blocks.
-
-`thresholds` is optional case-level gating. It can contain `min_pass_rate`, `max_failures`, and `per_target.<target_id>.min_pass_rate`.
+- `version` must be `1`.
+- `video` is an optional path to the case video, resolved relative to the case directory. If it is omitted, the case directory must contain exactly one supported video file.
+- `description` is optional and only for humans.
+- `sampling.every_s` sets the default sample interval for `range` blocks in the case. The default is `0.5` seconds.
+- `workflow.targets` is optional metadata matched to targets by each entry's `id`. Each entry must have `id`; `label` is optional; extra fields are passed to the adapter as `target.config` unless overridden by `targets.<id>.config`.
+- `targets.<target_id>.label` is optional display text for reports.
+- `targets.<target_id>.config` is optional adapter-specific metadata for that target. This is where you can put prompt ids, reference image paths, class names, or other app-level data that the core CLI should not know about.
+- `targets.<target_id>.samples` is the required list of labeled sample blocks.
+- `thresholds` is optional case-level gating. It can contain `min_pass_rate`, `max_failures`, and `per_target.<target_id>.min_pass_rate`.
 
 ## Expected Values And Comparison
 
@@ -203,17 +185,12 @@ targets:
           mode: set_contains_all
 ```
 
-`exact` requires the observed value to equal `expect`.
-
-`numeric` requires both values to be numbers and allows `tolerance`.
-
-`json_subset` requires every key and value in `expect` to be present in the observed object. For arrays, each expected item must match at least one observed item.
-
-`set_equals` compares arrays as unordered sets.
-
-`set_contains_any` passes when at least one expected array item is present in the observed array.
-
-`set_contains_all` passes when every expected array item is present in the observed array.
+- `exact` requires the observed value to equal `expect`.
+- `numeric` requires both values to be numbers and allows `tolerance`.
+- `json_subset` requires every key and value in `expect` to be present in the observed object. For arrays, each expected item must match at least one observed item.
+- `set_equals` compares arrays as unordered sets.
+- `set_contains_any` passes when at least one expected array item is present in the observed array.
+- `set_contains_all` passes when every expected array item is present in the observed array.
 
 ## Suite-Level Thresholds
 
@@ -304,19 +281,13 @@ uv run --with gk gk eval run \
   --artifacts-dir tmp/eval-artifacts
 ```
 
-`--case` limits the run to one case directory by name.
-
-`--adapter-config` reads a YAML or JSON object and passes it to the adapter factory.
-
-`--keep-going` records adapter or comparison errors as errored sample results instead of aborting the run on the first error.
-
-`--verbose` prints every sample result as it is produced and sets `AdapterConfig.verbose` for the adapter.
-
-`--output-json` writes a machine-readable report with summary counts, elapsed run duration, gate results, and per-sample observations. The final console summary also shows the elapsed duration.
-
-`--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.gk-artifacts` in the suite directory.
-
-`--allow-empty` allows suites or cases with no samples. This is mainly useful while drafting a suite, not for real quality gates.
+- `--case` limits the run to one case directory by name.
+- `--adapter-config` reads a YAML or JSON object and passes it to the adapter factory.
+- `--keep-going` records adapter or comparison errors as errored sample results instead of aborting the run on the first error.
+- `--verbose` prints every sample result as it is produced and sets `AdapterConfig.verbose` for the adapter.
+- `--output-json` writes a machine-readable report with summary counts, elapsed run duration, gate results, and per-sample observations. The final console summary also shows the elapsed duration.
+- `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.gk-artifacts` in the suite directory.
+- `--allow-empty` allows suites or cases with no samples. This is mainly useful while drafting a suite, not for real quality gates.
 
 ## Writing An Adapter
 
@@ -373,37 +344,22 @@ No-argument factories and evaluator classes are also supported, but they will no
 
 `AdapterConfig` has these fields:
 
-`suite_path` is the resolved path to the eval suite.
-
-`config` is the object loaded from `--adapter-config`; it is an empty mapping when the option is omitted.
-
-`artifacts_dir` is the path from `--artifacts-dir`, or `None` when the option is omitted.
-
-`verbose` mirrors `--verbose`.
-
-`sample` has these fields:
-
-`image` is a decoded RGB `PIL.Image.Image` for the requested timestamp.
-
-`timestamp_s` is the requested sample timestamp in seconds from the start of the clip.
-
-`frame_index` is the decoded video frame index chosen for that timestamp.
-
-`sample_index` is the case-local sample index.
-
-`video_path` is the source video path as a string.
-
-`case_name` is the case directory name.
-
-`target` has these fields:
-
-`id` is the target id from `expected.yaml`.
-
-`index` is the target's zero-based order in the case file.
-
-`label` is the optional target label.
-
-`config` is the merged target metadata from `workflow.targets` and `targets.<id>.config`.
+- `suite_path` is the resolved path to the eval suite.
+- `config` is the object loaded from `--adapter-config`; it is an empty mapping when the option is omitted.
+- `artifacts_dir` is the path from `--artifacts-dir`, or `None` when the option is omitted.
+- `verbose` mirrors `--verbose`.
+- `sample` has these fields:
+- `image` is a decoded RGB `PIL.Image.Image` for the requested timestamp.
+- `timestamp_s` is the requested sample timestamp in seconds from the start of the clip.
+- `frame_index` is the decoded video frame index chosen for that timestamp.
+- `sample_index` is the case-local sample index.
+- `video_path` is the source video path as a string.
+- `case_name` is the case directory name.
+- `target` has these fields:
+- `id` is the target id from `expected.yaml`.
+- `index` is the target's zero-based order in the case file.
+- `label` is the optional target label.
+- `config` is the merged target metadata from `workflow.targets` and `targets.<id>.config`.
 
 ### Simple Function Adapters
 
@@ -511,26 +467,13 @@ If the adapter is unstable or expensive, add `--keep-going --save-failures --out
 
 Common issues:
 
-`adapter target not found` means the `<module-or-file>:<callable>` path imported successfully but the callable name could not be resolved.
+- `adapter target not found` means the `<module-or-file>:<callable>` path imported successfully but the callable name could not be resolved.
+- `adapter import failed` usually means the working directory, `PYTHONPATH`, or app environment does not include the adapter's dependencies.
+- `video file does not exist` means the `video:` path is wrong or is being resolved from the case directory differently than expected.
+- `sample ... exceeds video duration` means a timestamp is beyond the readable video duration. Check the recording length and the units in `expected.yaml`.
+- `missing field` means the adapter returned a value that does not contain the sample's `field` path.
+- `invalid_observation: adapter returned null` means the adapter returned `None` for a sample whose expected value was not `null`.
 
-`adapter import failed` usually means the working directory, `PYTHONPATH`, or app environment does not include the adapter's dependencies.
+## Technical detail
 
-`video file does not exist` means the `video:` path is wrong or is being resolved from the case directory differently than expected.
-
-`sample ... exceeds video duration` means a timestamp is beyond the readable video duration. Check the recording length and the units in `expected.yaml`.
-
-`missing field` means the adapter returned a value that does not contain the sample's `field` path.
-
-`invalid_observation: adapter returned null` means the adapter returned `None` for a sample whose expected value was not `null`.
-
-## What Belongs Where
-
-Put recorded videos and labels in the eval suite.
-
-Put app prompts, backend calls, SDK imports, image composition, response parsing, and secrets handling in the adapter.
-
-Put reusable target metadata in `workflow.targets` or `targets.<id>.config`.
-
-Put pass/fail policy in `thresholds`, `suite.yaml`, or CLI gate options.
-
-Do not add app-specific model dependencies to the `gk` package just to make an adapter work. Run `uv run --with gk gk eval ...` from the app environment, or set `PYTHONPATH` so the adapter can import the app code it already depends on.
+For internal details, please check [ANGETS.md](ANGETS.md).
