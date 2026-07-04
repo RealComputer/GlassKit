@@ -79,7 +79,7 @@ async def run_eval(
     options: RunOptions, callbacks: RunCallbacks | None = None
 ) -> EvalRunReport:
     if options.adapter is None:
-        raise EvalConfigError("gk eval run requires --adapter")
+        raise EvalConfigError("glasskit eval run requires --adapter")
     started_at = perf_counter()
     suite = load_eval_suite(
         options.suite_path,
@@ -326,7 +326,7 @@ def _save_failure_artifacts(
     options: RunOptions,
     suite_path: Path,
 ) -> SampleResult:
-    artifacts_dir = options.artifacts_dir or (suite_path / ".gk-artifacts")
+    artifacts_dir = options.artifacts_dir or (suite_path / ".glasskit-artifacts")
     failures_dir = artifacts_dir / "failures"
     stem = (
         f"{result.case_name}_{result.target_id}_"

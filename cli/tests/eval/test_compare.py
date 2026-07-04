@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gk.eval.compare import compare_observation
-from gk.eval.models import ComparisonConfig, SampleExpectation
+from glasskit_ai.eval.compare import compare_observation
+from glasskit_ai.eval.models import ComparisonConfig, SampleExpectation
 
 
 def test_exact_boolean_does_not_match_integer() -> None:

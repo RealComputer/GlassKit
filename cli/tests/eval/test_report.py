@@ -5,8 +5,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from gk.eval.models import EvalRunReport
-from gk.eval.report import print_run_summary
+from glasskit_ai.eval.models import EvalRunReport
+from glasskit_ai.eval.report import print_run_summary
 
 
 def test_print_run_summary_includes_formatted_duration() -> None:

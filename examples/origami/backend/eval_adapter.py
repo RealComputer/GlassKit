@@ -78,7 +78,9 @@ class OrigamiFoldCheckEvaluator:
             raise RuntimeError(f"unknown origami target id: {target_id}")
         reference = self._reference_images[target_id].copy()
         image = compose_fold_check_image(sample.image, reference)
-        thread_id = f"gk-eval-{sample.case_name}-{target_id}-{sample.sample_index}"
+        thread_id = (
+            f"glasskit-eval-{sample.case_name}-{target_id}-{sample.sample_index}"
+        )
         completion = await self._client.chat_completion_for_image(
             image_url=fold_check_image_data_url(image, self._jpeg_quality),
             thread_id=thread_id,

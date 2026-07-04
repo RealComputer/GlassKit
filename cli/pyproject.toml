@@ -1,5 +1,5 @@
 [project]
-name = "gk"
+name = "glasskit.ai"
 version = "0.1.0"
 description = "GlassKit command-line tools"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-gk = "gk.cli:app"
+glasskit = "glasskit_ai.cli:app"
 
 [dependency-groups]
 dev = [

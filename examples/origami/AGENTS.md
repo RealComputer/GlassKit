@@ -57,7 +57,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/rendering.py`: fold-check reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
-- `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames through the shared fold-check/Overshoot chat-completion path without LiveKit.
+- `eval_adapter.py`: recorded-video `glasskit eval` adapter that sends composed sampled frames through the shared fold-check/Overshoot chat-completion path without LiveKit.
 - `assets/origami_steps.json`: seven step definitions and prompts.
 - `assets/step-imgs/*.png`: backend demo copies of the step guide images, colorized into the green HUD style at render time.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.
@@ -77,5 +77,5 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --with-editable ../../../cli --env-file .env gk eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`: run a local recorded-video eval suite
+- `uv run --with-editable ../../../cli --env-file .env glasskit eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`: run a local recorded-video eval suite
 - `uv add <package>`: add a package

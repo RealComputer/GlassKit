@@ -1,12 +1,12 @@
 # GlassKit CLI
 
-`gk` is the GlassKit command-line package. Its first command family is `gk eval`, a recorded-video evaluator for smart-glasses apps.
+`glasskit.ai` is the GlassKit command-line package. Its first command family is `glasskit eval`, a recorded-video evaluator for smart-glasses apps.
 
-Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. Given a recording of a workflow, `gk eval` lets you label the important moments and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
+Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. Given a recording of a workflow, `glasskit eval` lets you label the important moments and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
 
 The current implementation assumes you use a `uv`-managed Python pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
 
-## Why Use `gk eval`?
+## Why Use `glasskit eval`?
 
 - Turn real camera recordings into repeatable tests instead of relying on memory, screenshots, or manual replay.
 - Test the vision path that users actually depend on: frames, prompts, model calls, response parsing, app logic, and thresholds.
@@ -19,25 +19,25 @@ The current implementation assumes you use a `uv`-managed Python pipeline. If yo
 - A short recording of the workflow you want to evaluate.
 - An `expected.yaml` file that says which timestamps or ranges should be checked and what each result should be.
 - A Python adapter function or object that receives decoded frames and returns JSON-like observations.
-- A `uv` command environment that can install `gk` and your app's runtime dependencies.
+- A `uv` command environment that can install `glasskit.ai` and your app's runtime dependencies.
 
 ## Install
 
-Use the CLI from the app repository that contains the eval suite, adapter, and app dependencies. Running from that directory keeps imports and relative paths predictable. If your app uses a `.env` file, pass it through the command runner, for example with `uv run --env-file .env`; `gk` does not load `.env` files by itself. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
+Use the CLI from the app repository that contains the eval suite, adapter, and app dependencies. Running from that directory keeps imports and relative paths predictable. If your app uses a `.env` file, pass it through the command runner, for example with `uv run --env-file .env`; the CLI does not load `.env` files by itself. With `uv`, install the published `glasskit.ai` package into the command environment and invoke the `glasskit` console script in one command:
 
 ```bash
 cd path/to/your-app
-uv run --with gk gk eval --help
+uv run --with glasskit.ai glasskit eval --help
 ```
 
-If you already installed the command another way (`uv add --dev gk`), you can drop the `uv run --with gk` prefix and run `gk eval ...` directly.
+If you already installed the command another way (`uv add --dev glasskit.ai`), you can drop the `uv run --with glasskit.ai` prefix and run `glasskit eval ...` directly.
 
 Run help when you need the exact options for the installed version:
 
 ```bash
-uv run --with gk gk --help
-uv run --with gk gk eval --help
-uv run --with gk gk eval run --help
+uv run --with glasskit.ai glasskit --help
+uv run --with glasskit.ai glasskit eval --help
+uv run --with glasskit.ai glasskit eval run --help
 ```
 
 ## Quick Start
@@ -47,7 +47,7 @@ Run these commands from your app repository so local imports, adapter files, and
 ### 1. Create a Case from a Recording
 
 ```bash
-uv run --with gk gk eval init-case \
+uv run --with glasskit.ai glasskit eval init-case \
   --suite eval-suite \
   --case fold-step-001 \
   --video path/to/recording.mp4 \
@@ -98,8 +98,8 @@ This adapter does not judge the image. It only proves that the suite, video deco
 ### 4. Validate and Inspect the Schedule
 
 ```bash
-uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:evaluate_sample
-uv run --with gk gk eval list-samples --suite eval-suite
+uv run --with glasskit.ai glasskit eval validate --suite eval-suite --adapter eval_adapter.py:evaluate_sample
+uv run --with glasskit.ai glasskit eval list-samples --suite eval-suite
 ```
 
 ### 5. Run the Eval
@@ -107,7 +107,7 @@ uv run --with gk gk eval list-samples --suite eval-suite
 Run the fake adapter first:
 
 ```bash
-uv run --with gk gk eval run \
+uv run --with glasskit.ai glasskit eval run \
   --adapter eval_adapter.py:evaluate_sample \
   --suite eval-suite \
   --min-pass-rate 1.0
@@ -116,7 +116,7 @@ uv run --with gk gk eval run \
 After that passes, replace the fake adapter body with the real call into your app or model backend and run with the options you want for local debugging or CI:
 
 ```bash
-uv run --with gk gk eval run \
+uv run --with glasskit.ai glasskit eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --min-pass-rate 0.9 \
@@ -293,7 +293,7 @@ Failed comparisons are intentionally controlled by quality gates instead of a bu
 CLI gates are useful for one-off CI jobs or local experiments:
 
 ```bash
-uv run --with gk gk eval run \
+uv run --with glasskit.ai glasskit eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --min-pass-rate 0.9 \
@@ -305,12 +305,12 @@ uv run --with gk gk eval run \
 
 ## Commands
 
-### `gk eval init-case`
+### `glasskit eval init-case`
 
 `init-case` creates a case directory, copies the source video into it when needed, and writes a starter `expected.yaml`:
 
 ```bash
-uv run --with gk gk eval init-case \
+uv run --with glasskit.ai glasskit eval init-case \
   --suite eval-suite \
   --case fold-step-001 \
   --video recordings/fold-step-001.mp4 \
@@ -320,35 +320,35 @@ uv run --with gk gk eval init-case \
 
 The case name must be a single directory name under the suite. If the source video is already inside the case directory, the generated `video:` path is written relative to the case directory. Use `--force` to overwrite an existing `expected.yaml` or case video.
 
-### `gk eval validate`
+### `glasskit eval validate`
 
 `validate` checks suite structure, YAML schema, video readability, sample timestamps, and optional adapter importability:
 
 ```bash
-uv run --with gk gk eval validate --suite eval-suite
-uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
-uv run --with gk gk eval validate --suite eval-suite --case fold-step-001
+uv run --with glasskit.ai glasskit eval validate --suite eval-suite
+uv run --with glasskit.ai glasskit eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
+uv run --with glasskit.ai glasskit eval validate --suite eval-suite --case fold-step-001
 ```
 
 Use validation before long or paid model evals. It catches most local mistakes without decoding sample frames or calling `evaluate`. Passing `--adapter` imports, constructs, and closes the adapter, so adapter setup side effects can still run.
 
-### `gk eval list-samples`
+### `glasskit eval list-samples`
 
 `list-samples` prints the expanded sample schedule:
 
 ```bash
-uv run --with gk gk eval list-samples --suite eval-suite
-uv run --with gk gk eval list-samples --suite eval-suite --case fold-step-001
+uv run --with glasskit.ai glasskit eval list-samples --suite eval-suite
+uv run --with glasskit.ai glasskit eval list-samples --suite eval-suite --case fold-step-001
 ```
 
 This is the quickest way to confirm that your ranges, point samples, fields, and explicit comparison modes expand as intended. When a sample omits `compare.mode`, the Mode column is blank because the default mode is inferred when the sample is evaluated.
 
-### `gk eval run`
+### `glasskit eval run`
 
 `run` decodes sample frames, calls the adapter, compares results, applies gates, prints a summary, and optionally writes JSON and failure artifacts:
 
 ```bash
-uv run --with gk gk eval run \
+uv run --with glasskit.ai glasskit eval run \
   --adapter eval_adapter.py:create_evaluator \
   --suite eval-suite \
   --case fold-step-001 \
@@ -365,7 +365,7 @@ uv run --with gk gk eval run \
 - `--keep-going` records adapter or comparison errors as errored sample results instead of aborting the run on the first error.
 - `--verbose` prints every sample result as it is produced and sets `AdapterConfig.verbose` for the adapter.
 - `--output-json` writes a machine-readable report with summary counts, elapsed run duration, gate results, and per-sample observations. The final console summary also shows the elapsed duration.
-- `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.gk-artifacts` in the suite directory.
+- `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.glasskit-artifacts` in the suite directory.
 - `--allow-empty` allows suites or cases with no samples. This is mainly useful while drafting a suite, not for real quality gates.
 
 ## Writing an Adapter
@@ -540,14 +540,14 @@ Keep retries, response parsing, prompt construction, and backend-specific error 
 Start with validation:
 
 ```bash
-uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
+uv run --with glasskit.ai glasskit eval validate --suite eval-suite --adapter eval_adapter.py:create_evaluator
 ```
 
 Then list samples and run one case:
 
 ```bash
-uv run --with gk gk eval list-samples --suite eval-suite --case fold-step-001
-uv run --with gk gk eval run --suite eval-suite --case fold-step-001 --adapter eval_adapter.py:create_evaluator --verbose
+uv run --with glasskit.ai glasskit eval list-samples --suite eval-suite --case fold-step-001
+uv run --with glasskit.ai glasskit eval run --suite eval-suite --case fold-step-001 --adapter eval_adapter.py:create_evaluator --verbose
 ```
 
 If the adapter is unstable or expensive, add `--keep-going --save-failures --output-json tmp/eval-results.json`. The saved failure images show exactly what frame the adapter saw, and the JSON report includes the raw observation, extracted field, comparison mode, and reason for each sample.
