@@ -11,8 +11,8 @@ from .constants import (
     DEFAULT_OVERSHOOT_API_URL,
     OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
+from .fold_check_prompts import fold_check_completion_payload
 from .payload_utils import _parse_positive_int, _response_text
-from .fold_check_prompts import LIVE_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -187,17 +187,12 @@ class OvershootClient:
         session_id: str,
         prompt: str,
     ) -> OvershootCompletionResult | None:
-        payload = {
-            "model": self._model,
-            "thread_id": session_id,
-            "temperature": 0,
-            "max_tokens": 8,
-            "messages": fold_check_messages(
-                prompt=prompt,
-                image_url=f"ovs://streams/{stream_id}?frame_index=-1",
-                system_prompt=LIVE_FOLD_CHECK_SYSTEM_PROMPT,
-            ),
-        }
+        payload = fold_check_completion_payload(
+            model=self._model,
+            thread_id=session_id,
+            prompt=prompt,
+            image_url=f"ovs://streams/{stream_id}?frame_index=-1",
+        )
         for attempt, delay in enumerate((0.0, *_CHAT_COMPLETION_RETRY_DELAYS), start=1):
             if delay:
                 await asyncio.sleep(delay)

@@ -21,10 +21,7 @@ from src.fold_check import (
     parse_fold_check_result,
 )
 from src.origami_config import OrigamiStep
-from src.fold_check_prompts import (
-    RECORDED_FOLD_CHECK_SYSTEM_PROMPT,
-    fold_check_messages,
-)
+from src.fold_check_prompts import fold_check_completion_payload
 
 _CHAT_COMPLETION_RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 
@@ -108,17 +105,12 @@ class OrigamiFoldCheckEvaluator:
         image: Image.Image,
         thread_id: str,
     ) -> dict[str, Any]:
-        payload = {
-            "model": self._overshoot_model,
-            "thread_id": thread_id,
-            "temperature": 0,
-            "max_tokens": 8,
-            "messages": fold_check_messages(
-                prompt=prompt,
-                image_url=_image_data_url(image, self._jpeg_quality),
-                system_prompt=RECORDED_FOLD_CHECK_SYSTEM_PROMPT,
-            ),
-        }
+        payload = fold_check_completion_payload(
+            model=self._overshoot_model,
+            thread_id=thread_id,
+            prompt=prompt,
+            image_url=_image_data_url(image, self._jpeg_quality),
+        )
         for attempt, delay in enumerate(_CHAT_COMPLETION_RETRY_DELAYS, start=1):
             if delay:
                 await asyncio.sleep(delay)
