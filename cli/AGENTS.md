@@ -2,6 +2,8 @@
 
 This package provides the `gk` command. Its current command group is recorded-video evaluation through `gk eval`.
 
+GlassKit CLI turns recorded smart-glasses workflows into repeatable eval suites by sampling labeled video moments, calling an app-provided adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs.
+
 ## Architecture
 
 - `src/gk/cli.py` wires the Typer app and exposes `gk eval run`, `validate`, `list-samples`, and `init-case`.
