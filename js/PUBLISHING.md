@@ -2,9 +2,9 @@
 
 The npm package is `@glasskit.ai/create`, and the supported create command is `npm create @glasskit.ai`. This package is intentionally WIP for the first release.
 
-## One-Time Bootstrap
+## One-Time Bootstrap (Done)
 
-If the npm package does not exist yet, publish the first version manually from this directory because npm Trusted Publishing is configured from an existing package's settings:
+The first version was published manually because npm Trusted Publishing requires the package to already exist:
 
 ```bash
 npm ci
@@ -13,17 +13,17 @@ npm pack --dry-run
 npm publish --access public
 ```
 
-Then configure npm Trusted Publishing on npmjs.com for `@glasskit.ai/create`:
+Then configure npm Trusted Publishing for `@glasskit.ai/create`:
 
-```text
-Owner: RealComputer
-Repository name: GlassKit
-Workflow filename: release.yml
-Environment name: npm
-Allowed action: npm publish
+```bash
+npm trust github @glasskit.ai/create \
+  --repo RealComputer/GlassKit \
+  --file release.yml \
+  --env npm \
+  --allow-publish
 ```
 
-Create a GitHub environment named `npm`. A required reviewer is optional but recommended.
+npm requires 2FA for this operation. The GitHub environment is named `npm`, with `tash-2s` as the required reviewer and self-review allowed.
 
 ## Release Flow
 
@@ -35,11 +35,14 @@ npm test
 npm pack --dry-run
 ```
 
-For a normal future release, bump the version, commit the version change, tag the commit with the npm package-specific tag format, and push both the branch and tag:
+For a normal future release, bump the version without npm's default `vX.Y.Z` tag, commit the version change, create the package-specific tag, and push both the branch and tag:
 
 ```bash
-npm version patch -m "Release @glasskit.ai/create %s"
+npm version patch --no-git-tag-version
 VERSION="$(node -p "require('./package.json').version")"
+git add package.json package-lock.json
+git commit -m "Release @glasskit.ai/create v${VERSION}"
+git tag -a "npm-glasskit-ai-create-v${VERSION}" -m "npm-glasskit-ai-create-v${VERSION}"
 git push origin main
 git push origin "npm-glasskit-ai-create-v${VERSION}"
 ```
