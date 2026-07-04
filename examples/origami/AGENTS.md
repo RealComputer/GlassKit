@@ -29,8 +29,8 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 3. The backend enters the first step, publishes HUD state, and starts fold checking when auto check is available.
 4. The backend sends composed camera/reference video to the Overshoot LiveKit room.
 5. The backend prompts the hosted VLM against the latest ingested stream frame, parses the boolean response, and decides whether to advance the step.
-6. Swipe controls and browser demo controls send manual navigation commands to the backend.
-7. Completion or reset returns the HUD to the start screen.
+6. Swipe controls send manual navigation commands to the backend, and browser demo controls can start, navigate, toggle auto check, and reset the active workflow.
+7. Completion leaves the HUD on the completed workflow screen until a reset returns it to the start screen.
 
 # Key Files
 
@@ -59,7 +59,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/origami_config.py`: step config loader.
 - `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames through the shared fold-check/Overshoot chat-completion path without LiveKit.
 - `assets/origami_steps.json`: seven step definitions and prompts.
-- `assets/step-imgs/*.png`: green browser-demo HUD versions of the step guide images.
+- `assets/step-imgs/*.png`: backend demo copies of the step guide images, colorized into the green HUD style at render time.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.
 - `.env.example`: required key and optional Overshoot overrides.
 
