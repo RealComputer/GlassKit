@@ -1,6 +1,6 @@
 # GlassKit CLI
 
-`glasskit.ai` is the GlassKit command-line package. Its first command family is `glasskit eval`, a recorded-video evaluator for smart-glasses apps.
+This is the GlassKit command-line package. Its first command family is `glasskit eval`, a recorded-video evaluator for smart-glasses apps.
 
 Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. Given a recording of a workflow, `glasskit eval` lets you label the important moments and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
 
