@@ -44,11 +44,11 @@ cp .env.example .env
 
 Optional backend overrides can also be specified inline when starting FastAPI:
 
-- `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening Overshoot streams. When disabled at startup, auto check stays off.
-- `ORIGAMI_RECORD_OVERSHOOT_INPUTS=false` to disable the default recording of real camera frames sent into the Overshoot path for inspection. Recordings are written under `backend/debug/overshoot-inputs` before reference-image composition.
-- `ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR` to choose where Overshoot input recordings are written
-- `ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES=true` to save Overshoot input previews for debugging
-- `ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR` to choose where debug preview images are written
+- `ORIGAMI_AUTO_CHECK_ENABLED=false` to keep sessions and the browser demo running without opening fold-check provider streams. When disabled at startup, auto check stays off.
+- `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=false` to disable the default recording of real camera frames sent into the fold-check path for inspection. Recordings are written under `backend/debug/fold-check-inputs` before reference-image composition.
+- `ORIGAMI_FOLD_CHECK_INPUT_RECORDING_DIR` to choose where fold-check input recordings are written
+- `ORIGAMI_DEBUG_SAVE_FOLD_CHECK_COMPOSITES=true` to save fold-check input previews for debugging
+- `ORIGAMI_DEBUG_FOLD_CHECK_COMPOSITE_DIR` to choose where debug preview images are written
 - `OVERSHOOT_MODEL`
 
 ### Run the Backend
@@ -97,9 +97,9 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 
 ### Recorded-Video Evals
 
-The backend includes a `gk eval` adapter at `backend/eval_adapter.py`. It evaluates recorded camera-input videos from files, composes the same reference-image header used by the live Overshoot path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with `expected.yaml`.
+The backend includes a `gk eval` adapter at `backend/eval_adapter.py`. It evaluates recorded camera-input videos from files, composes the same reference-image header used by the live fold-check path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with `expected.yaml`.
 
-Create eval cases from existing Overshoot input recordings by running the app with `ORIGAMI_RECORD_OVERSHOOT_INPUTS=true`, copying a generated MP4 from `backend/debug/overshoot-inputs` into an eval-suite case directory, and manually labeling stable timestamp ranges in `expected.yaml`. Leave transition, occluded, or ambiguous windows undeclared.
+Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, copying a generated MP4 from `backend/debug/fold-check-inputs` into an eval-suite case directory, and manually labeling stable timestamp ranges in `expected.yaml`. Leave transition, occluded, or ambiguous windows undeclared.
 
 Local development command:
 
