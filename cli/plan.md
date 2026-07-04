@@ -4,7 +4,6 @@ This file tracks remaining and future work for the `glasskit eval` recorded-vide
 
 ## Priorities
 
-- Prepare the `glasskit.ai` package for publication by confirming package metadata, release workflow, versioning policy, and PyPI name availability before the first public release.
 - Decide the storage policy for realistic eval suites before committing any real recordings. Use external storage, Git LFS, or artifact buckets only after making an explicit privacy and repository-size decision.
   - Document any future storage location for realistic eval suites once that policy exists.
 - Add clip-level evaluation support only when an app needs temporal model observations. This should be an optional protocol and schema extension rather than changing the frame-sample adapter contract.
