@@ -6,7 +6,7 @@ env:
 on:
   push:
     tags:
-      - "v*"
+      - "pypi-glasskit-ai-v*"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           PACKAGE_VERSION="$(uv version --short)"
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${GITHUB_REF_NAME#pypi-glasskit-ai-v}"
 
           if [[ "${PACKAGE_VERSION}" != "${TAG_VERSION}" ]]; then
             echo "::error::pyproject.toml version ${PACKAGE_VERSION} does not match tag ${TAG_VERSION}"
@@ -94,9 +94,37 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_PREFIX: pypi-glasskit-ai-v
         run: |
+          VERSION="${GITHUB_REF_NAME#${RELEASE_TAG_PREFIX}}"
+          PREVIOUS_TAG="$(
+            git tag --list "${RELEASE_TAG_PREFIX}*" --sort=-v:refname \
+              | grep -Fxv "${GITHUB_REF_NAME}" \
+              | head -n 1 \
+              || true
+          )"
+
+          {
+            echo "PyPI package: glasskit.ai"
+            echo "Version: ${VERSION}"
+
+            if [[ -n "${PREVIOUS_TAG}" ]]; then
+              echo
+              echo "CLI changes since ${PREVIOUS_TAG}:"
+              git log --format='- %s (%h)' "${PREVIOUS_TAG}..${GITHUB_REF_NAME}" -- cli > /tmp/cli-release-changes.txt
+              if [[ -s /tmp/cli-release-changes.txt ]]; then
+                cat /tmp/cli-release-changes.txt
+              else
+                echo "- No changes under cli/."
+              fi
+            else
+              echo
+              echo "Initial PyPI release for glasskit.ai."
+            fi
+          } > release-notes.md
+
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes
+            --title "PyPI: glasskit.ai v${VERSION}" \
+            --notes-file release-notes.md

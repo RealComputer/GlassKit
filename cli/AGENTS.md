@@ -30,5 +30,5 @@ GlassKit CLI turns recorded smart-glasses workflows into repeatable eval suites 
 - `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after changes.
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
 - `uv build --no-sources --clear` plus isolated `dist/*.whl` and `dist/*.tar.gz` smoke tests: verify publishable artifacts before release.
-- Releases are tag-triggered from the repository root workflow. `pyproject.toml` version and the pushed `vX.Y.Z` tag must match.
+- PyPI releases are tag-triggered from the repository root workflow. `pyproject.toml` version and the pushed `pypi-glasskit-ai-vX.Y.Z` tag must match.
 - For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`
