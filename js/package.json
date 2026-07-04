@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/RealComputer/GlassKit/issues"
   },
-  "homepage": "https://github.com/RealComputer/GlassKit#readme",
+  "homepage": "https://glasskit.ai",
   "bin": {
     "create-glasskit": "bin/create.js"
   },
