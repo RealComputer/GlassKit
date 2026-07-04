@@ -43,7 +43,7 @@ class FoldCheckRuntime:
         self,
         *,
         auto_check_available: bool,
-        api_key: str,
+        overshoot_api_key: str,
         model: str,
         sessions: dict[str, OrigamiSession],
         sessions_lock: asyncio.Lock,
@@ -55,7 +55,7 @@ class FoldCheckRuntime:
         input_recording_dir: Path,
     ) -> None:
         self._auto_check_available = auto_check_available
-        self._client = OvershootClient(api_key=api_key, model=model)
+        self._client = OvershootClient(api_key=overshoot_api_key, model=model)
         self._diagnostics = FoldCheckDiagnostics(
             save_composites=save_composites,
             composite_dir=debug_composite_dir,

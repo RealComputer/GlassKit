@@ -24,9 +24,9 @@ manager: OrigamiSessionManager | None = None
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global manager
 
-    fold_check_api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
+    overshoot_api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
     auto_check_available = _auto_check_available_from_env()
-    if auto_check_available and not fold_check_api_key:
+    if auto_check_available and not overshoot_api_key:
         raise RuntimeError(
             "Set OVERSHOOT_API_KEY in backend/.env or set "
             "ORIGAMI_AUTO_CHECK_ENABLED=false"
@@ -50,7 +50,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     )
 
     manager = OrigamiSessionManager(
-        fold_check_api_key=fold_check_api_key,
+        overshoot_api_key=overshoot_api_key,
         fold_check_model=fold_check_model,
         steps_path=steps_path,
         auto_check_available=auto_check_available,

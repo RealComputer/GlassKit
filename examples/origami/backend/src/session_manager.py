@@ -56,7 +56,7 @@ class OrigamiSessionManager:
     def __init__(
         self,
         *,
-        fold_check_api_key: str,
+        overshoot_api_key: str,
         fold_check_model: str,
         steps_path: Path,
         auto_check_available: bool = True,
@@ -85,7 +85,7 @@ class OrigamiSessionManager:
         self._viewers_lock = asyncio.Lock()
         self._fold_check = FoldCheckRuntime(
             auto_check_available=auto_check_available,
-            api_key=fold_check_api_key,
+            overshoot_api_key=overshoot_api_key,
             model=fold_check_model,
             sessions=self._sessions,
             sessions_lock=self._sessions_lock,
