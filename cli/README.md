@@ -147,7 +147,7 @@ Use ranges for stable windows where the expected answer should be unchanged. Use
 
 `sampling.every_s` sets the default sample interval for `range` blocks in the case. The default is `0.5` seconds.
 
-`workflow.targets` is optional metadata keyed by target id. Each entry must have `id`; `label` is optional; extra fields are passed to the adapter as `target.config` unless overridden by `targets.<id>.config`.
+`workflow.targets` is optional metadata matched to targets by each entry's `id`. Each entry must have `id`; `label` is optional; extra fields are passed to the adapter as `target.config` unless overridden by `targets.<id>.config`.
 
 `targets.<target_id>.label` is optional display text for reports.
 
@@ -174,7 +174,7 @@ targets:
         expect: true
 ```
 
-Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with numeric path parts such as `detections.0.label`.
+Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with non-negative numeric path parts such as `detections.0.label`.
 
 Supported `compare.mode` values are:
 
@@ -285,7 +285,7 @@ uv run --with gk gk eval list-samples --suite eval-suite
 uv run --with gk gk eval list-samples --suite eval-suite --case fold-step-001
 ```
 
-This is the quickest way to confirm that your ranges, point samples, fields, and comparison modes expand as intended.
+This is the quickest way to confirm that your ranges, point samples, fields, and explicit comparison modes expand as intended. When a sample omits `compare.mode`, the Mode column is blank because the default mode is inferred when the sample is evaluated.
 
 ### `gk eval run`
 
