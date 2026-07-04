@@ -615,9 +615,7 @@ class OrigamiSessionManager:
             return
         if not session.auto_check_enabled:
             return
-        await self._fail_session(
-            session, "Fold check stream ended. Double tap to restart."
-        )
+        await self._fail_session(session, "Auto check stopped. Double tap to restart.")
 
     async def _fail_session(self, session: OrigamiSession, message: str) -> None:
         await self._cancel_done_task(session)
