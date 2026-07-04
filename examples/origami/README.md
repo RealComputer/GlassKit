@@ -117,7 +117,7 @@ uv run \
   --min-pass-rate 0.9
 ```
 
-For projects outside this repository, install and run the published `gk` command instead of using the monorepo `--with-editable ../../../cli` path. See the [CLI README](../../../cli/README.md) for details.
+For projects outside this repository, install and run the published `gk` command instead of using the monorepo `--with-editable ../../../cli` path. See the [CLI README](../../cli/README.md) for details.
 
 ## Vision Path Comparison
 
