@@ -14,7 +14,7 @@ Workflow filename: release.yml
 Environment name: pypi
 ```
 
-Create the GitHub environment named `pypi` if you want approval gates before publishing. The workflow references that environment so the PyPI OIDC claim includes the expected environment name.
+The GitHub environment named `pypi` requires review by `tash-2s` before the release job can run. Self-review is allowed for now because this repo has a solo maintainer. The workflow references that environment so the PyPI OIDC claim includes the expected environment name.
 
 ## Release Flow
 
@@ -47,4 +47,4 @@ git push origin "v${VERSION}"
 
 Pushing the tag runs `.github/workflows/release.yml`. The workflow checks that the tag matches `pyproject.toml`, runs type checks, tests, lint, formatting checks, source CLI help checks, builds wheel and sdist artifacts, smoke-tests both artifacts, publishes to PyPI with `uv publish --trusted-publishing always`, and creates a GitHub Release with the built artifacts attached.
 
-If the GitHub environment has required reviewers, approve the `pypi` deployment in GitHub Actions after reviewing the run. If the PyPI publish fails because the trusted publisher does not match, check the PyPI project name, owner, repository, workflow filename, and environment name listed above.
+After pushing the release tag, open the GitHub Actions release run and approve the `pypi` deployment when GitHub asks for review. If the PyPI publish fails because the trusted publisher does not match, check the PyPI project name, owner, repository, workflow filename, and environment name listed above.

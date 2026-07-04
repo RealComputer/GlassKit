@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  UV_PYTHON: "3.12"
+
 on:
   pull_request:
     paths:
@@ -40,6 +43,9 @@ jobs:
 
       - name: Sync dependencies
         run: uv sync --locked --dev
+
+      - name: Verify Python runtime
+        run: uv run python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
 
       - name: Type check
         run: uv run ty check

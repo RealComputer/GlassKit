@@ -32,7 +32,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://glasskit.ai"
-Documentation = "https://glasskit.ai/docs"
+Documentation = "https://github.com/RealComputer/GlassKit/blob/main/cli/README.md"
 Repository = "https://github.com/RealComputer/GlassKit"
 Issues = "https://github.com/RealComputer/GlassKit/issues"
 

@@ -1,5 +1,8 @@
 name: Release
 
+env:
+  UV_PYTHON: "3.12"
+
 on:
   push:
     tags:
@@ -44,6 +47,9 @@ jobs:
 
       - name: Sync dependencies
         run: uv sync --locked --dev
+
+      - name: Verify Python runtime
+        run: uv run python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
 
       - name: Verify tag matches package version
         shell: bash
