@@ -563,4 +563,4 @@ Common issues:
 
 ## Technical Details
 
-For contributor-oriented implementation notes, see [AGENTS.md](AGENTS.md).
+For contributor-oriented implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
