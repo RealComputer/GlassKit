@@ -273,7 +273,7 @@ targets:
 
 ## Suite-Level Thresholds
 
-Put thresholds that should apply to the selected run as a whole in `suite.yaml` or `eval.yaml` at the suite root. Suite-level `min_pass_rate` and `max_failures` gates are evaluated against the combined selected results. Suite-level `per_target` entries apply across the selected samples for each target id:
+Put thresholds that should apply to the selected run as a whole in `suite.yaml` at the suite root. Suite-level `min_pass_rate` and `max_failures` gates are evaluated against the combined selected results. Suite-level `per_target` entries apply across the selected samples for each target id:
 
 ```yaml
 thresholds:

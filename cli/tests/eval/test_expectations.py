@@ -214,6 +214,38 @@ def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
         load_eval_suite(case_dir.parent)
 
 
+def test_suite_yaml_loads_suite_thresholds(tmp_path: Path) -> None:
+    case_dir = _case_dir(
+        tmp_path,
+        """
+        version: 1
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (case_dir.parent / "suite.yaml").write_text(
+        """
+        thresholds:
+          min_pass_rate: 0.9
+          max_failures: 2
+          per_target:
+            step_1:
+              min_pass_rate: 0.95
+        """,
+        encoding="utf-8",
+    )
+
+    suite = load_eval_suite(case_dir.parent)
+
+    assert suite.thresholds.min_pass_rate == 0.9
+    assert suite.thresholds.max_failures == 2
+    assert suite.thresholds.per_target["step_1"].min_pass_rate == 0.95
+
+
 def _case_dir(tmp_path: Path, expected_yaml: str) -> Path:
     case_dir = tmp_path / "suite" / "case-001"
     case_dir.mkdir(parents=True)

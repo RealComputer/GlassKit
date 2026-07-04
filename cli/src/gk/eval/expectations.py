@@ -67,13 +67,11 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
 
 
 def _load_suite_thresholds(suite_path: Path) -> Thresholds:
-    for filename in ("suite.yaml", "eval.yaml"):
-        path = suite_path / filename
-        if not path.exists():
-            continue
-        raw = parse_suite_yaml(_load_yaml_mapping(path), label=str(path))
-        return _thresholds_from_raw(raw.thresholds)
-    return Thresholds()
+    path = suite_path / "suite.yaml"
+    if not path.exists():
+        return Thresholds()
+    raw = parse_suite_yaml(_load_yaml_mapping(path), label=str(path))
+    return _thresholds_from_raw(raw.thresholds)
 
 
 def _discover_case_dirs(suite_path: Path, case_filter: str | None) -> list[Path]:
