@@ -1,6 +1,6 @@
 # Publishing @glasskit.ai/create
 
-The npm package is `@glasskit.ai/create`, and the supported create command is `npm create @glasskit.ai`. This package is intentionally WIP for the first release.
+The npm package is `@glasskit.ai/create`, and the supported create command is `npm create @glasskit.ai`.
 
 ## One-Time Bootstrap (Done)
 
@@ -23,7 +23,7 @@ npm trust github @glasskit.ai/create \
   --allow-publish
 ```
 
-npm requires 2FA for this operation. The GitHub environment is named `npm`, with `tash-2s` as the required reviewer and self-review allowed.
+The GitHub environment is named `npm`, with `tash-2s` as the required reviewer and self-review allowed.
 
 ## Release Flow
 
@@ -48,3 +48,5 @@ git push origin "npm-glasskit-ai-create-v${VERSION}"
 ```
 
 Pushing the `npm-glasskit-ai-create-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow checks that the tag matches `package.json`, runs tests, builds the generated template, packs the npm artifact, smoke-tests the packed artifact, publishes to npm with Trusted Publishing/OIDC, and creates a package-scoped GitHub Release with the npm tarball attached.
+
+After pushing the release tag, open the GitHub Actions release run and approve the `npm` deployment when GitHub asks for review.
