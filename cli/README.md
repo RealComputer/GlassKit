@@ -312,7 +312,7 @@ uv run --with gk gk eval run \
 
 `--verbose` prints every sample result as it is produced and sets `AdapterConfig.verbose` for the adapter.
 
-`--output-json` writes a machine-readable report with summary counts, gate results, and per-sample observations.
+`--output-json` writes a machine-readable report with summary counts, elapsed run duration, gate results, and per-sample observations. The final console summary also shows the elapsed duration.
 
 `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.gk-artifacts` in the suite directory.
 

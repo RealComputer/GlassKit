@@ -216,6 +216,7 @@ class EvalRunReport:
     case_names: list[str]
     results: list[SampleResult]
     gate_results: list[GateResult]
+    duration_s: float
 
     @property
     def passed_count(self) -> int:

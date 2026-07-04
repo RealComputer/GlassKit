@@ -94,6 +94,7 @@ def print_run_summary(
         f"{report.error_count} errors"
     )
     console.print(f"Pass rate: {report.pass_rate:.1%} ({status})")
+    console.print(f"Duration: {_format_duration(report.duration_s)}")
 
     if report.gate_results:
         gate_table = Table(title="Gates")
@@ -158,3 +159,13 @@ def _short(value: Any) -> str:
     if len(text) > 80:
         return text[:77] + "..."
     return text
+
+
+def _format_duration(duration_s: float) -> str:
+    if duration_s < 60:
+        return f"{duration_s:.1f}s"
+    minutes, seconds = divmod(duration_s, 60)
+    if minutes < 60:
+        return f"{int(minutes)}m {seconds:.1f}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{int(hours)}h {int(minutes)}m {seconds:.1f}s"

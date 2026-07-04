@@ -39,6 +39,12 @@ def test_runner_records_non_json_adapter_observations_with_keep_going(
     asyncio.run(_run_non_json_adapter_observation_test(tmp_path))
 
 
+def test_runner_records_duration_in_report_and_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asyncio.run(_run_duration_report_test(tmp_path, monkeypatch))
+
+
 def test_runner_preserves_eval_error_when_close_also_fails(tmp_path: Path) -> None:
     asyncio.run(_run_close_error_masking_test(tmp_path))
 
@@ -308,6 +314,45 @@ def create_evaluator(config):
     data = json.loads(output_json.read_text(encoding="utf-8"))
     assert data["results"][0]["status"] == "error"
     assert "non-JSON observation" in data["results"][0]["reason"]
+
+
+async def _run_duration_report_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    suite_dir = FIXTURES / "eval_suites" / "two-state"
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [sample.timestamp_s >= 1.0 for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return sample.timestamp_s >= 1.0
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "report.json"
+    clock_values = iter([10.0, 72.25])
+    monkeypatch.setattr("gk.eval.runner.perf_counter", lambda: next(clock_values))
+
+    report = await run_eval(
+        RunOptions(
+            suite_path=suite_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            output_json=output_json,
+        )
+    )
+
+    assert report.duration_s == pytest.approx(62.25)
+    data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert data["summary"]["duration_seconds"] == pytest.approx(62.25)
 
 
 async def _run_close_error_masking_test(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Protocol
 
 from .adapters import load_evaluator
@@ -79,6 +80,7 @@ async def run_eval(
 ) -> EvalRunReport:
     if options.adapter is None:
         raise EvalConfigError("gk eval run requires --adapter")
+    started_at = perf_counter()
     suite = load_eval_suite(
         options.suite_path,
         case_filter=options.case_filter,
@@ -158,6 +160,7 @@ async def run_eval(
         case_names=[case.name for case in suite.cases],
         results=results,
         gate_results=gate_results,
+        duration_s=max(0.0, perf_counter() - started_at),
     )
     if options.output_json is not None:
         write_json_report(report, options.output_json)
@@ -521,6 +524,7 @@ def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
             "failed": report.failed_count,
             "errors": report.error_count,
             "pass_rate": report.pass_rate,
+            "duration_seconds": report.duration_s,
         },
         "gates": [gate.__dict__ for gate in report.gate_results],
         "results": [_result_to_json(result) for result in report.results],
