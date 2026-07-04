@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 DEFAULT_OVERSHOOT_API_URL = "https://api.overshoot.ai/v1beta"
-DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8"
+DEFAULT_OVERSHOOT_MODEL = "Qwen/Qwen3.6-27B-FP8"
 
 PHASE_WAITING = "WAITING_FOR_START"
 PHASE_GUIDING = "GUIDING"
