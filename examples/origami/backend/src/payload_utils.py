@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -16,7 +15,7 @@ def _parse_json_object(raw_text: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _parse_overshoot_boolean(payload: dict[str, Any]) -> bool | None:
+def _parse_fold_check_boolean(payload: dict[str, Any]) -> bool | None:
     if payload.get("ok") is False:
         return None
     raw = payload.get("result")
@@ -28,14 +27,6 @@ def _parse_overshoot_boolean(payload: dict[str, Any]) -> bool | None:
             return True
         if lowered == "false":
             return False
-        with suppress(json.JSONDecodeError):
-            parsed = json.loads(raw)
-            if isinstance(parsed, bool):
-                return parsed
-            if isinstance(parsed, dict):
-                return _first_boolean(parsed)
-    if isinstance(raw, dict):
-        return _first_boolean(raw)
     return None
 
 
@@ -44,21 +35,6 @@ def _payload_received_at(payload: dict[str, Any]) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return time.monotonic()
-
-
-def _first_boolean(payload: dict[str, Any]) -> bool | None:
-    for key in ("matches", "match", "result", "value", "ok"):
-        value = payload.get(key)
-        if isinstance(value, bool):
-            return value
-    return None
-
-
-def _overshoot_payload_for_log(payload: dict[str, Any]) -> dict[str, Any]:
-    summarized = dict(payload)
-    if "prompt" in summarized:
-        summarized["prompt"] = "<active prompt>"
-    return summarized
 
 
 def _extract_answer_sdp(payload: Any) -> str:

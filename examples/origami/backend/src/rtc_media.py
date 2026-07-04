@@ -23,16 +23,13 @@ from .constants import (
     AIORTC_H264_MAX_BITRATE,
     AIORTC_H264_MIN_BITRATE,
     DEMO_FPS,
-    OVERSHOOT_FPS,
     VIDEO_CLOCK_RATE,
 )
-from .rendering import _compose_reference_image, _demo_placeholder, _frame_to_image
-from .session_state import OrigamiSession
 
 logger = logging.getLogger("uvicorn.error")
 
 # aiortc does not expose sender bitrate parameters; tune the H.264 codec module
-# before any backend-originated demo or Overshoot encoders are created.
+# before any backend-originated demo encoders are created.
 setattr(aiortc_h264, "DEFAULT_BITRATE", AIORTC_H264_DEFAULT_BITRATE)
 setattr(aiortc_h264, "MIN_BITRATE", AIORTC_H264_MIN_BITRATE)
 setattr(aiortc_h264, "MAX_BITRATE", AIORTC_H264_MAX_BITRATE)
@@ -61,35 +58,6 @@ class TimedVideoTrack(MediaStreamTrack):
         frame.time_base = Fraction(1, VIDEO_CLOCK_RATE)
         self._pts += int(VIDEO_CLOCK_RATE / self._fps)
         return frame
-
-
-class ReferenceCompositeTrack(TimedVideoTrack):
-    def __init__(
-        self,
-        manager: Any,
-        session: OrigamiSession,
-    ) -> None:
-        super().__init__(fps=OVERSHOOT_FPS)
-        self._manager = manager
-        self._session = session
-        self._last_frame_id: int | None = None
-
-    async def recv(self) -> VideoFrame:
-        await self._wait_tick()
-        item = await self._session.camera_frames.wait_for_new(
-            self._last_frame_id,
-            timeout_seconds=0.2,
-        )
-        if item is not None:
-            self._last_frame_id = item[0]
-            camera = _frame_to_image(item[1], fallback_size=(1024, 768))
-        else:
-            camera = _demo_placeholder("Waiting for camera")
-        step = self._manager.current_step_for(self._session)
-        reference = self._manager.reference_image_for(step)
-        return self._video_frame_from_image(
-            _compose_reference_image(camera, reference, "Reference shape")
-        )
 
 
 class DemoCompositeTrack(TimedVideoTrack):
@@ -145,25 +113,5 @@ def create_peer_connection() -> RTCPeerConnection:
     return RTCPeerConnection(
         RTCConfiguration(
             iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
-        )
-    )
-
-
-def create_overshoot_peer_connection() -> RTCPeerConnection:
-    return RTCPeerConnection(
-        RTCConfiguration(
-            iceServers=[
-                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-                RTCIceServer(
-                    urls=[
-                        "turn:turn.overshoot.ai:3478?transport=udp",
-                        "turn:turn.overshoot.ai:3478?transport=tcp",
-                        "turns:turn.overshoot.ai:443?transport=udp",
-                        "turns:turn.overshoot.ai:443?transport=tcp",
-                    ],
-                    username="overshoot",
-                    credential="overshoot",
-                ),
-            ]
         )
     )

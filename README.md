@@ -166,6 +166,7 @@ Then follow that example's README.
 | Path | What it contains |
 | --- | --- |
 | [`skills/glasskit/`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter, and smart-glasses app references for coding agents and human developers. |
+| [`cli/`](cli/README.md) | `gk` command-line tools, including recorded-video evals for apps. |
 | [`docs/`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
 | [`examples/`](examples) | Runnable Rokid Glasses examples you can copy or adapt. |
 
