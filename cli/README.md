@@ -9,7 +9,7 @@ The current implementation assumes you use a `uv`-managed Python pipeline. If yo
 ## Why Use `gk eval`?
 
 - Turn real camera recordings into repeatable tests instead of relying on memory, screenshots, or manual replay.
-- Test the full vision path that users actually depend on: frames, prompts, model calls, response parsing, app logic, and thresholds.
+- Test the vision path that users actually depend on: frames, prompts, model calls, response parsing, app logic, and thresholds.
 - Label only stable moments in the video and skip ambiguous transitions that would make a test noisy.
 - Keep app-specific behavior in your adapter while reusing the CLI for video handling, comparison modes, JSON reports, and failure images.
 - Run the same suite locally and in CI with exit codes that distinguish setup errors from quality-gate failures.
@@ -38,14 +38,6 @@ Run help when you need the exact options for the installed version:
 uv run --with gk gk --help
 uv run --with gk gk eval --help
 uv run --with gk gk eval run --help
-```
-
-Pass app environment files or extra runtime settings through `uv` in the same command:
-
-```bash
-uv run --with gk --env-file .env gk eval run \
-  --adapter eval_adapter.py:create_evaluator \
-  --suite eval-suite
 ```
 
 ## Quick Start
@@ -141,7 +133,6 @@ Keep the eval suite next to the adapter and app code that it exercises. This mak
 
 ```text
 your-app/
-  .env
   eval_adapter.py
   adapter-config.yaml
   eval-suite/
@@ -151,9 +142,6 @@ your-app/
     fold-step-002/
       video.mp4
       expected.yaml
-  tmp/
-    eval-results.json
-    eval-artifacts/
 ```
 
 Commit the suite files that your team should share. Keep secrets in environment variables or uncommitted environment files, not in `expected.yaml` or `adapter-config.yaml`.
