@@ -34,7 +34,7 @@ UV_PYTHON=3.12 uv run --isolated --no-project --with dist/*.whl glasskit --help
 UV_PYTHON=3.12 uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
 ```
 
-For a normal future release, bump the version, commit the version change, tag the commit with the PyPI package-specific tag format, and push both the branch and tag:
+For a normal future release, bump the version, commit the version change, tag the commit with the PyPI package-specific tag format, and atomically push both the branch and tag:
 
 ```bash
 uv version --bump patch
@@ -42,8 +42,7 @@ VERSION="$(uv version --short)"
 git add pyproject.toml uv.lock
 git commit -m "Release glasskit.ai v${VERSION}"
 git tag -a "pypi-glasskit-ai-v${VERSION}" -m "pypi-glasskit-ai-v${VERSION}"
-git push origin main
-git push origin "pypi-glasskit-ai-v${VERSION}"
+git push --atomic origin main "pypi-glasskit-ai-v${VERSION}"
 ```
 
 Pushing the `pypi-glasskit-ai-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow checks that the tag matches `pyproject.toml`, runs type checks, tests, lint, formatting checks, source CLI help checks, builds wheel and sdist artifacts, smoke-tests both artifacts, publishes to PyPI with `uv publish --trusted-publishing always`, and creates a package-scoped GitHub Release with the built artifacts attached.

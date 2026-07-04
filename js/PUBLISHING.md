@@ -35,7 +35,7 @@ npm test
 npm pack --dry-run
 ```
 
-For a normal future release, bump the version without npm's default `vX.Y.Z` tag, commit the version change, create the package-specific tag, and push both the branch and tag:
+For a normal future release, bump the version without npm's default `vX.Y.Z` tag, commit the version change, create the package-specific tag, and atomically push both the branch and tag:
 
 ```bash
 npm version patch --no-git-tag-version
@@ -43,8 +43,7 @@ VERSION="$(node -p "require('./package.json').version")"
 git add package.json package-lock.json
 git commit -m "Release @glasskit.ai/create v${VERSION}"
 git tag -a "npm-glasskit-ai-create-v${VERSION}" -m "npm-glasskit-ai-create-v${VERSION}"
-git push origin main
-git push origin "npm-glasskit-ai-create-v${VERSION}"
+git push --atomic origin main "npm-glasskit-ai-create-v${VERSION}"
 ```
 
 Pushing the `npm-glasskit-ai-create-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow checks that the tag matches `package.json`, runs tests, builds the generated template, packs the npm artifact, smoke-tests the packed artifact, publishes to npm with Trusted Publishing/OIDC, and creates a package-scoped GitHub Release with the npm tarball attached.
