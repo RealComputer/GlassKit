@@ -14,7 +14,7 @@ from .constants import PHASE_WAITING
 if TYPE_CHECKING:
     from livekit import rtc
 
-    from .recording import OvershootInputRecorder
+    from .recording import FoldCheckInputRecorder
 
 
 @dataclass
@@ -71,11 +71,11 @@ class LatestFrameBuffer:
 
 
 @dataclass(frozen=True)
-class OvershootRuntimeSnapshot:
+class FoldCheckRuntimeSnapshot:
     stream_id: str | None
     room: rtc.Room | None
     video_source: rtc.VideoSource | None
-    input_recorder: OvershootInputRecorder | None
+    input_recorder: FoldCheckInputRecorder | None
     publish_task: asyncio.Task[None] | None
     prompt_task: asyncio.Task[None] | None
     keepalive_task: asyncio.Task[None] | None
@@ -91,7 +91,7 @@ class OvershootRuntimeSnapshot:
 
 
 @dataclass
-class OvershootSessionState:
+class FoldCheckRuntimeState:
     generation: int = 0
     stream_id: str | None = None
     lease_ttl_seconds: int | None = None
@@ -110,7 +110,7 @@ class OvershootSessionState:
     prompt_task: asyncio.Task[None] | None = None
     keepalive_task: asyncio.Task[None] | None = None
     reconnect_task: asyncio.Task[None] | None = None
-    input_recorder: OvershootInputRecorder | None = None
+    input_recorder: FoldCheckInputRecorder | None = None
     active_prompt: str | None = None
     ignore_results_until: float = 0.0
     last_debug_composite_save_at: float = 0.0
@@ -170,8 +170,8 @@ class OvershootSessionState:
         self.prompt_resume_after_frame_at_ms = None
         self.prompt_resume_deadline_at = 0.0
 
-    def clear_runtime(self) -> OvershootRuntimeSnapshot:
-        snapshot = OvershootRuntimeSnapshot(
+    def clear_runtime(self) -> FoldCheckRuntimeSnapshot:
+        snapshot = FoldCheckRuntimeSnapshot(
             stream_id=self.stream_id,
             room=self.room,
             video_source=self.video_source,
@@ -216,7 +216,7 @@ class OrigamiSession:
     camera_frames: LatestFrameBuffer = field(default_factory=LatestFrameBuffer)
     track_tasks: list[asyncio.Task[None]] = field(default_factory=list)
     done_task: asyncio.Task[None] | None = None
-    overshoot: OvershootSessionState = field(default_factory=OvershootSessionState)
+    fold_check: FoldCheckRuntimeState = field(default_factory=FoldCheckRuntimeState)
     guiding_step_started_at: float = 0.0
 
 

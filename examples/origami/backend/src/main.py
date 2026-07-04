@@ -8,10 +8,9 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from .session_manager import (
-    DEFAULT_OVERSHOOT_MODEL,
-    OrigamiSessionManager,
-)
+
+from .constants import DEFAULT_OVERSHOOT_MODEL
+from .session_manager import OrigamiSessionManager
 
 
 class WebRTCOfferRequest(BaseModel):
@@ -25,46 +24,46 @@ manager: OrigamiSessionManager | None = None
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global manager
 
-    overshoot_api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
+    fold_check_api_key = os.getenv("OVERSHOOT_API_KEY", "").strip()
     auto_check_available = _auto_check_available_from_env()
-    if auto_check_available and not overshoot_api_key:
+    if auto_check_available and not fold_check_api_key:
         raise RuntimeError(
             "Set OVERSHOOT_API_KEY in backend/.env or set "
             "ORIGAMI_AUTO_CHECK_ENABLED=false"
         )
 
-    overshoot_model = os.getenv("OVERSHOOT_MODEL", DEFAULT_OVERSHOOT_MODEL).strip()
+    fold_check_model = os.getenv("OVERSHOOT_MODEL", DEFAULT_OVERSHOOT_MODEL).strip()
     steps_path = (
         Path(__file__).resolve().parent.parent / "assets" / "origami_steps.json"
     )
     debug_composite_dir_raw = os.getenv(
-        "ORIGAMI_DEBUG_OVERSHOOT_COMPOSITE_DIR", ""
+        "ORIGAMI_DEBUG_FOLD_CHECK_COMPOSITE_DIR", ""
     ).strip()
     debug_composite_dir = (
         Path(debug_composite_dir_raw).expanduser() if debug_composite_dir_raw else None
     )
     input_recording_dir_raw = os.getenv(
-        "ORIGAMI_OVERSHOOT_INPUT_RECORDING_DIR", ""
+        "ORIGAMI_FOLD_CHECK_INPUT_RECORDING_DIR", ""
     ).strip()
     input_recording_dir = (
         Path(input_recording_dir_raw).expanduser() if input_recording_dir_raw else None
     )
 
     manager = OrigamiSessionManager(
-        overshoot_api_key=overshoot_api_key,
-        overshoot_model=overshoot_model,
+        fold_check_api_key=fold_check_api_key,
+        fold_check_model=fold_check_model,
         steps_path=steps_path,
         auto_check_available=auto_check_available,
-        save_overshoot_composites=_env_bool(
-            "ORIGAMI_DEBUG_SAVE_OVERSHOOT_COMPOSITES",
+        save_fold_check_composites=_env_bool(
+            "ORIGAMI_DEBUG_SAVE_FOLD_CHECK_COMPOSITES",
             default=False,
         ),
         debug_composite_dir=debug_composite_dir,
-        record_overshoot_inputs=_env_bool(
-            "ORIGAMI_RECORD_OVERSHOOT_INPUTS",
+        record_fold_check_inputs=_env_bool(
+            "ORIGAMI_RECORD_FOLD_CHECK_INPUTS",
             default=True,
         ),
-        overshoot_input_recording_dir=input_recording_dir,
+        fold_check_input_recording_dir=input_recording_dir,
     )
     try:
         yield

@@ -11,8 +11,8 @@ from .constants import (
     DEFAULT_OVERSHOOT_API_URL,
     OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
-from .overshoot_payloads import _parse_positive_int, _response_text
-from .overshoot_prompts import LIVE_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
+from .payload_utils import _parse_positive_int, _response_text
+from .fold_check_prompts import LIVE_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
 
 logger = logging.getLogger("uvicorn.error")
 

@@ -9,7 +9,7 @@ from typing import Any, cast
 from livekit import rtc
 from PIL import Image
 
-from .constants import OVERSHOOT_FPS, OVERSHOOT_PUBLISH_MAX_BITRATE_BPS
+from .constants import FOLD_CHECK_PUBLISH_MAX_BITRATE_BPS, FOLD_CHECK_VIDEO_FPS
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -119,8 +119,8 @@ def _track_publish_options() -> rtc.TrackPublishOptions:
         simulcast=False,
         video_codec=rtc.VideoCodec.H264,
         video_encoding=rtc.VideoEncoding(
-            max_framerate=OVERSHOOT_FPS,
-            max_bitrate=OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
+            max_framerate=FOLD_CHECK_VIDEO_FPS,
+            max_bitrate=FOLD_CHECK_PUBLISH_MAX_BITRATE_BPS,
         ),
         degradation_preference=cast(
             Any,

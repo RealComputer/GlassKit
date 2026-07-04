@@ -19,7 +19,7 @@ logger = logging.getLogger("uvicorn.error")
 RECORDER_STOP_JOIN_TIMEOUT_SECONDS = 2.0
 
 
-class OvershootInputRecorder:
+class FoldCheckInputRecorder:
     def __init__(
         self,
         path: Path,
@@ -45,12 +45,12 @@ class OvershootInputRecorder:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._thread = threading.Thread(
             target=self._run,
-            name=f"overshoot-input-recorder-{self.path.stem}",
+            name=f"fold-check-input-recorder-{self.path.stem}",
             daemon=True,
         )
         self._thread.start()
         logger.info(
-            "overshoot input recording started path=%s codec=%s fps=%s",
+            "fold-check input recording started path=%s codec=%s fps=%s",
             self.path,
             self._codec_name,
             self._fps,
@@ -65,7 +65,7 @@ class OvershootInputRecorder:
             self.frames_dropped += 1
             if self.frames_dropped == 1 or self.frames_dropped % 30 == 0:
                 logger.warning(
-                    "overshoot input recording queue full path=%s dropped=%s",
+                    "fold-check input recording queue full path=%s dropped=%s",
                     self.path,
                     self.frames_dropped,
                 )
@@ -83,7 +83,7 @@ class OvershootInputRecorder:
         await asyncio.to_thread(thread.join, RECORDER_STOP_JOIN_TIMEOUT_SECONDS)
         if thread.is_alive():
             logger.warning(
-                "overshoot input recording stop timed out path=%s", self.path
+                "fold-check input recording stop timed out path=%s", self.path
             )
             return
 
@@ -91,13 +91,13 @@ class OvershootInputRecorder:
 
         if self._error is not None:
             logger.warning(
-                "overshoot input recording failed path=%s error=%s",
+                "fold-check input recording failed path=%s error=%s",
                 self.path,
                 self._error,
             )
             return
         logger.info(
-            "overshoot input recording stopped path=%s frames=%s dropped=%s",
+            "fold-check input recording stopped path=%s frames=%s dropped=%s",
             self.path,
             self.frames_written,
             self.frames_dropped,
@@ -129,7 +129,7 @@ class OvershootInputRecorder:
                     container.mux(packet)
         except BaseException as error:
             self._error = error
-            logger.exception("overshoot input recording crashed path=%s", self.path)
+            logger.exception("fold-check input recording crashed path=%s", self.path)
         finally:
             if container is not None:
                 container.close()
@@ -146,7 +146,7 @@ class OvershootInputRecorder:
         if dropped_on_stop:
             self.frames_dropped += dropped_on_stop
             logger.warning(
-                "overshoot input recording dropped queued frames on stop "
+                "fold-check input recording dropped queued frames on stop "
                 "path=%s dropped=%s",
                 self.path,
                 dropped_on_stop,

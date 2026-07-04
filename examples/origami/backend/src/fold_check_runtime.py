@@ -11,34 +11,34 @@ from livekit import rtc
 from PIL import Image
 
 from .constants import (
-    OVERSHOOT_FPS,
+    FOLD_CHECK_PUBLISH_MAX_BITRATE_BPS,
+    FOLD_CHECK_VIDEO_FPS,
+    FOLD_CHECK_PROMPT_INTERVAL_SECONDS,
+    FOLD_CHECK_RECONNECT_INGEST_TIMEOUT_SECONDS,
+    FOLD_CHECK_STREAM_READY_TIMEOUT_SECONDS,
+    FOLD_CHECK_STREAM_STATUS_POLL_SECONDS,
     OVERSHOOT_KEEPALIVE_INTERVAL_SECONDS,
-    OVERSHOOT_PROMPT_INTERVAL_SECONDS,
-    OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
-    OVERSHOOT_RECONNECT_INGEST_TIMEOUT_SECONDS,
-    OVERSHOOT_STREAM_READY_TIMEOUT_SECONDS,
-    OVERSHOOT_STREAM_STATUS_POLL_SECONDS,
     PHASE_GUIDING,
 )
 from .fold_check import compose_fold_check_image
 from .origami_config import OrigamiStep
 from .overshoot_client import OvershootClient, OvershootStreamLease
-from .overshoot_diagnostics import OvershootDiagnostics
+from .fold_check_diagnostics import FoldCheckDiagnostics
 from .overshoot_livekit import (
     OvershootLiveKitPublisher,
     capture_image,
     connect_overshoot_publisher,
     refresh_livekit_publish_token,
 )
-from .overshoot_payloads import _compact_json
-from .recording import OvershootInputRecorder
+from .payload_utils import _compact_json
+from .recording import FoldCheckInputRecorder
 from .rendering import _frame_to_image
 from .session_state import OrigamiSession, SessionEvent
 
 logger = logging.getLogger("uvicorn.error")
 
 
-class OvershootRuntime:
+class FoldCheckRuntime:
     def __init__(
         self,
         *,
@@ -56,7 +56,7 @@ class OvershootRuntime:
     ) -> None:
         self._auto_check_available = auto_check_available
         self._client = OvershootClient(api_key=api_key, model=model)
-        self._diagnostics = OvershootDiagnostics(
+        self._diagnostics = FoldCheckDiagnostics(
             save_composites=save_composites,
             composite_dir=debug_composite_dir,
             record_inputs=record_inputs,
@@ -81,9 +81,9 @@ class OvershootRuntime:
         if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
             return
 
-        overshoot = session.overshoot
-        if not overshoot.is_running():
-            if overshoot.has_runtime_resources():
+        fold_check = session.fold_check
+        if not fold_check.is_running():
+            if fold_check.has_runtime_resources():
                 await self.stop(session)
             if await session.camera_frames.latest() is None:
                 return
@@ -105,9 +105,9 @@ class OvershootRuntime:
         )
 
     async def stop(self, session: OrigamiSession) -> None:
-        overshoot = session.overshoot
-        overshoot.generation += 1
-        snapshot = overshoot.clear_runtime()
+        fold_check = session.fold_check
+        fold_check.generation += 1
+        snapshot = fold_check.clear_runtime()
 
         tasks: list[asyncio.Task[None]] = []
         current_task = asyncio.current_task()
@@ -130,10 +130,10 @@ class OvershootRuntime:
             await self._client.close_stream(snapshot.stream_id)
 
     def _switch_prompt(self, session: OrigamiSession, prompt: str) -> None:
-        if not session.overshoot.update_prompt(prompt):
+        if not session.fold_check.update_prompt(prompt):
             return
         logger.info(
-            "session=%s overshoot prompt switched step=%s",
+            "session=%s fold-check prompt switched step=%s",
             session.session_id,
             session.step_index + 1,
         )
@@ -144,13 +144,13 @@ class OvershootRuntime:
             return
 
         step = self._current_step_for(session)
-        generation = session.overshoot.begin_generation(step.prompt)
+        generation = session.fold_check.begin_generation(step.prompt)
         first_camera = _frame_to_image(first_item[1], fallback_size=(1024, 768))
         frame_size = first_camera.size
 
         stream: OvershootStreamLease | None = None
         publisher: OvershootLiveKitPublisher | None = None
-        recorder: OvershootInputRecorder | None = None
+        recorder: FoldCheckInputRecorder | None = None
 
         try:
             stream = await self._client.create_stream()
@@ -168,49 +168,49 @@ class OvershootRuntime:
                 return
 
             recorder = self._diagnostics.start_input_recorder(current)
-            overshoot = current.overshoot
-            overshoot.stream_id = stream.stream_id
-            overshoot.lease_ttl_seconds = stream.ttl_seconds
-            overshoot.room = publisher.room
-            overshoot.video_source = publisher.source
-            overshoot.frame_size = frame_size
-            overshoot.publish_url = stream.publish_url
-            overshoot.publish_token = stream.publish_token
-            overshoot.publisher_epoch = 1
-            overshoot.prompt_resume_publisher_epoch = 0
-            overshoot.clear_reconnect_ingest_gate()
-            overshoot.livekit_recovering = False
-            overshoot.input_recorder = recorder
-            overshoot.publish_task = asyncio.create_task(
+            fold_check = current.fold_check
+            fold_check.stream_id = stream.stream_id
+            fold_check.lease_ttl_seconds = stream.ttl_seconds
+            fold_check.room = publisher.room
+            fold_check.video_source = publisher.source
+            fold_check.frame_size = frame_size
+            fold_check.publish_url = stream.publish_url
+            fold_check.publish_token = stream.publish_token
+            fold_check.publisher_epoch = 1
+            fold_check.prompt_resume_publisher_epoch = 0
+            fold_check.clear_reconnect_ingest_gate()
+            fold_check.livekit_recovering = False
+            fold_check.input_recorder = recorder
+            fold_check.publish_task = asyncio.create_task(
                 self._run_publisher(
                     current.session_id,
                     generation,
-                    overshoot.publisher_epoch,
+                    fold_check.publisher_epoch,
                     publisher.source,
                     frame_size,
                     recorder,
                 ),
-                name=f"overshoot-publisher-{current.session_id}-{generation}",
+                name=f"fold-check-publisher-{current.session_id}-{generation}",
             )
-            overshoot.prompt_task = asyncio.create_task(
+            fold_check.prompt_task = asyncio.create_task(
                 self._run_prompt_loop(
                     current.session_id,
                     stream.stream_id,
                     generation,
                 ),
-                name=f"overshoot-prompts-{current.session_id}-{generation}",
+                name=f"fold-check-prompts-{current.session_id}-{generation}",
             )
-            overshoot.keepalive_task = asyncio.create_task(
+            fold_check.keepalive_task = asyncio.create_task(
                 self._run_keepalive(
                     current.session_id,
                     stream.stream_id,
                     stream.ttl_seconds,
                     generation,
                 ),
-                name=f"overshoot-keepalive-{current.session_id}-{generation}",
+                name=f"fold-check-keepalive-{current.session_id}-{generation}",
             )
             logger.info(
-                "session=%s overshoot started step=%s stream_id=%s "
+                "session=%s fold-check started step=%s stream_id=%s "
                 "generation=%s livekit_track=%s frame_size=%sx%s max_bitrate=%s",
                 current.session_id,
                 current.step_index + 1,
@@ -219,15 +219,18 @@ class OvershootRuntime:
                 publisher.publication.sid,
                 frame_size[0],
                 frame_size[1],
-                OVERSHOOT_PUBLISH_MAX_BITRATE_BPS,
+                FOLD_CHECK_PUBLISH_MAX_BITRATE_BPS,
             )
         except Exception:
-            overshoot = session.overshoot
-            if publisher is not None and overshoot.video_source is not publisher.source:
+            fold_check = session.fold_check
+            if (
+                publisher is not None
+                and fold_check.video_source is not publisher.source
+            ):
                 await publisher.close()
-            if recorder is not None and overshoot.input_recorder is not recorder:
+            if recorder is not None and fold_check.input_recorder is not recorder:
                 await self._diagnostics.stop_input_recorder(recorder)
-            if stream is not None and overshoot.stream_id != stream.stream_id:
+            if stream is not None and fold_check.stream_id != stream.stream_id:
                 await self._client.close_stream(stream.stream_id)
             await self.stop(session)
             raise
@@ -261,16 +264,16 @@ class OvershootRuntime:
         disconnected_room: rtc.Room,
         reason: Any,
     ) -> None:
-        overshoot = session.overshoot
-        if overshoot.generation != generation:
+        fold_check = session.fold_check
+        if fold_check.generation != generation:
             return
-        if overshoot.room is not disconnected_room:
+        if fold_check.room is not disconnected_room:
             return
-        reconnect_task = overshoot.reconnect_task
+        reconnect_task = fold_check.reconnect_task
         if reconnect_task is not None and not reconnect_task.done():
             return
 
-        overshoot.start_recovery()
+        fold_check.start_recovery()
         task = asyncio.create_task(
             self._recover_livekit_connection(
                 session.session_id,
@@ -278,20 +281,20 @@ class OvershootRuntime:
                 disconnected_room,
                 reason,
             ),
-            name=f"overshoot-livekit-reconnect-{session.session_id}-{generation}",
+            name=f"fold-check-livekit-reconnect-{session.session_id}-{generation}",
         )
-        overshoot.reconnect_task = task
+        fold_check.reconnect_task = task
 
         def on_done(done_task: asyncio.Task[None]) -> None:
-            if session.overshoot.reconnect_task is done_task:
-                session.overshoot.reconnect_task = None
+            if session.fold_check.reconnect_task is done_task:
+                session.fold_check.reconnect_task = None
             try:
                 done_task.result()
             except asyncio.CancelledError:
                 pass
             except Exception:
                 logger.exception(
-                    "session=%s overshoot livekit reconnect task crashed",
+                    "session=%s fold-check livekit reconnect task crashed",
                     session.session_id,
                 )
 
@@ -308,15 +311,15 @@ class OvershootRuntime:
         committed = False
         try:
             session = await self._session_if_current(session_id, generation)
-            if session is None or session.overshoot.room is not disconnected_room:
+            if session is None or session.fold_check.room is not disconnected_room:
                 return
 
-            overshoot = session.overshoot
-            stream_id = overshoot.stream_id
-            publish_url = overshoot.publish_url
-            publish_token = overshoot.publish_token
-            frame_size = overshoot.frame_size
-            recorder = overshoot.input_recorder
+            fold_check = session.fold_check
+            stream_id = fold_check.stream_id
+            publish_url = fold_check.publish_url
+            publish_token = fold_check.publish_token
+            frame_size = fold_check.frame_size
+            recorder = fold_check.input_recorder
             if (
                 stream_id is None
                 or publish_url is None
@@ -324,7 +327,7 @@ class OvershootRuntime:
                 or frame_size is None
             ):
                 logger.error(
-                    "session=%s overshoot livekit reconnect missing credentials "
+                    "session=%s fold-check livekit reconnect missing credentials "
                     "generation=%s",
                     session_id,
                     generation,
@@ -337,14 +340,14 @@ class OvershootRuntime:
                 return
 
             logger.warning(
-                "session=%s overshoot livekit reconnecting after disconnect "
+                "session=%s fold-check livekit reconnecting after disconnect "
                 "reason=%s generation=%s",
                 session_id,
                 reason,
                 generation,
             )
-            old_publish_task = overshoot.publish_task
-            overshoot.publish_task = None
+            old_publish_task = fold_check.publish_task
+            fold_check.publish_task = None
             if old_publish_task is not None:
                 old_publish_task.cancel()
                 await asyncio.gather(old_publish_task, return_exceptions=True)
@@ -366,28 +369,30 @@ class OvershootRuntime:
                 ),
             )
             if not publisher.room.isconnected():
-                raise RuntimeError("Overshoot LiveKit publisher disconnected on join")
+                raise RuntimeError("Fold check LiveKit publisher disconnected on join")
 
             current = await self._session_if_current(session_id, generation)
-            if current is None or current.overshoot.room is not disconnected_room:
+            if current is None or current.fold_check.room is not disconnected_room:
                 return
 
-            current_overshoot = current.overshoot
-            old_source = current_overshoot.video_source
-            current_overshoot.publisher_epoch += 1
-            publisher_epoch = current_overshoot.publisher_epoch
-            current_overshoot.room = publisher.room
-            current_overshoot.video_source = publisher.source
-            current_overshoot.prompt_resume_after_publisher_epoch = (
+            current_fold_check = current.fold_check
+            old_source = current_fold_check.video_source
+            current_fold_check.publisher_epoch += 1
+            publisher_epoch = current_fold_check.publisher_epoch
+            current_fold_check.room = publisher.room
+            current_fold_check.video_source = publisher.source
+            current_fold_check.prompt_resume_after_publisher_epoch = (
                 publisher_epoch if resume_after_frame_at_ms is not None else 0
             )
-            current_overshoot.prompt_resume_after_frame_at_ms = resume_after_frame_at_ms
-            current_overshoot.prompt_resume_deadline_at = (
-                time.monotonic() + OVERSHOOT_RECONNECT_INGEST_TIMEOUT_SECONDS
+            current_fold_check.prompt_resume_after_frame_at_ms = (
+                resume_after_frame_at_ms
+            )
+            current_fold_check.prompt_resume_deadline_at = (
+                time.monotonic() + FOLD_CHECK_RECONNECT_INGEST_TIMEOUT_SECONDS
                 if resume_after_frame_at_ms is not None
                 else 0.0
             )
-            current_overshoot.publish_task = asyncio.create_task(
+            current_fold_check.publish_task = asyncio.create_task(
                 self._run_publisher(
                     current.session_id,
                     generation,
@@ -396,13 +401,13 @@ class OvershootRuntime:
                     frame_size,
                     recorder,
                 ),
-                name=f"overshoot-publisher-{current.session_id}-{generation}",
+                name=f"fold-check-publisher-{current.session_id}-{generation}",
             )
             committed = True
             if old_source is not None and old_source is not publisher.source:
                 self._schedule_video_source_close(old_source, session_id)
             logger.info(
-                "session=%s overshoot livekit reconnected generation=%s "
+                "session=%s fold-check livekit reconnected generation=%s "
                 "publisher_epoch=%s livekit_track=%s",
                 session_id,
                 generation,
@@ -413,7 +418,7 @@ class OvershootRuntime:
             raise
         except Exception:
             logger.exception(
-                "session=%s overshoot livekit reconnect failed", session_id
+                "session=%s fold-check livekit reconnect failed", session_id
             )
             await self._notify_closed(
                 session_id,
@@ -431,7 +436,7 @@ class OvershootRuntime:
         publisher_epoch: int,
         source: rtc.VideoSource,
         frame_size: tuple[int, int],
-        recorder: OvershootInputRecorder | None,
+        recorder: FoldCheckInputRecorder | None,
     ) -> None:
         last_frame_id: int | None = None
         next_frame_at = time.monotonic()
@@ -443,7 +448,7 @@ class OvershootRuntime:
                 if next_frame_at > now:
                     await asyncio.sleep(next_frame_at - now)
                 next_frame_at = max(
-                    next_frame_at + 1.0 / OVERSHOOT_FPS,
+                    next_frame_at + 1.0 / FOLD_CHECK_VIDEO_FPS,
                     time.monotonic(),
                 )
 
@@ -472,15 +477,15 @@ class OvershootRuntime:
                 capture_image(source, image)
                 frame_count += 1
 
-                overshoot = session.overshoot
+                fold_check = session.fold_check
                 if (
-                    overshoot.livekit_recovering
-                    and publisher_epoch >= overshoot.prompt_resume_publisher_epoch
+                    fold_check.livekit_recovering
+                    and publisher_epoch >= fold_check.prompt_resume_publisher_epoch
                 ):
-                    overshoot.livekit_recovering = False
-                    overshoot.prompt_resume_publisher_epoch = 0
+                    fold_check.livekit_recovering = False
+                    fold_check.prompt_resume_publisher_epoch = 0
                     logger.info(
-                        "session=%s overshoot prompts resumed after "
+                        "session=%s fold-check prompts resumed after "
                         "post-reconnect frame generation=%s publisher_epoch=%s",
                         session_id,
                         generation,
@@ -489,7 +494,7 @@ class OvershootRuntime:
                 now = time.monotonic()
                 if now - last_log_at >= 30.0:
                     logger.info(
-                        "session=%s overshoot published frames=%s generation=%s "
+                        "session=%s fold-check published frames=%s generation=%s "
                         "publisher_epoch=%s",
                         session_id,
                         frame_count,
@@ -500,7 +505,7 @@ class OvershootRuntime:
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("session=%s overshoot publisher crashed", session_id)
+            logger.exception("session=%s fold-check publisher crashed", session_id)
             await self._notify_closed(session_id, generation, "publisher_failed")
 
     async def _run_keepalive(
@@ -523,7 +528,7 @@ class OvershootRuntime:
                 if result is None:
                     await session.queue.put(
                         SessionEvent(
-                            kind="overshoot.closed",
+                            kind="fold_check.closed",
                             payload={
                                 "generation": generation,
                                 "reason": "keepalive_failed",
@@ -531,14 +536,14 @@ class OvershootRuntime:
                         )
                     )
                     return
-                overshoot = session.overshoot
+                fold_check = session.fold_check
                 if result.publish_url:
-                    overshoot.publish_url = result.publish_url
+                    fold_check.publish_url = result.publish_url
                 if result.publish_token:
-                    overshoot.publish_token = result.publish_token
-                    if overshoot.room is not None:
+                    fold_check.publish_token = result.publish_token
+                    if fold_check.room is not None:
                         refresh_livekit_publish_token(
-                            overshoot.room,
+                            fold_check.room,
                             result.publish_token,
                         )
         except asyncio.CancelledError:
@@ -576,12 +581,12 @@ class OvershootRuntime:
 
                 elapsed = time.monotonic() - started_at
                 await asyncio.sleep(
-                    max(0.0, OVERSHOOT_PROMPT_INTERVAL_SECONDS - elapsed)
+                    max(0.0, FOLD_CHECK_PROMPT_INTERVAL_SECONDS - elapsed)
                 )
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("session=%s overshoot prompt loop crashed", session_id)
+            logger.exception("session=%s fold-check prompt loop crashed", session_id)
             await self._notify_closed(session_id, generation, "prompt_loop_failed")
 
     async def _wait_for_prompt_slot(
@@ -598,12 +603,12 @@ class OvershootRuntime:
                 await asyncio.sleep(0.1)
                 continue
 
-            overshoot = session.overshoot
-            if overshoot.prompts_are_recovering():
+            fold_check = session.fold_check
+            if fold_check.prompts_are_recovering():
                 await asyncio.sleep(0.1)
                 continue
 
-            if overshoot.prompt_resume_after_frame_at_ms is not None:
+            if fold_check.prompt_resume_after_frame_at_ms is not None:
                 ingest_ready = await self._check_reconnect_ingest(
                     session=session,
                     stream_id=stream_id,
@@ -622,36 +627,36 @@ class OvershootRuntime:
         stream_id: str,
         generation: int,
     ) -> bool | None:
-        overshoot = session.overshoot
-        resume_after_frame_at_ms = overshoot.prompt_resume_after_frame_at_ms
+        fold_check = session.fold_check
+        resume_after_frame_at_ms = fold_check.prompt_resume_after_frame_at_ms
         if resume_after_frame_at_ms is None:
             return True
 
-        gate_publisher_epoch = overshoot.prompt_resume_after_publisher_epoch
-        gate_deadline_at = overshoot.prompt_resume_deadline_at
+        gate_publisher_epoch = fold_check.prompt_resume_after_publisher_epoch
+        gate_deadline_at = fold_check.prompt_resume_deadline_at
         last_frame_at_ms = await self._client.last_frame_at_ms(stream_id)
         current = await self._session_if_current(session.session_id, generation)
         if current is None:
             return None
 
-        current_overshoot = current.overshoot
+        current_fold_check = current.fold_check
         if (
-            current_overshoot.prompt_resume_after_frame_at_ms
+            current_fold_check.prompt_resume_after_frame_at_ms
             != resume_after_frame_at_ms
-            or current_overshoot.prompt_resume_after_publisher_epoch
+            or current_fold_check.prompt_resume_after_publisher_epoch
             != gate_publisher_epoch
         ):
             return False
         if (
-            current_overshoot.livekit_recovering
-            or current_overshoot.publisher_epoch < gate_publisher_epoch
+            current_fold_check.livekit_recovering
+            or current_fold_check.publisher_epoch < gate_publisher_epoch
         ):
             await asyncio.sleep(0.1)
             return False
         if last_frame_at_ms is None or last_frame_at_ms <= resume_after_frame_at_ms:
             if gate_deadline_at > 0 and time.monotonic() >= gate_deadline_at:
                 logger.error(
-                    "session=%s overshoot reconnect ingest timed out "
+                    "session=%s fold-check reconnect ingest timed out "
                     "generation=%s publisher_epoch=%s baseline_ms=%s "
                     "last_frame_at_ms=%s",
                     session.session_id,
@@ -666,10 +671,10 @@ class OvershootRuntime:
                     "reconnect_ingest_timeout",
                 )
                 return None
-            await asyncio.sleep(OVERSHOOT_STREAM_STATUS_POLL_SECONDS)
+            await asyncio.sleep(FOLD_CHECK_STREAM_STATUS_POLL_SECONDS)
             return False
 
-        current_overshoot.clear_reconnect_ingest_gate()
+        current_fold_check.clear_reconnect_ingest_gate()
         return True
 
     async def _request_fold_check(
@@ -680,7 +685,7 @@ class OvershootRuntime:
     ) -> None:
         step_index = session.step_index
         prompt = self._current_step_for(session).prompt
-        publisher_epoch = session.overshoot.publisher_epoch
+        publisher_epoch = session.fold_check.publisher_epoch
         completion = await self._client.chat_completion(
             stream_id=stream_id,
             session_id=session.session_id,
@@ -691,7 +696,7 @@ class OvershootRuntime:
             return
 
         logger.info(
-            "session=%s overshoot completion result=%s usage=%s cache=%s",
+            "session=%s fold-check completion result=%s usage=%s cache=%s",
             session.session_id,
             completion.text,
             _compact_json(completion.usage),
@@ -701,25 +706,25 @@ class OvershootRuntime:
         if current is None:
             return
 
-        overshoot = current.overshoot
+        fold_check = current.fold_check
         if (
-            overshoot.livekit_recovering
-            or overshoot.prompt_resume_after_frame_at_ms is not None
-            or overshoot.publisher_epoch != publisher_epoch
+            fold_check.livekit_recovering
+            or fold_check.prompt_resume_after_frame_at_ms is not None
+            or fold_check.publisher_epoch != publisher_epoch
         ):
             logger.info(
-                "session=%s overshoot completion ignored during "
+                "session=%s fold-check completion ignored during "
                 "publisher recovery generation=%s request_epoch=%s current_epoch=%s",
                 session.session_id,
                 generation,
                 publisher_epoch,
-                overshoot.publisher_epoch,
+                fold_check.publisher_epoch,
             )
             return
 
         await current.queue.put(
             SessionEvent(
-                kind="overshoot.result",
+                kind="fold_check.result",
                 payload={
                     "generation": generation,
                     "step_index": step_index,
@@ -738,7 +743,7 @@ class OvershootRuntime:
         stream_id: str,
         generation: int,
     ) -> bool:
-        deadline = time.monotonic() + OVERSHOOT_STREAM_READY_TIMEOUT_SECONDS
+        deadline = time.monotonic() + FOLD_CHECK_STREAM_READY_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             session = await self._session_if_current(session_id, generation)
             if session is None:
@@ -747,19 +752,19 @@ class OvershootRuntime:
             if status is not None:
                 if status.last_frame_at_ms is not None:
                     logger.info(
-                        "session=%s overshoot first frame ready stream_id=%s",
+                        "session=%s fold-check first frame ready stream_id=%s",
                         session_id,
                         stream_id,
                     )
                     return True
                 if status.state == "ended":
                     logger.error(
-                        "session=%s overshoot stream ended before first frame body=%s",
+                        "session=%s fold-check stream ended before first frame body=%s",
                         session_id,
                         _compact_json(status.raw),
                     )
                     return False
-            await asyncio.sleep(OVERSHOOT_STREAM_STATUS_POLL_SECONDS)
+            await asyncio.sleep(FOLD_CHECK_STREAM_STATUS_POLL_SECONDS)
         return False
 
     async def _notify_closed(
@@ -773,7 +778,7 @@ class OvershootRuntime:
             return
         await session.queue.put(
             SessionEvent(
-                kind="overshoot.closed",
+                kind="fold_check.closed",
                 payload={"generation": generation, "reason": reason},
             )
         )
@@ -787,7 +792,7 @@ class OvershootRuntime:
             session = self._sessions.get(session_id)
         if session is None or session.destroyed:
             return None
-        if session.overshoot.generation != generation:
+        if session.fold_check.generation != generation:
             return None
         return session
 
@@ -798,7 +803,7 @@ class OvershootRuntime:
     ) -> None:
         task = asyncio.create_task(
             self._close_video_source(source, session_id),
-            name=f"overshoot-video-source-close-{session_id}",
+            name=f"fold-check-video-source-close-{session_id}",
         )
         self._video_source_close_tasks.add(task)
         task.add_done_callback(self._video_source_close_tasks.discard)
@@ -812,7 +817,7 @@ class OvershootRuntime:
             await source.aclose()
         except Exception:
             logger.warning(
-                "session=%s failed to close old Overshoot video source",
+                "session=%s failed to close old fold-check video source",
                 session_id,
                 exc_info=True,
             )

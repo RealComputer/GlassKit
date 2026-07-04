@@ -21,7 +21,10 @@ from src.fold_check import (
     parse_fold_check_result,
 )
 from src.origami_config import OrigamiStep
-from src.overshoot_prompts import RECORDED_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
+from src.fold_check_prompts import (
+    RECORDED_FOLD_CHECK_SYSTEM_PROMPT,
+    fold_check_messages,
+)
 
 _CHAT_COMPLETION_RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 

@@ -7,17 +7,21 @@ from pathlib import Path
 
 from PIL import Image
 
-from .constants import DEBUG_COMPOSITE_INTERVAL_SECONDS, OVERSHOOT_FPS, PHASE_GUIDING
+from .constants import (
+    DEBUG_COMPOSITE_INTERVAL_SECONDS,
+    FOLD_CHECK_VIDEO_FPS,
+    PHASE_GUIDING,
+)
 from .fold_check import compose_fold_check_image
 from .origami_config import OrigamiStep
-from .recording import OvershootInputRecorder
+from .recording import FoldCheckInputRecorder
 from .rendering import _frame_to_image, _save_jpeg
 from .session_state import OrigamiSession
 
 logger = logging.getLogger("uvicorn.error")
 
 
-class OvershootDiagnostics:
+class FoldCheckDiagnostics:
     def __init__(
         self,
         *,
@@ -50,13 +54,13 @@ class OvershootDiagnostics:
             return
 
         now = asyncio.get_running_loop().time()
-        overshoot = session.overshoot
+        fold_check = session.fold_check
         if (
-            now - overshoot.last_debug_composite_save_at
+            now - fold_check.last_debug_composite_save_at
             < DEBUG_COMPOSITE_INTERVAL_SECONDS
         ):
             return
-        overshoot.last_debug_composite_save_at = now
+        fold_check.last_debug_composite_save_at = now
 
         camera_item = await session.camera_frames.latest()
         if camera_item is None:
@@ -72,12 +76,12 @@ class OvershootDiagnostics:
         try:
             await asyncio.to_thread(_save_jpeg, image, path)
         except Exception:
-            logger.exception("failed to save Overshoot debug composite to %s", path)
+            logger.exception("failed to save fold-check debug composite to %s", path)
 
     def start_input_recorder(
         self,
         session: OrigamiSession,
-    ) -> OvershootInputRecorder | None:
+    ) -> FoldCheckInputRecorder | None:
         if not self._record_inputs:
             return None
 
@@ -85,32 +89,32 @@ class OvershootDiagnostics:
         path = self._input_recording_dir / (
             f"{timestamp}_session-{session.session_id[:8]}.mp4"
         )
-        recorder = OvershootInputRecorder(path, fps=OVERSHOOT_FPS)
+        recorder = FoldCheckInputRecorder(path, fps=FOLD_CHECK_VIDEO_FPS)
         try:
             recorder.start()
         except Exception:
-            logger.exception("failed to start Overshoot input recorder path=%s", path)
+            logger.exception("failed to start fold-check input recorder path=%s", path)
             return None
         return recorder
 
     def schedule_input_recorder_stop(
         self,
-        recorder: OvershootInputRecorder,
+        recorder: FoldCheckInputRecorder,
     ) -> None:
         task = asyncio.create_task(
             self.stop_input_recorder(recorder),
-            name=f"overshoot-input-recorder-stop-{recorder.path.stem}",
+            name=f"fold-check-input-recorder-stop-{recorder.path.stem}",
         )
         self._recorder_stop_tasks.add(task)
         task.add_done_callback(self._recorder_stop_tasks.discard)
 
     async def stop_input_recorder(
         self,
-        recorder: OvershootInputRecorder,
+        recorder: FoldCheckInputRecorder,
     ) -> None:
         try:
             await recorder.stop()
         except Exception:
             logger.exception(
-                "failed to stop Overshoot input recorder path=%s", recorder.path
+                "failed to stop fold-check input recorder path=%s", recorder.path
             )

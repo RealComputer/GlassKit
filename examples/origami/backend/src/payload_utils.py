@@ -15,7 +15,7 @@ def _parse_json_object(raw_text: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _parse_overshoot_boolean(payload: dict[str, Any]) -> bool | None:
+def _parse_fold_check_boolean(payload: dict[str, Any]) -> bool | None:
     if payload.get("ok") is False:
         return None
     raw = payload.get("result")
@@ -35,13 +35,6 @@ def _payload_received_at(payload: dict[str, Any]) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return time.monotonic()
-
-
-def _overshoot_payload_for_log(payload: dict[str, Any]) -> dict[str, Any]:
-    summarized = dict(payload)
-    if "prompt" in summarized:
-        summarized["prompt"] = "<active prompt>"
-    return summarized
 
 
 def _extract_answer_sdp(payload: Any) -> str:
