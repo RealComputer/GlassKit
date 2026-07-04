@@ -23,7 +23,7 @@ The current implementation assumes you use a `uv`-managed Python pipeline. If yo
 
 ## Install
 
-Use the CLI from the app repository that contains the eval suite, adapter, app dependencies, and environment files. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
+Use the CLI from the app repository that contains the eval suite, adapter, and app dependencies. Running from that directory keeps imports and relative paths predictable. If your app uses a `.env` file, pass it through the command runner, for example with `uv run --env-file .env`; `gk` does not load `.env` files by itself. With `uv`, install the published `gk` package into the command environment and invoke the `gk` console script in one command:
 
 ```bash
 cd path/to/your-app
@@ -42,7 +42,7 @@ uv run --with gk gk eval run --help
 
 ## Quick Start
 
-Run these commands from your app repository so local imports, adapter files, environment files, and relative asset paths resolve the same way they do in your app.
+Run these commands from your app repository so local imports, adapter files, and relative asset paths resolve the same way they do in your app. Add `--env-file .env` to `uv run` if your adapter expects environment variables from that file.
 
 ### 1. Create a Case from a Recording
 
@@ -129,7 +129,7 @@ The command exits `0` when all quality gates pass, `1` when the eval ran but one
 
 ## Recommended App Repo Layout
 
-Keep the eval suite next to the adapter and app code that it exercises. This makes imports, environment files, and relative asset paths predictable.
+Keep the eval suite next to the adapter and app code that it exercises. This makes imports and relative asset paths predictable, and keeps environment handling close to the code that needs it.
 
 ```text
 your-app/
@@ -273,7 +273,7 @@ targets:
 
 ## Suite-Level Thresholds
 
-Put thresholds that should apply to every case in `suite.yaml` or `eval.yaml` at the suite root:
+Put thresholds that should apply to the selected run as a whole in `suite.yaml` or `eval.yaml` at the suite root. Suite-level `min_pass_rate` and `max_failures` gates are evaluated against the combined selected results. Suite-level `per_target` entries apply across the selected samples for each target id:
 
 ```yaml
 thresholds:
@@ -301,7 +301,7 @@ uv run --with gk gk eval run \
   --max-failures 3
 ```
 
-`--min-pass-rate` and `--max-failures` override suite-level YAML values for the run. Because those flags define a run-level pass/fail policy, case-level YAML gates are not applied when either flag is set. `--min-target-pass-rate` applies the same target pass-rate gate to every target present in the selected results. With `--case`, suite-level per-target gates for targets outside the selected case are skipped.
+`--min-pass-rate` and `--max-failures` override suite-level YAML values for the run. Because those flags define a run-level pass/fail policy, case-level YAML gates are not applied when either flag is set. `--min-target-pass-rate` applies the same target pass-rate gate to every target present in the selected results; when it is set, suite-level `per_target` gates are replaced by the uniform CLI gate. With `--case`, suite-level per-target gates for targets outside the selected case are skipped.
 
 ## Commands
 
@@ -330,7 +330,7 @@ uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:c
 uv run --with gk gk eval validate --suite eval-suite --case fold-step-001
 ```
 
-Use validation before long or paid model evals. It catches most local mistakes without sending frames to a backend, unless you pass `--adapter`.
+Use validation before long or paid model evals. It catches most local mistakes without decoding sample frames or calling `evaluate`. Passing `--adapter` imports, constructs, and closes the adapter, so adapter setup side effects can still run.
 
 ### `gk eval list-samples`
 
@@ -379,14 +379,15 @@ The recommended shape is a factory that accepts one required `AdapterConfig` arg
 ```python
 from __future__ import annotations
 
+import os
 from typing import Any
 
 
 def create_evaluator(config: Any) -> "FoldEvaluator":
-    raw_config = dict(config.config)
+    settings = dict(config.config)
     return FoldEvaluator(
-        api_key=raw_config["api_key"],
-        model=raw_config.get("model", "default-model"),
+        api_key=os.environ["MODEL_API_KEY"],
+        model=settings.get("model", "default-model"),
         verbose=bool(config.verbose),
     )
 
@@ -498,6 +499,9 @@ Avoid returning SDK objects, dataclasses, images, bytes, or other values that ca
 A model-backed adapter usually follows this flow:
 
 ```python
+import os
+
+
 def create_evaluator(config):
     settings = dict(config.config)
     return MyEvaluator(
