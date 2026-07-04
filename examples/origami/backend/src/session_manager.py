@@ -9,7 +9,6 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-import httpx
 from aiortc import MediaStreamTrack, RTCSessionDescription
 from aiortc.rtcdatachannel import RTCDataChannel
 from av import VideoFrame
@@ -17,7 +16,6 @@ from fastapi import HTTPException
 from PIL import Image
 
 from .constants import (
-    DEFAULT_OVERSHOOT_API_URL,
     DEFAULT_OVERSHOOT_MODEL,
     OVERSHOOT_STEP_RESULT_GRACE_SECONDS,
     PHASE_COMPLETED,
@@ -33,7 +31,7 @@ from .overshoot_payloads import (
     _parse_json_object,
     _payload_received_at,
 )
-from .overshoot_runtime import OvershootRuntimeMixin
+from .overshoot_runtime import OvershootRuntime
 from .rendering import (
     _compose_demo_image,
     _demo_placeholder,
@@ -56,7 +54,7 @@ __all__ = [
 ]
 
 
-class OrigamiSessionManager(OvershootRuntimeMixin):
+class OrigamiSessionManager:
     def __init__(
         self,
         *,
@@ -69,36 +67,37 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         record_overshoot_inputs: bool = True,
         overshoot_input_recording_dir: Path | None = None,
     ) -> None:
-        self._overshoot_api_url = DEFAULT_OVERSHOOT_API_URL
-        self._overshoot_api_key = overshoot_api_key
-        self._overshoot_model = overshoot_model
         self._auto_check_available = auto_check_available
-        self._save_overshoot_composites = save_overshoot_composites
-        self._debug_composite_dir = (
+        debug_composite_dir = (
             debug_composite_dir
             if debug_composite_dir is not None
             else steps_path.parent.parent / "debug" / "overshoot-composites"
         )
-        self._record_overshoot_inputs = record_overshoot_inputs
-        self._overshoot_input_recording_dir = (
+        overshoot_input_recording_dir = (
             overshoot_input_recording_dir
             if overshoot_input_recording_dir is not None
             else steps_path.parent.parent / "debug" / "overshoot-inputs"
         )
-        self._overshoot_input_recorder_stop_tasks: set[asyncio.Task[None]] = set()
-        self._overshoot_video_source_close_tasks: set[asyncio.Task[None]] = set()
         self._steps = load_fold_check_steps(steps_path)
         self._reference_images = self._load_reference_images(self._steps)
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
-        self._overshoot_http = httpx.AsyncClient(
-            base_url=self._overshoot_api_url,
-            timeout=httpx.Timeout(30.0, connect=10.0),
-            headers={"Authorization": f"Bearer {self._overshoot_api_key}"},
-        )
         self._sessions: dict[str, OrigamiSession] = {}
         self._viewers: dict[str, DemoViewer] = {}
         self._sessions_lock = asyncio.Lock()
         self._viewers_lock = asyncio.Lock()
+        self._overshoot = OvershootRuntime(
+            auto_check_available=auto_check_available,
+            api_key=overshoot_api_key,
+            model=overshoot_model,
+            sessions=self._sessions,
+            sessions_lock=self._sessions_lock,
+            current_step_for=self.current_step_for,
+            reference_image_for=self.reference_image_for,
+            save_composites=save_overshoot_composites,
+            debug_composite_dir=debug_composite_dir,
+            record_inputs=record_overshoot_inputs,
+            input_recording_dir=overshoot_input_recording_dir,
+        )
 
     async def close(self) -> None:
         async with self._sessions_lock:
@@ -112,14 +111,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         for viewer in viewers:
             await viewer.pc.close()
 
-        recorder_stop_tasks = list(self._overshoot_input_recorder_stop_tasks)
-        if recorder_stop_tasks:
-            await asyncio.gather(*recorder_stop_tasks, return_exceptions=True)
-        source_close_tasks = list(self._overshoot_video_source_close_tasks)
-        if source_close_tasks:
-            await asyncio.gather(*source_close_tasks, return_exceptions=True)
-
-        await self._overshoot_http.aclose()
+        await self._overshoot.close()
 
     async def create_media_session(self, offer_sdp: str) -> dict[str, str]:
         offer_sdp = offer_sdp.strip()
@@ -418,9 +410,9 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
             await self._publish_hud_state(session)
             return
         if event.kind == "camera.frame":
-            await self._maybe_save_overshoot_debug_composite(session)
+            await self._overshoot.maybe_save_debug_composite(session)
             if session.phase == PHASE_GUIDING and session.auto_check_enabled:
-                await self._sync_overshoot_for_current_step(session)
+                await self._overshoot.sync_for_current_step(session)
             return
         if event.kind == "overshoot.result":
             await self._handle_overshoot_result(session, event.payload)
@@ -441,18 +433,17 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         session.auto_check_enabled = self._auto_check_available
         self._mark_guiding_step_started(session)
         await self._publish_hud_state(session)
-        await self._sync_overshoot_for_current_step(session)
+        await self._overshoot.sync_for_current_step(session)
 
     async def _reset_to_waiting(self, session: OrigamiSession) -> None:
         await self._cancel_done_task(session)
-        await self._stop_overshoot_runtime(session)
+        await self._overshoot.stop(session)
         session.phase = PHASE_WAITING
         session.step_index = 0
         session.true_streak = 0
         session.auto_check_enabled = self._auto_check_available
-        session.active_prompt_text = None
+        session.overshoot.clear_prompt_tracking()
         session.guiding_step_started_at = 0.0
-        session.overshoot_ignore_results_until = 0.0
         await self._publish_hud_state(session)
 
     async def _manual_move(self, session: OrigamiSession, *, delta: int) -> None:
@@ -465,7 +456,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
             if session.step_index >= step_count - 1:
                 session.phase = PHASE_COMPLETED
                 session.true_streak = 0
-                await self._stop_overshoot_runtime(session)
+                await self._overshoot.stop(session)
                 await self._publish_hud_state(session)
                 return
             session.step_index += 1
@@ -479,22 +470,22 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         session.true_streak = 0
         self._mark_guiding_step_started(session)
         await self._publish_hud_state(session)
-        await self._sync_overshoot_for_current_step(session)
+        await self._overshoot.sync_for_current_step(session)
 
     async def _toggle_auto_check(self, session: OrigamiSession) -> None:
         if session.phase not in {PHASE_GUIDING, PHASE_STEP_DONE}:
             return
         if not self._auto_check_available:
             session.auto_check_enabled = False
-            await self._stop_overshoot_runtime(session)
+            await self._overshoot.stop(session)
             await self._publish_hud_state(session)
             return
         session.auto_check_enabled = not session.auto_check_enabled
         session.true_streak = 0
         if session.auto_check_enabled and session.phase == PHASE_GUIDING:
-            await self._sync_overshoot_for_current_step(session)
+            await self._overshoot.sync_for_current_step(session)
         else:
-            await self._stop_overshoot_runtime(session)
+            await self._overshoot.stop(session)
         await self._publish_hud_state(session)
 
     async def _handle_overshoot_result(
@@ -502,7 +493,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         session: OrigamiSession,
         payload: dict[str, Any],
     ) -> None:
-        if payload.get("generation") != session.overshoot_generation:
+        if payload.get("generation") != session.overshoot.generation:
             return
         if payload.get("step_index") != session.step_index:
             return
@@ -516,7 +507,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
                 session.session_id,
             )
             return
-        if received_at < session.overshoot_ignore_results_until:
+        if received_at < session.overshoot.ignore_results_until:
             logger.info(
                 "session=%s ignoring overshoot result during step settle window",
                 session.session_id,
@@ -526,8 +517,8 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         prompt = str(payload.get("prompt") or "")
         if (
             prompt
-            and session.active_prompt_text
-            and not prompt.startswith(session.active_prompt_text)
+            and session.overshoot.active_prompt
+            and not prompt.startswith(session.overshoot.active_prompt)
         ):
             logger.info(
                 "session=%s ignoring result for stale prompt",
@@ -602,7 +593,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         session.done_task = None
         if session.step_index >= len(self._steps) - 1:
             session.phase = PHASE_COMPLETED
-            await self._stop_overshoot_runtime(session)
+            await self._overshoot.stop(session)
             await self._publish_hud_state(session)
             return
 
@@ -611,14 +602,14 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
         session.true_streak = 0
         self._mark_guiding_step_started(session)
         await self._publish_hud_state(session)
-        await self._sync_overshoot_for_current_step(session)
+        await self._overshoot.sync_for_current_step(session)
 
     async def _handle_overshoot_closed(
         self,
         session: OrigamiSession,
         payload: dict[str, Any],
     ) -> None:
-        if payload.get("generation") != session.overshoot_generation:
+        if payload.get("generation") != session.overshoot.generation:
             return
         if session.phase in {PHASE_WAITING, PHASE_COMPLETED, PHASE_ERROR}:
             return
@@ -632,7 +623,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
 
     async def _fail_session(self, session: OrigamiSession, message: str) -> None:
         await self._cancel_done_task(session)
-        await self._stop_overshoot_runtime(session)
+        await self._overshoot.stop(session)
         session.phase = PHASE_ERROR
         session.true_streak = 0
         self._send_session_json(session, {"type": "hud.error", "message": message})
@@ -742,8 +733,9 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
     def _mark_guiding_step_started(self, session: OrigamiSession) -> None:
         now = time.monotonic()
         session.guiding_step_started_at = now
-        session.overshoot_ignore_results_until = (
-            now + OVERSHOOT_STEP_RESULT_GRACE_SECONDS
+        session.overshoot.mark_guiding_step_started(
+            now,
+            OVERSHOOT_STEP_RESULT_GRACE_SECONDS,
         )
 
     async def _cancel_done_task(self, session: OrigamiSession) -> None:
@@ -756,7 +748,7 @@ class OrigamiSessionManager(OvershootRuntimeMixin):
 
     async def _cleanup_session(self, session: OrigamiSession) -> None:
         await self._cancel_done_task(session)
-        await self._stop_overshoot_runtime(session)
+        await self._overshoot.stop(session)
         for task in session.track_tasks:
             task.cancel()
         if session.track_tasks:

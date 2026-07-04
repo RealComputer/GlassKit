@@ -46,12 +46,15 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `src/main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
-- `src/overshoot_runtime.py`: Overshoot stream lifecycle, LiveKit publishing, chat-completion prompt loop, keepalive, and stream cleanup.
+- `src/overshoot_runtime.py`: session-scoped Overshoot orchestration, worker tasks, LiveKit reconnect recovery, prompt gating, and runtime cleanup.
+- `src/overshoot_client.py`: Overshoot HTTP API client for stream setup/status, keepalive, chat-completion requests, retries, and response parsing.
+- `src/overshoot_livekit.py`: LiveKit publisher setup, token refresh, track options, and image-to-video-frame capture helpers.
+- `src/overshoot_diagnostics.py`: Overshoot debug composite saving and pre-composition input recording lifecycle.
 - `src/fold_check.py`: shared fold-check helpers for reference composition, step loading, and boolean result parsing.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
 - `src/recording.py`: non-blocking video recording for pre-composition Overshoot input frames.
 - `src/rendering.py`: Overshoot reference composition, browser demo composition, and HUD image rendering.
-- `src/session_state.py`: session data classes and latest-frame buffer.
+- `src/session_state.py`: session data classes, latest-frame buffer, and grouped Overshoot runtime state.
 - `src/origami_config.py`: step config loader.
 - `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames to Overshoot chat completions without LiveKit.
 - `assets/origami_steps.json`: seven step definitions and prompts.
