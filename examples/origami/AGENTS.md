@@ -47,17 +47,17 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/main.py`: FastAPI lifecycle and `/session/media`, `/demo`, and `/demo/session` routes.
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
 - `src/fold_check_runtime.py`: session-scoped fold-check orchestration, worker tasks, LiveKit reconnect recovery, prompt gating, and runtime cleanup.
-- `src/overshoot_client.py`: Overshoot HTTP API client for stream setup/status, keepalive, chat-completion requests, retries, and response parsing.
+- `src/overshoot_client.py`: Overshoot HTTP API client for stream setup/status, keepalive, shared chat-completion requests, retries, and response parsing.
 - `src/fold_check_prompts.py`: hard-coded VLM chat wrapper prompts and message construction used by live checks and recorded-video evals.
 - `src/overshoot_livekit.py`: LiveKit publisher setup, token refresh, track options, and image-to-video-frame capture helpers.
 - `src/fold_check_diagnostics.py`: fold-check debug composite saving and pre-composition input recording lifecycle.
-- `src/fold_check.py`: shared fold-check helpers for reference composition, step loading, and boolean result parsing.
+- `src/fold_check.py`: shared fold-check helpers for reference composition, image reference encoding, step/reference loading, and boolean result parsing.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
 - `src/recording.py`: non-blocking video recording for pre-composition fold-check input frames.
 - `src/rendering.py`: fold-check reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
-- `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames to Overshoot chat completions without LiveKit.
+- `eval_adapter.py`: recorded-video `gk eval` adapter that sends composed sampled frames through the shared fold-check/Overshoot chat-completion path without LiveKit.
 - `assets/origami_steps.json`: seven step definitions and prompts.
 - `assets/step-imgs/*.png`: green browser-demo HUD versions of the step guide images.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.

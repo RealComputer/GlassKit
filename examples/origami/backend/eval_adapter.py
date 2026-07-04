@@ -1,29 +1,21 @@
 from __future__ import annotations
 
-import asyncio
-import base64
-import io
 import os
 from pathlib import Path
 from typing import Any
 
-import httpx
-from PIL import Image
-
 from src.constants import (
     DEFAULT_OVERSHOOT_API_URL,
     DEFAULT_OVERSHOOT_MODEL,
-    OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
 from src.fold_check import (
     compose_fold_check_image,
+    fold_check_image_data_url,
+    load_fold_check_reference_images,
     load_fold_check_steps,
     parse_fold_check_result,
 )
-from src.origami_config import OrigamiStep
-from src.fold_check_prompts import fold_check_completion_payload
-
-_CHAT_COMPLETION_RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
+from src.overshoot_client import OvershootClient
 
 
 def create_evaluator(config: Any) -> OrigamiFoldCheckEvaluator:
@@ -64,14 +56,13 @@ class OrigamiFoldCheckEvaluator:
         steps_path: Path,
         jpeg_quality: int,
     ) -> None:
-        self._overshoot_model = overshoot_model
         self._jpeg_quality = jpeg_quality
         self._steps = {step.id: step for step in load_fold_check_steps(steps_path)}
-        self._reference_images = _load_reference_images(self._steps)
-        self._http = httpx.AsyncClient(
-            base_url=overshoot_api_url,
-            timeout=httpx.Timeout(30.0, connect=10.0),
-            headers={"Authorization": f"Bearer {overshoot_api_key}"},
+        self._reference_images = load_fold_check_reference_images(self._steps.values())
+        self._client = OvershootClient(
+            api_key=overshoot_api_key,
+            model=overshoot_model,
+            api_url=overshoot_api_url,
         )
 
     async def evaluate_many(self, samples: list[Any], target: Any) -> list[bool | None]:
@@ -87,101 +78,25 @@ class OrigamiFoldCheckEvaluator:
             raise RuntimeError(f"unknown origami target id: {target_id}")
         reference = self._reference_images[target_id].copy()
         image = compose_fold_check_image(sample.image, reference)
-        completion = await self._post_fold_check_completion(
+        thread_id = f"gk-eval-{sample.case_name}-{target_id}-{sample.sample_index}"
+        completion = await self._client.chat_completion_for_image(
+            image_url=fold_check_image_data_url(image, self._jpeg_quality),
+            thread_id=thread_id,
             prompt=step.prompt,
-            image=image,
-            thread_id=(f"gk-eval-{sample.case_name}-{target_id}-{sample.sample_index}"),
+            log_context=f"eval={thread_id}",
         )
-        text = _chat_completion_text(completion)
-        return parse_fold_check_result({"ok": True, "result": text})
+        if completion is None:
+            raise RuntimeError("Overshoot chat completion failed after retries")
+        return parse_fold_check_result(
+            {
+                "ok": True,
+                "result": completion.text,
+                "completion_id": completion.completion_id,
+            }
+        )
 
     async def close(self) -> None:
-        await self._http.aclose()
-
-    async def _post_fold_check_completion(
-        self,
-        *,
-        prompt: str,
-        image: Image.Image,
-        thread_id: str,
-    ) -> dict[str, Any]:
-        payload = fold_check_completion_payload(
-            model=self._overshoot_model,
-            thread_id=thread_id,
-            prompt=prompt,
-            image_url=_image_data_url(image, self._jpeg_quality),
-        )
-        for attempt, delay in enumerate(_CHAT_COMPLETION_RETRY_DELAYS, start=1):
-            if delay:
-                await asyncio.sleep(delay)
-            try:
-                response = await self._http.post(
-                    "/chat/completions",
-                    json=payload,
-                    timeout=OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
-                )
-            except httpx.HTTPError as error:
-                if attempt == len(_CHAT_COMPLETION_RETRY_DELAYS):
-                    raise RuntimeError(f"Overshoot request failed: {error}") from error
-                continue
-            if response.is_success:
-                data = response.json()
-                return data if isinstance(data, dict) else {}
-            if response.status_code not in {429, 500, 502, 503, 504}:
-                raise RuntimeError(
-                    "Overshoot chat completion failed "
-                    f"(HTTP {response.status_code}): {_response_text(response)}"
-                )
-        raise RuntimeError("Overshoot chat completion failed after retries")
-
-
-def _load_reference_images(steps: dict[str, OrigamiStep]) -> dict[str, Image.Image]:
-    images: dict[str, Image.Image] = {}
-    for step_id, step in steps.items():
-        with Image.open(step.reference_path) as image:
-            images[step_id] = image.convert("RGB")
-    return images
-
-
-def _image_data_url(image: Image.Image, jpeg_quality: int) -> str:
-    buffer = io.BytesIO()
-    image.convert("RGB").save(
-        buffer,
-        format="JPEG",
-        quality=max(1, min(100, jpeg_quality)),
-        optimize=True,
-    )
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/jpeg;base64,{encoded}"
-
-
-def _chat_completion_text(data: dict[str, Any]) -> str:
-    choices = data.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return ""
-    first = choices[0]
-    if not isinstance(first, dict):
-        return ""
-    message = first.get("message")
-    if not isinstance(message, dict):
-        return ""
-    content = message.get("content")
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, dict) and isinstance(item.get("text"), str):
-                parts.append(item["text"])
-        return "".join(parts).strip()
-    return ""
-
-
-def _response_text(response: httpx.Response) -> str:
-    try:
-        return response.text.strip()
-    except Exception:
-        return ""
+        await self._client.close()
 
 
 def _path_config(raw_value: Any, *, default: Path) -> Path:

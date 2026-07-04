@@ -23,7 +23,11 @@ from .constants import (
     PHASE_STEP_DONE,
     PHASE_WAITING,
 )
-from .fold_check import load_fold_check_steps, parse_fold_check_result
+from .fold_check import (
+    load_fold_check_reference_images,
+    load_fold_check_steps,
+    parse_fold_check_result,
+)
 from .origami_config import OrigamiStep
 from .payload_utils import (
     _compact_json,
@@ -77,7 +81,7 @@ class OrigamiSessionManager:
             else steps_path.parent.parent / "debug" / "fold-check-inputs"
         )
         self._steps = load_fold_check_steps(steps_path)
-        self._reference_images = self._load_reference_images(self._steps)
+        self._reference_images = load_fold_check_reference_images(self._steps)
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
         self._sessions: dict[str, OrigamiSession] = {}
         self._viewers: dict[str, DemoViewer] = {}
@@ -753,14 +757,6 @@ class OrigamiSessionManager:
         if session.media_pc is not None:
             await session.media_pc.close()
             session.media_pc = None
-
-    @staticmethod
-    def _load_reference_images(steps: list[OrigamiStep]) -> dict[str, Image.Image]:
-        images: dict[str, Image.Image] = {}
-        for step in steps:
-            with Image.open(step.reference_path) as image:
-                images[step.id] = image.convert("RGB")
-        return images
 
     @staticmethod
     def _load_hud_images(

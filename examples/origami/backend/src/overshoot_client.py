@@ -11,6 +11,7 @@ from .constants import (
     DEFAULT_OVERSHOOT_API_URL,
     OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
+from .fold_check import fold_check_stream_image_url
 from .fold_check_prompts import fold_check_completion_payload
 from .payload_utils import _parse_positive_int, _response_text
 
@@ -187,11 +188,26 @@ class OvershootClient:
         session_id: str,
         prompt: str,
     ) -> OvershootCompletionResult | None:
-        payload = fold_check_completion_payload(
-            model=self._model,
+        return await self.chat_completion_for_image(
+            image_url=fold_check_stream_image_url(stream_id),
             thread_id=session_id,
             prompt=prompt,
-            image_url=f"ovs://streams/{stream_id}?frame_index=-1",
+            log_context=f"stream={stream_id}",
+        )
+
+    async def chat_completion_for_image(
+        self,
+        *,
+        image_url: str,
+        thread_id: str,
+        prompt: str,
+        log_context: str = "fold-check",
+    ) -> OvershootCompletionResult | None:
+        payload = fold_check_completion_payload(
+            model=self._model,
+            thread_id=thread_id,
+            prompt=prompt,
+            image_url=image_url,
         )
         for attempt, delay in enumerate((0.0, *_CHAT_COMPLETION_RETRY_DELAYS), start=1):
             if delay:
@@ -204,8 +220,8 @@ class OvershootClient:
                 )
             except httpx.HTTPError as error:
                 logger.warning(
-                    "stream=%s chat completion failed attempt=%s error=%s",
-                    stream_id,
+                    "%s chat completion failed attempt=%s error=%s",
+                    log_context,
                     attempt,
                     error,
                 )
@@ -226,8 +242,8 @@ class OvershootClient:
                 )
             retryable = response.status_code in {429, 500, 502, 503, 504}
             logger.warning(
-                "stream=%s chat completion failed attempt=%s status=%s body=%s",
-                stream_id,
+                "%s chat completion failed attempt=%s status=%s body=%s",
+                log_context,
                 attempt,
                 response.status_code,
                 _response_text(response),
