@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from glasskit_ai.eval.models import ComparisonConfig, SampleExpectation
-from glasskit_ai.eval.video import _stream_duration_s, decode_sample_frames, probe_video
+from glasskit.eval.models import ComparisonConfig, SampleExpectation
+from glasskit.eval.video import _stream_duration_s, decode_sample_frames, probe_video
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 

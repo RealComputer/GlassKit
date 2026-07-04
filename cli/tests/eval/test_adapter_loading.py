@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from glasskit_ai.eval.adapters import load_evaluator
-from glasskit_ai.eval.models import AdapterConfig, FrameSample, TargetContext
+from glasskit.eval.adapters import load_evaluator
+from glasskit.eval.models import AdapterConfig, FrameSample, TargetContext
 
 
 def test_loads_simple_file_function_adapter(tmp_path: Path) -> None:

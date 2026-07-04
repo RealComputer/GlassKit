@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-glasskit = "glasskit_ai.cli:app"
+glasskit = "glasskit.cli:app"
 
 [dependency-groups]
 dev = [
@@ -26,6 +26,9 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.9.0,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "glasskit"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

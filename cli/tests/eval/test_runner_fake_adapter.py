@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from glasskit_ai.eval.models import AdapterRuntimeError, RunOptions
-from glasskit_ai.eval.runner import run_eval
+from glasskit.eval.models import AdapterRuntimeError, RunOptions
+from glasskit.eval.runner import run_eval
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TWO_STATE_VIDEO = (FIXTURES / "videos" / "two-state-64x64.mp4").as_posix()
@@ -340,9 +340,7 @@ def create_evaluator(config):
     )
     output_json = tmp_path / "report.json"
     clock_values = iter([10.0, 72.25])
-    monkeypatch.setattr(
-        "glasskit_ai.eval.runner.perf_counter", lambda: next(clock_values)
-    )
+    monkeypatch.setattr("glasskit.eval.runner.perf_counter", lambda: next(clock_values))
 
     report = await run_eval(
         RunOptions(

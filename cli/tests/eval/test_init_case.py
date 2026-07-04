@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from glasskit_ai.eval.expectations import load_eval_suite
-from glasskit_ai.eval.init_case import init_eval_case
-from glasskit_ai.eval.models import EvalConfigError
+from glasskit.eval.expectations import load_eval_suite
+from glasskit.eval.init_case import init_eval_case
+from glasskit.eval.models import EvalConfigError
 
 
 def test_init_case_copies_video_and_writes_expected_yaml(tmp_path: Path) -> None:

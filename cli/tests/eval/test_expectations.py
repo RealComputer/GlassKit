@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from glasskit_ai.eval.expectations import load_eval_suite
-from glasskit_ai.eval.models import EvalConfigError
+from glasskit.eval.expectations import load_eval_suite
+from glasskit.eval.models import EvalConfigError
 
 
 def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
