@@ -2,9 +2,24 @@
 
 `gk` is the GlassKit command-line package. Its first command family is `gk eval`, a recorded-video evaluator for smart-glasses apps.
 
-Are you tired of replaying the same physical smart-glasses workflow by hand just to check a vision feature? `gk eval` turns those recordings into repeatable evaluations. Provide a video of the target workflow, a YAML file that describes which timestamps to evaluate and what each result should be, and an app adapter that connects the CLI to your app. The CLI decodes the frames and runs automatic checks for the vision parts of your app.
+Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. `gk eval` lets you record a workflow once, label the important moments, and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
 
 The current implementation assumes you use a `uv`-managed Python pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
+
+## Why Use `gk eval`?
+
+- Turn real camera recordings into repeatable tests instead of relying on memory, screenshots, or manual replay.
+- Test the full vision path that users actually depend on: frames, prompts, model calls, response parsing, app logic, and thresholds.
+- Label only stable moments in the video and skip ambiguous transitions that would make a test noisy.
+- Keep app-specific behavior in your adapter while reusing the CLI for video handling, comparison modes, JSON reports, and failure images.
+- Run the same suite locally and in CI with exit codes that distinguish setup errors from quality-gate failures.
+
+## What You Need
+
+- A short recording of the workflow you want to evaluate.
+- An `expected.yaml` file that says which timestamps or ranges should be checked and what each result should be.
+- A Python adapter function or object that receives decoded frames and returns JSON-like observations.
+- A `uv` command environment that can install `gk` and your app's runtime dependencies.
 
 ## Install
 
@@ -35,7 +50,9 @@ uv run --with gk --env-file .env gk eval run \
 
 ## Quick Start
 
-Create a starter case from a video:
+Run these commands from your app repository so local imports, adapter files, environment files, and relative asset paths resolve the same way they do in your app.
+
+### 1. Create a Case from a Recording
 
 ```bash
 uv run --with gk gk eval init-case \
@@ -46,14 +63,65 @@ uv run --with gk gk eval init-case \
   --label "Step 1"
 ```
 
-Edit `eval-suite/fold-step-001/expected.yaml` so the sample timestamps and expected values match the video. Validate the suite before running a model-backed adapter:
+This creates `eval-suite/fold-step-001/`, copies the recording into the case directory, and writes a starter `expected.yaml`.
+
+### 2. Label the Moments You Care About
+
+Edit `eval-suite/fold-step-001/expected.yaml` so the timestamps and expected values match the video. Start with one or two unambiguous samples:
+
+```yaml
+version: 1
+video: "video.mp4"
+sampling:
+  every_s: 0.5
+targets:
+  step_1:
+    label: Step 1
+    samples:
+      - at: 2.0
+        field: matches
+        expect: true
+      - range: [3.0, 5.0]
+        field: matches
+        expect: true
+```
+
+Use `at` for a single moment and `range` for a stable window. Avoid transition frames until you specifically want to measure transition behavior.
+
+### 3. Check the Wiring with a Fake Adapter
+
+Create `eval_adapter.py` in your app repository:
+
+```python
+def evaluate_sample(sample, target):
+    return {
+        "target": target.id,
+        "timestamp_s": sample.timestamp_s,
+        "matches": target.id == "step_1",
+    }
+```
+
+This adapter does not judge the image. It only proves that the suite, video decoding, field extraction, comparison, and command wiring work before you connect a model backend.
+
+### 4. Validate and Inspect the Schedule
 
 ```bash
-uv run --with gk gk eval validate --suite eval-suite
+uv run --with gk gk eval validate --suite eval-suite --adapter eval_adapter.py:evaluate_sample
 uv run --with gk gk eval list-samples --suite eval-suite
 ```
 
-Run the eval with an adapter:
+### 5. Run the Eval
+
+Run the fake adapter first:
+
+```bash
+uv run --with gk gk eval run \
+  --adapter eval_adapter.py:evaluate_sample \
+  --suite eval-suite \
+  --min-pass-rate 1.0
+```
+
+After that passes, replace the fake adapter body with the real call into your app or model backend and run with the options you want for local debugging or CI:
 
 ```bash
 uv run --with gk gk eval run \
@@ -66,6 +134,29 @@ uv run --with gk gk eval run \
 ```
 
 The command exits `0` when all quality gates pass, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors such as invalid YAML, unreadable videos, or adapter failures that are not being collected with `--keep-going`.
+
+## Recommended App Repo Layout
+
+Keep the eval suite next to the adapter and app code that it exercises. This makes imports, environment files, and relative asset paths predictable.
+
+```text
+your-app/
+  .env
+  eval_adapter.py
+  adapter-config.yaml
+  eval-suite/
+    fold-step-001/
+      video.mp4
+      expected.yaml
+    fold-step-002/
+      video.mp4
+      expected.yaml
+  tmp/
+    eval-results.json
+    eval-artifacts/
+```
+
+Commit the suite files that your team should share. Keep secrets in environment variables or uncommitted environment files, not in `expected.yaml` or `adapter-config.yaml`.
 
 ## Eval Suite Layout
 
