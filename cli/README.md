@@ -2,9 +2,9 @@
 
 `gk` is the GlassKit command-line package. Its first command family is `gk eval`, a recorded-video evaluator for smart-glasses apps.
 
-Are you tired of manually repeating physical vision-enabled smart glasses app test over and over? `gk eval` is for you! You prepare video recording for the target workflow, YAML file describing how it's processed at specific timestamps, and an app adapter that connects this cli and your app. And you can do an automatic eval/test for your vision part of you app!
+Are you tired of replaying the same physical smart-glasses workflow by hand just to check a vision feature? `gk eval` turns those recordings into repeatable evaluations. Provide a video of the target workflow, a YAML file that describes which timestamps to evaluate and what each result should be, and an app adapter that connects the CLI to your app. The CLI decodes the frames and runs automatic checks for the vision parts of your app.
 
-The current implementation assumes you have a `uv` managed pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
+The current implementation assumes you use a `uv`-managed Python pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
 
 ## Install
 
@@ -139,7 +139,7 @@ Use ranges for stable windows where the expected answer should be unchanged. Use
 - `targets.<target_id>.samples` is the required list of labeled sample blocks.
 - `thresholds` is optional case-level gating. It can contain `min_pass_rate`, `max_failures`, and `per_target.<target_id>.min_pass_rate`.
 
-## Expected Values And Comparison
+## Expected Values and Comparison
 
 The adapter returns a JSON-like value: `null`, boolean, number, string, array, or object. Each sample's `expect` value is compared with that returned value.
 
@@ -289,7 +289,7 @@ uv run --with gk gk eval run \
 - `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.gk-artifacts` in the suite directory.
 - `--allow-empty` allows suites or cases with no samples. This is mainly useful while drafting a suite, not for real quality gates.
 
-## Writing An Adapter
+## Writing an Adapter
 
 An adapter is the bridge between the generic CLI and your app. It receives decoded video frames plus target metadata, calls your app or model backend, and returns a JSON-like observation for each sample.
 
@@ -342,20 +342,24 @@ No-argument factories and evaluator classes are also supported, but they will no
 
 ### Adapter Inputs
 
-`AdapterConfig` has these fields:
+The factory receives `AdapterConfig` when it declares one required argument. `AdapterConfig` has these fields:
 
 - `suite_path` is the resolved path to the eval suite.
 - `config` is the object loaded from `--adapter-config`; it is an empty mapping when the option is omitted.
 - `artifacts_dir` is the path from `--artifacts-dir`, or `None` when the option is omitted.
 - `verbose` mirrors `--verbose`.
-- `sample` has these fields:
+
+The evaluator receives a `sample` object with these fields:
+
 - `image` is a decoded RGB `PIL.Image.Image` for the requested timestamp.
 - `timestamp_s` is the requested sample timestamp in seconds from the start of the clip.
 - `frame_index` is the decoded video frame index chosen for that timestamp.
 - `sample_index` is the case-local sample index.
 - `video_path` is the source video path as a string.
 - `case_name` is the case directory name.
-- `target` has these fields:
+
+The evaluator also receives a `target` object with these fields:
+
 - `id` is the target id from `expected.yaml`.
 - `index` is the target's zero-based order in the case file.
 - `label` is the optional target label.
@@ -474,6 +478,6 @@ Common issues:
 - `missing field` means the adapter returned a value that does not contain the sample's `field` path.
 - `invalid_observation: adapter returned null` means the adapter returned `None` for a sample whose expected value was not `null`.
 
-## Technical detail
+## Technical Details
 
-For internal details, please check [ANGETS.md](ANGETS.md).
+For contributor-oriented implementation notes, see [AGENTS.md](AGENTS.md).
