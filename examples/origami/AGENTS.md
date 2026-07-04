@@ -12,7 +12,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
 - Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops the fold-check runtime and closes any provider stream while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables provider stream creation for the whole backend process.
-- The latest Overshoot API uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
+- The Overshoot API uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
 - The backend records the real camera frames sent into the fold-check path before reference-image composition by default. Recordings are written under `backend/debug/fold-check-inputs` unless `ORIGAMI_FOLD_CHECK_INPUT_RECORDING_DIR` overrides the location, and `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=false` disables this recording.
 
 ## Connection Graph
@@ -77,6 +77,5 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --with-editable ../../../cli --env-file .env gk eval validate --adapter eval_adapter.py:create_evaluator --suite eval-suite`: validate a local recorded-video eval suite
 - `uv run --with-editable ../../../cli --env-file .env gk eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`: run a local recorded-video eval suite
 - `uv add <package>`: add a package
