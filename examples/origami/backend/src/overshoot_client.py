@@ -12,6 +12,7 @@ from .constants import (
     OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
 from .overshoot_payloads import _parse_positive_int, _response_text
+from .overshoot_prompts import LIVE_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -191,34 +192,11 @@ class OvershootClient:
             "thread_id": session_id,
             "temperature": 0,
             "max_tokens": 8,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You verify origami fold completion from a live camera "
-                        "view. Return exactly true or false with no explanation."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                f"{prompt}\n\n"
-                                "Return exactly true or false. Do not include "
-                                "any other text."
-                            ),
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"ovs://streams/{stream_id}?frame_index=-1"
-                            },
-                        },
-                    ],
-                },
-            ],
+            "messages": fold_check_messages(
+                prompt=prompt,
+                image_url=f"ovs://streams/{stream_id}?frame_index=-1",
+                system_prompt=LIVE_FOLD_CHECK_SYSTEM_PROMPT,
+            ),
         }
         for attempt, delay in enumerate((0.0, *_CHAT_COMPLETION_RETRY_DELAYS), start=1):
             if delay:

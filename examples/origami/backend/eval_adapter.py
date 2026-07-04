@@ -21,6 +21,7 @@ from src.fold_check import (
     parse_fold_check_result,
 )
 from src.origami_config import OrigamiStep
+from src.overshoot_prompts import RECORDED_FOLD_CHECK_SYSTEM_PROMPT, fold_check_messages
 
 _CHAT_COMPLETION_RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 
@@ -109,34 +110,11 @@ class OrigamiFoldCheckEvaluator:
             "thread_id": thread_id,
             "temperature": 0,
             "max_tokens": 8,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You verify origami fold completion from a camera view. "
-                        "Return exactly true or false with no explanation."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                f"{prompt}\n\n"
-                                "Return exactly true or false. Do not include "
-                                "any other text."
-                            ),
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": _image_data_url(image, self._jpeg_quality)
-                            },
-                        },
-                    ],
-                },
-            ],
+            "messages": fold_check_messages(
+                prompt=prompt,
+                image_url=_image_data_url(image, self._jpeg_quality),
+                system_prompt=RECORDED_FOLD_CHECK_SYSTEM_PROMPT,
+            ),
         }
         for attempt, delay in enumerate(_CHAT_COMPLETION_RETRY_DELAYS, start=1):
             if delay:
