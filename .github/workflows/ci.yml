@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "cli/**"
+      - "js/**"
       - ".github/workflows/ci.yml"
       - ".github/workflows/release.yml"
   push:
@@ -14,11 +15,12 @@ on:
       - main
     paths:
       - "cli/**"
+      - "js/**"
       - ".github/workflows/ci.yml"
       - ".github/workflows/release.yml"
 
 jobs:
-  test:
+  test-cli:
     name: Test CLI package
     runs-on: ubuntu-latest
 
@@ -68,3 +70,34 @@ jobs:
 
       - name: Build package
         run: uv build --no-sources --clear
+
+  test-js:
+    name: Test JS create package
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: js
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Check package contents
+        run: npm pack --dry-run

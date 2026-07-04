@@ -7,14 +7,16 @@ on:
   push:
     tags:
       - "pypi-glasskit-ai-v*"
+      - "npm-glasskit-ai-create-v*"
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  release-pypi:
     name: Test, build, publish
+    if: startsWith(github.ref_name, 'pypi-glasskit-ai-v')
     runs-on: ubuntu-latest
 
     environment:
@@ -127,4 +129,125 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --title "PyPI: glasskit.ai v${VERSION}" \
+            --notes-file release-notes.md
+
+  release-npm:
+    name: Test, pack, publish
+    if: startsWith(github.ref_name, 'npm-glasskit-ai-create-v')
+    runs-on: ubuntu-latest
+
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@glasskit.ai/create
+
+    permissions:
+      contents: write
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: js
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Show versions
+        run: |
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#npm-glasskit-ai-create-v}"
+
+          if [[ "${PACKAGE_VERSION}" != "${TAG_VERSION}" ]]; then
+            echo "::error::package.json version ${PACKAGE_VERSION} does not match tag ${TAG_VERSION}"
+            exit 1
+          fi
+
+      - name: Run tests
+        run: npm test
+
+      - name: Pack package
+        shell: bash
+        run: |
+          mkdir -p /tmp/npm-package
+          npm pack --pack-destination /tmp/npm-package
+          ls -la /tmp/npm-package
+
+      - name: Smoke test packed package
+        shell: bash
+        run: |
+          TARBALL="$(ls /tmp/npm-package/*.tgz)"
+          TMP="$(mktemp -d)"
+          OUT="$(mktemp -d)"
+
+          npm install --prefix "${TMP}" "${TARBALL}"
+
+          "${TMP}/node_modules/.bin/create-glasskit" --help
+          "${TMP}/node_modules/.bin/create-glasskit" --version
+
+          (
+            cd "${OUT}"
+            "${TMP}/node_modules/.bin/create-glasskit"
+          )
+          test -f "${OUT}/rokid-starter/AGENTS.md"
+          test -f "${OUT}/rokid-starter/.gitignore"
+          test ! -e "${OUT}/rokid-starter/gitignore"
+          test -f "${OUT}/rokid-starter/gradle/wrapper/gradle-wrapper.jar"
+
+      - name: Publish to npm
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_PREFIX: npm-glasskit-ai-create-v
+        run: |
+          VERSION="${GITHUB_REF_NAME#${RELEASE_TAG_PREFIX}}"
+          PREVIOUS_TAG="$(
+            git tag --list "${RELEASE_TAG_PREFIX}*" --sort=-v:refname \
+              | grep -Fxv "${GITHUB_REF_NAME}" \
+              | head -n 1 \
+              || true
+          )"
+
+          {
+            echo "npm package: @glasskit.ai/create"
+            echo "Version: ${VERSION}"
+
+            if [[ -n "${PREVIOUS_TAG}" ]]; then
+              echo
+              echo "JS create package changes since ${PREVIOUS_TAG}:"
+              git log --format='- %s (%h)' "${PREVIOUS_TAG}..${GITHUB_REF_NAME}" -- . > /tmp/npm-release-changes.txt
+              if [[ -s /tmp/npm-release-changes.txt ]]; then
+                cat /tmp/npm-release-changes.txt
+              else
+                echo "- No changes under js/."
+              fi
+            else
+              echo
+              echo "Initial npm release for @glasskit.ai/create."
+            fi
+          } > release-notes.md
+
+          gh release create "${GITHUB_REF_NAME}" /tmp/npm-package/*.tgz \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --title "npm: @glasskit.ai/create v${VERSION}" \
             --notes-file release-notes.md

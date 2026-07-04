@@ -1,0 +1,38 @@
+{
+  "name": "@glasskit.ai/create",
+  "version": "0.1.0",
+  "description": "WIP create package for GlassKit starter projects",
+  "type": "module",
+  "license": "MIT",
+  "author": "RealComputer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RealComputer/GlassKit.git",
+    "directory": "js"
+  },
+  "bugs": {
+    "url": "https://github.com/RealComputer/GlassKit/issues"
+  },
+  "homepage": "https://github.com/RealComputer/GlassKit#readme",
+  "bin": {
+    "create-glasskit": "bin/create.js"
+  },
+  "files": [
+    "bin",
+    "dist/template",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build-template.js",
+    "pretest": "npm run build",
+    "test": "node --test",
+    "prepack": "npm run build"
+  }
+}
