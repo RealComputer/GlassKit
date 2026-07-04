@@ -21,16 +21,17 @@ The GitHub environment named `pypi` requires review by `tash-2s` before the rele
 Run the local checks from this directory before tagging:
 
 ```bash
-uv sync --locked --dev
-uv run ty check
-uv run pytest
-uv run ruff check --fix
-uv run ruff format
-uv run glasskit --help
-uv run glasskit eval --help
-uv build --no-sources --clear
-uv run --isolated --no-project --with dist/*.whl glasskit --help
-uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
+UV_PYTHON=3.12 uv sync --locked --dev
+UV_PYTHON=3.12 uv run python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+UV_PYTHON=3.12 uv run ty check
+UV_PYTHON=3.12 uv run pytest
+UV_PYTHON=3.12 uv run ruff check --fix
+UV_PYTHON=3.12 uv run ruff format
+UV_PYTHON=3.12 uv run glasskit --help
+UV_PYTHON=3.12 uv run glasskit eval --help
+UV_PYTHON=3.12 uv build --no-sources --clear
+UV_PYTHON=3.12 uv run --isolated --no-project --with dist/*.whl glasskit --help
+UV_PYTHON=3.12 uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
 ```
 
 For a normal future release, bump the version, commit the version change, tag the commit with the PyPI package-specific tag format, and push both the branch and tag:
