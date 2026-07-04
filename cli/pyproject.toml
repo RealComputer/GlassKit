@@ -1,9 +1,14 @@
 [project]
 name = "glasskit.ai"
 version = "0.1.0"
-description = "GlassKit command-line tools"
+description = "Recorded-video eval tools for smart-glasses apps"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "RealComputer" },
+]
 dependencies = [
     "av",
     "pillow",
@@ -12,6 +17,24 @@ dependencies = [
     "rich",
     "typer",
 ]
+keywords = ["ai", "cli", "evals", "smart-glasses", "testing", "video"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://glasskit.ai"
+Documentation = "https://glasskit.ai/docs"
+Repository = "https://github.com/RealComputer/GlassKit"
+Issues = "https://github.com/RealComputer/GlassKit/issues"
 
 [project.scripts]
 glasskit = "glasskit.cli:app"

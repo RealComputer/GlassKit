@@ -22,9 +22,13 @@ GlassKit CLI turns recorded smart-glasses workflows into repeatable eval suites 
 - `src/glasskit/eval/video.py`, `compare.py`, `report.py`, and `init_case.py`: frame decoding, comparison modes, Rich output, and starter case creation.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.
 - `tests/fixtures/`: reproducible videos and sample eval suites used by default tests.
+- `PUBLISHING.md`: release runbook for the `glasskit.ai` PyPI package and tag-triggered Trusted Publishing flow.
+- `../.github/workflows/ci.yml` and `../.github/workflows/release.yml`: repository-level CI and PyPI release automation for this package. Keep their package commands scoped to the `cli/` working directory.
 
 ## Commands
 
 - `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after changes.
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
+- `uv build --no-sources --clear` plus isolated `dist/*.whl` and `dist/*.tar.gz` smoke tests: verify publishable artifacts before release.
+- Releases are tag-triggered from the repository root workflow. `pyproject.toml` version and the pushed `vX.Y.Z` tag must match.
 - For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run --adapter eval_adapter.py:create_evaluator --suite eval-suite`
