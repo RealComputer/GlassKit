@@ -4,48 +4,48 @@
     "title": "Step 1",
     "hud_image": "origami_step_1",
     "reference_image": "ref-imgs/1.jpg",
-    "criteria": "Accept a model shaped like a single downward-pointing triangle, with a long horizontal top edge and two diagonal edges meeting at the lower point. Reject a square or diamond sheet, an upright triangle, or a model with extra flaps visible."
+    "criteria": "Accept a model with a single downward-pointing triangular silhouette, a long horizontal top edge, and two diagonal edges meeting at the lower point. Reject a square or diamond sheet, an upright triangle, or any model with extra visible flaps that break the simple triangle silhouette."
   },
   {
     "id": "step_2",
     "title": "Step 2",
     "hud_image": "origami_step_2",
     "reference_image": "ref-imgs/2.jpg",
-    "criteria": "Accept a model shaped like an upright kite or diamond, with left and right side points, top and bottom points, and two narrow front flaps meeting along the vertical center near the bottom. Reject a downward triangle or a plain kite or diamond without narrow center flaps."
+    "criteria": "Accept a model with an upright kite or diamond silhouette, left and right side points, top and bottom points, and two narrow front flaps meeting along the vertical center near the bottom. Reject a downward triangle or a plain kite or diamond without the narrow center flaps."
   },
   {
     "id": "step_3",
     "title": "Step 3",
     "hud_image": "origami_step_3",
     "reference_image": "ref-imgs/3.jpg",
-    "criteria": "Accept a diamond-shaped model with a clear horizontal crease across the middle and two narrow upright flaps rising from the middle to the top center. Reject a closed kite or diamond that lacks either the horizontal middle crease or the narrow top-center flaps."
+    "criteria": "Accept a diamond-shaped model with a clear horizontal crease across the middle and two narrow upright flaps rising from the middle to the top center. Reject a closed kite or diamond that lacks the horizontal middle crease or the narrow top-center flaps."
   },
   {
     "id": "step_4",
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "criteria": "Accept a model with a large lower diamond, a horizontal middle crease, two triangular side flaps opened upward to the left and right, and a narrow upright flap at the top center. Reject a plain diamond or a model whose side flaps remain folded inward."
+    "criteria": "Accept a model with a large lower diamond, a horizontal crease across the middle, triangular side flaps opened upward to the left and right, and a narrow upright flap at the top center. Reject a plain diamond or a model without the opened left and right triangular side flaps."
   },
   {
     "id": "step_5",
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "Accept a model with the upper side flaps visible and a large upward-pointing front triangle covering the center, with its base along the middle crease and its point near the upper center. Reject a model where the front triangle still lies below the middle crease or points downward."
+    "criteria": "Accept a model with upper side flaps behind a large centered upward-pointing front triangle, with the triangle base along the middle crease and its point near the upper center. Reject a model without the large centered upward front triangle or with a front triangle pointing downward below the middle crease."
   },
   {
     "id": "step_6",
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "criteria": "Accept a model with upper side flaps visible, a small centered triangle above a wide horizontal band across the middle, and a large downward diamond below the band. Reject a model where the large front triangle is still raised instead of folded into the band."
+    "criteria": "Accept a model with upper side flaps, a small centered triangle between them, a wide horizontal band across the middle, and a large downward diamond below the band. Reject a model where a large upward-pointing triangle covers the center or the wide middle band is missing."
   },
   {
     "id": "step_7",
     "title": "Step 7",
     "hud_image": "origami_step_7",
     "reference_image": "ref-imgs/7.jpg",
-    "criteria": "Accept a model with upper side flaps visible, a small centered triangle above the middle band, and a long shallow horizontal base across the bottom. Reject a model with a large downward diamond still hanging below the middle band."
+    "criteria": "Accept a model with upper side flaps, a small centered triangle above the middle, and a long shallow horizontal base across the bottom. Reject a model with a large downward diamond below the middle or without the long shallow bottom base."
   }
 ]
