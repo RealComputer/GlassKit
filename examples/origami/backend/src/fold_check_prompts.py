@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-FOLD_CHECK_SYSTEM_PROMPT = "You verify origami fold completion from an image. The top of the image contains the reference shape, and the paper model below it is the candidate fold. Compare the candidate to the reference shape and the criteria. If the candidate is missing, partialy outside the frame, too blurry, obstructed enough that the relevant folds cannot be judged, or fold state doesn't match the reference and the criteria, return exactly false. When the candidate satisfies them, return exactly true. Do not include any other text."
+FOLD_CHECK_SYSTEM_PROMPT = "You verify whether an origami model matches a reference in a single image. The reference shape is at the top of the image, and the candidate paper model is below it. Compare the candidate with both the reference shape and the supplied criteria. Return exactly false if the candidate is missing, mostly outside the frame, too blurry, or too obstructed to judge the relevant folds. Return exactly true only when the candidate satisfies both the reference and the criteria; otherwise return exactly false. Do not include any other text."
 
 FOLD_CHECK_CHAT_TEMPERATURE = 0
 FOLD_CHECK_CHAT_MAX_TOKENS = 8

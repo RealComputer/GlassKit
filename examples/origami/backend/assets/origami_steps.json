@@ -4,48 +4,48 @@
     "title": "Step 1",
     "hud_image": "origami_step_1",
     "reference_image": "ref-imgs/1.jpg",
-    "prompt": "The accepted model is a single downward-pointing triangle with a long horizontal top edge and two diagonal edges meeting at the lower point. Reject if the paper is still an unfolded square or diamond."
+    "prompt": "Accept a single downward-pointing triangle with a long horizontal top edge and two diagonal edges meeting at the lower point. Reject an unfolded square or diamond, or any shape with visible extra flaps."
   },
   {
     "id": "step_2",
     "title": "Step 2",
     "hud_image": "origami_step_2",
     "reference_image": "ref-imgs/2.jpg",
-    "prompt": "The accepted model is an upright kite or diamond shape with left and right outer points, a top point, a bottom point, and two narrow folded flaps meeting along the vertical center near the bottom. Reject the previous simple triangle shape."
+    "prompt": "Accept an upright kite or diamond shape with left and right outer points, a top point, a bottom point, and two narrow folded flaps meeting along the vertical center near the bottom. Reject a flat downward triangle or a plain diamond with no narrow center flaps."
   },
   {
     "id": "step_3",
     "title": "Step 3",
     "hud_image": "origami_step_3",
     "reference_image": "ref-imgs/3.jpg",
-    "prompt": "The accepted model is a diamond shape with a horizontal crease across the middle and two narrow upright folded flaps at the top center. Reject if the model is still the closed kite from the previous step with no clear horizontal middle crease."
+    "prompt": "Accept a diamond shape with a horizontal crease across the middle and two narrow upright folded flaps at the top center. Reject a closed kite or diamond with no clear horizontal middle crease."
   },
   {
     "id": "step_4",
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "prompt": "The accepted model has a large lower diamond, a horizontal middle crease, symmetric triangular flaps opened upward on the left and right, and a narrow vertical flap in the top center. Reject if the side flaps are still closed."
+    "prompt": "Accept a large lower diamond with a horizontal middle crease, symmetric triangular flaps opened upward on the left and right, and a narrow vertical flap at the top center. Reject a plain diamond or any shape with the side flaps still folded inward."
   },
   {
     "id": "step_5",
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "prompt": "The accepted model keeps the upper leaf-like flaps visible and has the large front triangular flap folded upward over the center, with its base across the middle and its point near the upper center. Reject if the front triangular flap has not been raised."
+    "prompt": "Accept a model with the upper leaf-like flaps visible and the large front triangular flap raised over the center, with its base across the middle and its point near the upper center. Reject if the front triangular flap remains flat or points downward."
   },
   {
     "id": "step_6",
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "prompt": "The accepted model keeps the upper leaf-like flaps visible and has the large front section folded downward into a wide horizontal band across the middle, leaving a smaller centered triangle above the band and a large downward diamond below it. Reject the previous step where the large front triangle is still raised."
+    "prompt": "Accept a model with the upper leaf-like flaps visible, a small centered triangle above a wide horizontal band across the middle, and a large downward diamond below the band. Reject any model with the large front triangle still raised instead of folded into the band."
   },
   {
     "id": "step_7",
     "title": "Step 7",
     "hud_image": "origami_step_7",
     "reference_image": "ref-imgs/7.jpg",
-    "prompt": "The accepted model keeps the upper leaf-like flaps visible and has the lower diamond folded upward into a long shallow horizontal base. Reject the previous step if a large downward diamond still hangs below the middle band."
+    "prompt": "Accept a model with the upper leaf-like flaps visible and a long shallow horizontal base formed from the lower section. Reject if a large downward diamond still hangs below the middle band."
   }
 ]
