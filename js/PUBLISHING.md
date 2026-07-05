@@ -41,7 +41,7 @@ For a normal future release, bump the version without npm's default `vX.Y.Z` tag
 npm version patch --no-git-tag-version
 VERSION="$(node -p "require('./package.json').version")"
 git add package.json package-lock.json
-git commit -m "Release @glasskit.ai/create v${VERSION} to npm"
+git commit -m "Release npm package @glasskit.ai/create v${VERSION}"
 git tag -a "npm-glasskit-ai-create-v${VERSION}" -m "npm-glasskit-ai-create-v${VERSION}"
 git push --atomic origin main "npm-glasskit-ai-create-v${VERSION}"
 ```
