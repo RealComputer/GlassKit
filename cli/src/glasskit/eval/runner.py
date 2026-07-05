@@ -45,14 +45,14 @@ async def validate_eval_suite(options: RunOptions) -> ValidationReport:
     suite: EvalSuite | None = None
     try:
         suite = load_eval_suite(
-            options.suite_path,
+            options.eval_dir,
             case_filter=options.case_filter,
             allow_empty=options.allow_empty,
         )
     except EvalConfigError as error:
         return ValidationReport(
             suite=None,
-            issues=[ValidationIssue(message=str(error), path=options.suite_path)],
+            issues=[ValidationIssue(message=str(error), path=options.eval_dir)],
         )
 
     issues.extend(_validate_videos(suite))
@@ -61,7 +61,7 @@ async def validate_eval_suite(options: RunOptions) -> ValidationReport:
             evaluator = await load_evaluator(
                 options.adapter,
                 AdapterConfig(
-                    suite_path=suite.path,
+                    eval_dir=suite.path,
                     config=options.adapter_config,
                     artifacts_dir=options.artifacts_dir,
                     verbose=options.verbose,
@@ -82,7 +82,7 @@ async def run_eval(
         raise EvalConfigError("glasskit eval run requires --adapter")
     started_at = perf_counter()
     suite = load_eval_suite(
-        options.suite_path,
+        options.eval_dir,
         case_filter=options.case_filter,
         allow_empty=options.allow_empty,
     )
@@ -96,7 +96,7 @@ async def run_eval(
     evaluator = await load_evaluator(
         options.adapter,
         AdapterConfig(
-            suite_path=suite.path,
+            eval_dir=suite.path,
             config=options.adapter_config,
             artifacts_dir=options.artifacts_dir,
             verbose=options.verbose,
@@ -146,7 +146,7 @@ async def run_eval(
                                 result,
                                 frame.image,
                                 options=options,
-                                suite_path=suite.path,
+                                eval_dir=suite.path,
                             )
                     results.append(result)
                     if callbacks is not None:
@@ -156,7 +156,7 @@ async def run_eval(
 
     gate_results = _apply_quality_gates(suite, results, options)
     report = EvalRunReport(
-        suite_path=suite.path,
+        eval_dir=suite.path,
         case_names=[case.name for case in suite.cases],
         results=results,
         gate_results=gate_results,
@@ -324,9 +324,9 @@ def _save_failure_artifacts(
     image: Any,
     *,
     options: RunOptions,
-    suite_path: Path,
+    eval_dir: Path,
 ) -> SampleResult:
-    artifacts_dir = options.artifacts_dir or (suite_path / ".glasskit-artifacts")
+    artifacts_dir = options.artifacts_dir or (eval_dir / ".glasskit-artifacts")
     failures_dir = artifacts_dir / "failures"
     stem = (
         f"{result.case_name}_{result.target_id}_"
@@ -383,12 +383,12 @@ def _apply_quality_gates(
     min_target_pass_rate = options.min_target_pass_rate
 
     if min_pass_rate is not None:
-        gates.append(_pass_rate_gate("suite_min_pass_rate", results, min_pass_rate))
+        gates.append(_pass_rate_gate("eval_min_pass_rate", results, min_pass_rate))
     if max_failures is not None:
         failure_count = sum(1 for result in results if result.status == "failed")
         gates.append(
             GateResult(
-                name="suite_max_failures",
+                name="eval_max_failures",
                 passed=failure_count <= max_failures,
                 message=f"{failure_count} failures (gate: <= {max_failures})",
             )
@@ -402,7 +402,7 @@ def _apply_quality_gates(
             _configured_target_pass_rate_gates(
                 results,
                 global_thresholds,
-                "suite",
+                "eval",
                 fail_empty_targets=options.case_filter is None,
             )
         )
@@ -515,7 +515,7 @@ def _coalesce(primary: Any, fallback: Any) -> Any:
 
 def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
     return {
-        "suite": str(report.suite_path),
+        "eval_dir": str(report.eval_dir),
         "cases": report.case_names,
         "success": report.success,
         "summary": {

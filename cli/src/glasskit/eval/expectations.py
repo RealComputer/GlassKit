@@ -20,30 +20,31 @@ from .schemas import (
     RawCompare,
     RawSampleBlock,
     RawThresholds,
-    parse_expected_yaml,
-    parse_suite_yaml,
+    parse_case_yaml,
+    parse_eval_config_yaml,
     workflow_target_metadata,
 )
 
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
+CASES_DIR_NAME = "cases"
 _EPSILON = 1e-9
 
 
 def load_eval_suite(
-    suite_path: Path, *, case_filter: str | None = None, allow_empty: bool = False
+    eval_dir: Path, *, case_filter: str | None = None, allow_empty: bool = False
 ) -> EvalSuite:
-    suite_path = suite_path.expanduser().resolve()
-    if not suite_path.exists():
-        raise EvalConfigError(f"eval suite does not exist: {suite_path}")
-    if not suite_path.is_dir():
-        raise EvalConfigError(f"eval suite must be a directory: {suite_path}")
+    eval_dir = eval_dir.expanduser().resolve()
+    if not eval_dir.exists():
+        raise EvalConfigError(f"eval directory does not exist: {eval_dir}")
+    if not eval_dir.is_dir():
+        raise EvalConfigError(f"eval directory must be a directory: {eval_dir}")
 
-    thresholds = _load_suite_thresholds(suite_path)
-    case_dirs = _discover_case_dirs(suite_path, case_filter)
-    cases = [_load_case(case_dir, allow_empty=allow_empty) for case_dir in case_dirs]
+    thresholds = _load_eval_thresholds(eval_dir)
+    case_paths = _discover_case_paths(eval_dir, case_filter)
+    cases = [_load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
     if not allow_empty and not any(case.samples for case in cases):
-        raise EvalConfigError("eval suite has no declared samples")
-    return EvalSuite(path=suite_path, cases=cases, thresholds=thresholds)
+        raise EvalConfigError("eval has no declared samples")
+    return EvalSuite(path=eval_dir, cases=cases, thresholds=thresholds)
 
 
 def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
@@ -66,38 +67,51 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
     return rows
 
 
-def _load_suite_thresholds(suite_path: Path) -> Thresholds:
-    path = suite_path / "suite.yaml"
+def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
+    path = eval_dir / "config.yaml"
     if not path.exists():
         return Thresholds()
-    raw = parse_suite_yaml(_load_yaml_mapping(path), label=str(path))
+    raw = parse_eval_config_yaml(_load_yaml_mapping(path), label=str(path))
     return _thresholds_from_raw(raw.thresholds)
 
 
-def _discover_case_dirs(suite_path: Path, case_filter: str | None) -> list[Path]:
-    if (suite_path / "expected.yaml").exists():
-        candidates = [suite_path]
+def _discover_case_paths(eval_dir: Path, case_filter: str | None) -> list[Path]:
+    cases_dir = eval_dir / CASES_DIR_NAME
+    if not cases_dir.exists():
+        raise EvalConfigError(f"eval cases directory does not exist: {cases_dir}")
+    if not cases_dir.is_dir():
+        raise EvalConfigError(f"eval cases path must be a directory: {cases_dir}")
+
+    if case_filter is not None:
+        _validate_case_filter(case_filter)
+        candidates = [cases_dir / f"{case_filter}.yaml"]
+        candidates = [path for path in candidates if path.exists()]
     else:
         candidates = sorted(
             child
-            for child in suite_path.iterdir()
-            if child.is_dir() and (child / "expected.yaml").exists()
+            for child in cases_dir.iterdir()
+            if child.is_file() and child.suffix == ".yaml"
         )
-    if case_filter is not None:
-        candidates = [path for path in candidates if path.name == case_filter]
     if not candidates:
         suffix = f" matching case {case_filter!r}" if case_filter else ""
-        raise EvalConfigError(f"no eval cases found under {suite_path}{suffix}")
+        raise EvalConfigError(f"no eval cases found under {cases_dir}{suffix}")
     return candidates
 
 
-def _load_case(case_dir: Path, *, allow_empty: bool) -> EvalCase:
-    expected_path = case_dir / "expected.yaml"
-    raw = parse_expected_yaml(
-        _load_yaml_mapping(expected_path), label=str(expected_path)
-    )
+def _validate_case_filter(case_filter: str) -> None:
+    if (
+        not case_filter
+        or case_filter in {".", ".."}
+        or Path(case_filter).name != case_filter
+        or case_filter.endswith((".yaml", ".yml"))
+    ):
+        raise EvalConfigError("case must be a filename stem under cases/")
 
-    video_path = _resolve_video_path(case_dir, raw.video)
+
+def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:
+    raw = parse_case_yaml(_load_yaml_mapping(case_path), label=str(case_path))
+
+    video_path = _resolve_video_path(case_path, raw.video)
     workflow_targets = {
         target.id: workflow_target_metadata(target) for target in raw.workflow.targets
     }
@@ -114,7 +128,7 @@ def _load_case(case_dir: Path, *, allow_empty: bool) -> EvalCase:
         for block_index, raw_block in enumerate(raw_target.samples, start=1):
             block_samples = _expand_sample_block(
                 raw_block,
-                case_name=case_dir.name,
+                case_name=case_path.stem,
                 target_id=target_id,
                 target_index=target_index,
                 target_label=label,
@@ -123,16 +137,14 @@ def _load_case(case_dir: Path, *, allow_empty: bool) -> EvalCase:
                 default_every_s=raw.sampling.every_s,
                 next_sample_index=next_sample_index,
                 block_index=block_index,
-                expected_path=expected_path,
+                case_path=case_path,
                 intervals=intervals,
             )
             samples.extend(block_samples)
             next_sample_index += len(block_samples)
 
         if not allow_empty and not samples:
-            raise EvalConfigError(
-                f"{expected_path}: target {target_id!r} has no samples"
-            )
+            raise EvalConfigError(f"{case_path}: target {target_id!r} has no samples")
         targets.append(
             TargetSpec(
                 id=target_id,
@@ -144,11 +156,11 @@ def _load_case(case_dir: Path, *, allow_empty: bool) -> EvalCase:
         )
 
     if not allow_empty and not any(target.samples for target in targets):
-        raise EvalConfigError(f"{expected_path}: case has no samples")
+        raise EvalConfigError(f"{case_path}: case has no samples")
 
     return EvalCase(
-        name=case_dir.name,
-        path=case_dir,
+        name=case_path.stem,
+        path=case_path,
         video_path=video_path,
         description=raw.description,
         targets=targets,
@@ -170,31 +182,17 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return raw
 
 
-def _resolve_video_path(case_dir: Path, raw_video: Any) -> Path:
-    if raw_video is not None:
-        if not isinstance(raw_video, str) or not raw_video.strip():
-            raise EvalConfigError(f"{case_dir / 'expected.yaml'}: video must be a path")
-        path = (case_dir / raw_video).resolve()
-        if not path.exists():
-            raise EvalConfigError(f"video file does not exist: {path}")
-        if not path.is_file():
-            raise EvalConfigError(f"video path is not a file: {path}")
-        if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
-            raise EvalConfigError(f"unsupported video file type: {path}")
-        return path
-
-    videos = sorted(
-        child
-        for child in case_dir.iterdir()
-        if child.is_file() and child.suffix.lower() in SUPPORTED_VIDEO_SUFFIXES
-    )
-    if len(videos) == 1:
-        return videos[0].resolve()
-    if not videos:
-        raise EvalConfigError(f"{case_dir}: expected one video file or video: ...")
-    raise EvalConfigError(
-        f"{case_dir}: multiple video files found; set video: in expected.yaml"
-    )
+def _resolve_video_path(case_path: Path, raw_video: Any) -> Path:
+    if not isinstance(raw_video, str) or not raw_video.strip():
+        raise EvalConfigError(f"{case_path}: video must be a path")
+    path = (case_path.parent / raw_video).resolve()
+    if not path.exists():
+        raise EvalConfigError(f"video file does not exist: {path}")
+    if not path.is_file():
+        raise EvalConfigError(f"video path is not a file: {path}")
+    if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
+        raise EvalConfigError(f"unsupported video file type: {path}")
+    return path
 
 
 def _target_config(
@@ -221,7 +219,7 @@ def _expand_sample_block(
     default_every_s: float,
     next_sample_index: int,
     block_index: int,
-    expected_path: Path,
+    case_path: Path,
     intervals: list[tuple[float, float, str]],
 ) -> list[SampleExpectation]:
     every_s = raw_block.every_s if raw_block.every_s is not None else default_every_s
@@ -229,14 +227,14 @@ def _expand_sample_block(
 
     if raw_block.range_ is not None:
         timestamps, source_interval = _expand_range(
-            raw_block.range_, every_s, expected_path, target_id, block_index
+            raw_block.range_, every_s, case_path, target_id, block_index
         )
-        _add_interval(intervals, source_interval, expected_path, target_id, block_index)
+        _add_interval(intervals, source_interval, case_path, target_id, block_index)
         source = f"range [{source_interval[0]:g}, {source_interval[1]:g})"
     else:
-        timestamps = _expand_at(raw_block.at, expected_path, target_id, block_index)
+        timestamps = _expand_at(raw_block.at, case_path, target_id, block_index)
         for timestamp in timestamps:
-            _add_point(intervals, timestamp, expected_path, target_id, block_index)
+            _add_point(intervals, timestamp, case_path, target_id, block_index)
         source = "at"
 
     return [
@@ -271,7 +269,7 @@ def _compare_from_raw(raw_compare: RawCompare | None) -> ComparisonConfig:
 def _expand_range(
     raw_range: list[float],
     every_s: float,
-    expected_path: Path,
+    case_path: Path,
     target_id: str,
     block_index: int,
 ) -> tuple[list[float], tuple[float, float, str]]:
@@ -286,7 +284,7 @@ def _expand_range(
 
 def _expand_at(
     raw_at: Any,
-    expected_path: Path,
+    case_path: Path,
     target_id: str,
     block_index: int,
 ) -> list[float]:
@@ -294,7 +292,7 @@ def _expand_at(
     timestamps = [_round_timestamp(float(value)) for value in raw_values]
     if not timestamps:
         raise EvalConfigError(
-            f"{expected_path}: target {target_id!r} sample {block_index} "
+            f"{case_path}: target {target_id!r} sample {block_index} "
             "at must contain at least one timestamp"
         )
     return sorted(timestamps)
@@ -303,7 +301,7 @@ def _expand_at(
 def _add_interval(
     intervals: list[tuple[float, float, str]],
     interval: tuple[float, float, str],
-    expected_path: Path,
+    case_path: Path,
     target_id: str,
     block_index: int,
 ) -> None:
@@ -312,13 +310,13 @@ def _add_interval(
         if existing_start == existing_end:
             if start <= existing_start < end:
                 raise EvalConfigError(
-                    f"{expected_path}: target {target_id!r} sample {block_index} "
+                    f"{case_path}: target {target_id!r} sample {block_index} "
                     f"overlaps {existing_source}"
                 )
             continue
         if start < existing_end and existing_start < end:
             raise EvalConfigError(
-                f"{expected_path}: target {target_id!r} sample {block_index} "
+                f"{case_path}: target {target_id!r} sample {block_index} "
                 f"overlaps {existing_source}"
             )
     intervals.append(interval)
@@ -327,7 +325,7 @@ def _add_interval(
 def _add_point(
     intervals: list[tuple[float, float, str]],
     timestamp: float,
-    expected_path: Path,
+    case_path: Path,
     target_id: str,
     block_index: int,
 ) -> None:
@@ -335,13 +333,13 @@ def _add_point(
         if existing_start == existing_end:
             if abs(timestamp - existing_start) <= _EPSILON:
                 raise EvalConfigError(
-                    f"{expected_path}: target {target_id!r} sample {block_index} "
+                    f"{case_path}: target {target_id!r} sample {block_index} "
                     f"duplicates {existing_source}"
                 )
             continue
         if existing_start <= timestamp < existing_end:
             raise EvalConfigError(
-                f"{expected_path}: target {target_id!r} sample {block_index} "
+                f"{case_path}: target {target_id!r} sample {block_index} "
                 f"overlaps {existing_source}"
             )
     intervals.append((timestamp, timestamp, f"sample {block_index}"))

@@ -24,22 +24,25 @@ app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
 app.add_typer(eval_app, name="eval")
 
+DEFAULT_EVAL_DIR = Path("eval")
+DEFAULT_ADAPTER = "eval/adapter.py:create_evaluator"
+
 
 @eval_app.command("run")
 def eval_run(
     adapter: Annotated[
         str,
         typer.Option(
-            "--adapter", help="Adapter target, e.g. eval_adapter.py:create_evaluator."
+            "--adapter", help="Adapter target, e.g. eval/adapter.py:create_evaluator."
         ),
-    ],
-    suite: Annotated[
+    ] = DEFAULT_ADAPTER,
+    eval_dir: Annotated[
         Path,
-        typer.Option("--suite", help="Eval suite directory."),
-    ],
+        typer.Option("--eval-dir", help="Eval directory."),
+    ] = DEFAULT_EVAL_DIR,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only run one case directory by name."),
+        typer.Option("--case", help="Only run one case by filename stem."),
     ] = None,
     adapter_config: Annotated[
         Path | None,
@@ -85,13 +88,13 @@ def eval_run(
     ] = 20,
     allow_empty: Annotated[
         bool,
-        typer.Option("--allow-empty", help="Allow suites or cases with no samples."),
+        typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
     console = Console()
     options = RunOptions(
         adapter=adapter,
-        suite_path=suite,
+        eval_dir=eval_dir,
         case_filter=case,
         adapter_config=_load_config(adapter_config),
         min_pass_rate=min_pass_rate,
@@ -121,7 +124,9 @@ def eval_run(
 
 @eval_app.command("validate")
 def eval_validate(
-    suite: Annotated[Path, typer.Option("--suite", help="Eval suite directory.")],
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
     adapter: Annotated[
         str | None,
         typer.Option(
@@ -130,7 +135,7 @@ def eval_validate(
     ] = None,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only validate one case directory by name."),
+        typer.Option("--case", help="Only validate one case by filename stem."),
     ] = None,
     adapter_config: Annotated[
         Path | None,
@@ -140,12 +145,12 @@ def eval_validate(
     ] = None,
     allow_empty: Annotated[
         bool,
-        typer.Option("--allow-empty", help="Allow suites or cases with no samples."),
+        typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
     options = RunOptions(
         adapter=adapter,
-        suite_path=suite,
+        eval_dir=eval_dir,
         case_filter=case,
         adapter_config=_load_config(adapter_config),
         allow_empty=allow_empty,
@@ -157,18 +162,20 @@ def eval_validate(
 
 @eval_app.command("list-samples")
 def eval_list_samples(
-    suite: Annotated[Path, typer.Option("--suite", help="Eval suite directory.")],
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only list one case directory by name."),
+        typer.Option("--case", help="Only list one case by filename stem."),
     ] = None,
     allow_empty: Annotated[
         bool,
-        typer.Option("--allow-empty", help="Allow suites or cases with no samples."),
+        typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
     try:
-        loaded = load_eval_suite(suite, case_filter=case, allow_empty=allow_empty)
+        loaded = load_eval_suite(eval_dir, case_filter=case, allow_empty=allow_empty)
     except EvalError as error:
         Console().print(f"[red]Could not list samples[/red]: {error}")
         raise typer.Exit(2) from error
@@ -177,22 +184,24 @@ def eval_list_samples(
 
 @eval_app.command("init-case")
 def eval_init_case(
-    suite: Annotated[Path, typer.Option("--suite", help="Eval suite directory.")],
-    case: Annotated[str, typer.Option("--case", help="Case directory name.")],
+    case: Annotated[str, typer.Option("--case", help="Case filename stem.")],
     video: Annotated[Path, typer.Option("--video", help="Source video file.")],
     target: Annotated[str, typer.Option("--target", help="Initial target id.")],
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
     label: Annotated[
         str | None,
         typer.Option("--label", help="Optional label for the initial target."),
     ] = None,
     force: Annotated[
         bool,
-        typer.Option("--force", help="Overwrite expected.yaml and case video."),
+        typer.Option("--force", help="Overwrite case YAML and copied video."),
     ] = False,
 ) -> None:
     try:
         result = init_eval_case(
-            suite_path=suite,
+            eval_dir=eval_dir,
             case_name=case,
             source_video=video,
             target_id=target,
@@ -202,9 +211,9 @@ def eval_init_case(
     except EvalError as error:
         Console().print(f"[red]Could not initialize case[/red]: {error}")
         raise typer.Exit(2) from error
-    Console().print(f"Created case: {result.case_dir}")
+    Console().print(f"Created case: {result.case_path}")
     Console().print(f"Video: {result.video_path}")
-    Console().print(f"Expected: {result.expected_path}")
+    Console().print(f"Eval: {result.eval_dir}")
 
 
 def _load_config(path: Path | None) -> dict[str, Any]:

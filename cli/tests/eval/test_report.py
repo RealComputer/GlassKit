@@ -13,7 +13,7 @@ def test_print_run_summary_includes_formatted_duration() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
     report = EvalRunReport(
-        suite_path=Path("eval-suite"),
+        eval_dir=Path("eval"),
         case_names=[],
         results=[],
         gate_results=[],

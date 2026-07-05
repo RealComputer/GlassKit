@@ -9,7 +9,7 @@ from glasskit.eval.models import EvalConfigError
 
 
 def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -27,7 +27,7 @@ def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(case_dir.parent)
+    suite = load_eval_suite(eval_dir)
 
     samples = suite.cases[0].samples
     assert [sample.timestamp_s for sample in samples] == [0.0, 0.5, 1.0]
@@ -35,7 +35,7 @@ def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
 
 
 def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -50,7 +50,7 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(case_dir.parent)
+    suite = load_eval_suite(eval_dir)
 
     assert [sample.timestamp_s for sample in suite.cases[0].samples] == [
         1.0,
@@ -61,7 +61,7 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
 
 
 def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -76,7 +76,7 @@ def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(case_dir.parent)
+    suite = load_eval_suite(eval_dir)
 
     assert [sample.timestamp_s for sample in suite.cases[0].samples] == [
         0.0,
@@ -87,7 +87,7 @@ def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
 
 
 def test_overlapping_ranges_are_invalid(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -103,11 +103,11 @@ def test_overlapping_ranges_are_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="overlaps"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
 def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -123,11 +123,11 @@ def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="overlaps"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
 def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -143,7 +143,7 @@ def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match=r"sampling\.every_s"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
 @pytest.mark.parametrize(
@@ -160,7 +160,7 @@ def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
     ],
 )
 def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         f"""
         version: 1
@@ -173,11 +173,11 @@ def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -
     )
 
     with pytest.raises(EvalConfigError, match="finite"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
 def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -193,11 +193,11 @@ def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="unsupported compare mode"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
 def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -211,11 +211,28 @@ def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="JSON-like"):
-        load_eval_suite(case_dir.parent)
+        load_eval_suite(eval_dir)
 
 
-def test_suite_yaml_loads_suite_thresholds(tmp_path: Path) -> None:
-    case_dir = _case_dir(
+def test_video_field_is_required(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        version: 1
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="video"):
+        load_eval_suite(eval_dir)
+
+
+def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
         tmp_path,
         """
         version: 1
@@ -227,7 +244,7 @@ def test_suite_yaml_loads_suite_thresholds(tmp_path: Path) -> None:
                 expect: true
         """,
     )
-    (case_dir.parent / "suite.yaml").write_text(
+    (eval_dir / "config.yaml").write_text(
         """
         thresholds:
           min_pass_rate: 0.9
@@ -239,16 +256,17 @@ def test_suite_yaml_loads_suite_thresholds(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(case_dir.parent)
+    suite = load_eval_suite(eval_dir)
 
     assert suite.thresholds.min_pass_rate == 0.9
     assert suite.thresholds.max_failures == 2
     assert suite.thresholds.per_target["step_1"].min_pass_rate == 0.95
 
 
-def _case_dir(tmp_path: Path, expected_yaml: str) -> Path:
-    case_dir = tmp_path / "suite" / "case-001"
-    case_dir.mkdir(parents=True)
-    (case_dir / "video.mp4").write_bytes(b"placeholder")
-    (case_dir / "expected.yaml").write_text(expected_yaml, encoding="utf-8")
-    return case_dir
+def _eval_dir(tmp_path: Path, case_yaml: str) -> Path:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "video.mp4").write_bytes(b"placeholder")
+    (cases_dir / "case-001.yaml").write_text(case_yaml, encoding="utf-8")
+    return eval_dir

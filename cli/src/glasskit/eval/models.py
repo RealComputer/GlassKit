@@ -30,7 +30,7 @@ class EvalError(Exception):
 
 
 class EvalConfigError(EvalError):
-    """Raised when an eval suite, case, or CLI option is invalid."""
+    """Raised when an eval directory, case, or CLI option is invalid."""
 
 
 class AdapterLoadError(EvalError):
@@ -43,7 +43,7 @@ class AdapterRuntimeError(EvalError):
 
 @dataclass(frozen=True)
 class AdapterConfig:
-    suite_path: Path
+    eval_dir: Path
     config: Mapping[str, Any] = dc_field(default_factory=dict)
     artifacts_dir: Path | None = None
     verbose: bool = False
@@ -212,7 +212,7 @@ class GateResult:
 
 @dataclass(frozen=True)
 class EvalRunReport:
-    suite_path: Path
+    eval_dir: Path
     case_names: list[str]
     results: list[SampleResult]
     gate_results: list[GateResult]
@@ -247,7 +247,7 @@ class EvalRunReport:
 
 @dataclass(frozen=True)
 class RunOptions:
-    suite_path: Path
+    eval_dir: Path
     adapter: str | None = None
     case_filter: str | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)

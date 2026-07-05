@@ -84,7 +84,7 @@ def print_run_summary(
 ) -> None:
     console = console or Console()
     status = "[green]passed[/green]" if report.success else "[red]failed[/red]"
-    console.print(f"\n[bold]Eval suite[/bold]: {report.suite_path}")
+    console.print(f"\n[bold]Eval[/bold]: {report.eval_dir}")
     console.print(f"Cases: {len(report.case_names)}")
     console.print(
         "Samples: "

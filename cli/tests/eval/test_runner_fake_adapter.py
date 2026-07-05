@@ -76,7 +76,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
         )
     )
@@ -109,7 +109,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
             artifacts_dir=tmp_path / "artifacts",
             save_failures=True,
@@ -127,10 +127,10 @@ def create_evaluator(config):
 
 
 async def _run_suite_per_target_gate_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_dir = suite_dir / "case-001"
-    case_dir.mkdir(parents=True)
-    (suite_dir / "suite.yaml").write_text(
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (suite_dir / "config.yaml").write_text(
         """
 thresholds:
   per_target:
@@ -139,7 +139,7 @@ thresholds:
         """,
         encoding="utf-8",
     )
-    (case_dir / "expected.yaml").write_text(
+    (cases_dir / "case-001.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -176,27 +176,23 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
         )
     )
 
     gate = next(
-        gate
-        for gate in report.gate_results
-        if gate.name == "suite_step_2_min_pass_rate"
+        gate for gate in report.gate_results if gate.name == "eval_step_2_min_pass_rate"
     )
     assert not gate.passed
     assert not report.success
 
 
 async def _run_filtered_suite_target_gate_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_1 = suite_dir / "case-001"
-    case_2 = suite_dir / "case-002"
-    case_1.mkdir(parents=True)
-    case_2.mkdir(parents=True)
-    (suite_dir / "suite.yaml").write_text(
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (suite_dir / "config.yaml").write_text(
         """
 thresholds:
   per_target:
@@ -207,7 +203,7 @@ thresholds:
         """,
         encoding="utf-8",
     )
-    (case_1 / "expected.yaml").write_text(
+    (cases_dir / "case-001.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -219,7 +215,7 @@ targets:
         """,
         encoding="utf-8",
     )
-    (case_2 / "expected.yaml").write_text(
+    (cases_dir / "case-002.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -252,23 +248,23 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             case_filter="case-001",
             adapter=f"{adapter_path}:create_evaluator",
         )
     )
 
     gate_names = {gate.name for gate in report.gate_results}
-    assert "suite_step_1_min_pass_rate" in gate_names
-    assert "suite_step_2_min_pass_rate" not in gate_names
+    assert "eval_step_1_min_pass_rate" in gate_names
+    assert "eval_step_2_min_pass_rate" not in gate_names
     assert report.success
 
 
 async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_dir = suite_dir / "case-001"
-    case_dir.mkdir(parents=True)
-    (case_dir / "expected.yaml").write_text(
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -302,7 +298,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
             keep_going=True,
             output_json=output_json,
@@ -344,7 +340,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
             output_json=output_json,
         )
@@ -356,10 +352,10 @@ def create_evaluator(config):
 
 
 async def _run_close_error_masking_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_dir = suite_dir / "case-001"
-    case_dir.mkdir(parents=True)
-    (case_dir / "expected.yaml").write_text(
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -393,7 +389,7 @@ def create_evaluator(config):
     with pytest.raises(AdapterRuntimeError, match="evaluation failed") as exc_info:
         await run_eval(
             RunOptions(
-                suite_path=suite_dir,
+                eval_dir=suite_dir,
                 adapter=f"{adapter_path}:create_evaluator",
             )
         )
@@ -402,10 +398,10 @@ def create_evaluator(config):
 
 
 async def _run_malformed_evaluate_many_return_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "suite"
-    case_dir = suite_dir / "case-001"
-    case_dir.mkdir(parents=True)
-    (case_dir / "expected.yaml").write_text(
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
         f"""
 version: 1
 video: "{TWO_STATE_VIDEO}"
@@ -438,7 +434,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            suite_path=suite_dir,
+            eval_dir=suite_dir,
             adapter=f"{adapter_path}:create_evaluator",
             keep_going=True,
         )
@@ -451,7 +447,7 @@ def create_evaluator(config):
     with pytest.raises(AdapterRuntimeError, match="adapter failed for target 'step_1'"):
         await run_eval(
             RunOptions(
-                suite_path=suite_dir,
+                eval_dir=suite_dir,
                 adapter=f"{adapter_path}:create_evaluator",
             )
         )

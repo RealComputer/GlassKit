@@ -26,7 +26,7 @@ def evaluate_frame(image, target_id):
 
     evaluator = await load_evaluator(
         f"{adapter_path}:evaluate_frame",
-        AdapterConfig(suite_path=tmp_path),
+        AdapterConfig(eval_dir=tmp_path),
     )
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
@@ -62,7 +62,7 @@ def create_evaluator(config):
 
     evaluator = await load_evaluator(
         "my_adapter:create_evaluator",
-        AdapterConfig(suite_path=tmp_path),
+        AdapterConfig(eval_dir=tmp_path),
     )
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_2", index=1))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from json import dumps as json_dumps
+from os import path as os_path
 from pathlib import Path
 
 from .expectations import SUPPORTED_VIDEO_SUFFIXES
@@ -11,14 +12,14 @@ from .models import EvalConfigError
 
 @dataclass(frozen=True)
 class InitCaseResult:
-    case_dir: Path
-    expected_path: Path
+    eval_dir: Path
+    case_path: Path
     video_path: Path
 
 
 def init_eval_case(
     *,
-    suite_path: Path,
+    eval_dir: Path,
     case_name: str,
     source_video: Path,
     target_id: str,
@@ -29,58 +30,67 @@ def init_eval_case(
     target_id = target_id.strip()
     if not case_name:
         raise EvalConfigError("case name must not be empty")
-    if case_name in {".", ".."} or Path(case_name).name != case_name:
-        raise EvalConfigError("case name must be a single directory name")
+    if (
+        case_name in {".", ".."}
+        or Path(case_name).name != case_name
+        or case_name.endswith((".yaml", ".yml"))
+    ):
+        raise EvalConfigError("case name must be a single filename stem")
     if not target_id:
         raise EvalConfigError("target id must not be empty")
 
-    suite_path = suite_path.expanduser().resolve()
+    eval_dir = eval_dir.expanduser().resolve()
     source_video = source_video.expanduser().resolve()
     if not source_video.exists() or not source_video.is_file():
         raise EvalConfigError(f"video file does not exist: {source_video}")
     if source_video.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
         raise EvalConfigError(f"unsupported video file type: {source_video}")
 
-    if suite_path.exists() and not suite_path.is_dir():
-        raise EvalConfigError(f"eval suite path is not a directory: {suite_path}")
-    case_dir = (suite_path / case_name).resolve()
+    if eval_dir.exists() and not eval_dir.is_dir():
+        raise EvalConfigError(f"eval path is not a directory: {eval_dir}")
+    cases_dir = (eval_dir / "cases").resolve()
+    case_path = (cases_dir / f"{case_name}.yaml").resolve()
     try:
-        case_dir.relative_to(suite_path)
+        case_path.relative_to(eval_dir)
     except ValueError as exc:
-        raise EvalConfigError("case path must stay inside the eval suite") from exc
-    if case_dir.exists() and not case_dir.is_dir():
-        raise EvalConfigError(f"case path is not a directory: {case_dir}")
-    expected_path = case_dir / "expected.yaml"
-    case_dir.mkdir(parents=True, exist_ok=True)
-    if expected_path.exists() and not force:
-        raise EvalConfigError(f"expected.yaml already exists: {expected_path}")
+        raise EvalConfigError("case path must stay inside the eval directory") from exc
+    cases_dir.mkdir(parents=True, exist_ok=True)
+    if case_path.exists() and not force:
+        raise EvalConfigError(f"case YAML already exists: {case_path}")
 
-    video_path = _case_video_path(case_dir, source_video)
+    video_path = _case_video_path(
+        eval_dir=eval_dir,
+        case_dir=cases_dir,
+        case_name=case_name,
+        source_video=source_video,
+    )
     if video_path.exists() and not _same_file(source_video, video_path) and not force:
         raise EvalConfigError(f"case video already exists: {video_path}")
     if not _same_file(source_video, video_path):
         shutil.copy2(source_video, video_path)
 
-    expected_path.write_text(
-        _expected_yaml_template(
-            video_name=video_path.relative_to(case_dir).as_posix(),
+    case_path.write_text(
+        _case_yaml_template(
+            video_name=_relative_path(video_path, start=cases_dir),
             target_id=target_id,
             target_label=target_label.strip() if target_label else None,
         ),
         encoding="utf-8",
     )
     return InitCaseResult(
-        case_dir=case_dir,
-        expected_path=expected_path,
+        eval_dir=eval_dir,
+        case_path=case_path,
         video_path=video_path,
     )
 
 
-def _case_video_path(case_dir: Path, source_video: Path) -> Path:
+def _case_video_path(
+    *, eval_dir: Path, case_dir: Path, case_name: str, source_video: Path
+) -> Path:
     try:
-        source_video.relative_to(case_dir)
+        source_video.relative_to(eval_dir)
     except ValueError:
-        return case_dir / f"video{source_video.suffix.lower()}"
+        return case_dir / f"{case_name}{source_video.suffix.lower()}"
     return source_video
 
 
@@ -91,7 +101,11 @@ def _same_file(left: Path, right: Path) -> bool:
         return False
 
 
-def _expected_yaml_template(
+def _relative_path(path: Path, *, start: Path) -> str:
+    return Path(os_path.relpath(path, start=start)).as_posix()
+
+
+def _case_yaml_template(
     *, video_name: str, target_id: str, target_label: str | None
 ) -> str:
     label_line = f"    label: {_yaml_string(target_label)}\n" if target_label else ""
