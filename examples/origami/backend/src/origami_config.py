@@ -13,7 +13,7 @@ class OrigamiStep:
     hud_image: str
     reference_image: str
     reference_path: Path
-    prompt: str
+    criteria: str
 
 
 def load_origami_steps(path: Path) -> list[OrigamiStep]:
@@ -35,7 +35,7 @@ def _parse_step(index: int, asset_dir: Path, item: dict[str, Any]) -> OrigamiSte
     title = _required_string(item, "title", index)
     hud_image = _required_string(item, "hud_image", index)
     reference_image = _required_string(item, "reference_image", index)
-    prompt = _required_string(item, "prompt", index)
+    criteria = _required_string(item, "criteria", index)
     reference_path = asset_dir / reference_image
     if not reference_path.exists():
         raise ValueError(f"step {index} reference image not found: {reference_path}")
@@ -45,7 +45,7 @@ def _parse_step(index: int, asset_dir: Path, item: dict[str, Any]) -> OrigamiSte
         hud_image=hud_image,
         reference_image=reference_image,
         reference_path=reference_path,
-        prompt=prompt,
+        criteria=criteria,
     )
 
 

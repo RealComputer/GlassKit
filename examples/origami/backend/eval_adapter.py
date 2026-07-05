@@ -84,7 +84,7 @@ class OrigamiFoldCheckEvaluator:
         completion = await self._client.chat_completion_for_image(
             image_url=fold_check_image_data_url(image, self._jpeg_quality),
             thread_id=thread_id,
-            prompt=step.prompt,
+            prompt=step.criteria,
             log_context=f"eval={thread_id}",
         )
         if completion is None:

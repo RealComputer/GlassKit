@@ -91,7 +91,7 @@ class FoldCheckRuntime:
             return
 
         step = self._current_step_for(session)
-        self._switch_prompt(session, step.prompt)
+        self._switch_prompt(session, step.criteria)
 
     async def maybe_save_debug_composite(self, session: OrigamiSession) -> None:
         if not self._diagnostics.save_composites:
@@ -144,7 +144,7 @@ class FoldCheckRuntime:
             return
 
         step = self._current_step_for(session)
-        generation = session.fold_check.begin_generation(step.prompt)
+        generation = session.fold_check.begin_generation(step.criteria)
         first_camera = _frame_to_image(first_item[1], fallback_size=(1024, 768))
         frame_size = first_camera.size
 
@@ -684,7 +684,7 @@ class FoldCheckRuntime:
         generation: int,
     ) -> None:
         step_index = session.step_index
-        prompt = self._current_step_for(session).prompt
+        prompt = self._current_step_for(session).criteria
         publisher_epoch = session.fold_check.publisher_epoch
         completion = await self._client.chat_completion(
             stream_id=stream_id,
