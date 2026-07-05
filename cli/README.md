@@ -146,6 +146,25 @@ your-app/
 
 Commit the suite files that your team should share. Keep secrets in environment variables or uncommitted environment files, not in `expected.yaml` or `adapter-config.yaml`.
 
+For large or private recordings, commit the eval YAML and keep video files outside ordinary Git history. Put the media in a gitignored or externally synced directory, including outside the app repository, then reference each file with `video:`. The path is resolved relative to the case directory that contains `expected.yaml`, so an external media directory can look like this:
+
+```text
+workspace/
+  your-app/
+    eval_adapter.py
+    eval-suite/
+      fold-step-001/
+        expected.yaml
+  eval-videos/
+    fold-step-001.mp4
+```
+
+```yaml
+video: ../../../eval-videos/fold-step-001.mp4
+```
+
+This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process.
+
 ## Eval Suite Layout
 
 An eval suite is a directory containing one or more case directories. Each case has an `expected.yaml` file and either one video file in the case directory or a `video:` path in `expected.yaml`.
