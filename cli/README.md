@@ -163,7 +163,7 @@ workspace/
 video: ../../../eval-videos/fold-step-001.mp4
 ```
 
-This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process.
+This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process. Git LFS can also work when the repository intentionally owns the recordings, but make that an explicit privacy and repository-size policy before adding real media.
 
 ## Eval Suite Layout
 
