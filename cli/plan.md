@@ -1,6 +1,6 @@
-# GlassKit CLI Eval Future Work
+# Future Work
 
-This file tracks remaining and future work for the `glasskit eval` recorded-video evaluator. Current user-facing behavior belongs in `README.md`, and contributor guidance belongs in `AGENTS.md`.
+This file tracks remaining and future work for the `glasskit eval` recorded-video evaluator.
 
 ## Priorities
 
