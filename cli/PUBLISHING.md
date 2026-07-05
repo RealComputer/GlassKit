@@ -40,7 +40,7 @@ For a normal future release, bump the version, commit the version change, tag th
 uv version --bump patch
 VERSION="$(uv version --short)"
 git add pyproject.toml uv.lock
-git commit -m "Release glasskit.ai v${VERSION}"
+git commit -m "Release glasskit.ai v${VERSION} to PyPI"
 git tag -a "pypi-glasskit-ai-v${VERSION}" -m "pypi-glasskit-ai-v${VERSION}"
 git push --atomic origin main "pypi-glasskit-ai-v${VERSION}"
 ```
