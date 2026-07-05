@@ -144,13 +144,13 @@ your-app/
       expected.yaml
 ```
 
-Commit the suite files that your team should share. Keep secrets in environment variables or uncommitted environment files, not in `expected.yaml` or `adapter-config.yaml`.
+Commit the suite files that your team should share.
 
-For large or private recordings, commit the eval YAML and keep video files outside ordinary Git history. Put the media in a gitignored or externally synced directory, including outside the app repository, then reference each file with `video:`. The path is resolved relative to the case directory that contains `expected.yaml`, so an external media directory can look like this:
+For large recordings, commit the eval YAML and keep video files outside ordinary Git history. Put the media in a gitignored or externally synced directory, including outside the app repository, then reference each file with `video:`. The path is resolved relative to the case directory that contains `expected.yaml`, so an external media directory can look like this:
 
 ```text
 workspace/
-  your-app/
+  app-repo/
     eval_adapter.py
     eval-suite/
       fold-step-001/
@@ -163,7 +163,7 @@ workspace/
 video: ../../../eval-videos/fold-step-001.mp4
 ```
 
-This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process. Git LFS can also work when the repository intentionally owns the recordings, but make that an explicit privacy and repository-size policy before adding real media.
+This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process. Git LFS can also work.
 
 ## Eval Suite Layout
 
