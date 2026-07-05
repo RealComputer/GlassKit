@@ -92,7 +92,7 @@ class FoldCheckRuntimeSnapshot:
 
 @dataclass
 class FoldCheckRuntimeState:
-    generation: int = 0
+    runtime_epoch: int = 0
     stream_id: str | None = None
     lease_ttl_seconds: int | None = None
     room: rtc.Room | None = None
@@ -137,10 +137,10 @@ class FoldCheckRuntimeState:
             )
         )
 
-    def begin_generation(self, prompt: str) -> int:
-        self.generation += 1
+    def begin_runtime_epoch(self, prompt: str) -> int:
+        self.runtime_epoch += 1
         self.active_prompt = prompt
-        return self.generation
+        return self.runtime_epoch
 
     def mark_guiding_step_started(self, now: float, grace_seconds: float) -> None:
         self.ignore_results_until = now + grace_seconds

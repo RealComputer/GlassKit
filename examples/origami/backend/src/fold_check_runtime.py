@@ -106,7 +106,7 @@ class FoldCheckRuntime:
 
     async def stop(self, session: OrigamiSession) -> None:
         fold_check = session.fold_check
-        fold_check.generation += 1
+        fold_check.runtime_epoch += 1
         snapshot = fold_check.clear_runtime()
 
         tasks: list[asyncio.Task[None]] = []
@@ -144,7 +144,7 @@ class FoldCheckRuntime:
             return
 
         step = self._current_step_for(session)
-        generation = session.fold_check.begin_generation(step.criteria)
+        runtime_epoch = session.fold_check.begin_runtime_epoch(step.criteria)
         first_camera = _frame_to_image(first_item[1], fallback_size=(1024, 768))
         frame_size = first_camera.size
 
@@ -156,12 +156,12 @@ class FoldCheckRuntime:
             stream = await self._client.create_stream()
             publisher = await self._connect_publisher(
                 session=session,
-                generation=generation,
+                runtime_epoch=runtime_epoch,
                 stream=stream,
                 frame_size=frame_size,
             )
 
-            current = await self._session_if_current(session.session_id, generation)
+            current = await self._session_if_current(session.session_id, runtime_epoch)
             if current is None:
                 await publisher.close()
                 await self._client.close_stream(stream.stream_id)
@@ -184,38 +184,38 @@ class FoldCheckRuntime:
             fold_check.publish_task = asyncio.create_task(
                 self._run_publisher(
                     current.session_id,
-                    generation,
+                    runtime_epoch,
                     fold_check.publisher_epoch,
                     publisher.source,
                     frame_size,
                     recorder,
                 ),
-                name=f"fold-check-publisher-{current.session_id}-{generation}",
+                name=f"fold-check-publisher-{current.session_id}-{runtime_epoch}",
             )
             fold_check.prompt_task = asyncio.create_task(
                 self._run_prompt_loop(
                     current.session_id,
                     stream.stream_id,
-                    generation,
+                    runtime_epoch,
                 ),
-                name=f"fold-check-prompts-{current.session_id}-{generation}",
+                name=f"fold-check-prompts-{current.session_id}-{runtime_epoch}",
             )
             fold_check.keepalive_task = asyncio.create_task(
                 self._run_keepalive(
                     current.session_id,
                     stream.stream_id,
                     stream.ttl_seconds,
-                    generation,
+                    runtime_epoch,
                 ),
-                name=f"fold-check-keepalive-{current.session_id}-{generation}",
+                name=f"fold-check-keepalive-{current.session_id}-{runtime_epoch}",
             )
             logger.info(
                 "session=%s fold-check started step=%s stream_id=%s "
-                "generation=%s livekit_track=%s frame_size=%sx%s max_bitrate=%s",
+                "runtime_epoch=%s livekit_track=%s frame_size=%sx%s max_bitrate=%s",
                 current.session_id,
                 current.step_index + 1,
                 stream.stream_id,
-                generation,
+                runtime_epoch,
                 publisher.publication.sid,
                 frame_size[0],
                 frame_size[1],
@@ -239,19 +239,19 @@ class FoldCheckRuntime:
         self,
         *,
         session: OrigamiSession,
-        generation: int,
+        runtime_epoch: int,
         stream: OvershootStreamLease,
         frame_size: tuple[int, int],
     ) -> OvershootLiveKitPublisher:
         return await connect_overshoot_publisher(
             session_id=session.session_id,
-            generation=generation,
+            runtime_epoch=runtime_epoch,
             publish_url=stream.publish_url,
             publish_token=stream.publish_token,
             frame_size=frame_size,
             on_disconnected=lambda room, reason: self._schedule_livekit_reconnect(
                 session,
-                generation,
+                runtime_epoch,
                 room,
                 reason,
             ),
@@ -260,12 +260,12 @@ class FoldCheckRuntime:
     def _schedule_livekit_reconnect(
         self,
         session: OrigamiSession,
-        generation: int,
+        runtime_epoch: int,
         disconnected_room: rtc.Room,
         reason: Any,
     ) -> None:
         fold_check = session.fold_check
-        if fold_check.generation != generation:
+        if fold_check.runtime_epoch != runtime_epoch:
             return
         if fold_check.room is not disconnected_room:
             return
@@ -277,11 +277,11 @@ class FoldCheckRuntime:
         task = asyncio.create_task(
             self._recover_livekit_connection(
                 session.session_id,
-                generation,
+                runtime_epoch,
                 disconnected_room,
                 reason,
             ),
-            name=f"fold-check-livekit-reconnect-{session.session_id}-{generation}",
+            name=f"fold-check-livekit-reconnect-{session.session_id}-{runtime_epoch}",
         )
         fold_check.reconnect_task = task
 
@@ -303,14 +303,14 @@ class FoldCheckRuntime:
     async def _recover_livekit_connection(
         self,
         session_id: str,
-        generation: int,
+        runtime_epoch: int,
         disconnected_room: rtc.Room,
         reason: Any,
     ) -> None:
         publisher: OvershootLiveKitPublisher | None = None
         committed = False
         try:
-            session = await self._session_if_current(session_id, generation)
+            session = await self._session_if_current(session_id, runtime_epoch)
             if session is None or session.fold_check.room is not disconnected_room:
                 return
 
@@ -328,23 +328,23 @@ class FoldCheckRuntime:
             ):
                 logger.error(
                     "session=%s fold-check livekit reconnect missing credentials "
-                    "generation=%s",
+                    "runtime_epoch=%s",
                     session_id,
-                    generation,
+                    runtime_epoch,
                 )
                 await self._notify_closed(
                     session_id,
-                    generation,
+                    runtime_epoch,
                     "livekit_reconnect_missing_credentials",
                 )
                 return
 
             logger.warning(
                 "session=%s fold-check livekit reconnecting after disconnect "
-                "reason=%s generation=%s",
+                "reason=%s runtime_epoch=%s",
                 session_id,
                 reason,
-                generation,
+                runtime_epoch,
             )
             old_publish_task = fold_check.publish_task
             fold_check.publish_task = None
@@ -355,14 +355,14 @@ class FoldCheckRuntime:
             resume_after_frame_at_ms = await self._client.last_frame_at_ms(stream_id)
             publisher = await connect_overshoot_publisher(
                 session_id=session_id,
-                generation=generation,
+                runtime_epoch=runtime_epoch,
                 publish_url=publish_url,
                 publish_token=publish_token,
                 frame_size=frame_size,
                 on_disconnected=lambda room, new_reason: (
                     self._schedule_livekit_reconnect(
                         session,
-                        generation,
+                        runtime_epoch,
                         room,
                         new_reason,
                     )
@@ -371,7 +371,7 @@ class FoldCheckRuntime:
             if not publisher.room.isconnected():
                 raise RuntimeError("Fold check LiveKit publisher disconnected on join")
 
-            current = await self._session_if_current(session_id, generation)
+            current = await self._session_if_current(session_id, runtime_epoch)
             if current is None or current.fold_check.room is not disconnected_room:
                 return
 
@@ -395,22 +395,22 @@ class FoldCheckRuntime:
             current_fold_check.publish_task = asyncio.create_task(
                 self._run_publisher(
                     current.session_id,
-                    generation,
+                    runtime_epoch,
                     publisher_epoch,
                     publisher.source,
                     frame_size,
                     recorder,
                 ),
-                name=f"fold-check-publisher-{current.session_id}-{generation}",
+                name=f"fold-check-publisher-{current.session_id}-{runtime_epoch}",
             )
             committed = True
             if old_source is not None and old_source is not publisher.source:
                 self._schedule_video_source_close(old_source, session_id)
             logger.info(
-                "session=%s fold-check livekit reconnected generation=%s "
+                "session=%s fold-check livekit reconnected runtime_epoch=%s "
                 "publisher_epoch=%s livekit_track=%s",
                 session_id,
-                generation,
+                runtime_epoch,
                 publisher_epoch,
                 publisher.publication.sid,
             )
@@ -422,7 +422,7 @@ class FoldCheckRuntime:
             )
             await self._notify_closed(
                 session_id,
-                generation,
+                runtime_epoch,
                 "livekit_reconnect_failed",
             )
         finally:
@@ -432,7 +432,7 @@ class FoldCheckRuntime:
     async def _run_publisher(
         self,
         session_id: str,
-        generation: int,
+        runtime_epoch: int,
         publisher_epoch: int,
         source: rtc.VideoSource,
         frame_size: tuple[int, int],
@@ -452,7 +452,7 @@ class FoldCheckRuntime:
                     time.monotonic(),
                 )
 
-                session = await self._session_if_current(session_id, generation)
+                session = await self._session_if_current(session_id, runtime_epoch)
                 if session is None:
                     return
 
@@ -486,19 +486,19 @@ class FoldCheckRuntime:
                     fold_check.prompt_resume_publisher_epoch = 0
                     logger.info(
                         "session=%s fold-check prompts resumed after "
-                        "post-reconnect frame generation=%s publisher_epoch=%s",
+                        "post-reconnect frame runtime_epoch=%s publisher_epoch=%s",
                         session_id,
-                        generation,
+                        runtime_epoch,
                         publisher_epoch,
                     )
                 now = time.monotonic()
                 if now - last_log_at >= 30.0:
                     logger.info(
-                        "session=%s fold-check published frames=%s generation=%s "
+                        "session=%s fold-check published frames=%s runtime_epoch=%s "
                         "publisher_epoch=%s",
                         session_id,
                         frame_count,
-                        generation,
+                        runtime_epoch,
                         publisher_epoch,
                     )
                     last_log_at = now
@@ -506,14 +506,14 @@ class FoldCheckRuntime:
             raise
         except Exception:
             logger.exception("session=%s fold-check publisher crashed", session_id)
-            await self._notify_closed(session_id, generation, "publisher_failed")
+            await self._notify_closed(session_id, runtime_epoch, "publisher_failed")
 
     async def _run_keepalive(
         self,
         session_id: str,
         stream_id: str,
         ttl_seconds: int | None,
-        generation: int,
+        runtime_epoch: int,
     ) -> None:
         interval_seconds = OVERSHOOT_KEEPALIVE_INTERVAL_SECONDS
         if ttl_seconds is not None:
@@ -521,7 +521,7 @@ class FoldCheckRuntime:
         try:
             while True:
                 await asyncio.sleep(interval_seconds)
-                session = await self._session_if_current(session_id, generation)
+                session = await self._session_if_current(session_id, runtime_epoch)
                 if session is None:
                     return
                 result = await self._client.keepalive(stream_id)
@@ -530,7 +530,7 @@ class FoldCheckRuntime:
                         SessionEvent(
                             kind="fold_check.closed",
                             payload={
-                                "generation": generation,
+                                "runtime_epoch": runtime_epoch,
                                 "reason": "keepalive_failed",
                             },
                         )
@@ -550,20 +550,22 @@ class FoldCheckRuntime:
             raise
         except Exception:
             logger.exception("session=%s keepalive crashed", session_id)
-            await self._notify_closed(session_id, generation, "keepalive_failed")
+            await self._notify_closed(session_id, runtime_epoch, "keepalive_failed")
 
     async def _run_prompt_loop(
         self,
         session_id: str,
         stream_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> None:
         try:
-            ready = await self._wait_for_first_frame(session_id, stream_id, generation)
+            ready = await self._wait_for_first_frame(
+                session_id, stream_id, runtime_epoch
+            )
             if not ready:
                 await self._notify_closed(
                     session_id,
-                    generation,
+                    runtime_epoch,
                     "first_frame_timeout",
                 )
                 return
@@ -573,11 +575,11 @@ class FoldCheckRuntime:
                 session = await self._wait_for_prompt_slot(
                     session_id,
                     stream_id,
-                    generation,
+                    runtime_epoch,
                 )
                 if session is None:
                     return
-                await self._request_fold_check(session, stream_id, generation)
+                await self._request_fold_check(session, stream_id, runtime_epoch)
 
                 elapsed = time.monotonic() - started_at
                 await asyncio.sleep(
@@ -587,16 +589,16 @@ class FoldCheckRuntime:
             raise
         except Exception:
             logger.exception("session=%s fold-check prompt loop crashed", session_id)
-            await self._notify_closed(session_id, generation, "prompt_loop_failed")
+            await self._notify_closed(session_id, runtime_epoch, "prompt_loop_failed")
 
     async def _wait_for_prompt_slot(
         self,
         session_id: str,
         stream_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> OrigamiSession | None:
         while True:
-            session = await self._session_if_current(session_id, generation)
+            session = await self._session_if_current(session_id, runtime_epoch)
             if session is None:
                 return None
             if session.phase != PHASE_GUIDING or not session.auto_check_enabled:
@@ -612,7 +614,7 @@ class FoldCheckRuntime:
                 ingest_ready = await self._check_reconnect_ingest(
                     session=session,
                     stream_id=stream_id,
-                    generation=generation,
+                    runtime_epoch=runtime_epoch,
                 )
                 if ingest_ready is None:
                     return None
@@ -625,7 +627,7 @@ class FoldCheckRuntime:
         *,
         session: OrigamiSession,
         stream_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> bool | None:
         fold_check = session.fold_check
         resume_after_frame_at_ms = fold_check.prompt_resume_after_frame_at_ms
@@ -635,7 +637,7 @@ class FoldCheckRuntime:
         gate_publisher_epoch = fold_check.prompt_resume_after_publisher_epoch
         gate_deadline_at = fold_check.prompt_resume_deadline_at
         last_frame_at_ms = await self._client.last_frame_at_ms(stream_id)
-        current = await self._session_if_current(session.session_id, generation)
+        current = await self._session_if_current(session.session_id, runtime_epoch)
         if current is None:
             return None
 
@@ -657,17 +659,17 @@ class FoldCheckRuntime:
             if gate_deadline_at > 0 and time.monotonic() >= gate_deadline_at:
                 logger.error(
                     "session=%s fold-check reconnect ingest timed out "
-                    "generation=%s publisher_epoch=%s baseline_ms=%s "
+                    "runtime_epoch=%s publisher_epoch=%s baseline_ms=%s "
                     "last_frame_at_ms=%s",
                     session.session_id,
-                    generation,
+                    runtime_epoch,
                     gate_publisher_epoch,
                     resume_after_frame_at_ms,
                     last_frame_at_ms,
                 )
                 await self._notify_closed(
                     session.session_id,
-                    generation,
+                    runtime_epoch,
                     "reconnect_ingest_timeout",
                 )
                 return None
@@ -681,7 +683,7 @@ class FoldCheckRuntime:
         self,
         session: OrigamiSession,
         stream_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> None:
         step_index = session.step_index
         prompt = self._current_step_for(session).criteria
@@ -702,7 +704,7 @@ class FoldCheckRuntime:
             _compact_json(completion.usage),
             _compact_json(completion.cache),
         )
-        current = await self._session_if_current(session.session_id, generation)
+        current = await self._session_if_current(session.session_id, runtime_epoch)
         if current is None:
             return
 
@@ -714,9 +716,10 @@ class FoldCheckRuntime:
         ):
             logger.info(
                 "session=%s fold-check completion ignored during "
-                "publisher recovery generation=%s request_epoch=%s current_epoch=%s",
+                "publisher recovery runtime_epoch=%s "
+                "request_publisher_epoch=%s current_publisher_epoch=%s",
                 session.session_id,
-                generation,
+                runtime_epoch,
                 publisher_epoch,
                 fold_check.publisher_epoch,
             )
@@ -726,7 +729,7 @@ class FoldCheckRuntime:
             SessionEvent(
                 kind="fold_check.result",
                 payload={
-                    "generation": generation,
+                    "runtime_epoch": runtime_epoch,
                     "step_index": step_index,
                     "_received_at": received_at,
                     "prompt": prompt,
@@ -741,11 +744,11 @@ class FoldCheckRuntime:
         self,
         session_id: str,
         stream_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> bool:
         deadline = time.monotonic() + FOLD_CHECK_STREAM_READY_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
-            session = await self._session_if_current(session_id, generation)
+            session = await self._session_if_current(session_id, runtime_epoch)
             if session is None:
                 return False
             status = await self._client.stream_status(stream_id)
@@ -770,29 +773,29 @@ class FoldCheckRuntime:
     async def _notify_closed(
         self,
         session_id: str,
-        generation: int,
+        runtime_epoch: int,
         reason: str | None,
     ) -> None:
-        session = await self._session_if_current(session_id, generation)
+        session = await self._session_if_current(session_id, runtime_epoch)
         if session is None:
             return
         await session.queue.put(
             SessionEvent(
                 kind="fold_check.closed",
-                payload={"generation": generation, "reason": reason},
+                payload={"runtime_epoch": runtime_epoch, "reason": reason},
             )
         )
 
     async def _session_if_current(
         self,
         session_id: str,
-        generation: int,
+        runtime_epoch: int,
     ) -> OrigamiSession | None:
         async with self._sessions_lock:
             session = self._sessions.get(session_id)
         if session is None or session.destroyed:
             return None
-        if session.fold_check.generation != generation:
+        if session.fold_check.runtime_epoch != runtime_epoch:
             return None
         return session
 

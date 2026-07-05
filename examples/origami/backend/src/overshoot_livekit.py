@@ -30,7 +30,7 @@ class OvershootLiveKitPublisher:
 async def connect_overshoot_publisher(
     *,
     session_id: str,
-    generation: int,
+    runtime_epoch: int,
     publish_url: str,
     publish_token: str,
     frame_size: tuple[int, int],
@@ -42,36 +42,36 @@ async def connect_overshoot_publisher(
     @room.on("connection_state_changed")
     def on_connection_state_changed(state: Any) -> None:
         logger.info(
-            "session=%s overshoot livekit state=%s generation=%s",
+            "session=%s overshoot livekit state=%s runtime_epoch=%s",
             session_id,
             state,
-            generation,
+            runtime_epoch,
         )
 
     @room.on("reconnecting")
     def on_reconnecting() -> None:
         logger.info(
-            "session=%s overshoot livekit reconnecting generation=%s",
+            "session=%s overshoot livekit reconnecting runtime_epoch=%s",
             session_id,
-            generation,
+            runtime_epoch,
         )
 
     @room.on("reconnected")
     def on_reconnected() -> None:
         logger.info(
-            "session=%s overshoot livekit reconnected generation=%s",
+            "session=%s overshoot livekit reconnected runtime_epoch=%s",
             session_id,
-            generation,
+            runtime_epoch,
         )
 
     @room.on("disconnected")
     def on_disconnected_event(*args: Any) -> None:
         reason = args[0] if args else None
         logger.info(
-            "session=%s overshoot livekit disconnected reason=%s generation=%s",
+            "session=%s overshoot livekit disconnected reason=%s runtime_epoch=%s",
             session_id,
             reason,
-            generation,
+            runtime_epoch,
         )
         on_disconnected(room, reason)
 

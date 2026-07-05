@@ -495,7 +495,7 @@ class OrigamiSessionManager:
         session: OrigamiSession,
         payload: dict[str, Any],
     ) -> None:
-        if payload.get("generation") != session.fold_check.generation:
+        if payload.get("runtime_epoch") != session.fold_check.runtime_epoch:
             return
         if payload.get("step_index") != session.step_index:
             return
@@ -611,7 +611,7 @@ class OrigamiSessionManager:
         session: OrigamiSession,
         payload: dict[str, Any],
     ) -> None:
-        if payload.get("generation") != session.fold_check.generation:
+        if payload.get("runtime_epoch") != session.fold_check.runtime_epoch:
             return
         if session.phase in {PHASE_WAITING, PHASE_COMPLETED, PHASE_ERROR}:
             return
