@@ -1,87 +1,58 @@
 # GlassKit CLI
 
-This is the GlassKit command-line package. Its first command family is `glasskit eval`, a recorded-video evaluator for smart-glasses apps.
+GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling your app adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs.
 
-Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. Given a recording of a workflow, `glasskit eval` lets you label the important moments and rerun the same checks whenever your prompts, model, parser, or app logic changes. Your adapter owns the app-specific call; the CLI handles video decoding, timestamp sampling, comparisons, reports, failure artifacts, and quality gates.
+This README is the user manual for the `glasskit` command. The current command family is `glasskit eval`.
 
-The current implementation assumes you use a `uv`-managed Python pipeline. If your use case does not fit the current model, please open an issue. We want to expand support based on real app needs.
+## Why Use This?
 
-## Why Use `glasskit eval`?
+Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. `glasskit eval` lets you record a workflow once, label the stable moments that should be checked, and rerun the same eval whenever your prompt, model, parser, or app logic changes.
 
-- Turn real camera recordings into repeatable tests instead of relying on memory, screenshots, or manual replay.
-- Test the vision path that users actually depend on: frames, prompts, model calls, response parsing, app logic, and thresholds.
-- Label only stable moments in the video and skip ambiguous transitions that would make a test noisy.
-- Keep app-specific behavior in your adapter while reusing the CLI for video handling, comparison modes, JSON reports, and failure images.
-- Run the same eval locally and in CI with exit codes that distinguish setup errors from quality-gate failures.
+Use it when you want to test the vision path users actually depend on, keep app-specific model calls in your own adapter, inspect failures with saved frames and JSON, and enforce CI gates with explicit pass-rate or failure-count thresholds.
 
-## What You Need
+## Installation
 
-- A short recording of the workflow you want to evaluate.
-- An `eval/` directory with case YAML files that say which timestamps or ranges should be checked and what each result should be.
-- Video files referenced from each case YAML file with a required `video:` path.
-- A Python adapter function or object that receives decoded frames and returns JSON-like observations.
-- A `uv` command environment that can install `glasskit.ai` and your app's runtime dependencies.
+The published Python package is `glasskit.ai` and it provides the `glasskit` console command. The package requires Python 3.12 or newer.
 
-## Install
-
-Use the CLI from the app repository that contains the eval directory, adapter, and app dependencies. Running from that directory keeps imports and relative paths predictable. If your app uses a `.env` file, pass it through the command runner, for example with `uv run --env-file .env`; the CLI does not load `.env` files by itself. With `uv`, install the published `glasskit.ai` package into the command environment and invoke the `glasskit` console script in one command:
+The recommended way to run the CLI from an app repository is `uv run --with glasskit.ai`, which creates an isolated command environment and keeps local imports relative to your app checkout:
 
 ```bash
 cd path/to/your-app
-uv run --with glasskit.ai glasskit eval --help
+uv run --with glasskit.ai glasskit --help
 ```
 
-If you already installed the command another way (`uv add --dev glasskit.ai`), you can drop the `uv run --with glasskit.ai` prefix and run `glasskit eval ...` directly.
-
-Run help when you need the exact options for the installed version:
+For a persistent command install with `uv`, use:
 
 ```bash
-uv run --with glasskit.ai glasskit --help
-uv run --with glasskit.ai glasskit eval --help
-uv run --with glasskit.ai glasskit eval run --help
+uv tool install glasskit.ai
+glasskit --help
 ```
 
-## Quick Start
+If you are working from this source checkout, run the local package with:
 
-Run these commands from your app repository so local imports, adapter files, and relative asset paths resolve the same way they do in your app. Add `--env-file .env` to `uv run` if your adapter expects environment variables from that file. By convention, `glasskit eval` looks for `eval/`, so the simplest command can be just `glasskit eval run`.
-
-### 1. Add One Case
-
-Create a small eval directory:
-
-```text
-your-app/
-  eval/
-    adapter.py
-    cases/
-      fold-step-001.yaml
-      fold-step-001.mp4
+```bash
+uv run glasskit --help
 ```
 
-Write the case YAML in `eval/cases/fold-step-001.yaml`. Start with one or two unambiguous samples:
+The CLI does not load `.env` files itself. If your adapter needs environment variables from a file, pass that file through the command runner:
 
-```yaml
-version: 1
-video: fold-step-001.mp4
-sampling:
-  every_s: 0.5
-targets:
-  step_1:
-    label: Step 1
-    samples:
-      - at: 2.0
-        field: matches
-        expect: true
-      - range: [3.0, 5.0]
-        field: matches
-        expect: true
+```bash
+uv run --with glasskit.ai --env-file .env glasskit eval run
 ```
 
-Use `at` for a single moment and `range` for a stable window. Avoid transition frames until you specifically want to measure transition behavior.
+GlassKit is not currently distributed through Homebrew, npm, Cargo, or standalone binary downloads.
 
-### 2. Check the Wiring with a Fake Adapter
+## Quickstart
 
-Create `eval/adapter.py`:
+Start from an app repository that contains one short supported video recording. This example uses `recordings/fold-step-001.mp4` and creates an `eval/` directory in the current repo.
+
+Create a starter case:
+
+```bash
+uv run --with glasskit.ai glasskit eval init-case --case fold-step-001 --video recordings/fold-step-001.mp4 --target step_1 --label "Step 1"
+```
+
+Create `eval/adapter.py` with a fake evaluator so you can prove the eval wiring works before connecting a model backend:
 
 ```python
 class FakeEvaluator:
@@ -97,36 +68,160 @@ def create_evaluator(config):
     return FakeEvaluator()
 ```
 
-This adapter does not judge the image. It only proves that the eval directory, video decoding, field extraction, comparison, and command wiring work before you connect a model backend.
+Edit `eval/cases/fold-step-001.yaml` so the sample checks the `matches` field returned by the fake adapter:
 
-### 3. Run the Eval
+```yaml
+version: 1
+video: "fold-step-001.mp4"
+description: "Starter eval case. Replace these timestamps with stable labeled moments from this video."
+sampling:
+  every_s: 0.5
+targets:
+  "step_1":
+    label: "Step 1"
+    samples:
+      - at: 0.0
+        field: matches
+        expect: true
+thresholds:
+  min_pass_rate: 1.0
+```
+
+Validate the eval directory:
+
+```bash
+uv run --with glasskit.ai glasskit eval validate
+```
+
+Run the eval:
 
 ```bash
 uv run --with glasskit.ai glasskit eval run
 ```
 
-That command uses `eval/` as the eval directory and `<eval-dir>/adapter.py:create_evaluator` as the default adapter. When you want to inspect setup before running the adapter, use:
+Expected result: `validate` prints `Validation passed`, and `run` prints case progress, a summary, gates, and a per-target table. With the YAML above, the run exits `0` only if the configured `min_pass_rate: 1.0` gate passes.
+
+## Core Concepts
+
+An eval directory is the runnable test suite. By default, GlassKit uses `eval/` in the current working directory.
+
+A case is one YAML file under `<eval-dir>/cases/`. The case name is the YAML filename without `.yaml`.
+
+A video is declared by each case with `video:`. The path is resolved relative to the case YAML file.
+
+A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
+
+A sample is one labeled timestamp, or one timestamp expanded from a range. Each sample has an expected JSON-like value.
+
+An adapter is your Python bridge from GlassKit to your app, prompt, model, parser, or backend. The CLI decodes frames and calls the adapter; the adapter returns observations.
+
+A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails.
+
+## Common Workflows
+
+### Create a New Eval Case
+
+Goal: create the required directory structure and starter YAML from an existing video.
+
+Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval validate
-uv run --with glasskit.ai glasskit eval list-samples
+uv run --with glasskit.ai glasskit eval init-case --case fold-step-002 --video recordings/fold-step-002.mov --target step_2 --label "Step 2"
 ```
 
-After the fake adapter passes, replace it with the real call into your app or model backend and add the gates or output options you want for local debugging or CI:
+Expected output:
+
+```text
+Created case: /absolute/path/to/eval/cases/fold-step-002.yaml
+Video: /absolute/path/to/eval/cases/fold-step-002.mov
+Eval: /absolute/path/to/eval
+```
+
+Notes: `init-case` copies the source video next to the case YAML when the source video is outside the eval directory. If the source video is already inside the eval directory, the generated YAML references it in place. Use `--force` only when you intentionally want to overwrite the case YAML or copied video.
+
+### Validate Before an Expensive Run
+
+Goal: catch YAML, video, timestamp, and optional adapter setup problems before calling a paid or slow model backend.
+
+Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval run \
-  --min-pass-rate 0.9 \
-  --output-json tmp/eval-results.json \
-  --save-failures \
-  --artifacts-dir tmp/eval-artifacts
+uv run --with glasskit.ai glasskit eval validate --adapter eval/adapter.py:create_evaluator
 ```
 
-The command exits `0` when all quality gates pass, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors such as invalid YAML, unreadable videos, or adapter failures that are not being collected with `--keep-going`.
+Expected output:
 
-## Recommended App Repo Layout
+```text
+Validation passed: /absolute/path/to/eval (12 samples)
+```
 
-Keep the eval directory next to the app code that it exercises. This makes imports and relative asset paths predictable, and keeps environment handling close to the code that needs it.
+Notes: validation loads the eval suite, probes videos, checks sample timestamps against video duration, and imports, constructs, and closes the adapter when `--adapter` is provided. It does not call `evaluate` or `evaluate_many`.
+
+### Inspect the Expanded Sample Schedule
+
+Goal: confirm that ranges, `at` lists, fields, and compare modes expand as intended.
+
+Command:
+
+```bash
+uv run --with glasskit.ai glasskit eval list-samples --case fold-step-001
+```
+
+Expected output: a Rich table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
+
+Notes: range blocks are half-open intervals. For example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
+
+### Run One Case While Debugging
+
+Goal: run a focused eval and print every sample result.
+
+Command:
+
+```bash
+uv run --with glasskit.ai glasskit eval run --case fold-step-001 --verbose --keep-going --save-failures --output-json tmp/eval-results.json --artifacts-dir tmp/eval-artifacts
+```
+
+Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
+
+Notes: `--keep-going` records adapter and comparison errors as sample results instead of aborting on the first error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples.
+
+### Enforce CI Quality Gates
+
+Goal: make the command fail when quality drops below your threshold.
+
+Command:
+
+```bash
+uv run --with glasskit.ai glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json tmp/eval-results.json
+```
+
+Expected behavior: the process exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors that abort the run.
+
+Notes: without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are visible in the report but do not fail the command. Always configure a gate for CI.
+
+### Use a Real Adapter Config File
+
+Goal: pass non-secret runtime settings to your adapter without putting them in case YAML.
+
+Command:
+
+```bash
+uv run --with glasskit.ai --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
+```
+
+Example `eval/local-adapter.yaml`:
+
+```yaml
+api_url: "https://example.test/v1"
+model: "vision-checker"
+jpeg_quality: 90
+```
+
+Notes: `--adapter-config` must be a YAML or JSON object. GlassKit does not expand environment variables inside this file. Read secrets from environment variables in your adapter.
+
+## Eval Directory Layout
+
+The default layout is:
 
 ```text
 your-app/
@@ -140,71 +235,45 @@ your-app/
       fold-step-002.mp4
 ```
 
-`config.yaml` is optional. Use it for thresholds or other eval-level policy that applies across cases. Do not create it until you need shared settings.
+`config.yaml` is optional and currently supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip; GlassKit normalizes videos with nonzero presentation timestamps so the first decoded frame starts at `0.0`.
 
-Commit the YAML files that your team should share. For large recordings, commit the case YAML and keep video files outside ordinary Git history. Put the media in a gitignored or externally synced directory, including outside the app repository, then reference each file with `video:`. The path is resolved relative to the case YAML file, so an external media directory can look like this:
-
-```text
-workspace/
-  app-repo/
-    eval/
-      adapter.py
-      cases/
-        fold-step-001.yaml
-  eval-videos/
-    fold-step-001.mp4
-```
+You can keep videos outside Git or outside the app repository. The `video:` path is resolved relative to the case YAML file:
 
 ```yaml
-video: ../../../eval-videos/fold-step-001.mp4
+video: "../../../eval-videos/fold-step-001.mp4"
 ```
 
-This keeps the labels and thresholds reviewable in Git while letting teams manage recordings with file sync, object storage, or another repository-specific process. Git LFS can also work when the repository intentionally owns the recordings, but make that an explicit privacy and repository-size policy before adding real media.
+Commit the labels, thresholds, and adapter code your team should review. Treat real recordings as potentially sensitive user data and store them according to your app's privacy and repository-size policy.
 
-## Eval Directory Layout
-
-An eval directory is a runnable collection of recorded checks. By default, `glasskit eval` uses `eval/` in the current app repository.
-
-```text
-eval/
-  adapter.py
-  config.yaml
-  cases/
-    fold-step-001.yaml
-    fold-step-002.yaml
-```
-
-Each file in `cases/*.yaml` is one case. The case name is the YAML filename without the extension. Each case must contain a `video:` path, resolved relative to the directory that contains the case YAML file.
-
-Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the clip, even when the container stores non-zero presentation timestamps internally.
-
-## Writing Case YAML
+## Case YAML Reference
 
 Here is a representative case file:
 
 ```yaml
 version: 1
-video: fold-step-001.mp4
-description: Fold step 1 should be detected after the crease is completed.
+video: "fold-step-001.mp4"
+description: "Fold step 1 should be detected after the crease is completed."
 sampling:
   every_s: 0.5
 workflow:
   targets:
     - id: step_1
-      label: Step 1
+      label: "Step 1"
       prompt_id: origami.step_1
 targets:
   step_1:
-    label: Step 1
+    label: "Step 1"
     config:
       reference_image: assets/step_1.png
     samples:
       - range: [0.0, 6.8]
         expect: false
       - range: [7.4, 11.8]
+        every_s: 0.25
+        field: result.matches
         expect: true
   step_2:
-    label: Step 2
+    label: "Step 2"
     samples:
       - at: [4.0, 6.0]
         expect: false
@@ -216,29 +285,59 @@ thresholds:
       min_pass_rate: 0.95
 ```
 
-Ranges are interpreted as `[start, end)`. With `sampling.every_s: 0.5`, `range: [7.4, 8.6]` expands to samples at `7.4`, `7.9`, and `8.4` seconds. Only declared `range` and `at` samples are evaluated; unlabeled gaps are skipped. A sample block must contain exactly one of `range` or `at`.
+Case fields:
 
-Use ranges for stable windows where the expected answer should be unchanged. Use `at` for isolated moments or when a transition is too short to sample safely. Avoid labeling ambiguous transition frames unless the ambiguity is exactly what you want to measure.
+| Field | Required | Description |
+| --- | ---: | --- |
+| `version` | No | Must be `1` when present. Defaults to `1`. |
+| `video` | Yes | Video path resolved relative to the case YAML directory. |
+| `description` | No | Human-readable case note. |
+| `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
+| `workflow.targets` | No | Optional target metadata list. Each item needs `id`; `label` and extra keys are allowed. |
+| `targets` | Yes | Mapping of target id to target definition. Must contain at least one target. |
+| `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. |
 
-### Case Fields
+Target fields:
 
-- `version` must be `1`.
-- `video` is the required path to the case video, resolved relative to the directory containing the case YAML file.
-- `description` is optional and only for humans.
-- `sampling.every_s` sets the default sample interval for `range` blocks in the case. The default is `0.5` seconds.
-- `workflow.targets` is optional metadata matched to targets by each entry's `id`. Each entry must have `id`; `label` is optional; extra fields are passed to the adapter as `target.config` unless overridden by `targets.<id>.config`.
-- `targets.<target_id>.label` is optional display text for reports.
-- `targets.<target_id>.config` is optional adapter-specific metadata for that target. This is where you can put prompt ids, reference image paths, class names, or other app-level data that the core CLI should not know about.
-- `targets.<target_id>.samples` is the required list of labeled sample blocks.
-- `thresholds` is optional case-level gating. It can contain `min_pass_rate`, `max_failures`, and `per_target.<target_id>.min_pass_rate`.
+| Field | Required | Description |
+| --- | ---: | --- |
+| `label` | No | Display label for reports. |
+| `config` | No | Adapter-specific metadata for the target. Values override matching keys from `workflow.targets`. |
+| `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
 
-## Expected Values and Comparison
+Sample block fields:
 
-The adapter returns a JSON-like value: `null`, boolean, number, string, array, or object. Each sample's `expect` value is compared with that returned value.
+| Field | Required | Description |
+| --- | ---: | --- |
+| `range` | Conditionally | Two-element `[start, end]` interval in seconds. Exactly one of `range` or `at` is required. The interval is half-open. |
+| `at` | Conditionally | One timestamp or a list of timestamps in seconds. Exactly one of `range` or `at` is required. Lists are sorted during expansion. |
+| `expect` | Yes | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. |
+| `every_s` | No | Per-block range sampling interval. Overrides `sampling.every_s`. |
+| `field` | No | Dot-separated path to extract from the adapter observation before comparison. |
+| `compare` | No | Comparison config with `mode` and optional `tolerance`. |
 
-By default, booleans, strings, and `null` use exact comparison. Numbers use numeric comparison with zero tolerance unless you set one. Arrays and objects use exact comparison unless you choose another mode.
+Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping samples for the same target are invalid.
 
-Use `field` when the adapter returns a structured object but the sample only cares about one nested value:
+## Comparison Reference
+
+The adapter observation and the sample `expect` value must both be JSON-like. When `field` is present, GlassKit extracts that nested value first and compares the extracted value against `expect`.
+
+Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with a `missing field: ...` reason.
+
+Supported comparison modes:
+
+| Mode | Description |
+| --- | --- |
+| `exact` | Observed value must equal `expect`. Booleans only match booleans. |
+| `numeric` | Observed and expected values must be numbers. `tolerance` defaults to `0.0`. |
+| `json_subset` | Every expected key and value must be present in the observed object. For arrays, each expected item must match at least one observed item. |
+| `set_equals` | Observed and expected arrays are compared as unordered JSON sets. |
+| `set_contains_any` | At least one expected array item must be present in the observed array. |
+| `set_contains_all` | Every expected array item must be present in the observed array. |
+
+Default comparison modes are inferred from `expect`: booleans, strings, and `null` use `exact`; numbers use `numeric`; arrays and objects use `exact`.
+
+Example:
 
 ```yaml
 targets:
@@ -247,145 +346,26 @@ targets:
       - at: 2.0
         field: result.matches
         expect: true
-```
-
-Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with non-negative numeric path parts such as `detections.0.label`.
-
-Supported `compare.mode` values are:
-
-```yaml
-targets:
-  score:
-    samples:
-      - at: 1.0
-        expect: 0.75
+      - at: 3.0
+        field: result.confidence
+        expect: 0.8
         compare:
           mode: numeric
           tolerance: 0.05
-  metadata:
-    samples:
-      - at: 1.0
-        expect:
-          result:
-            matches: true
-        compare:
-          mode: json_subset
-  objects:
-    samples:
-      - at: 1.0
+      - at: 4.0
+        field: detected_classes
         expect: ["paper", "crease"]
         compare:
           mode: set_contains_all
 ```
 
-- `exact` requires the observed value to equal `expect`.
-- `numeric` requires both values to be numbers and allows `tolerance`.
-- `json_subset` requires every key and value in `expect` to be present in the observed object. For arrays, each expected item must match at least one observed item.
-- `set_equals` compares arrays as unordered sets.
-- `set_contains_any` passes when at least one expected array item is present in the observed array.
-- `set_contains_all` passes when every expected array item is present in the observed array.
+## Adapter Reference
 
-## Eval-Level Thresholds
+By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
 
-Put thresholds that should apply to the selected run as a whole in `eval/config.yaml`. Eval-level `min_pass_rate` and `max_failures` gates are evaluated against the combined selected results. Eval-level `per_target` entries apply across the selected samples for each target id:
+Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.fold_checker`.
 
-```yaml
-thresholds:
-  min_pass_rate: 0.9
-  max_failures: 5
-  per_target:
-    step_1:
-      min_pass_rate: 0.95
-    step_2:
-      min_pass_rate: 0.85
-```
-
-Every run also includes an `adapter_errors` gate. The run only succeeds if the adapter produced no runtime or comparison errors and every configured quality gate passed.
-
-Failed comparisons are intentionally controlled by quality gates instead of a built-in default failure policy. If you run without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are reported in the summary and JSON output but do not make the command exit nonzero; adapter, runtime, or comparison errors still fail through the `adapter_errors` gate. Configure a pass-rate or max-failures gate for CI or any run where failed observations should fail the command.
-
-CLI gates are useful for one-off CI jobs or local experiments:
-
-```bash
-uv run --with glasskit.ai glasskit eval run \
-  --min-pass-rate 0.9 \
-  --min-target-pass-rate 0.85 \
-  --max-failures 3
-```
-
-`--min-pass-rate` and `--max-failures` override eval-level YAML values for the run. Because those flags define a run-level pass/fail policy, case-level YAML gates are not applied when either flag is set. `--min-target-pass-rate` applies the same target pass-rate gate to every target present in the selected results; when it is set, eval-level `per_target` gates are replaced by the uniform CLI gate. With `--case`, eval-level per-target gates for targets outside the selected case are skipped.
-
-## Commands
-
-### `glasskit eval init-case`
-
-`init-case` creates an eval directory when needed, copies the source video next to the case YAML by default, and writes a starter case file under `cases/`:
-
-```bash
-uv run --with glasskit.ai glasskit eval init-case \
-  --case fold-step-001 \
-  --video recordings/fold-step-001.mp4 \
-  --target step_1 \
-  --label "Step 1"
-```
-
-The case name must be a single filename stem. If the source video is already inside the eval directory, the generated `video:` path is written relative to the case YAML file. Use `--eval-dir` to choose a directory other than `eval`, and use `--force` to overwrite an existing case YAML or copied video.
-
-### `glasskit eval validate`
-
-`validate` checks eval structure, YAML schema, video readability, sample timestamps, and optional adapter importability:
-
-```bash
-uv run --with glasskit.ai glasskit eval validate
-uv run --with glasskit.ai glasskit eval validate --adapter eval/adapter.py:create_evaluator
-uv run --with glasskit.ai glasskit eval validate --case fold-step-001
-```
-
-Use validation before long or paid model evals. It catches most local mistakes without decoding sample frames or calling `evaluate`. Passing `--adapter` imports, constructs, and closes the adapter, so adapter setup side effects can still run.
-
-### `glasskit eval list-samples`
-
-`list-samples` prints the expanded sample schedule:
-
-```bash
-uv run --with glasskit.ai glasskit eval list-samples
-uv run --with glasskit.ai glasskit eval list-samples --case fold-step-001
-```
-
-This is the quickest way to confirm that your ranges, point samples, fields, and explicit comparison modes expand as intended. When a sample omits `compare.mode`, the Mode column is blank because the default mode is inferred when the sample is evaluated.
-
-### `glasskit eval run`
-
-`run` decodes sample frames, calls the adapter, compares results, applies gates, prints a summary, and optionally writes JSON and failure artifacts:
-
-```bash
-uv run --with glasskit.ai glasskit eval run \
-  --case fold-step-001 \
-  --adapter-config local-eval.yaml \
-  --keep-going \
-  --verbose \
-  --output-json tmp/eval-results.json \
-  --save-failures \
-  --artifacts-dir tmp/eval-artifacts
-```
-
-- `--eval-dir` chooses an eval directory other than the default `eval`.
-- `--adapter` chooses an adapter other than the default `<eval-dir>/adapter.py:create_evaluator`.
-- `--case` limits the run to one case by filename stem.
-- `--adapter-config` reads a YAML or JSON object and passes it to the adapter factory.
-- `--keep-going` records adapter or comparison errors as errored sample results instead of aborting the run on the first error.
-- `--verbose` prints every sample result as it is produced and sets `AdapterConfig.verbose` for the adapter.
-- `--output-json` writes a machine-readable report with summary counts, elapsed run duration, gate results, and per-sample observations. The final console summary also shows the elapsed duration.
-- `--save-failures` saves failed sample frames and per-result JSON files. If `--artifacts-dir` is omitted, artifacts are written under `.glasskit-artifacts` in the eval directory.
-- `--allow-empty` allows evals or cases with no samples. This is mainly useful while drafting an eval, not for real quality gates.
-
-## Writing an Adapter
-
-An adapter is the bridge between the generic CLI and your app. It receives decoded video frames plus target metadata, calls your app or model backend, and returns a JSON-like observation for each sample.
-
-By default, `glasskit eval run` uses `<eval-dir>/adapter.py:create_evaluator`, which is `eval/adapter.py:create_evaluator` when you use the default eval directory. Pass `--adapter <module-or-file>:<callable>` when you want a different adapter target. The module side can be a Python import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.fold_checker`.
-
-The recommended shape is a factory that accepts one required `AdapterConfig` argument and returns an evaluator object:
+The recommended adapter shape is a factory that accepts one config argument and returns an evaluator object:
 
 ```python
 from __future__ import annotations
@@ -410,14 +390,11 @@ class FoldEvaluator:
         self._verbose = verbose
 
     async def evaluate(self, sample: Any, target: Any) -> bool:
-        image = sample.image
-        target_id = target.id
-        prompt_id = target.config.get("prompt_id", target_id)
         return await call_model_backend(
             api_key=self._api_key,
             model=self._model,
-            image=image,
-            prompt_id=prompt_id,
+            image=sample.image,
+            prompt_id=target.config.get("prompt_id", target.id),
             timestamp_s=sample.timestamp_s,
         )
 
@@ -425,128 +402,289 @@ class FoldEvaluator:
         await close_model_client()
 ```
 
-No-argument factories and evaluator classes are also supported, but they will not receive `AdapterConfig`. If the factory needs `--adapter-config`, `--artifacts-dir`, `--verbose`, or the eval directory, give it one required argument.
+Adapter factories may be synchronous or asynchronous. No-argument factories are supported, but they do not receive `AdapterConfig`. If the factory needs `--adapter-config`, `--artifacts-dir`, `--verbose`, or the eval directory, give it one required argument.
 
-`evaluate(sample, target)` may be synchronous or asynchronous. If the evaluator also implements `evaluate_many(samples, target)`, the runner calls it once per target and uses the returned list as the observations for that target's samples. `evaluate_many` must return exactly one observation for each input sample in the same order.
+Evaluator methods:
 
-`close()` is optional and may be synchronous or asynchronous. Use it to close HTTP clients, model sessions, or temporary resources.
+| Method | Required | Description |
+| --- | ---: | --- |
+| `evaluate(sample, target)` | Yes | Called per sample when `evaluate_many` is not available. May be sync or async. |
+| `evaluate_many(samples, target)` | No | Called once per target when present. Must return exactly one JSON-like observation for each input sample in the same order. |
+| `close()` | No | Called after the run or validation adapter check. May be sync or async. |
 
-### Adapter Inputs
-
-The factory receives `AdapterConfig` when it declares one required argument. `AdapterConfig` has these fields:
-
-- `eval_dir` is the resolved path to the eval directory.
-- `config` is the object loaded from `--adapter-config`; it is an empty mapping when the option is omitted.
-- `artifacts_dir` is the path from `--artifacts-dir`, or `None` when the option is omitted.
-- `verbose` mirrors `--verbose`.
-
-The evaluator receives a `sample` object with these fields:
-
-- `image` is a decoded RGB `PIL.Image.Image` for the requested timestamp.
-- `timestamp_s` is the requested sample timestamp in seconds from the start of the clip.
-- `frame_index` is the decoded video frame index chosen for that timestamp.
-- `sample_index` is the case-local sample index.
-- `video_path` is the source video path as a string.
-- `case_name` is the case YAML filename stem.
-
-The evaluator also receives a `target` object with these fields:
-
-- `id` is the target id from the case YAML file.
-- `index` is the target's zero-based order in the case file.
-- `label` is the optional target label.
-- `config` is the merged target metadata from `workflow.targets` and `targets.<id>.config`.
-
-### Simple Function Adapters
-
-For smoke checks or fake local evals, the adapter target can be a function whose first two positional arguments are either `image, target_id` or `sample, target`:
+Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
 ```python
 def evaluate_frame(image, target_id):
     return target_id == "step_1"
 ```
 
-```python
-async def evaluate_sample(sample, target):
-    return {
-        "target": target.id,
-        "bright": sample.image.convert("L").getextrema()[1] > 180,
-    }
+Factory `config` fields:
+
+| Field | Description |
+| --- | --- |
+| `eval_dir` | Resolved eval directory path. |
+| `config` | Mapping loaded from `--adapter-config`, or an empty mapping. |
+| `artifacts_dir` | Path from `--artifacts-dir`, or `None`. |
+| `verbose` | Boolean from `--verbose`. |
+
+Sample fields passed to the evaluator:
+
+| Field | Description |
+| --- | --- |
+| `image` | Decoded RGB `PIL.Image.Image` for the requested timestamp. |
+| `timestamp_s` | Requested sample timestamp in seconds from the start of the clip. |
+| `frame_index` | Decoded video frame index chosen for that timestamp. |
+| `sample_index` | Case-local sample index. |
+| `video_path` | Source video path as a string. |
+| `case_name` | Case YAML filename stem. |
+
+Target fields passed to the evaluator:
+
+| Field | Description |
+| --- | --- |
+| `id` | Target id from the case YAML file. |
+| `index` | Target's zero-based order in the case file. |
+| `label` | Optional target label. |
+| `config` | Merged metadata from `workflow.targets` and `targets.<id>.config`. |
+
+Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys. Return the smallest stable value that answers the target.
+
+## Command Reference
+
+Every command supports `--help`. The current Typer configuration exposes `--help`, not `-h`, and there is no `glasskit help` subcommand.
+
+### `glasskit`
+
+Purpose: top-level command group.
+
+```bash
+glasskit --help
 ```
 
-Function adapters are useful for testing eval wiring because they do not need a model backend. Production adapters should usually use the object shape so they can reuse clients and close resources cleanly.
+Options:
 
-### Optional Adapter Config Files
+| Option | Default | Description |
+| --- | --- | --- |
+| `--install-completion` | None | Install shell completion for the current shell. |
+| `--show-completion` | None | Print shell completion setup text. |
+| `--help` | None | Show help and exit. |
 
-You do not need an adapter config file for the default layout. Use `--adapter-config` only when the same adapter needs runtime settings that should not live in case YAML, such as backend URLs, model names, thresholds owned by the adapter, or local asset paths:
+Commands:
+
+| Command | Description |
+| --- | --- |
+| `eval` | Recorded-video eval tools. |
+
+### `glasskit eval`
+
+Purpose: command group for recorded-video evals.
+
+```bash
+glasskit eval --help
+```
+
+Commands:
+
+| Command | Description |
+| --- | --- |
+| `run` | Decode frames, call the adapter, compare observations, apply gates, and report results. |
+| `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
+| `list-samples` | Print the expanded sample schedule. |
+| `init-case` | Create a starter case YAML and video placement. |
+
+### `glasskit eval run`
+
+Purpose: execute eval samples and apply quality gates.
+
+```bash
+glasskit eval run --case fold-step-001 --output-json tmp/eval-results.json
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--case TEXT` | All cases | Only run one case by filename stem. Do not include `.yaml` or path separators. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
+| `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
+| `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
+| `--max-failures INTEGER` | None | Run-level maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
+| `--keep-going` | `false` | Record adapter or comparison errors as sample results and continue. |
+| `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
+| `--output-json PATH` | None | Write a machine-readable JSON report. |
+| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/.glasskit-artifacts` when this is omitted. |
+| `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
+| `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
+| `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` when setup or runtime errors abort the run.
+
+### `glasskit eval validate`
+
+Purpose: validate an eval suite without evaluating sample observations.
+
+```bash
+glasskit eval validate --adapter eval/adapter.py:create_evaluator
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
+| `--case TEXT` | All cases | Only validate one case by filename stem. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
+| `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+Exit behavior: exits `0` when validation has no error issues and `1` when validation fails.
+
+### `glasskit eval list-samples`
+
+Purpose: print expanded sample rows.
+
+```bash
+glasskit eval list-samples --case fold-step-001
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--case TEXT` | All cases | Only list one case by filename stem. |
+| `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+Exit behavior: exits `0` when samples can be listed and `2` when the eval suite cannot be loaded.
+
+### `glasskit eval init-case`
+
+Purpose: create starter YAML and place or reference the source video.
+
+```bash
+glasskit eval init-case --case fold-step-001 --video recordings/fold-step-001.mp4 --target step_1 --label "Step 1"
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--case TEXT` | Required | Case filename stem. Must be a single filename stem without `.yaml`, `.yml`, or path separators. |
+| `--video PATH` | Required | Source video file. Must exist and use a supported video suffix. |
+| `--target TEXT` | Required | Initial target id. |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--label TEXT` | None | Optional label for the initial target. |
+| `--force` | `false` | Overwrite existing case YAML or copied video. |
+
+Exit behavior: exits `0` when files are created and `2` when initialization fails.
+
+## Configuration
+
+GlassKit has no global config file. Eval configuration lives in the eval directory and case YAML files.
+
+`<eval-dir>/config.yaml` currently supports only eval-level thresholds:
 
 ```yaml
-api_url: "https://example.test/v1"
-model: "vision-checker"
-jpeg_quality: 90
+thresholds:
+  min_pass_rate: 0.9
+  max_failures: 5
+  per_target:
+    step_1:
+      min_pass_rate: 0.95
 ```
 
-The CLI only parses the file as YAML or JSON and passes the resulting object to `AdapterConfig.config`; it does not expand environment variables inside the file. Read secrets directly from environment variables in the adapter and use `--adapter-config` for non-secret runtime settings.
+Threshold precedence:
 
-### Adapter Return Values
+| Source | Applies To | Notes |
+| --- | --- | --- |
+| `--min-pass-rate` | Selected run | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
+| `--max-failures` | Selected run | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
+| `--min-target-pass-rate` | Selected run targets | Adds the same per-target pass-rate gate for each target present in the selected results and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
+| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a `--case` filtered run are skipped. |
+| `cases/<case>.yaml` `thresholds` | That case | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
 
-Return the smallest stable value that answers the target. For a binary detector, return `true` or `false`. For a classifier, return a string label. For richer workflows, return an object and use `field` or `json_subset` in case YAML.
+Other precedence rules:
 
-Good observations are deterministic, JSON-like, and easy to inspect in the JSON report:
+| Area | Rule |
+| --- | --- |
+| Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
+| Target metadata | `targets.<id>.config` overrides matching keys from `workflow.targets` metadata. |
+| Adapter config | `--adapter-config` is independent of eval YAML and is passed only to the adapter factory. |
 
-```python
-return {
-    "result": {
-        "matches": True,
-        "confidence": 0.94,
-        "label": "folded",
+## Environment Variables
+
+GlassKit defines no CLI-specific environment variables and does not read from stdin.
+
+Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case YAML and adapter config files. With `uv`, pass a dotenv file through the runner:
+
+```bash
+uv run --with glasskit.ai --env-file .env glasskit eval run
+```
+
+## Output Formats
+
+Human output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Typer argument parsing errors may print usage and error text to stderr.
+
+`glasskit eval run --output-json tmp/eval-results.json` writes a JSON file with this shape:
+
+```json
+{
+  "eval_dir": "/absolute/path/to/eval",
+  "cases": ["fold-step-001"],
+  "success": true,
+  "summary": {
+    "evaluated": 1,
+    "passed": 1,
+    "failed": 0,
+    "errors": 0,
+    "pass_rate": 1.0,
+    "duration_seconds": 0.42
+  },
+  "gates": [
+    {
+      "name": "adapter_errors",
+      "passed": true,
+      "message": "no adapter/comparison errors"
     }
+  ],
+  "results": [
+    {
+      "case": "fold-step-001",
+      "target": "step_1",
+      "target_label": "Step 1",
+      "sample_index": 0,
+      "timestamp_s": 0.0,
+      "status": "passed",
+      "expected": true,
+      "observed": {
+        "matches": true
+      },
+      "observed_value": true,
+      "compare_mode": "exact",
+      "field": "matches",
+      "reason": "matched",
+      "source": "at",
+      "artifact_image": null,
+      "artifact_json": null
+    }
+  ]
 }
 ```
 
-Avoid returning SDK objects, dataclasses, images, bytes, or other values that cannot be serialized to JSON. They make reports harder to read and may fail when written to `--output-json`.
+`--save-failures` writes artifacts for non-passing sample results. The default location is `<eval-dir>/.glasskit-artifacts/failures/` unless `--artifacts-dir` is provided. Each saved result gets a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
-## Practical Adapter Pattern
+## Exit Codes
 
-A model-backed adapter usually follows this flow:
+| Code | Meaning | Fix |
+| ---: | --- | --- |
+| `0` | Command succeeded. For `run`, every gate passed. | No action needed. |
+| `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate table, fix the eval, adapter, or quality threshold, then rerun. |
+| `2` | CLI usage, setup, config, video, adapter load, adapter runtime, or initialization error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter errors recorded instead of aborting. |
 
-```python
-import os
-
-
-def create_evaluator(config):
-    settings = dict(config.config)
-    return MyEvaluator(
-        api_key=settings.get("api_key") or os.environ["MODEL_API_KEY"],
-        api_url=settings.get("api_url", "https://api.example.test"),
-        model=settings.get("model", "vision-model"),
-    )
-
-
-class MyEvaluator:
-    def __init__(self, *, api_key, api_url, model):
-        self._client = make_async_client(api_key=api_key, base_url=api_url)
-        self._model = model
-
-    async def evaluate_many(self, samples, target):
-        return [await self.evaluate(sample, target) for sample in samples]
-
-    async def evaluate(self, sample, target):
-        prompt = target.config.get("prompt", f"Check {target.id}.")
-        image_payload = encode_image(sample.image)
-        response = await self._client.check(
-            model=self._model,
-            prompt=prompt,
-            image=image_payload,
-        )
-        return parse_response(response)
-
-    async def close(self):
-        await self._client.aclose()
-```
-
-Keep retries, response parsing, prompt construction, and backend-specific error handling in the adapter. Keep generic eval semantics in case YAML and the CLI.
-
-## Debugging Failed Runs
+## Errors and Troubleshooting
 
 Start with validation:
 
@@ -554,24 +692,57 @@ Start with validation:
 uv run --with glasskit.ai glasskit eval validate
 ```
 
-Then list samples and run one case:
+Then inspect samples and run one case:
 
 ```bash
 uv run --with glasskit.ai glasskit eval list-samples --case fold-step-001
-uv run --with glasskit.ai glasskit eval run --case fold-step-001 --verbose
+uv run --with glasskit.ai glasskit eval run --case fold-step-001 --verbose --keep-going
 ```
 
-If the adapter is unstable or expensive, add `--keep-going --save-failures --output-json tmp/eval-results.json`. The saved failure images show exactly what frame the adapter saw, and the JSON report includes the raw observation, extracted field, comparison mode, and reason for each sample.
+Common failures:
 
-Common issues:
+| Message or Symptom | Likely Cause | Fix |
+| --- | --- | --- |
+| `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
+| `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Create a case with `init-case` or add YAML files under `cases/`. |
+| `no eval cases found` | No `.yaml` files exist under `cases/`, or `--case` does not match a filename stem. | Check the case filename and omit `.yaml` from `--case`. |
+| `invalid schema` | YAML shape, field name, type, or value is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
+| `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
+| `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
+| `could not open video` or `could not decode video` | PyAV cannot read the file. | Check that the file is a real video and can be decoded locally. |
+| `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
+| `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled points. |
+| `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
+| `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
+| `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass env vars needed during import. |
+| `adapter target not found` | The module imported, but the callable path does not exist. | Check the function, class, or nested attribute name after `:`. |
+| `adapter ... did not return an object with evaluate(...)` | The factory returned the wrong shape. | Return an object with `evaluate(sample, target)` or use a supported simple function adapter. |
+| `adapter returned non-JSON observation` | The adapter returned a dataclass, SDK object, image, bytes, infinite number, or other non-JSON value. | Return only JSON-like values. |
+| `adapter returned N observations for M samples` | `evaluate_many` returned the wrong number of observations. | Return exactly one observation per input sample in order. |
+| `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |
+| `invalid_observation: adapter returned null` | The adapter returned `None` for a sample expecting a non-null value. | Return a JSON value matching the expected shape, or set `expect: null`. |
+| Failed comparisons but exit code `0` | No quality gate was configured. | Add `--min-pass-rate`, `--max-failures`, `--min-target-pass-rate`, or YAML thresholds. |
 
-- `adapter target not found` means the `<module-or-file>:<callable>` path imported successfully but the callable name could not be resolved.
-- `adapter import failed` usually means the working directory, `PYTHONPATH`, or app environment does not include the adapter's dependencies.
-- `video file does not exist` means the `video:` path is wrong or is being resolved from the case YAML directory differently than expected.
-- `sample ... exceeds video duration` means a timestamp is beyond the readable video duration. Check the recording length and the units in case YAML.
-- `missing field` means the adapter returned a value that does not contain the sample's `field` path.
-- `invalid_observation: adapter returned null` means the adapter returned `None` for a sample whose expected value was not `null`.
+## Security Notes
 
-## Technical Details
+The CLI itself reads local eval files, reads video files, imports your adapter, decodes frames with PyAV, writes optional JSON reports, and writes optional failure artifacts. It does not implement telemetry.
+
+Your adapter is ordinary Python code imported into the CLI process. It can read environment variables, access files, and make network calls according to your implementation and installed dependencies. Review adapters with the same care as application code, especially when they handle credentials or real user recordings.
+
+Failure artifacts can contain sensitive frames and raw model observations. Store `tmp/`, `.glasskit-artifacts/`, and JSON reports according to your privacy policy, and add them to `.gitignore` when they should not be committed.
+
+## Versioning and Compatibility
+
+This source tree declares version `0.1.1` and Python `>=3.12`. GlassKit is alpha software, so command details may change before `1.0`; use `glasskit --help` and subcommand `--help` for the exact installed version.
+
+Default tests are designed to run offline with committed synthetic video fixtures. Real adapters may require network access, model credentials, or app-specific services.
+
+## Support
+
+GlassKit CLI is maintained by RealComputer. Report bugs and feature requests at https://github.com/RealComputer/GlassKit/issues.
 
 For contributor-oriented implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
+
+## License
+
+MIT. See [LICENSE](https://github.com/RealComputer/GlassKit/blob/main/cli/LICENSE).
