@@ -1,6 +1,6 @@
 # GlassKit CLI
 
-GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling your app adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs. (TODO: can we improve this first line to make it more friendly to someone new, easy to understand??)
+GlassKit CLI helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a small Python adapter, and rerun the same checks locally or in CI.
 
 This is the user manual for the `glasskit` command. For implementation notes for contributors, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
@@ -8,32 +8,30 @@ The current command family is `glasskit eval`.
 
 ## Why Use This?
 
-Building smart glasses apps that support wearers working on defined tasks (workflows) is becoming popular. These apps watch the live camera feed, check the how the task is going, and take actions like giving a next instruction or pointing out mistakes.
+Smart-glasses apps often guide a wearer through a task by watching the live camera feed, deciding how the task is going, and responding with the next instruction or a correction.
 
-However, these apps are hard to test manually because you have to repeat the same physical tasks over and over. `glasskit eval` lets you automate the test and evaluation about how the vision part performs, so you can be confident whenever your prompt, model, or app logic changes.
+These apps are hard to test manually because every prompt, model, parser, or app logic change can mean repeating the same physical workflow. `glasskit eval` lets you record the workflow once, label the expected moments, and replay the same checks whenever the app changes.
 
-By supplying workflow video recordings, it lets provide the moments and expected result, allowing the reruning the same eval.
-
-Use it when you want to have a reliable vision path and CI.
+Use it when you want a reliable way to test the vision path users depend on and enforce quality gates in CI.
 
 ## Installation
 
-The Python package is `glasskit.ai` and it provides the `glasskit` console command. The package requires Python 3.12 or newer and `uv`.
+The Python package is `glasskit.ai`; it provides the `glasskit` console command. The package requires Python 3.12 or newer and is designed to run with `uv`.
 
-Install:
+Add it to your app repo's dev dependencies:
 
 ```bash
 uv add --dev glasskit.ai
 uv run glasskit --help
 ```
 
-Or, run without adding the dependency:
+Or run it once without adding the dependency:
 
 ```bash
 uv run --with glasskit.ai glasskit --help
 ```
 
-This docs is written assumiing it's installed to the dependency, so please add the `--with glasskit.ai` if you didn't install it.
+The `uv run ...` examples below assume the package has been added to your project. If you use the one-off form, replace `uv run` with `uv run --with glasskit.ai`.
 
 ## Quickstart
 
@@ -77,7 +75,7 @@ Run the eval:
 uv run glasskit eval run
 ```
 
-Expected result: `validate` prints `Validation passed`, and `run` prints case progress, a summary, gates, and a per-target table.
+Expected result: `run` prints case progress, a summary, gates, and a per-target table.
 
 ## Core Concepts
 
@@ -91,9 +89,9 @@ A target is one thing the adapter should evaluate, such as `step_1`, `ready_stat
 
 A sample is one labeled timestamp, or one timestamp expanded from a range. Each sample has an expected JSON-like value.
 
-An adapter is your Python bridge from the CLI to your app's logics. The CLI decodes frames and calls the adapter; the adapter returns observations.
+An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Since some models cannot peform 100%, this is made configurable so you can setup your CI.
+A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Because model-based checks may not reach 100%, gates are configurable so you can set the right bar for CI.
 
 ## Common Workflows
 
@@ -717,5 +715,5 @@ Default tests are designed to run offline with committed synthetic video fixture
 
 ## Support
 
-- Join our Discord server for conversations: https://discord.gg/v5ayGKhPNP
-- Report bugs and feature requests at: https://github.com/RealComputer/GlassKit/issues
+- Join our Discord server for questions and discussion: https://discord.gg/v5ayGKhPNP
+- Report bugs and feature requests: https://github.com/RealComputer/GlassKit/issues
