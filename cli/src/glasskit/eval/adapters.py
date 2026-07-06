@@ -4,7 +4,7 @@ import importlib
 import importlib.util
 import inspect
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -19,7 +19,7 @@ from .models import (
 
 
 async def load_evaluator(adapter_target: str, config: AdapterConfig) -> Any:
-    target = _load_target(adapter_target)
+    target = _load_target(adapter_target, import_roots=_adapter_import_roots(config))
     if _looks_like_frame_function(target):
         return _FunctionEvaluator(target)
 
@@ -40,7 +40,16 @@ async def load_evaluator(adapter_target: str, config: AdapterConfig) -> Any:
     )
 
 
-def _load_target(adapter_target: str) -> Callable[..., Any]:
+def _adapter_import_roots(config: AdapterConfig) -> list[Path]:
+    return [
+        Path.cwd().resolve(),
+        config.eval_dir.expanduser().resolve().parent,
+    ]
+
+
+def _load_target(
+    adapter_target: str, *, import_roots: Iterable[Path] = ()
+) -> Callable[..., Any]:
     if ":" not in adapter_target:
         raise AdapterLoadError(
             f"adapter must be '<module-or-file>:<callable>', got {adapter_target!r}"
@@ -53,7 +62,7 @@ def _load_target(adapter_target: str) -> Callable[..., Any]:
             f"adapter must be '<module-or-file>:<callable>', got {adapter_target!r}"
         )
 
-    module = _load_module(module_ref)
+    module = _load_module(module_ref, import_roots=import_roots)
     value: Any = module
     for part in object_ref.split("."):
         if not hasattr(value, part):
@@ -64,7 +73,7 @@ def _load_target(adapter_target: str) -> Callable[..., Any]:
     return value
 
 
-def _load_module(module_ref: str) -> ModuleType:
+def _load_module(module_ref: str, *, import_roots: Iterable[Path] = ()) -> ModuleType:
     path = Path(module_ref)
     if module_ref.endswith(".py") or path.exists():
         path = path.expanduser().resolve()
@@ -74,9 +83,7 @@ def _load_module(module_ref: str) -> ModuleType:
         spec = importlib.util.spec_from_file_location(module_name, path)
         if spec is None or spec.loader is None:
             raise AdapterLoadError(f"could not load adapter file: {path}")
-        parent = str(path.parent)
-        if parent not in sys.path:
-            sys.path.insert(0, parent)
+        _prepend_import_roots([path.parent, *import_roots])
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         try:
@@ -93,6 +100,18 @@ def _load_module(module_ref: str) -> ModuleType:
         raise AdapterLoadError(
             f"adapter import failed for module {module_ref!r}: {error}"
         ) from error
+
+
+def _prepend_import_roots(roots: Iterable[Path]) -> None:
+    unique_roots: list[Path] = []
+    for root in roots:
+        resolved = root.expanduser().resolve()
+        if resolved.is_dir() and resolved not in unique_roots:
+            unique_roots.append(resolved)
+    for root in reversed(unique_roots):
+        path = str(root)
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
 
 def _looks_like_frame_function(value: Any) -> bool:

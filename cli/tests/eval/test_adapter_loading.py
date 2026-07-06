@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,12 @@ def test_loads_import_path_factory_adapter(
     asyncio.run(_run_import_path_factory_adapter_test(tmp_path, monkeypatch))
 
 
+def test_file_adapter_can_import_app_root_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asyncio.run(_run_app_root_import_test(tmp_path, monkeypatch))
+
+
 async def _run_import_path_factory_adapter_test(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -67,6 +74,62 @@ def create_evaluator(config):
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_2", index=1))
     assert result == {"target": "step_2", "time": 0.0}
+
+
+async def _run_app_root_import_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (tmp_path / "app_logic.py").write_text(
+        """
+def check_target(target_id):
+    return target_id == "step_1"
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = eval_dir / "adapter.py"
+    adapter_path.write_text(
+        """
+from app_logic import check_target
+
+
+class Evaluator:
+    async def evaluate(self, sample, target):
+        return check_target(target.id)
+
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "path", _without_import_paths(sys.path, tmp_path))
+
+    evaluator = await load_evaluator(
+        "eval/adapter.py:create_evaluator",
+        AdapterConfig(eval_dir=eval_dir),
+    )
+
+    result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
+    assert result is True
+
+
+def _without_import_paths(paths: list[str], root: Path) -> list[str]:
+    blocked = {root.resolve(), (root / "eval").resolve()}
+    filtered: list[str] = []
+    for entry in paths:
+        if not entry:
+            continue
+        try:
+            resolved = Path(entry).resolve()
+        except OSError:
+            filtered.append(entry)
+            continue
+        if resolved not in blocked:
+            filtered.append(entry)
+    return filtered
 
 
 def _sample() -> FrameSample:

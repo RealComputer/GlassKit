@@ -105,7 +105,7 @@ This adapter does not judge the image. It only proves that the eval directory, v
 uv run --with glasskit.ai glasskit eval run
 ```
 
-That command uses `eval/` as the eval directory and `eval/adapter.py:create_evaluator` as the default adapter. When you want to inspect setup before running the adapter, use:
+That command uses `eval/` as the eval directory and `<eval-dir>/adapter.py:create_evaluator` as the default adapter. When you want to inspect setup before running the adapter, use:
 
 ```bash
 uv run --with glasskit.ai glasskit eval validate
@@ -370,7 +370,7 @@ uv run --with glasskit.ai glasskit eval run \
 ```
 
 - `--eval-dir` chooses an eval directory other than the default `eval`.
-- `--adapter` chooses an adapter other than the default `eval/adapter.py:create_evaluator`.
+- `--adapter` chooses an adapter other than the default `<eval-dir>/adapter.py:create_evaluator`.
 - `--case` limits the run to one case by filename stem.
 - `--adapter-config` reads a YAML or JSON object and passes it to the adapter factory.
 - `--keep-going` records adapter or comparison errors as errored sample results instead of aborting the run on the first error.
@@ -383,7 +383,7 @@ uv run --with glasskit.ai glasskit eval run \
 
 An adapter is the bridge between the generic CLI and your app. It receives decoded video frames plus target metadata, calls your app or model backend, and returns a JSON-like observation for each sample.
 
-By default, `glasskit eval run` uses `eval/adapter.py:create_evaluator`. Pass `--adapter <module-or-file>:<callable>` when you want a different adapter target. The module side can be a Python import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.fold_checker`.
+By default, `glasskit eval run` uses `<eval-dir>/adapter.py:create_evaluator`, which is `eval/adapter.py:create_evaluator` when you use the default eval directory. Pass `--adapter <module-or-file>:<callable>` when you want a different adapter target. The module side can be a Python import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.fold_checker`.
 
 The recommended shape is a factory that accepts one required `AdapterConfig` argument and returns an evaluator object:
 

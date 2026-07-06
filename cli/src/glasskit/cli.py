@@ -25,17 +25,21 @@ eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
 app.add_typer(eval_app, name="eval")
 
 DEFAULT_EVAL_DIR = Path("eval")
-DEFAULT_ADAPTER = "eval/adapter.py:create_evaluator"
+DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
 
 
 @eval_app.command("run")
 def eval_run(
     adapter: Annotated[
-        str,
+        str | None,
         typer.Option(
-            "--adapter", help="Adapter target, e.g. eval/adapter.py:create_evaluator."
+            "--adapter",
+            help=(
+                "Adapter target, e.g. eval/adapter.py:create_evaluator. "
+                "Defaults to <eval-dir>/adapter.py:create_evaluator."
+            ),
         ),
-    ] = DEFAULT_ADAPTER,
+    ] = None,
     eval_dir: Annotated[
         Path,
         typer.Option("--eval-dir", help="Eval directory."),
@@ -92,8 +96,9 @@ def eval_run(
     ] = False,
 ) -> None:
     console = Console()
+    adapter_target = adapter or _default_adapter_target(eval_dir)
     options = RunOptions(
-        adapter=adapter,
+        adapter=adapter_target,
         eval_dir=eval_dir,
         case_filter=case,
         adapter_config=_load_config(adapter_config),
@@ -235,3 +240,8 @@ def _load_config(path: Path | None) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise typer.BadParameter("adapter config must contain an object")
     return raw
+
+
+def _default_adapter_target(eval_dir: Path) -> str:
+    adapter_path = eval_dir / "adapter.py"
+    return f"{adapter_path.as_posix()}:{DEFAULT_ADAPTER_CALLABLE}"
