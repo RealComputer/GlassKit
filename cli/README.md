@@ -35,19 +35,17 @@ The `uv run ...` examples below assume the package has been added to your projec
 
 ## Quickstart
 
-Start from an app repository that contains one video recording. This example uses `recordings/task-01.mp4` and creates an `eval/` directory in the current repo.
+Start from an app repository checked out next to a `recordings/` directory. This example uses `../recordings/task-01.mp4` from the shell working directory and creates an `eval/` directory in the app repo.
 
-Create the eval directory, put the recording next to its case YAML, and label one target:
+Create the eval directory and write a case YAML that points at the recording:
 
 ```bash
 mkdir -p eval/cases
-cp recordings/task-01.mp4 eval/cases/task-01.mp4
 cat > eval/cases/task-01.yaml <<'YAML'
 version: 1
-video: "task-01.mp4"
+video: "../../../recordings/task-01.mp4"
 targets:
   step_1:
-    label: "Step 1"
     samples:
       - range: [0.0, 3.0]
         expect: true
@@ -55,6 +53,8 @@ thresholds:
   min_pass_rate: 1.0
 YAML
 ```
+
+The `video:` path is relative to `eval/cases/task-01.yaml`, so it walks back up to the sibling `recordings/` directory.
 
 Create `eval/adapter.py` with a placeholder evaluator so you can prove the eval wiring works before connecting a model pipeline:
 
@@ -96,16 +96,15 @@ A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed c
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and YAML from an existing video.
+Goal: create the required directory structure and YAML from an existing recording without moving the video into `eval/`.
 
 Commands:
 
 ```bash
 mkdir -p eval/cases
-cp recordings/task-02.mov eval/cases/task-02.mov
 cat > eval/cases/task-02.yaml <<'YAML'
 version: 1
-video: "task-02.mov"
+video: "../../../recordings/task-02.mov"
 description: "Replace this note with what task-02 should cover."
 sampling:
   every_s: 0.5
@@ -118,9 +117,9 @@ targets:
 YAML
 ```
 
-Expected result: `eval/cases/task-02.yaml` references `eval/cases/task-02.mov`, and the case is ready for timestamp and expectation edits.
+Expected result: `eval/cases/task-02.yaml` references `../recordings/task-02.mov` from the app repo, and the case is ready for timestamp and expectation edits.
 
-Notes: if you do not want to copy recordings into the eval directory, set `video:` to a path relative to the case YAML file, such as `../../../eval-videos/task-02.mov`. The shell redirection above replaces an existing YAML file, so edit intentionally when a case already exists.
+Notes: if you prefer colocated fixtures, copy the recording into `eval/cases/` and set `video:` to the local filename, such as `task-02.mov`. The shell redirection above replaces an existing YAML file, so edit intentionally when a case already exists.
 
 ### Validate Before an Expensive Run
 
@@ -204,29 +203,31 @@ Notes: `--adapter-config` must be a YAML or JSON object. GlassKit does not expan
 
 ## Eval Directory Layout
 
-The default layout is:
+A typical layout keeps eval YAML and adapter code in the app repo while storing recordings outside the repo:
 
 ```text
-your-app/
-  eval/
-    adapter.py
-    config.yaml
-    cases/
-      task-01.yaml
-      task-01.mp4
-      task-02.yaml
-      task-02.mp4
+workspace/
+  recordings/
+    task-01.mp4
+    task-02.mp4
+  your-app/
+    eval/
+      adapter.py
+      config.yaml
+      cases/
+        task-01.yaml
+        task-02.yaml
 ```
 
 `config.yaml` is optional and currently supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip; GlassKit normalizes videos with nonzero presentation timestamps so the first decoded frame starts at `0.0`.
 
-You can keep videos outside Git or outside the app repository. The `video:` path is resolved relative to the case YAML file:
+The `video:` path is resolved relative to the case YAML file:
 
 ```yaml
-video: "../../../eval-videos/task-01.mp4"
+video: "../../../recordings/task-01.mp4"
 ```
 
-Commit the labels, thresholds, and adapter code your team should review. Treat real recordings as potentially sensitive user data and store them according to your app's privacy and repository-size policy.
+You can also keep small synthetic fixtures next to the case YAML and reference them with a local filename such as `task-01.mp4`. Commit the labels, thresholds, and adapter code your team should review. Treat real recordings as potentially sensitive user data and store them according to your app's privacy and repository-size policy.
 
 ## Case YAML Reference
 
