@@ -88,7 +88,7 @@ A sample is one labeled timestamp, or one timestamp expanded from a range. Each 
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Because model-based checks may not always reach 100%, gates are configurable so you can set the right bar for CI.
+A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Omitted threshold values mean no gate is created for that threshold. For example, if `min_pass_rate` is not set in CLI flags, `<eval-dir>/config.yaml`, or case YAML, ordinary failed comparisons are still reported but do not make `glasskit eval run` exit nonzero. Adapter and comparison errors still fail the run through the automatic `adapter_errors` gate.
 
 ## Common Workflows
 
@@ -177,7 +177,7 @@ uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-f
 
 Expected behavior: the process exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors that abort the run.
 
-Notes: without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are visible in the report but do not fail the command. Always configure a gate for CI.
+Notes: threshold defaults are intentionally unset. Without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are visible in the report but do not fail the command. Always configure a gate for CI.
 
 ### Use a Real Adapter Config File
 
@@ -277,14 +277,14 @@ Case fields:
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
 | `workflow.targets` | No | Optional target metadata list. Each item needs `id`; `label` and extra keys are allowed. |
 | `targets` | Yes | Mapping of target id to target definition. Must contain at least one target. |
-| `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. |
+| `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. Omitted keys create no gate for that key. |
 
 Target fields:
 
 | Field | Required | Description |
 | --- | ---: | --- |
 | `label` | No | Display label for reports. |
-| `config` | No | Adapter-specific metadata for the target. Values override matching keys from `workflow.targets`. |
+| `config` | No | Adapter-specific metadata for the target. Defaults to an empty object. Values override matching keys from `workflow.targets`. |
 | `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
 
 Sample block fields:
@@ -294,9 +294,9 @@ Sample block fields:
 | `range` | Conditionally | Two-element `[start, end]` interval in seconds. Exactly one of `range` or `at` is required. The interval is half-open. |
 | `at` | Conditionally | One timestamp or a list of timestamps in seconds. Exactly one of `range` or `at` is required. Lists are sorted during expansion. |
 | `expect` | Yes | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. |
-| `every_s` | No | Per-block range sampling interval. Overrides `sampling.every_s`. |
-| `field` | No | Dot-separated path to extract from the adapter observation before comparison. |
-| `compare` | No | Comparison config with `mode` and optional `tolerance`. |
+| `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
+| `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
+| `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping samples for the same target are invalid.
 
@@ -545,6 +545,24 @@ Exit behavior: exits `0` when samples can be listed and `2` when the eval suite 
 
 GlassKit has no global config file. Eval configuration lives in the eval directory and case YAML files.
 
+Default values at a glance:
+
+| Area | Default When Omitted |
+| --- | --- |
+| Eval directory | `eval` from the command working directory. |
+| `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
+| `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
+| Case `version` | `1`. |
+| Case `sampling.every_s` | `0.5` seconds. |
+| Sample block `every_s` | Inherits the case `sampling.every_s`. |
+| Sample `field` | Compares the whole adapter observation. |
+| Sample `compare.mode` | Inferred from `expect`: non-boolean numbers use `numeric`; booleans, strings, `null`, arrays, and objects use `exact`. |
+| Numeric `compare.tolerance` | `0.0`. |
+| `targets.<id>.config` | Empty object. The final adapter target config also includes matching extra metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
+| Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
+| Adapter config | Empty object unless `--adapter-config` is provided. |
+| Failure artifacts | Saved only with `--save-failures`; default directory is `<eval-dir>/.glasskit-artifacts/failures/`. |
+
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:
 
 ```yaml
@@ -555,6 +573,8 @@ thresholds:
     step_1:
       min_pass_rate: 0.95
 ```
+
+All threshold keys default to unset. GlassKit does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. The automatic `adapter_errors` gate is always present and fails the run when adapter or comparison errors produce sample results with status `error`.
 
 Threshold precedence:
 
