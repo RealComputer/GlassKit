@@ -1,109 +1,87 @@
 # GlassKit CLI
 
-GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling your app adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs.
+GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling your app adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs. (TODO: can we improve this first line to make it more friendly to someone new, easy to understand??)
 
-This README is the user manual for the `glasskit` command. The current command family is `glasskit eval`.
+This is the user manual for the `glasskit` command. For implementation notes for contributors, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
+
+The current command family is `glasskit eval`.
 
 ## Why Use This?
 
-Smart-glasses apps are hard to test by hand because the input is physical, visual, and timing-sensitive. `glasskit eval` lets you record a workflow once, label the stable moments that should be checked, and rerun the same eval whenever your prompt, model, parser, or app logic changes.
+Building smart glasses apps that support wearers working on defined tasks (workflows) is becoming popular. These apps watch the live camera feed, check the how the task is going, and take actions like giving a next instruction or pointing out mistakes.
 
-Use it when you want to test the vision path users actually depend on, keep app-specific model calls in your own adapter, inspect failures with saved frames and JSON, and enforce CI gates with explicit pass-rate or failure-count thresholds.
+However, these apps are hard to test manually because you have to repeat the same physical tasks over and over. `glasskit eval` lets you automate the test and evaluation about how the vision part performs, so you can be confident whenever your prompt, model, or app logic changes.
+
+By supplying workflow video recordings, it lets provide the moments and expected result, allowing the reruning the same eval.
+
+Use it when you want to have a reliable vision path and CI.
 
 ## Installation
 
-The published Python package is `glasskit.ai` and it provides the `glasskit` console command. The package requires Python 3.12 or newer.
+The Python package is `glasskit.ai` and it provides the `glasskit` console command. The package requires Python 3.12 or newer and `uv`.
 
-The recommended way to run the CLI from an app repository is `uv run --with glasskit.ai`, which creates an isolated command environment and keeps local imports relative to your app checkout:
-
-```bash
-cd path/to/your-app
-uv run --with glasskit.ai glasskit --help
-```
-
-For a persistent command install with `uv`, use:
+Install:
 
 ```bash
-uv tool install glasskit.ai
-glasskit --help
-```
-
-If you are working from this source checkout, run the local package with:
-
-```bash
+uv add --dev glasskit.ai
 uv run glasskit --help
 ```
 
-The CLI does not load `.env` files itself. If your adapter needs environment variables from a file, pass that file through the command runner:
+Or, run without adding the dependency:
 
 ```bash
-uv run --with glasskit.ai --env-file .env glasskit eval run
+uv run --with glasskit.ai glasskit --help
 ```
 
-GlassKit is not currently distributed through Homebrew, npm, Cargo, or standalone binary downloads.
+This docs is written assumiing it's installed to the dependency, so please add the `--with glasskit.ai` if you didn't install it.
 
 ## Quickstart
 
-Start from an app repository that contains one short supported video recording. This example uses `recordings/fold-step-001.mp4` and creates an `eval/` directory in the current repo.
+Start from an app repository that contains one video recording. This example uses `recordings/task-01.mp4` and creates an `eval/` directory in the current repo.
 
 Create a starter case:
 
 ```bash
-uv run --with glasskit.ai glasskit eval init-case --case fold-step-001 --video recordings/fold-step-001.mp4 --target step_1 --label "Step 1"
+uv run glasskit eval init-case --case task-01 --video recordings/task-01.mp4 --target step_1 --label "Step 1"
 ```
 
-Create `eval/adapter.py` with a fake evaluator so you can prove the eval wiring works before connecting a model backend:
+Create `eval/adapter.py` with a placeholder evaluator so you can prove the eval wiring works before connecting a model pipeline:
 
 ```python
-class FakeEvaluator:
+class Evaluator:
     async def evaluate(self, sample, target):
-        return {
-            "target": target.id,
-            "timestamp_s": sample.timestamp_s,
-            "matches": target.id == "step_1",
-        }
+        return True
 
 
 def create_evaluator(config):
-    return FakeEvaluator()
+    return Evaluator()
 ```
 
-Edit `eval/cases/fold-step-001.yaml` so the sample checks the `matches` field returned by the fake adapter:
+Edit `eval/cases/task-01.yaml` so the sample checks the value returned by the adapter:
 
 ```yaml
 version: 1
-video: "fold-step-001.mp4"
-description: "Starter eval case. Replace these timestamps with stable labeled moments from this video."
-sampling:
-  every_s: 0.5
+video: "task-01.mp4"
 targets:
-  "step_1":
-    label: "Step 1"
+  step_1:
     samples:
-      - at: 0.0
-        field: matches
+      - range: [0.0, 3.0]
         expect: true
 thresholds:
   min_pass_rate: 1.0
 ```
 
-Validate the eval directory:
-
-```bash
-uv run --with glasskit.ai glasskit eval validate
-```
-
 Run the eval:
 
 ```bash
-uv run --with glasskit.ai glasskit eval run
+uv run glasskit eval run
 ```
 
-Expected result: `validate` prints `Validation passed`, and `run` prints case progress, a summary, gates, and a per-target table. With the YAML above, the run exits `0` only if the configured `min_pass_rate: 1.0` gate passes.
+Expected result: `validate` prints `Validation passed`, and `run` prints case progress, a summary, gates, and a per-target table.
 
 ## Core Concepts
 
-An eval directory is the runnable test suite. By default, GlassKit uses `eval/` in the current working directory.
+An eval directory is the runnable test set. By default, GlassKit uses `eval/` in the current working directory.
 
 A case is one YAML file under `<eval-dir>/cases/`. The case name is the YAML filename without `.yaml`.
 
@@ -113,9 +91,9 @@ A target is one thing the adapter should evaluate, such as `step_1`, `ready_stat
 
 A sample is one labeled timestamp, or one timestamp expanded from a range. Each sample has an expected JSON-like value.
 
-An adapter is your Python bridge from GlassKit to your app, prompt, model, parser, or backend. The CLI decodes frames and calls the adapter; the adapter returns observations.
+An adapter is your Python bridge from the CLI to your app's logics. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails.
+A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Since some models cannot peform 100%, this is made configurable so you can setup your CI.
 
 ## Common Workflows
 
@@ -126,14 +104,14 @@ Goal: create the required directory structure and starter YAML from an existing 
 Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval init-case --case fold-step-002 --video recordings/fold-step-002.mov --target step_2 --label "Step 2"
+uv run glasskit eval init-case --case task-02 --video recordings/task-02.mov --target step_2 --label "Step 2"
 ```
 
 Expected output:
 
 ```text
-Created case: /absolute/path/to/eval/cases/fold-step-002.yaml
-Video: /absolute/path/to/eval/cases/fold-step-002.mov
+Created case: /absolute/path/to/eval/cases/task-02.yaml
+Video: /absolute/path/to/eval/cases/task-02.mov
 Eval: /absolute/path/to/eval
 ```
 
@@ -146,7 +124,7 @@ Goal: catch YAML, video, timestamp, and optional adapter setup problems before c
 Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval validate --adapter eval/adapter.py:create_evaluator
+uv run glasskit eval validate --adapter eval/adapter.py:create_evaluator
 ```
 
 Expected output:
@@ -164,7 +142,7 @@ Goal: confirm that ranges, `at` lists, fields, and compare modes expand as inten
 Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval list-samples --case fold-step-001
+uv run glasskit eval list-samples --case task-01
 ```
 
 Expected output: a Rich table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
@@ -178,7 +156,7 @@ Goal: run a focused eval and print every sample result.
 Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval run --case fold-step-001 --verbose --keep-going --save-failures --output-json tmp/eval-results.json --artifacts-dir tmp/eval-artifacts
+uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json tmp/eval-results.json --artifacts-dir tmp/eval-artifacts
 ```
 
 Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
@@ -192,7 +170,7 @@ Goal: make the command fail when quality drops below your threshold.
 Command:
 
 ```bash
-uv run --with glasskit.ai glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json tmp/eval-results.json
+uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json tmp/eval-results.json
 ```
 
 Expected behavior: the process exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors that abort the run.
@@ -206,7 +184,7 @@ Goal: pass non-secret runtime settings to your adapter without putting them in c
 Command:
 
 ```bash
-uv run --with glasskit.ai --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
+uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
 ```
 
 Example `eval/local-adapter.yaml`:
@@ -229,10 +207,10 @@ your-app/
     adapter.py
     config.yaml
     cases/
-      fold-step-001.yaml
-      fold-step-001.mp4
-      fold-step-002.yaml
-      fold-step-002.mp4
+      task-01.yaml
+      task-01.mp4
+      task-02.yaml
+      task-02.mp4
 ```
 
 `config.yaml` is optional and currently supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip; GlassKit normalizes videos with nonzero presentation timestamps so the first decoded frame starts at `0.0`.
@@ -240,7 +218,7 @@ your-app/
 You can keep videos outside Git or outside the app repository. The `video:` path is resolved relative to the case YAML file:
 
 ```yaml
-video: "../../../eval-videos/fold-step-001.mp4"
+video: "../../../eval-videos/task-01.mp4"
 ```
 
 Commit the labels, thresholds, and adapter code your team should review. Treat real recordings as potentially sensitive user data and store them according to your app's privacy and repository-size policy.
@@ -251,7 +229,7 @@ Here is a representative case file:
 
 ```yaml
 version: 1
-video: "fold-step-001.mp4"
+video: "task-01.mp4"
 description: "Fold step 1 should be detected after the crease is completed."
 sampling:
   every_s: 0.5
@@ -498,7 +476,7 @@ Commands:
 Purpose: execute eval samples and apply quality gates.
 
 ```bash
-glasskit eval run --case fold-step-001 --output-json tmp/eval-results.json
+glasskit eval run --case task-01 --output-json tmp/eval-results.json
 ```
 
 Options:
@@ -547,7 +525,7 @@ Exit behavior: exits `0` when validation has no error issues and `1` when valida
 Purpose: print expanded sample rows.
 
 ```bash
-glasskit eval list-samples --case fold-step-001
+glasskit eval list-samples --case task-01
 ```
 
 Options:
@@ -565,7 +543,7 @@ Exit behavior: exits `0` when samples can be listed and `2` when the eval suite 
 Purpose: create starter YAML and place or reference the source video.
 
 ```bash
-glasskit eval init-case --case fold-step-001 --video recordings/fold-step-001.mp4 --target step_1 --label "Step 1"
+glasskit eval init-case --case task-01 --video recordings/task-01.mp4 --target step_1 --label "Step 1"
 ```
 
 Options:
@@ -621,7 +599,7 @@ GlassKit defines no CLI-specific environment variables and does not read from st
 Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case YAML and adapter config files. With `uv`, pass a dotenv file through the runner:
 
 ```bash
-uv run --with glasskit.ai --env-file .env glasskit eval run
+uv run --env-file .env glasskit eval run
 ```
 
 ## Output Formats
@@ -633,7 +611,7 @@ Human output is printed with Rich tables to stdout. JSON output is written only 
 ```json
 {
   "eval_dir": "/absolute/path/to/eval",
-  "cases": ["fold-step-001"],
+  "cases": ["task-01"],
   "success": true,
   "summary": {
     "evaluated": 1,
@@ -652,7 +630,7 @@ Human output is printed with Rich tables to stdout. JSON output is written only 
   ],
   "results": [
     {
-      "case": "fold-step-001",
+      "case": "task-01",
       "target": "step_1",
       "target_label": "Step 1",
       "sample_index": 0,
@@ -689,14 +667,14 @@ Human output is printed with Rich tables to stdout. JSON output is written only 
 Start with validation:
 
 ```bash
-uv run --with glasskit.ai glasskit eval validate
+uv run glasskit eval validate
 ```
 
 Then inspect samples and run one case:
 
 ```bash
-uv run --with glasskit.ai glasskit eval list-samples --case fold-step-001
-uv run --with glasskit.ai glasskit eval run --case fold-step-001 --verbose --keep-going
+uv run glasskit eval list-samples --case task-01
+uv run glasskit eval run --case task-01 --verbose --keep-going
 ```
 
 Common failures:
@@ -739,10 +717,5 @@ Default tests are designed to run offline with committed synthetic video fixture
 
 ## Support
 
-GlassKit CLI is maintained by RealComputer. Report bugs and feature requests at https://github.com/RealComputer/GlassKit/issues.
-
-For contributor-oriented implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
-
-## License
-
-MIT. See [LICENSE](https://github.com/RealComputer/GlassKit/blob/main/cli/LICENSE).
+- Join our Discord server for conversations: https://discord.gg/v5ayGKhPNP
+- Report bugs and feature requests at: https://github.com/RealComputer/GlassKit/issues
