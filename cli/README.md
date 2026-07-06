@@ -49,8 +49,6 @@ targets:
     samples:
       - range: [0.0, 3.0]
         expect: true
-thresholds:
-  min_pass_rate: 1.0
 YAML
 ```
 
@@ -88,7 +86,7 @@ A sample is one labeled timestamp, or one timestamp expanded from a range. Each 
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Omitted threshold values mean no gate is created for that threshold. For example, if `min_pass_rate` is not set in CLI flags, `<eval-dir>/config.yaml`, or case YAML, ordinary failed comparisons are still reported but do not make `glasskit eval run` exit nonzero. Adapter and comparison errors still fail the run through the automatic `adapter_errors` gate.
+A gate is a quality bar, such as a minimum pass rate or maximum failure count, that turns eval results into a pass/fail signal for CI.
 
 ## Common Workflows
 
@@ -574,7 +572,7 @@ thresholds:
       min_pass_rate: 0.95
 ```
 
-All threshold keys default to unset. GlassKit does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. The automatic `adapter_errors` gate is always present and fails the run when adapter or comparison errors produce sample results with status `error`.
+All threshold keys default to unset. GlassKit does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate. Adapter runtime errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those errors are recorded as sample results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`.
 
 Threshold precedence:
 
