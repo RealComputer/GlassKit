@@ -6,7 +6,7 @@ GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sam
 
 ## Architecture
 
-- `src/glasskit/cli.py` wires the Typer app and exposes `glasskit eval run`, `validate`, `list-samples`, and `init-case`.
+- `src/glasskit/cli.py` wires the Typer app and exposes `glasskit eval run`, `validate`, and `list-samples`.
 - The eval pipeline is app-agnostic. `expectations.py` discovers eval directories and case YAML files, loads `config.yaml`, expands case sample blocks, and resolves case videos. `schemas.py` owns Pydantic validation for YAML shape. `video.py` probes and decodes requested frames with PyAV. `adapters.py` imports adapter targets from `module:callable` or `file.py:callable` and normalizes function or object evaluators. `compare.py` evaluates JSON-like observations, and `runner.py` coordinates validation, adapter execution, failure artifacts, JSON output, and quality gates. App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repo.
 - `README.md` is user-facing. Keep it detailed and friendly. This file is for developers changing CLI internals, tests, packaging, or the adapter contract.
 - Default pytest must stay offline. Use synthetic videos and fake adapters for tests. Committed video fixtures live under `tests/fixtures/videos/`; keep them reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs should not require a system `ffmpeg` executable. If a video edge case needs default coverage, add a committed synthetic fixture for it.
@@ -19,7 +19,7 @@ GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sam
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
 - `src/glasskit/eval/runner.py`: validation and run orchestration, adapter lifecycle, reports, artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading and normalization for simple functions, factories, and evaluator objects.
-- `src/glasskit/eval/video.py`, `compare.py`, `report.py`, and `init_case.py`: frame decoding, comparison modes, Rich output, and starter case creation.
+- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.
 - `tests/fixtures/`: reproducible videos and sample eval directories used by default tests.
 - `PUBLISHING.md`: release runbook for the `glasskit.ai` PyPI package and tag-triggered Trusted Publishing flow.

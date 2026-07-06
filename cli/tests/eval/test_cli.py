@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from glasskit.cli import _default_adapter_target
+from typer.testing import CliRunner
+
+from glasskit.cli import _default_adapter_target, app
+
+
+def test_eval_help_lists_current_commands() -> None:
+    result = CliRunner().invoke(app, ["eval", "--help"])
+
+    assert result.exit_code == 0
+    assert "run" in result.output
+    assert "validate" in result.output
+    assert "list-samples" in result.output
+    assert "init-case" not in result.output
 
 
 def test_default_adapter_target_follows_eval_dir() -> None:

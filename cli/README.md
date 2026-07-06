@@ -37,10 +37,23 @@ The `uv run ...` examples below assume the package has been added to your projec
 
 Start from an app repository that contains one video recording. This example uses `recordings/task-01.mp4` and creates an `eval/` directory in the current repo.
 
-Create a starter case:
+Create the eval directory, put the recording next to its case YAML, and label one target:
 
 ```bash
-uv run glasskit eval init-case --case task-01 --video recordings/task-01.mp4 --target step_1 --label "Step 1"
+mkdir -p eval/cases
+cp recordings/task-01.mp4 eval/cases/task-01.mp4
+cat > eval/cases/task-01.yaml <<'YAML'
+version: 1
+video: "task-01.mp4"
+targets:
+  step_1:
+    label: "Step 1"
+    samples:
+      - range: [0.0, 3.0]
+        expect: true
+thresholds:
+  min_pass_rate: 1.0
+YAML
 ```
 
 Create `eval/adapter.py` with a placeholder evaluator so you can prove the eval wiring works before connecting a model pipeline:
@@ -53,20 +66,6 @@ class Evaluator:
 
 def create_evaluator(config):
     return Evaluator()
-```
-
-Edit `eval/cases/task-01.yaml` so the sample checks the value returned by the adapter:
-
-```yaml
-version: 1
-video: "task-01.mp4"
-targets:
-  step_1:
-    samples:
-      - range: [0.0, 3.0]
-        expect: true
-thresholds:
-  min_pass_rate: 1.0
 ```
 
 Run the eval:
@@ -97,23 +96,31 @@ A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed c
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and starter YAML from an existing video.
+Goal: create the required directory structure and YAML from an existing video.
 
-Command:
+Commands:
 
 ```bash
-uv run glasskit eval init-case --case task-02 --video recordings/task-02.mov --target step_2 --label "Step 2"
+mkdir -p eval/cases
+cp recordings/task-02.mov eval/cases/task-02.mov
+cat > eval/cases/task-02.yaml <<'YAML'
+version: 1
+video: "task-02.mov"
+description: "Replace this note with what task-02 should cover."
+sampling:
+  every_s: 0.5
+targets:
+  step_2:
+    label: "Step 2"
+    samples:
+      - at: 0.0
+        expect: false
+YAML
 ```
 
-Expected output:
+Expected result: `eval/cases/task-02.yaml` references `eval/cases/task-02.mov`, and the case is ready for timestamp and expectation edits.
 
-```text
-Created case: /absolute/path/to/eval/cases/task-02.yaml
-Video: /absolute/path/to/eval/cases/task-02.mov
-Eval: /absolute/path/to/eval
-```
-
-Notes: `init-case` copies the source video next to the case YAML when the source video is outside the eval directory. If the source video is already inside the eval directory, the generated YAML references it in place. Use `--force` only when you intentionally want to overwrite the case YAML or copied video.
+Notes: if you do not want to copy recordings into the eval directory, set `video:` to a path relative to the case YAML file, such as `../../../eval-videos/task-02.mov`. The shell redirection above replaces an existing YAML file, so edit intentionally when a case already exists.
 
 ### Validate Before an Expensive Run
 
@@ -467,7 +474,6 @@ Commands:
 | `run` | Decode frames, call the adapter, compare observations, apply gates, and report results. |
 | `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
 | `list-samples` | Print the expanded sample schedule. |
-| `init-case` | Create a starter case YAML and video placement. |
 
 ### `glasskit eval run`
 
@@ -535,27 +541,6 @@ Options:
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when samples can be listed and `2` when the eval suite cannot be loaded.
-
-### `glasskit eval init-case`
-
-Purpose: create starter YAML and place or reference the source video.
-
-```bash
-glasskit eval init-case --case task-01 --video recordings/task-01.mp4 --target step_1 --label "Step 1"
-```
-
-Options:
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `--case TEXT` | Required | Case filename stem. Must be a single filename stem without `.yaml`, `.yml`, or path separators. |
-| `--video PATH` | Required | Source video file. Must exist and use a supported video suffix. |
-| `--target TEXT` | Required | Initial target id. |
-| `--eval-dir PATH` | `eval` | Eval directory. |
-| `--label TEXT` | None | Optional label for the initial target. |
-| `--force` | `false` | Overwrite existing case YAML or copied video. |
-
-Exit behavior: exits `0` when files are created and `2` when initialization fails.
 
 ## Configuration
 
@@ -658,7 +643,7 @@ Human output is printed with Rich tables to stdout. JSON output is written only 
 | ---: | --- | --- |
 | `0` | Command succeeded. For `run`, every gate passed. | No action needed. |
 | `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate table, fix the eval, adapter, or quality threshold, then rerun. |
-| `2` | CLI usage, setup, config, video, adapter load, adapter runtime, or initialization error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter errors recorded instead of aborting. |
+| `2` | CLI usage, setup, config, video, adapter load, or adapter runtime error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter errors recorded instead of aborting. |
 
 ## Errors and Troubleshooting
 
@@ -680,7 +665,7 @@ Common failures:
 | Message or Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
-| `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Create a case with `init-case` or add YAML files under `cases/`. |
+| `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add YAML files under `cases/` and reference videos from them. |
 | `no eval cases found` | No `.yaml` files exist under `cases/`, or `--case` does not match a filename stem. | Check the case filename and omit `.yaml` from `--case`. |
 | `invalid schema` | YAML shape, field name, type, or value is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
