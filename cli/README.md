@@ -8,9 +8,9 @@ The current command family is `glasskit eval`.
 
 ## Why Use This?
 
-Smart-glasses apps often guide a wearer through a task by watching the live camera feed, deciding how the task is going, and responding with the next instruction or a correction.
+Smart-glasses apps often guide a wearer through a task. They watch the live camera feed, track workflow progress, and provide the next instruction or correction when it is useful.
 
-These apps are hard to test manually because every prompt, model, parser, or app logic change can mean repeating the same physical workflow. `glasskit eval` lets you record the workflow once, label the expected moments, and replay the same checks whenever the app changes.
+These apps are hard to test manually because every prompt, model, or app logic change can mean repeating the same physical workflow. With `glasskit eval`, you provide a workflow recording, label the expected moments, and replay the same checks whenever the app changes.
 
 Use it when you want a reliable way to test the vision path users depend on and enforce quality gates in CI.
 
@@ -91,7 +91,7 @@ A sample is one labeled timestamp, or one timestamp expanded from a range. Each 
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Because model-based checks may not reach 100%, gates are configurable so you can set the right bar for CI.
+A gate is a pass/fail policy such as `min_pass_rate` or `max_failures`. Failed comparisons are reported even without gates, but they do not make `glasskit eval run` exit nonzero unless a gate fails. Because model-based checks may not always reach 100%, gates are configurable so you can set the right bar for CI.
 
 ## Common Workflows
 
@@ -715,5 +715,7 @@ Default tests are designed to run offline with committed synthetic video fixture
 
 ## Support
 
-- Join our Discord server for questions and discussion: https://discord.gg/v5ayGKhPNP
-- Report bugs and feature requests: https://github.com/RealComputer/GlassKit/issues
+Questions, bug reports, feature requests, and pull requests are welcome. Use whichever path is easiest:
+
+- Discord: https://discord.gg/v5ayGKhPNP
+- GitHub issues and pull requests: https://github.com/RealComputer/GlassKit
