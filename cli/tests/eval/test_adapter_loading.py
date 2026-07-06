@@ -46,6 +46,10 @@ def test_file_adapter_can_import_app_root_modules(
     asyncio.run(_run_app_root_import_test(tmp_path, monkeypatch))
 
 
+def test_file_adapter_path_may_contain_colons(tmp_path: Path) -> None:
+    asyncio.run(_run_colon_path_adapter_test(tmp_path))
+
+
 async def _run_import_path_factory_adapter_test(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -114,6 +118,32 @@ def create_evaluator(config):
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
     assert result is True
+
+
+async def _run_colon_path_adapter_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "repo:with-colon" / "eval"
+    eval_dir.mkdir(parents=True)
+    adapter_path = eval_dir / "adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate(self, sample, target):
+        return target.id
+
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    evaluator = await load_evaluator(
+        f"{adapter_path}:create_evaluator",
+        AdapterConfig(eval_dir=eval_dir),
+    )
+
+    result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
+    assert result == "step_1"
 
 
 def _without_import_paths(paths: list[str], root: Path) -> list[str]:

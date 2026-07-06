@@ -54,7 +54,7 @@ def _load_target(
         raise AdapterLoadError(
             f"adapter must be '<module-or-file>:<callable>', got {adapter_target!r}"
         )
-    module_ref, object_ref = adapter_target.split(":", 1)
+    module_ref, object_ref = adapter_target.rsplit(":", 1)
     module_ref = module_ref.strip()
     object_ref = object_ref.strip()
     if not module_ref or not object_ref:
