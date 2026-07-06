@@ -54,8 +54,6 @@ thresholds:
 YAML
 ```
 
-The `video:` path is relative to `eval/cases/task-01.yaml`, so it walks back up to the sibling `recordings/` directory.
-
 Create `eval/adapter.py` with a placeholder evaluator so you can prove the eval wiring works before connecting a model pipeline:
 
 ```python
