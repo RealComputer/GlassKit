@@ -396,6 +396,8 @@ Evaluator methods:
 | `evaluate_many(samples, target)` | No | Called once per target when present. Must return exactly one JSON-like observation for each input sample in the same order. |
 | `close()` | No | Called after the run or validation adapter check. May be sync or async. |
 
+Implement `evaluate_many` only when batching samples for a target is more efficient, such as sharing model context or sending multiple frames in one backend request. Otherwise, implement `evaluate`; `glasskit eval` will call it once per sample.
+
 Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
 ```python
