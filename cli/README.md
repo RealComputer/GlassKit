@@ -231,7 +231,7 @@ targets:
   step_1:
     label: "Step 1"
     config:
-      prompt_id: origami.step_1
+      prompt_id: workflow.step_1
       reference_image: assets/step_1.png
     samples:
       - range: [0.0, 6.8]
@@ -279,7 +279,7 @@ workflow:
   targets:
     - id: step_1
       app_step_id: 123
-      prompt_id: origami.step_1
+      prompt_id: workflow.step_1
 targets:
   step_1:
     config:
