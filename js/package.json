@@ -1,6 +1,6 @@
 {
   "name": "@glasskit.ai/create",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "WIP create package for GlassKit starter projects",
   "type": "module",
   "license": "MIT",
