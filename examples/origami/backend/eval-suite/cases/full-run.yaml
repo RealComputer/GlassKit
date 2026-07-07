@@ -1,0 +1,50 @@
+video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
+targets:
+  step_1:
+    samples:
+      - range: [0.0, 49.0]
+        expect: false
+      - range: [49.0, 51.0]
+        expect: true
+
+  step_2:
+    samples:
+      - range: [64.0, 113.0]
+        expect: false
+      - range: [113.0, 117.0]
+        expect: true
+
+  step_3:
+    samples:
+      - range: [117.0, 151.0]
+        expect: false
+      - range: [151.0, 153.0]
+        expect: true
+
+  step_4:
+    samples:
+      - range: [164.0, 194.0]
+        expect: false
+      - range: [194.0, 195.0]
+        expect: true
+
+  step_5:
+    samples:
+      - range: [195.0, 212.0]
+        expect: false
+      - range: [212.0, 215.0]
+        expect: true
+
+  step_6:
+    samples:
+      - range: [215.0, 247.0]
+        expect: false
+      - range: [247.0, 248.0]
+        expect: true
+
+  step_7:
+    samples:
+      - range: [248.0, 271.0]
+        expect: false
+      - range: [290.0, 299.5]
+        expect: true
