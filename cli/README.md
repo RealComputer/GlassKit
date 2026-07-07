@@ -154,12 +154,12 @@ Goal: run a focused eval and print every sample result.
 Command:
 
 ```bash
-uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json tmp/eval-results.json --artifacts-dir tmp/eval-artifacts
+uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json eval/runs/eval-results.json --artifacts-dir eval/runs/artifacts
 ```
 
 Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
 
-Notes: `--keep-going` records adapter and comparison errors as sample results instead of aborting on the first error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples.
+Notes: `--keep-going` records adapter and comparison errors as sample results instead of aborting on the first error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
 ### Enforce CI Quality Gates
 
@@ -168,7 +168,7 @@ Goal: make the command fail when quality drops below your threshold.
 Command:
 
 ```bash
-uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json tmp/eval-results.json
+uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/eval-results.json
 ```
 
 Expected behavior: the process exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors that abort the run.
@@ -473,7 +473,7 @@ Commands:
 Purpose: execute eval samples and apply quality gates.
 
 ```bash
-glasskit eval run --case task-01 --output-json tmp/eval-results.json
+glasskit eval run --case task-01 --output-json eval/runs/eval-results.json
 ```
 
 Options:
@@ -490,7 +490,7 @@ Options:
 | `--keep-going` | `false` | Record adapter or comparison errors as sample results and continue. |
 | `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
-| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/.glasskit-artifacts` when this is omitted. |
+| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/runs` when this is omitted. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
@@ -554,7 +554,7 @@ Default values at a glance:
 | `targets.<id>.config` | Empty object. The final adapter target config also includes matching extra metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | Empty object unless `--adapter-config` is provided. |
-| Failure artifacts | Saved only with `--save-failures`; default directory is `<eval-dir>/.glasskit-artifacts/failures/`. |
+| Failure artifacts | Saved only with `--save-failures`; default directory is `<eval-dir>/runs/failures/`. |
 
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:
 
@@ -601,7 +601,7 @@ uv run --env-file .env glasskit eval run
 
 Human output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Typer argument parsing errors may print usage and error text to stderr.
 
-`glasskit eval run --output-json tmp/eval-results.json` writes a JSON file with this shape:
+`glasskit eval run --output-json eval/runs/eval-results.json` writes a JSON file with this shape:
 
 ```json
 {
@@ -647,7 +647,7 @@ Human output is printed with Rich tables to stdout. JSON output is written only 
 }
 ```
 
-`--save-failures` writes artifacts for non-passing sample results. The default location is `<eval-dir>/.glasskit-artifacts/failures/` unless `--artifacts-dir` is provided. Each saved result gets a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
+`--save-failures` writes artifacts for non-passing sample results. The default location is `<eval-dir>/runs/failures/` unless `--artifacts-dir` is provided. Each saved result gets a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
 ## Exit Codes
 

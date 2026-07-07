@@ -326,7 +326,7 @@ def _save_failure_artifacts(
     options: RunOptions,
     eval_dir: Path,
 ) -> SampleResult:
-    artifacts_dir = options.artifacts_dir or (eval_dir / ".glasskit-artifacts")
+    artifacts_dir = options.artifacts_dir or (eval_dir / "runs")
     failures_dir = artifacts_dir / "failures"
     stem = (
         f"{result.case_name}_{result.target_id}_"

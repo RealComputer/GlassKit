@@ -25,6 +25,12 @@ def test_runner_saves_failure_artifacts_for_committed_fixture(
     asyncio.run(_run_committed_fixture_artifact_test(tmp_path))
 
 
+def test_runner_saves_failure_artifacts_in_eval_runs_by_default(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_default_failure_artifact_dir_test(tmp_path))
+
+
 def test_runner_applies_suite_level_per_target_gates(tmp_path: Path) -> None:
     asyncio.run(_run_suite_per_target_gate_test(tmp_path))
 
@@ -124,6 +130,58 @@ def create_evaluator(config):
         assert result.artifact_json is not None
         assert Path(result.artifact_image).exists()
         assert Path(result.artifact_json).exists()
+
+
+async def _run_default_failure_artifact_dir_test(tmp_path: Path) -> None:
+    suite_dir = tmp_path / "eval"
+    cases_dir = suite_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [False for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return False
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=suite_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            save_failures=True,
+        )
+    )
+
+    assert report.failed_count == 1
+    result = report.results[0]
+    assert result.artifact_image is not None
+    assert result.artifact_json is not None
+    assert Path(result.artifact_image).parent == suite_dir / "runs" / "failures"
+    assert Path(result.artifact_json).parent == suite_dir / "runs" / "failures"
+    assert Path(result.artifact_image).exists()
+    assert Path(result.artifact_json).exists()
 
 
 async def _run_suite_per_target_gate_test(tmp_path: Path) -> None:
