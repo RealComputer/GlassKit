@@ -673,7 +673,7 @@ Common failures:
 | --- | --- | --- |
 | `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
 | `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add YAML files under `cases/` and reference videos from them. |
-| `no eval cases found` | No `.yaml` files exist under `cases/`, or `--case` does not match a filename stem. | Check the case filename and omit `.yaml` from `--case`. |
+| `no eval cases found` | No YAML files exist under `cases/`, or `--case` does not match a filename stem. | Check the case filename and omit `.yaml` from `--case`. |
 | `invalid schema` | YAML shape, field name, type, or value is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
