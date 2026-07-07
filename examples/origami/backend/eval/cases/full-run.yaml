@@ -1,6 +1,10 @@
 video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
+description: "Full origami workflow recording with expected incomplete/complete windows for each fold-check step."
+sampling:
+  every_s: 0.5
 targets:
   step_1:
+    label: "Step 1"
     samples:
       - range: [0.0, 49.0]
         expect: false
@@ -8,6 +12,7 @@ targets:
         expect: true
 
   step_2:
+    label: "Step 2"
     samples:
       - range: [64.0, 113.0]
         expect: false
@@ -15,6 +20,7 @@ targets:
         expect: true
 
   step_3:
+    label: "Step 3"
     samples:
       - range: [117.0, 151.0]
         expect: false
@@ -22,6 +28,7 @@ targets:
         expect: true
 
   step_4:
+    label: "Step 4"
     samples:
       - range: [164.0, 194.0]
         expect: false
@@ -29,6 +36,7 @@ targets:
         expect: true
 
   step_5:
+    label: "Step 5"
     samples:
       - range: [195.0, 212.0]
         expect: false
@@ -36,6 +44,7 @@ targets:
         expect: true
 
   step_6:
+    label: "Step 6"
     samples:
       - range: [215.0, 247.0]
         expect: false
@@ -43,6 +52,7 @@ targets:
         expect: true
 
   step_7:
+    label: "Step 7"
     samples:
       - range: [248.0, 271.0]
         expect: false

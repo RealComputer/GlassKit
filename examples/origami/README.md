@@ -104,17 +104,17 @@ The backend includes a `glasskit eval` suite under `backend/eval/`. Its default 
 
 Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, keeping generated MP4 files outside the repository, and labeling stable timestamp ranges in `backend/eval/cases/*.yaml` with `video:` paths relative to the case file.
 
-Run evals locally with the monorepo CLI:
+Run evals locally from `backend/` with the published CLI package:
 
 ```bash
 cd backend
 uv run \
-  --with-editable ../../../cli \
+  --with glasskit.ai \
   --env-file .env \
   glasskit eval run
 ```
 
-For projects outside this repository, install and run the published `glasskit.ai` package instead of using the monorepo `--with-editable ../../../cli` path. See the [CLI README](../../cli/README.md) for details.
+The committed `full-run` case expects the companion recordings directory at `../GlassKit_origami-recordings` relative to this repository checkout. See the [CLI README](../../cli/README.md) for details about the eval file format and command options.
 
 ## Vision Path Comparison
 
