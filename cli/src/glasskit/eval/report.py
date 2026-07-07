@@ -22,7 +22,8 @@ class ConsoleReporter:
     def on_case_start(self, case: EvalCase, sample_count: int) -> None:
         self.console.print(
             f"[bold]Case[/bold] {case.name} "
-            f"({sample_count} samples, video={case.video_path.name})"
+            f"({sample_count} samples, video={case.video_path.name})",
+            highlight=False,
         )
 
     def on_target_start(
@@ -30,7 +31,10 @@ class ConsoleReporter:
     ) -> None:
         target_label = _target_label_for_case(case, target_id)
         target_name = escape(_format_target_name(target_id, target_label))
-        self.console.print(f"  target {target_name}: {sample_count} samples")
+        self.console.print(
+            f"  target {target_name}: {sample_count} samples",
+            highlight=False,
+        )
 
     def on_result(self, result: SampleResult) -> None:
         if result.status == "passed" and not self.verbose:
@@ -42,7 +46,8 @@ class ConsoleReporter:
             f"@{result.timestamp_s:g}s "
             f"expected={_short(result.expected)} "
             f"observed={_short(result.observed_value)} "
-            f"reason={result.reason}"
+            f"reason={result.reason}",
+            highlight=False,
         )
 
 
@@ -54,13 +59,14 @@ def print_validation_report(
         suite_name = str(report.suite.path) if report.suite is not None else "<none>"
         sample_count = len(report.suite.samples) if report.suite is not None else 0
         console.print(
-            f"[green]Validation passed[/green]: {suite_name} ({sample_count} samples)"
+            f"[green]Validation passed[/green]: {suite_name} ({sample_count} samples)",
+            highlight=False,
         )
         return
-    console.print("[red]Validation failed[/red]")
+    console.print("[red]Validation failed[/red]", highlight=False)
     for issue in report.issues:
         location = f"{issue.path}: " if issue.path else ""
-        console.print(f"- {location}{issue.message}")
+        console.print(f"- {location}{issue.message}", highlight=False)
 
 
 def print_sample_schedule(suite: EvalSuite, console: Console | None = None) -> None:
@@ -89,17 +95,18 @@ def print_run_summary(
 ) -> None:
     console = console or Console()
     status = "[green]passed[/green]" if report.success else "[red]failed[/red]"
-    console.print(f"\n[bold]Eval[/bold]: {report.eval_dir}")
-    console.print(f"Cases: {len(report.case_names)}")
+    console.print(f"\n[bold]Eval[/bold]: {report.eval_dir}", highlight=False)
+    console.print(f"Cases: {len(report.case_names)}", highlight=False)
     console.print(
         "Samples: "
         f"{report.evaluated_count} evaluated, "
         f"{report.passed_count} passed, "
         f"{report.failed_count} failed, "
-        f"{report.error_count} errors"
+        f"{report.error_count} errors",
+        highlight=False,
     )
-    console.print(f"Pass rate: {report.pass_rate:.1%} ({status})")
-    console.print(f"Duration: {_format_duration(report.duration_s)}")
+    console.print(f"Pass rate: {report.pass_rate:.1%} ({status})", highlight=False)
+    console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
 
     if report.gate_results:
         gate_table = Table(title="Gates")

@@ -74,6 +74,29 @@ def test_console_reporter_uses_target_label_with_id() -> None:
     assert "Step 1 (step_1) @0s" in output
 
 
+def test_console_reporter_does_not_auto_highlight_values() -> None:
+    buffer = StringIO()
+    console = Console(
+        file=buffer,
+        force_terminal=True,
+        color_system="standard",
+        no_color=False,
+        width=120,
+    )
+    reporter = ConsoleReporter(verbose=True, console=console)
+
+    reporter.on_case_start(_case(), 513)
+    reporter.on_target_start(_case(), "step_1", 102)
+    reporter.on_result(_result())
+
+    assert buffer.getvalue() == (
+        "\x1b[1mCase\x1b[0m case-001 (513 samples, video=video.mp4)\n"
+        "  target Step 1 (step_1): 102 samples\n"
+        "    \x1b[31mFAILED\x1b[0m Step 1 (step_1) @0s "
+        "expected=True observed=False reason=mismatch\n"
+    )
+
+
 def test_table_reports_render_markup_like_target_labels_literally() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
