@@ -71,6 +71,8 @@ uv run glasskit eval run
 
 Expected result: `run` prints case progress, a summary, gates, and a per-target table.
 
+For a real app-backed setup, see the [Origami backend example](https://github.com/RealComputer/GlassKit/tree/main/examples/origami/backend). It shows `glasskit eval` wired into an app adapter instead of the placeholder evaluator above.
+
 ## Core Concepts
 
 An eval directory is the runnable test set. By default, `glasskit eval` uses `eval/` in the current working directory.
@@ -418,12 +420,14 @@ Sample fields passed to the evaluator:
 
 | Field | Description |
 | --- | --- |
-| `image` | Decoded RGB `PIL.Image.Image` for the requested timestamp. |
-| `timestamp_s` | Requested sample timestamp in seconds from the start of the clip. |
-| `frame_index` | Decoded video frame index chosen for that timestamp. |
+| `image` | Decoded RGB `PIL.Image.Image` for the nearest decoded frame at the requested timestamp. |
+| `timestamp_s` | Requested sample timestamp in seconds from the start of the clip, from `at` or the expanded `range`. |
+| `frame_index` | Zero-based decoded video frame index chosen for that timestamp. |
 | `sample_index` | Case-local sample index. |
 | `video_path` | Source video path as a string. |
 | `case_name` | Case YAML filename stem. |
+
+Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, GlassKit uses each decoded frame's presentation time when available; if a video lacks frame timestamps, it falls back to `frame_index / average_rate`.
 
 Target fields passed to the evaluator:
 
