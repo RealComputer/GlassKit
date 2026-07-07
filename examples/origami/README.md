@@ -100,9 +100,9 @@ The two step-image sets are byte-identical copies kept in both locations because
 
 ### Recorded-Video Fold-Check Evals
 
-The backend includes a `glasskit eval` adapter at `backend/eval_adapter.py`. It evaluates recorded camera-input videos, composes the same reference-image header used by the live fold-check path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with `expected.yaml`.
+The backend includes a `glasskit eval` suite under `backend/eval/`. Its default adapter at `backend/eval/adapter.py` evaluates recorded camera-input videos, composes the same reference-image header used by the live fold-check path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with the case YAML expectations.
 
-Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, copying a generated MP4 from `backend/debug/fold-check-inputs` into an `eval-suite` case directory, and labeling stable timestamp ranges in `expected.yaml`.
+Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, keeping generated MP4 files outside the repository, and labeling stable timestamp ranges in `backend/eval/cases/*.yaml` with `video:` paths relative to the case file.
 
 Run evals locally with the monorepo CLI:
 
@@ -111,10 +111,7 @@ cd backend
 uv run \
   --with-editable ../../../cli \
   --env-file .env \
-  glasskit eval run \
-  --adapter eval_adapter.py:create_evaluator \
-  --suite eval-suite \
-  --min-pass-rate 0.9
+  glasskit eval run
 ```
 
 For projects outside this repository, install and run the published `glasskit.ai` package instead of using the monorepo `--with-editable ../../../cli` path. See the [CLI README](../../cli/README.md) for details.
