@@ -211,22 +211,12 @@ class RawThresholds(_SchemaModel):
 
 
 class RawCaseYaml(_SchemaModel):
-    version: int = 1
     video: str
     description: str | None = None
     sampling: RawSampling = Field(default_factory=RawSampling)
     workflow: RawWorkflow = Field(default_factory=RawWorkflow)
     targets: dict[str, RawTarget]
     thresholds: RawThresholds = Field(default_factory=RawThresholds)
-
-    @field_validator("version", mode="before")
-    @classmethod
-    def _validate_version(cls, value: Any) -> int:
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError("must be 1")
-        if value != 1:
-            raise ValueError("must be 1")
-        return value
 
     @field_validator("video", "description")
     @classmethod

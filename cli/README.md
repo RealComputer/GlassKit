@@ -42,7 +42,6 @@ Create the eval directory and write a case YAML that points at the recording:
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-01.yaml <<'YAML'
-version: 1
 video: "../../../recordings/task-01.mp4"
 targets:
   step_1:
@@ -99,7 +98,6 @@ Commands:
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-02.yaml <<'YAML'
-version: 1
 video: "../../../recordings/task-02.mov"
 description: "Replace this note with what task-02 should cover."
 sampling:
@@ -230,7 +228,6 @@ You can also keep small synthetic fixtures next to the case YAML and reference t
 Here is a representative case file:
 
 ```yaml
-version: 1
 video: "task-01.mp4"
 description: "Fold step 1 should be detected after the crease is completed."
 sampling:
@@ -269,7 +266,6 @@ Case fields:
 
 | Field | Required | Description |
 | --- | ---: | --- |
-| `version` | No | Must be `1` when present. Defaults to `1`. |
 | `video` | Yes | Video path resolved relative to the case YAML directory. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
@@ -550,7 +546,6 @@ Default values at a glance:
 | Eval directory | `eval` from the command working directory. |
 | `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
-| Case `version` | `1`. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
 | Sample `field` | Compares the whole adapter observation. |

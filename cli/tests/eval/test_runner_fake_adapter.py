@@ -141,7 +141,6 @@ thresholds:
     )
     (cases_dir / "case-001.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
@@ -205,7 +204,6 @@ thresholds:
     )
     (cases_dir / "case-001.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
@@ -217,7 +215,6 @@ targets:
     )
     (cases_dir / "case-002.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_2:
@@ -266,7 +263,6 @@ async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
@@ -357,7 +353,6 @@ async def _run_close_error_masking_test(tmp_path: Path) -> None:
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:
@@ -403,7 +398,6 @@ async def _run_malformed_evaluate_many_return_test(tmp_path: Path) -> None:
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
-version: 1
 video: "{TWO_STATE_VIDEO}"
 targets:
   step_1:

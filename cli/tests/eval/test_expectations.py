@@ -12,7 +12,6 @@ def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         sampling:
           every_s: 0.5
@@ -38,7 +37,6 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_3:
@@ -64,7 +62,6 @@ def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -90,7 +87,6 @@ def test_overlapping_ranges_are_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -110,7 +106,6 @@ def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -130,7 +125,6 @@ def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         sampling:
           every_s: false
@@ -163,7 +157,6 @@ def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -
     eval_dir = _eval_dir(
         tmp_path,
         f"""
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -180,7 +173,6 @@ def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -200,7 +192,6 @@ def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
@@ -218,7 +209,6 @@ def test_video_field_is_required(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         targets:
           step_1:
             samples:
@@ -235,7 +225,6 @@ def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
-        version: 1
         video: video.mp4
         targets:
           step_1:
