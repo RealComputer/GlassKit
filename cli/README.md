@@ -291,7 +291,7 @@ Sample times must be finite and nonnegative. Ranges must have `end` greater than
 
 ## Comparison Reference
 
-The adapter observation and the sample `expect` value must both be JSON-like. When `field` is present, GlassKit extracts that nested value first and compares the extracted value against `expect`.
+The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return the value you want compared and omit `field`. Use `field` when the adapter already returns a structured observation worth preserving for JSON output or saved failure artifacts, such as `matches`, `confidence`, `reason`, or detected classes in one object. When `field` is present, GlassKit extracts that nested value first and compares the extracted value against `expect`.
 
 Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with a `missing field: ...` reason.
 
