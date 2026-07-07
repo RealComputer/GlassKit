@@ -609,7 +609,7 @@ uv run --env-file .env glasskit eval run
 
 ## Output Formats
 
-Human output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Typer argument parsing errors may print usage and error text to stderr.
+Human output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout.
 
 `glasskit eval run --output-json eval/runs/results.json` writes a JSON file with this shape:
 
