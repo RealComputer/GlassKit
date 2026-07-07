@@ -26,6 +26,8 @@ from .schemas import (
 )
 
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
+YAML_SUFFIXES = (".yaml", ".yml")
+EVAL_CONFIG_NAMES = ("config.yaml", "config.yml")
 CASES_DIR_NAME = "cases"
 _EPSILON = 1e-9
 
@@ -68,9 +70,15 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
 
 
 def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
-    path = eval_dir / "config.yaml"
-    if not path.exists():
+    paths = [
+        eval_dir / name for name in EVAL_CONFIG_NAMES if (eval_dir / name).exists()
+    ]
+    if not paths:
         return Thresholds()
+    if len(paths) > 1:
+        names = ", ".join(path.name for path in paths)
+        raise EvalConfigError(f"multiple eval config files found: {names}; keep one")
+    path = paths[0]
     raw = parse_eval_config_yaml(_load_yaml_mapping(path), label=str(path))
     return _thresholds_from_raw(raw.thresholds)
 
@@ -84,18 +92,32 @@ def _discover_case_paths(eval_dir: Path, case_filter: str | None) -> list[Path]:
 
     if case_filter is not None:
         _validate_case_filter(case_filter)
-        candidates = [cases_dir / f"{case_filter}.yaml"]
+        candidates = [cases_dir / f"{case_filter}{suffix}" for suffix in YAML_SUFFIXES]
         candidates = [path for path in candidates if path.exists()]
     else:
         candidates = sorted(
             child
             for child in cases_dir.iterdir()
-            if child.is_file() and child.suffix == ".yaml"
+            if child.is_file() and child.suffix.lower() in YAML_SUFFIXES
         )
     if not candidates:
         suffix = f" matching case {case_filter!r}" if case_filter else ""
         raise EvalConfigError(f"no eval cases found under {cases_dir}{suffix}")
+    _validate_unique_case_stems(candidates)
     return candidates
+
+
+def _validate_unique_case_stems(case_paths: list[Path]) -> None:
+    by_stem: dict[str, list[Path]] = {}
+    for path in case_paths:
+        by_stem.setdefault(path.stem, []).append(path)
+    duplicates = {stem: paths for stem, paths in by_stem.items() if len(paths) > 1}
+    if duplicates:
+        details = "; ".join(
+            f"{stem!r}: {', '.join(path.name for path in paths)}"
+            for stem, paths in sorted(duplicates.items())
+        )
+        raise EvalConfigError(f"multiple eval case files share a name: {details}")
 
 
 def _validate_case_filter(case_filter: str) -> None:

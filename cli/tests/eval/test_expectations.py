@@ -221,6 +221,72 @@ def test_video_field_is_required(tmp_path: Path) -> None:
         load_eval_suite(eval_dir)
 
 
+def test_yml_case_files_are_discovered(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+        case_suffix=".yml",
+    )
+
+    suite = load_eval_suite(eval_dir)
+
+    assert [case.name for case in suite.cases] == ["case-001"]
+
+
+def test_case_filter_matches_yml_case_file(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+        case_suffix=".yml",
+    )
+
+    suite = load_eval_suite(eval_dir, case_filter="case-001")
+
+    assert suite.cases[0].path.name == "case-001.yml"
+
+
+def test_duplicate_yaml_case_stems_are_invalid(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "cases" / "case-001.yml").write_text(
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(EvalConfigError, match="multiple eval case files"):
+        load_eval_suite(eval_dir)
+
+
 def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
@@ -252,10 +318,54 @@ def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
     assert suite.thresholds.per_target["step_1"].min_pass_rate == 0.95
 
 
-def _eval_dir(tmp_path: Path, case_yaml: str) -> Path:
+def test_config_yml_loads_eval_thresholds(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "config.yml").write_text(
+        """
+        thresholds:
+          min_pass_rate: 0.9
+        """,
+        encoding="utf-8",
+    )
+
+    suite = load_eval_suite(eval_dir)
+
+    assert suite.thresholds.min_pass_rate == 0.9
+
+
+def test_duplicate_eval_config_files_are_invalid(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "config.yaml").write_text("thresholds: {}\n", encoding="utf-8")
+    (eval_dir / "config.yml").write_text("thresholds: {}\n", encoding="utf-8")
+
+    with pytest.raises(EvalConfigError, match="multiple eval config files"):
+        load_eval_suite(eval_dir)
+
+
+def _eval_dir(tmp_path: Path, case_yaml: str, *, case_suffix: str = ".yaml") -> Path:
     eval_dir = tmp_path / "eval"
     cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "video.mp4").write_bytes(b"placeholder")
-    (cases_dir / "case-001.yaml").write_text(case_yaml, encoding="utf-8")
+    (cases_dir / f"case-001{case_suffix}").write_text(case_yaml, encoding="utf-8")
     return eval_dir
