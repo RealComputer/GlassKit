@@ -260,7 +260,7 @@ Case fields:
 | `video` | Yes | Video path resolved relative to the case YAML directory. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
-| `workflow.targets` | No | Optional advanced target metadata list for imported or generated workflow definitions. Prefer `targets.<id>.config` for hand-written eval metadata. |
+| `workflow.targets` | No | Optional advanced target metadata list for imported or generated workflow definitions. |
 | `targets` | Yes | Mapping of target id to target definition. Must contain at least one target. |
 | `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. Omitted keys create no gate for that key. |
 
