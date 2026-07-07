@@ -434,7 +434,7 @@ Target fields passed to the evaluator:
 | `label` | Optional target label. |
 | `config` | Adapter-specific target metadata from `targets.<id>.config`, plus any matching optional metadata from `workflow.targets`. |
 
-Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys. Return the smallest stable value that answers the target.
+Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys.
 
 ## Command Reference
 
