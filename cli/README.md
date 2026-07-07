@@ -159,7 +159,7 @@ uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures -
 
 Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
 
-Note: `--keep-going` records adapter and comparison errors as sample results instead of aborting on the first error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
+Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
 ### Enforce CI Quality Gates
 
@@ -314,7 +314,7 @@ Supported comparison modes:
 | --- | --- |
 | `exact` | Observed value must equal `expect`. Booleans only match booleans. |
 | `numeric` | Observed and expected values must be numbers. `tolerance` defaults to `0.0`. |
-| `json_subset` | Every expected key and value must be present in the observed object. For arrays, each expected item must match at least one observed item. |
+| `json_subset` | Every expected key and value must be present in the observed object. For arrays, expected items are matched one-for-one against observed items, so duplicate expected items require duplicate observed matches. |
 | `set_equals` | Observed and expected arrays are compared as unordered JSON sets. |
 | `set_contains_any` | At least one expected array item must be present in the observed array. |
 | `set_contains_all` | Every expected array item must be present in the observed array. |
@@ -499,10 +499,10 @@ Options:
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
 | `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
 | `--max-failures INTEGER` | None | Run-level maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
-| `--keep-going` | `false` | Record adapter or comparison errors as sample results and continue. |
+| `--keep-going` | `false` | Record adapter evaluation or comparison errors as sample results and continue. |
 | `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
-| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/runs/failures/` when this is omitted. |
+| `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written under its `failures/` subdirectory; when omitted, they are written under `<eval-dir>/runs/failures/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
@@ -579,7 +579,7 @@ thresholds:
       min_pass_rate: 0.95
 ```
 
-All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate. Adapter runtime errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those errors are recorded as sample results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`.
+All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate. Adapter evaluation errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those sample-level errors are recorded as results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`. Adapter setup, loading, and close errors still abort the command.
 
 Threshold precedence:
 
@@ -659,7 +659,7 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 }
 ```
 
-`--save-failures` writes artifacts for non-passing sample results. The default location is `<eval-dir>/runs/failures/` unless `--artifacts-dir` is provided. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
+`--save-failures` writes artifacts for non-passing sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
 ## Exit Codes
 
@@ -667,7 +667,7 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 | ---: | --- | --- |
 | `0` | Command succeeded. For `run`, every gate passed. | No action needed. |
 | `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate table, fix the eval, adapter, or quality threshold, then rerun. |
-| `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter errors recorded instead of aborting. |
+| `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter evaluation errors recorded instead of aborting. |
 
 ## Errors and Troubleshooting
 
