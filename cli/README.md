@@ -227,15 +227,11 @@ video: "task-01.mp4"
 description: "Fold step 1 should be detected after the crease is completed."
 sampling:
   every_s: 0.5
-workflow:
-  targets:
-    - id: step_1
-      label: "Step 1"
-      prompt_id: origami.step_1
 targets:
   step_1:
     label: "Step 1"
     config:
+      prompt_id: origami.step_1
       reference_image: assets/step_1.png
     samples:
       - range: [0.0, 6.8]
@@ -264,7 +260,7 @@ Case fields:
 | `video` | Yes | Video path resolved relative to the case YAML directory. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
-| `workflow.targets` | No | Optional target metadata list. Each item needs `id`; `label` and extra keys are allowed. |
+| `workflow.targets` | No | Optional advanced target metadata list for imported or generated workflow definitions. Prefer `targets.<id>.config` for hand-written eval metadata. |
 | `targets` | Yes | Mapping of target id to target definition. Must contain at least one target. |
 | `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. Omitted keys create no gate for that key. |
 
@@ -273,8 +269,25 @@ Target fields:
 | Field | Required | Description |
 | --- | ---: | --- |
 | `label` | No | Display label for reports. |
-| `config` | No | Adapter-specific metadata for the target. Defaults to an empty object. Values override matching keys from `workflow.targets`. |
+| `config` | No | Adapter-specific metadata for the target. Use this as the default place for prompt ids, rubric ids, reference assets, confidence thresholds, or other target-specific settings. Defaults to an empty object. Values override matching keys from `workflow.targets`. |
 | `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
+
+Most evals should put adapter metadata directly under `targets.<id>.config`. `workflow.targets` is useful when an eval is generated from or synchronized with an app workflow manifest and workflow-owned metadata should stay separate from eval-owned samples, expectations, and per-case overrides. Each workflow target needs an `id`; `label` and extra metadata keys are allowed. Entries are matched by `id`, then merged into the adapter target config before `targets.<id>.config` is applied:
+
+```yaml
+workflow:
+  targets:
+    - id: step_1
+      app_step_id: 123
+      prompt_id: origami.step_1
+targets:
+  step_1:
+    config:
+      confidence_threshold: 0.85
+    samples:
+      - at: 8.0
+        expect: true
+```
 
 Sample block fields:
 
@@ -417,7 +430,7 @@ Target fields passed to the evaluator:
 | `id` | Target id from the case YAML file. |
 | `index` | Target's zero-based order in the case file. |
 | `label` | Optional target label. |
-| `config` | Merged metadata from `workflow.targets` and `targets.<id>.config`. |
+| `config` | Adapter-specific target metadata from `targets.<id>.config`, plus any matching optional metadata from `workflow.targets`. |
 
 Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys. Return the smallest stable value that answers the target.
 
@@ -546,7 +559,7 @@ Default values at a glance:
 | Sample `field` | Compares the whole adapter observation. |
 | Sample `compare.mode` | Inferred from `expect`: non-boolean numbers use `numeric`; booleans, strings, `null`, arrays, and objects use `exact`. |
 | Numeric `compare.tolerance` | `0.0`. |
-| `targets.<id>.config` | Empty object. The final adapter target config also includes matching extra metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
+| `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | Empty object unless `--adapter-config` is provided. |
 | Failure artifacts | Saved only with `--save-failures`; default directory is `<eval-dir>/runs/failures/`. |
@@ -579,7 +592,7 @@ Other precedence rules:
 | Area | Rule |
 | --- | --- |
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
-| Target metadata | `targets.<id>.config` overrides matching keys from `workflow.targets` metadata. |
+| Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
 | Adapter config | `--adapter-config` is independent of eval YAML and is passed only to the adapter factory. |
 
 ## Environment Variables
