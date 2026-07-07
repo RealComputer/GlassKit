@@ -500,7 +500,7 @@ Options:
 | `--keep-going` | `false` | Record adapter or comparison errors as sample results and continue. |
 | `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
-| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/runs` when this is omitted. |
+| `--artifacts-dir PATH` | None | Directory for generated artifacts. Failure artifacts default to `<eval-dir>/runs/failures/` when this is omitted. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |

@@ -34,8 +34,8 @@ def eval_run(
         typer.Option(
             "--adapter",
             help=(
-                "Adapter target, e.g. eval/adapter.py:create_evaluator. "
-                "Defaults to <eval-dir>/adapter.py:create_evaluator."
+                "Adapter target in module/file:callable form. Defaults to "
+                "adapter.py with create_evaluator in the eval dir."
             ),
         ),
     ] = None,
@@ -55,19 +55,36 @@ def eval_run(
     ] = None,
     min_pass_rate: Annotated[
         float | None,
-        typer.Option("--min-pass-rate", min=0.0, max=1.0),
+        typer.Option(
+            "--min-pass-rate",
+            min=0.0,
+            max=1.0,
+            help="Run-level pass-rate gate.",
+        ),
     ] = None,
     min_target_pass_rate: Annotated[
         float | None,
-        typer.Option("--min-target-pass-rate", min=0.0, max=1.0),
+        typer.Option(
+            "--min-target-pass-rate",
+            min=0.0,
+            max=1.0,
+            help="Uniform per-target pass-rate gate.",
+        ),
     ] = None,
     max_failures: Annotated[
         int | None,
-        typer.Option("--max-failures", min=0),
+        typer.Option(
+            "--max-failures",
+            min=0,
+            help="Run-level maximum failed comparisons.",
+        ),
     ] = None,
     keep_going: Annotated[
         bool,
-        typer.Option("--keep-going", help="Record adapter errors and continue."),
+        typer.Option(
+            "--keep-going",
+            help="Record adapter or comparison errors as results and continue.",
+        ),
     ] = False,
     verbose: Annotated[
         bool,
@@ -79,15 +96,28 @@ def eval_run(
     ] = None,
     artifacts_dir: Annotated[
         Path | None,
-        typer.Option("--artifacts-dir", help="Directory for generated artifacts."),
+        typer.Option(
+            "--artifacts-dir",
+            help=(
+                "Directory for generated artifacts. When omitted, --save-failures "
+                "writes under runs/failures in the eval dir."
+            ),
+        ),
     ] = None,
     save_failures: Annotated[
         bool,
-        typer.Option("--save-failures", help="Save failed sample frames and metadata."),
+        typer.Option(
+            "--save-failures",
+            help="Save failed or errored sample frames and per-result JSON.",
+        ),
     ] = False,
     max_failures_to_print: Annotated[
         int,
-        typer.Option("--max-failures-to-print", min=0),
+        typer.Option(
+            "--max-failures-to-print",
+            min=0,
+            help="Maximum non-passing results printed in the failures table.",
+        ),
     ] = 20,
     allow_empty: Annotated[
         bool,
