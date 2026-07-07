@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from .expectations import format_sample_schedule
@@ -26,7 +27,9 @@ class ConsoleReporter:
     def on_target_start(
         self, case: EvalCase, target_id: str, sample_count: int
     ) -> None:
-        self.console.print(f"  target {target_id}: {sample_count} samples")
+        target_label = _target_label_for_case(case, target_id)
+        target_name = escape(_format_target_name(target_id, target_label))
+        self.console.print(f"  target {target_name}: {sample_count} samples")
 
     def on_result(self, result: SampleResult) -> None:
         if result.status == "passed" and not self.verbose:
@@ -34,7 +37,8 @@ class ConsoleReporter:
         style = "green" if result.status == "passed" else "red"
         self.console.print(
             f"    [{style}]{result.status.upper()}[/{style}] "
-            f"{result.target_id} @{result.timestamp_s:g}s "
+            f"{escape(_format_target_name(result.target_id, result.target_label))} "
+            f"@{result.timestamp_s:g}s "
             f"expected={_short(result.expected)} "
             f"observed={_short(result.observed_value)} "
             f"reason={result.reason}"
@@ -66,7 +70,7 @@ def print_sample_schedule(suite: EvalSuite, console: Console | None = None) -> N
     for row in format_sample_schedule(suite):
         table.add_row(
             str(row["case"]),
-            str(row["target"]),
+            _format_target_name(str(row["target"]), row.get("target_label")),
             f"{row['timestamp_s']:g}s",
             _short(row["expected"]),
             str(row["mode"] or ""),
@@ -118,7 +122,13 @@ def print_run_summary(
         passed = sum(1 for result in target_results if result.status == "passed")
         total = len(target_results)
         pass_rate = passed / total if total else 0.0
-        target_table.add_row(target_id, f"{pass_rate:.1%}", str(passed), str(total))
+        target_label = _first_target_label(target_results)
+        target_table.add_row(
+            _format_target_name(target_id, target_label),
+            f"{pass_rate:.1%}",
+            str(passed),
+            str(total),
+        )
     console.print(target_table)
 
     failures = [result for result in report.results if result.status != "passed"]
@@ -137,7 +147,7 @@ def print_run_summary(
         for result in failures[:max_failures_to_print]:
             failure_table.add_row(
                 result.case_name,
-                result.target_id,
+                _format_target_name(result.target_id, result.target_label),
                 f"{result.timestamp_s:g}s",
                 result.status,
                 _short(result.expected),
@@ -152,6 +162,25 @@ def _group_by_target(results: list[SampleResult]) -> dict[str, list[SampleResult
     for result in results:
         grouped[result.target_id].append(result)
     return dict(sorted(grouped.items()))
+
+
+def _first_target_label(results: list[SampleResult]) -> str | None:
+    return next(
+        (result.target_label for result in results if result.target_label), None
+    )
+
+
+def _target_label_for_case(case: EvalCase, target_id: str) -> str | None:
+    return next(
+        (target.label for target in case.targets if target.id == target_id),
+        None,
+    )
+
+
+def _format_target_name(target_id: str, target_label: Any) -> str:
+    if not isinstance(target_label, str) or target_label == target_id:
+        return target_id
+    return f"{target_label} ({target_id})"
 
 
 def _short(value: Any) -> str:

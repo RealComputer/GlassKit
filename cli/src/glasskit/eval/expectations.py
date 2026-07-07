@@ -59,6 +59,7 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
                         "case": case.name,
                         "video": str(case.video_path),
                         "target": target.id,
+                        "target_label": target.label,
                         "timestamp_s": sample.timestamp_s,
                         "expected": sample.expected,
                         "field": sample.field,

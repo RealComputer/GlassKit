@@ -268,7 +268,7 @@ Target fields:
 
 | Field | Required | Description |
 | --- | ---: | --- |
-| `label` | No | Display label for reports. |
+| `label` | No | Human-facing target name shown in console reports and list-samples output alongside the stable target id, such as `Step 1 (step_1)`. |
 | `config` | No | Adapter-specific metadata for the target. Use this as the default place for prompt IDs, rubric IDs, reference assets, confidence thresholds, or other target-specific settings. Defaults to an empty object. Values override matching keys from `workflow.targets`. |
 | `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
 
