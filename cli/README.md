@@ -86,7 +86,7 @@ A sample is one labeled timestamp, or one timestamp expanded from a range. Each 
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
-A gate is a quality bar, such as a minimum pass rate or maximum failure count, that turns eval results into a pass/fail signal for CI.
+A gate is a quality bar, such as a minimum pass rate or maximum failure count, that turns eval results into a pass/fail signal for CI. Because model-based checks may not always reach 100%, gates let you choose the right bar for your app.
 
 ## Common Workflows
 
