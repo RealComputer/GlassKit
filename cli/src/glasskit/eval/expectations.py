@@ -71,7 +71,9 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
 
 def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
     paths = [
-        eval_dir / name for name in EVAL_CONFIG_NAMES if (eval_dir / name).exists()
+        child
+        for child in eval_dir.iterdir()
+        if child.is_file() and child.name in EVAL_CONFIG_NAMES
     ]
     if not paths:
         return Thresholds()
@@ -90,16 +92,16 @@ def _discover_case_paths(eval_dir: Path, case_filter: str | None) -> list[Path]:
     if not cases_dir.is_dir():
         raise EvalConfigError(f"eval cases path must be a directory: {cases_dir}")
 
+    discovered = sorted(
+        child
+        for child in cases_dir.iterdir()
+        if child.is_file() and child.suffix in YAML_SUFFIXES
+    )
     if case_filter is not None:
-        _validate_case_filter(case_filter)
-        candidates = [cases_dir / f"{case_filter}{suffix}" for suffix in YAML_SUFFIXES]
-        candidates = [path for path in candidates if path.exists()]
+        case_name = _normalize_case_filter(case_filter)
+        candidates = [path for path in discovered if path.stem == case_name]
     else:
-        candidates = sorted(
-            child
-            for child in cases_dir.iterdir()
-            if child.is_file() and child.suffix.lower() in YAML_SUFFIXES
-        )
+        candidates = discovered
     if not candidates:
         suffix = f" matching case {case_filter!r}" if case_filter else ""
         raise EvalConfigError(f"no eval cases found under {cases_dir}{suffix}")
@@ -120,14 +122,21 @@ def _validate_unique_case_stems(case_paths: list[Path]) -> None:
         raise EvalConfigError(f"multiple eval case files share a name: {details}")
 
 
+def _normalize_case_filter(case_filter: str) -> str:
+    _validate_case_filter(case_filter)
+    path = Path(case_filter)
+    if path.suffix in YAML_SUFFIXES:
+        return path.stem
+    return case_filter
+
+
 def _validate_case_filter(case_filter: str) -> None:
     if (
         not case_filter
         or case_filter in {".", ".."}
         or Path(case_filter).name != case_filter
-        or case_filter.endswith((".yaml", ".yml"))
     ):
-        raise EvalConfigError("case must be a filename stem under cases/")
+        raise EvalConfigError("case must be a filename or stem under cases/")
 
 
 def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:

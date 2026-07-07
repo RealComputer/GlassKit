@@ -259,6 +259,61 @@ def test_case_filter_matches_yml_case_file(tmp_path: Path) -> None:
     assert suite.cases[0].path.name == "case-001.yml"
 
 
+def test_case_filter_accepts_yaml_filename(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    suite = load_eval_suite(eval_dir, case_filter="case-001.yaml")
+
+    assert suite.cases[0].name == "case-001"
+
+
+def test_case_filter_accepts_yml_filename(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+        case_suffix=".yml",
+    )
+
+    suite = load_eval_suite(eval_dir, case_filter="case-001.yml")
+
+    assert suite.cases[0].name == "case-001"
+
+
+def test_uppercase_yaml_case_suffix_is_ignored(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+        case_suffix=".YML",
+    )
+
+    with pytest.raises(EvalConfigError, match="no eval cases found"):
+        load_eval_suite(eval_dir)
+
+
 def test_duplicate_yaml_case_stems_are_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
@@ -341,6 +396,31 @@ def test_config_yml_loads_eval_thresholds(tmp_path: Path) -> None:
     suite = load_eval_suite(eval_dir)
 
     assert suite.thresholds.min_pass_rate == 0.9
+
+
+def test_uppercase_yaml_config_suffix_is_ignored(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "config.YML").write_text(
+        """
+        thresholds:
+          min_pass_rate: 0.9
+        """,
+        encoding="utf-8",
+    )
+
+    suite = load_eval_suite(eval_dir)
+
+    assert suite.thresholds.min_pass_rate is None
 
 
 def test_duplicate_eval_config_files_are_invalid(tmp_path: Path) -> None:

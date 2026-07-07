@@ -45,7 +45,7 @@ def eval_run(
     ] = DEFAULT_EVAL_DIR,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only run one case by filename stem."),
+        typer.Option("--case", help="Only run one case by filename or stem."),
     ] = None,
     adapter_config: Annotated[
         Path | None,
@@ -139,7 +139,7 @@ def eval_validate(
     ] = None,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only validate one case by filename stem."),
+        typer.Option("--case", help="Only validate one case by filename or stem."),
     ] = None,
     adapter_config: Annotated[
         Path | None,
@@ -171,7 +171,7 @@ def eval_list_samples(
     ] = DEFAULT_EVAL_DIR,
     case: Annotated[
         str | None,
-        typer.Option("--case", help="Only list one case by filename stem."),
+        typer.Option("--case", help="Only list one case by filename or stem."),
     ] = None,
     allow_empty: Annotated[
         bool,

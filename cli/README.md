@@ -477,7 +477,7 @@ Options:
 | --- | --- | --- |
 | `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
 | `--eval-dir PATH` | `eval` | Eval directory. |
-| `--case TEXT` | All cases | Only run one case by filename stem. Do not include `.yaml` or path separators. |
+| `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
 | `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
@@ -506,7 +506,7 @@ Options:
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
-| `--case TEXT` | All cases | Only validate one case by filename stem. |
+| `--case TEXT` | All cases | Only validate one case by filename or stem. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
@@ -525,7 +525,7 @@ Options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
-| `--case TEXT` | All cases | Only list one case by filename stem. |
+| `--case TEXT` | All cases | Only list one case by filename or stem. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when samples can be listed and `2` when the eval suite cannot be loaded.
@@ -673,7 +673,7 @@ Common failures:
 | --- | --- | --- |
 | `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
 | `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add YAML files under `cases/` and reference videos from them. |
-| `no eval cases found` | No YAML files exist under `cases/`, or `--case` does not match a filename stem. | Check the case filename and omit `.yaml` from `--case`. |
+| `no eval cases found` | No YAML files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
 | `invalid schema` | YAML shape, field name, type, or value is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
