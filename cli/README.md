@@ -224,7 +224,7 @@ Here is a representative case file:
 
 ```yaml
 video: "task-01.mp4"
-description: "Fold step 1 should be detected after the crease is completed."
+description: "Step 1 should be detected after the bracket is seated."
 sampling:
   every_s: 0.5
 targets:
@@ -338,7 +338,7 @@ targets:
           tolerance: 0.05
       - at: 4.0
         field: detected_classes
-        expect: ["paper", "crease"]
+        expect: ["bracket", "fastener"]
         compare:
           mode: set_contains_all
 ```
@@ -347,7 +347,7 @@ targets:
 
 By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
 
-Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.fold_checker`.
+Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.step_checker`.
 
 The recommended adapter shape is a factory that accepts one config argument and returns an evaluator object:
 
@@ -358,16 +358,16 @@ import os
 from typing import Any
 
 
-def create_evaluator(config: Any) -> "FoldEvaluator":
+def create_evaluator(config: Any) -> "StepEvaluator":
     settings = dict(config.config)
-    return FoldEvaluator(
+    return StepEvaluator(
         api_key=os.environ["MODEL_API_KEY"],
         model=settings.get("model", "default-model"),
         verbose=bool(config.verbose),
     )
 
 
-class FoldEvaluator:
+class StepEvaluator:
     def __init__(self, *, api_key: str, model: str, verbose: bool) -> None:
         self._api_key = api_key
         self._model = model
