@@ -438,7 +438,7 @@ Adapter return values must be JSON-like: `None`, boolean, finite number, string,
 
 ## Command Reference
 
-Every command supports `--help`. The current Typer configuration exposes `--help`, not `-h`, and there is no `glasskit help` subcommand.
+Every command supports `--help`.
 
 ### `glasskit`
 
