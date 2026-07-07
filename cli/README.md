@@ -91,7 +91,7 @@ A gate is a quality bar, such as a minimum pass rate or maximum failure count, t
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and YAML from an existing recording without moving the video into `eval/`.
+Goal: create the required directory structure and YAML from an existing recording video into `eval/`.
 
 Commands:
 
@@ -113,16 +113,16 @@ YAML
 
 Expected result: `eval/cases/task-02.yaml` references `../recordings/task-02.mov` from the app repo, and the case is ready for timestamp and expectation edits.
 
-Notes: if you prefer colocated fixtures, copy the recording into `eval/cases/` and set `video:` to the local filename, such as `task-02.mov`. The shell redirection above replaces an existing YAML file, so edit intentionally when a case already exists.
+Notes: if you prefer colocated fixtures, put the recording into `eval/cases/` and set `video:` to the filename, such as `task-02.mov`.
 
-### Validate Before an Expensive Run
+### Validate Before a Run
 
 Goal: catch YAML, video, timestamp, and optional adapter setup problems before calling a paid or slow model backend.
 
 Command:
 
 ```bash
-uv run glasskit eval validate --adapter eval/adapter.py:create_evaluator
+uv run glasskit eval validate
 ```
 
 Expected output:
@@ -695,20 +695,6 @@ Common failures:
 | `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |
 | `invalid_observation: adapter returned null` | The adapter returned `None` for a sample expecting a non-null value. | Return a JSON value matching the expected shape, or set `expect: null`. |
 | Failed comparisons but exit code `0` | No quality gate was configured. | Add `--min-pass-rate`, `--max-failures`, `--min-target-pass-rate`, or YAML thresholds. |
-
-## Security Notes
-
-The CLI itself reads local eval files, reads video files, imports your adapter, decodes frames with PyAV, writes optional JSON reports, and writes optional failure artifacts. It does not implement telemetry.
-
-Your adapter is ordinary Python code imported into the CLI process. It can read environment variables, access files, and make network calls according to your implementation and installed dependencies. Review adapters with the same care as application code, especially when they handle credentials or real user recordings.
-
-Failure artifacts can contain sensitive frames and raw model observations. Store `tmp/`, `.glasskit-artifacts/`, and JSON reports according to your privacy policy, and add them to `.gitignore` when they should not be committed.
-
-## Versioning and Compatibility
-
-This source tree declares version `0.1.1` and Python `>=3.12`. GlassKit is alpha software, so command details may change before `1.0`; use `glasskit --help` and subcommand `--help` for the exact installed version.
-
-Default tests are designed to run offline with committed synthetic video fixtures. Real adapters may require network access, model credentials, or app-specific services.
 
 ## Support
 
