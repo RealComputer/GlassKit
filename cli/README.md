@@ -358,16 +358,16 @@ import os
 from typing import Any
 
 
-def create_evaluator(config: Any) -> "StepEvaluator":
+def create_evaluator(config: Any) -> "Evaluator":
     settings = dict(config.config)
-    return StepEvaluator(
+    return Evaluator(
         api_key=os.environ["MODEL_API_KEY"],
         model=settings.get("model", "default-model"),
         verbose=bool(config.verbose),
     )
 
 
-class StepEvaluator:
+class Evaluator:
     def __init__(self, *, api_key: str, model: str, verbose: bool) -> None:
         self._api_key = api_key
         self._model = model
