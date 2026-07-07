@@ -71,7 +71,7 @@ uv run glasskit eval run
 
 Expected result: `run` prints case progress, a summary, gates, and a per-target table.
 
-For a real app-backed setup, see the [Origami backend example](https://github.com/RealComputer/GlassKit/tree/main/examples/origami/backend). It shows `glasskit eval` wired into an app adapter instead of the placeholder evaluator above.
+For a real app-backed setup, see [this example](https://github.com/RealComputer/GlassKit/tree/main/examples/origami/backend). It shows `glasskit eval` wired into an app adapter instead of the placeholder evaluator above.
 
 ## Core Concepts
 
