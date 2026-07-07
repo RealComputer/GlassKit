@@ -154,7 +154,7 @@ Goal: run a focused eval and print every sample result.
 Command:
 
 ```bash
-uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json eval/runs/eval-results.json --artifacts-dir eval/runs/artifacts
+uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
 ```
 
 Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
@@ -168,7 +168,7 @@ Goal: make the command fail when quality drops below your threshold.
 Command:
 
 ```bash
-uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/eval-results.json
+uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/results.json
 ```
 
 Expected behavior: the process exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` for setup or runtime errors that abort the run.
@@ -473,7 +473,7 @@ Commands:
 Purpose: execute eval samples and apply quality gates.
 
 ```bash
-glasskit eval run --case task-01 --output-json eval/runs/eval-results.json
+glasskit eval run --case task-01 --output-json eval/runs/results.json
 ```
 
 Options:
@@ -601,7 +601,7 @@ uv run --env-file .env glasskit eval run
 
 Human output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Typer argument parsing errors may print usage and error text to stderr.
 
-`glasskit eval run --output-json eval/runs/eval-results.json` writes a JSON file with this shape:
+`glasskit eval run --output-json eval/runs/results.json` writes a JSON file with this shape:
 
 ```json
 {
