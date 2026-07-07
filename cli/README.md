@@ -1,6 +1,6 @@
-# GlassKit CLI
+# `glasskit eval`
 
-GlassKit CLI helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a small Python adapter, and rerun the same checks locally or in CI.
+`glasskit eval` helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a small Python adapter, and rerun the same checks locally or in CI.
 
 This is the user manual for the `glasskit` command. For contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
@@ -70,8 +70,6 @@ uv run glasskit eval run
 ```
 
 Expected result: `run` prints case progress, a summary, gates, and a per-target table.
-
-For a real app-backed setup, see [this example](https://github.com/RealComputer/GlassKit/tree/main/examples/origami/backend). It shows `glasskit eval` wired into an app adapter instead of the placeholder evaluator above.
 
 ## Core Concepts
 
@@ -427,7 +425,7 @@ Sample fields passed to the evaluator:
 | `video_path` | Source video path as a string. |
 | `case_name` | Case YAML filename stem. |
 
-Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, GlassKit uses each decoded frame's presentation time when available; if a video lacks frame timestamps, it falls back to `frame_index / average_rate`.
+Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, `glasskit eval` uses each decoded frame's presentation time when available; if a video lacks frame timestamps, it falls back to `frame_index / average_rate`.
 
 Target fields passed to the evaluator:
 
@@ -716,3 +714,5 @@ Questions, bug reports, feature requests, and pull requests are welcome. Use whi
 
 - Discord: https://discord.gg/v5ayGKhPNP
 - GitHub issues and pull requests: https://github.com/RealComputer/GlassKit
+
+For a real app-backed setup, see [this example](https://github.com/RealComputer/GlassKit/tree/main/examples/origami/backend).

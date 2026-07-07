@@ -2,7 +2,7 @@
 
 This package provides the `glasskit` command. Its current command group is recorded-video evaluation through `glasskit eval`.
 
-GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling an app-provided adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs.
+`glasskit eval` turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling an app-provided adapter, comparing JSON-like observations, and reporting quality gates for local and CI runs.
 
 ## Architecture
 
