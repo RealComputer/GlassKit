@@ -6,6 +6,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
+from rich.text import Text
 
 from .expectations import format_sample_schedule
 from .models import EvalCase, EvalRunReport, EvalSuite, SampleResult, ValidationReport
@@ -70,7 +71,7 @@ def print_sample_schedule(suite: EvalSuite, console: Console | None = None) -> N
     for row in format_sample_schedule(suite):
         table.add_row(
             str(row["case"]),
-            _format_target_name(str(row["target"]), row.get("target_label")),
+            _format_target_text(str(row["target"]), row.get("target_label")),
             f"{row['timestamp_s']:g}s",
             _short(row["expected"]),
             str(row["mode"] or ""),
@@ -124,7 +125,7 @@ def print_run_summary(
         pass_rate = passed / total if total else 0.0
         target_label = _first_target_label(target_results)
         target_table.add_row(
-            _format_target_name(target_id, target_label),
+            _format_target_text(target_id, target_label),
             f"{pass_rate:.1%}",
             str(passed),
             str(total),
@@ -147,7 +148,7 @@ def print_run_summary(
         for result in failures[:max_failures_to_print]:
             failure_table.add_row(
                 result.case_name,
-                _format_target_name(result.target_id, result.target_label),
+                _format_target_text(result.target_id, result.target_label),
                 f"{result.timestamp_s:g}s",
                 result.status,
                 _short(result.expected),
@@ -181,6 +182,10 @@ def _format_target_name(target_id: str, target_label: Any) -> str:
     if not isinstance(target_label, str) or target_label == target_id:
         return target_id
     return f"{target_label} ({target_id})"
+
+
+def _format_target_text(target_id: str, target_label: Any) -> Text:
+    return Text(_format_target_name(target_id, target_label))
 
 
 def _short(value: Any) -> str:

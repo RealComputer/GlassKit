@@ -74,16 +74,30 @@ def test_console_reporter_uses_target_label_with_id() -> None:
     assert "Step 1 (step_1) @0s" in output
 
 
-def _suite() -> EvalSuite:
-    return EvalSuite(path=Path("eval"), cases=[_case()])
+def test_table_reports_render_markup_like_target_labels_literally() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+
+    print_sample_schedule(_suite(target_label="Segment [draft]"), console=console)
+    print_run_summary(
+        _report(target_label="Segment [draft]"),
+        console=console,
+    )
+
+    output = buffer.getvalue()
+    assert "Segment [draft] (step_1)" in output
 
 
-def _case() -> EvalCase:
+def _suite(*, target_label: str = "Step 1") -> EvalSuite:
+    return EvalSuite(path=Path("eval"), cases=[_case(target_label=target_label)])
+
+
+def _case(*, target_label: str = "Step 1") -> EvalCase:
     sample = SampleExpectation(
         case_name="case-001",
         target_id="step_1",
         target_index=0,
-        target_label="Step 1",
+        target_label=target_label,
         target_config={},
         video_path=Path("video.mp4"),
         timestamp_s=0.0,
@@ -93,7 +107,7 @@ def _case() -> EvalCase:
     target = TargetSpec(
         id="step_1",
         index=0,
-        label="Step 1",
+        label=target_label,
         config={},
         samples=[sample],
     )
@@ -106,11 +120,21 @@ def _case() -> EvalCase:
     )
 
 
-def _result() -> SampleResult:
+def _report(*, target_label: str = "Step 1") -> EvalRunReport:
+    return EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"],
+        results=[_result(target_label=target_label)],
+        gate_results=[],
+        duration_s=1.0,
+    )
+
+
+def _result(*, target_label: str = "Step 1") -> SampleResult:
     return SampleResult(
         case_name="case-001",
         target_id="step_1",
-        target_label="Step 1",
+        target_label=target_label,
         sample_index=0,
         timestamp_s=0.0,
         status="failed",
