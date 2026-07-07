@@ -73,7 +73,7 @@ Expected result: `run` prints case progress, a summary, gates, and a per-target 
 
 ## Core Concepts
 
-An eval directory is the runnable test set. By default, GlassKit uses `eval/` in the current working directory.
+An eval directory is the runnable test set. By default, `glasskit eval` uses `eval/` in the current working directory.
 
 A case is one YAML file under `<eval-dir>/cases/`. The case name is the YAML filename without `.yaml`.
 
@@ -291,7 +291,7 @@ Sample times must be finite and nonnegative. Ranges must have `end` greater than
 
 ## Comparison Reference
 
-The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return the value you want compared and omit `field`. Use `field` when the adapter already returns a structured observation worth preserving for JSON output or saved failure artifacts, such as `matches`, `confidence`, `reason`, or detected classes in one object. When `field` is present, GlassKit extracts that nested value first and compares the extracted value against `expect`.
+The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return the value you want compared and omit `field`. Use `field` when the adapter already returns a structured observation worth preserving for JSON output or saved failure artifacts, such as `matches`, `confidence`, `reason`, or detected classes in one object. When `field` is present, `glasskit eval` extracts that nested value first and compares the extracted value against `expect`.
 
 Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with a `missing field: ...` reason.
 
@@ -532,7 +532,7 @@ Exit behavior: exits `0` when samples can be listed and `2` when the eval suite 
 
 ## Configuration
 
-GlassKit has no global config file. Eval configuration lives in the eval directory and case YAML files.
+`glasskit eval` has no global config file. Eval configuration lives in the eval directory and case YAML files.
 
 Default values at a glance:
 
@@ -562,7 +562,7 @@ thresholds:
       min_pass_rate: 0.95
 ```
 
-All threshold keys default to unset. GlassKit does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate. Adapter runtime errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those errors are recorded as sample results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`.
+All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate. Adapter runtime errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those errors are recorded as sample results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`.
 
 Threshold precedence:
 
@@ -584,7 +584,7 @@ Other precedence rules:
 
 ## Environment Variables
 
-GlassKit defines no CLI-specific environment variables and does not read from stdin.
+`glasskit eval` defines no CLI-specific environment variables and does not read from stdin.
 
 Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case YAML and adapter config files. With `uv`, pass a dotenv file through the runner:
 
