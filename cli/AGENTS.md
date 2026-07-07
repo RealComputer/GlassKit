@@ -27,6 +27,6 @@ GlassKit CLI turns recorded smart-glasses workflows into repeatable evals by sam
 
 ## Commands
 
-- `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after changes.
+- `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after code changes.
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
 - For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run --adapter eval_adapter.py:create_evaluator --eval-dir ../../../tmp/origami-full-run-eval-suite`
