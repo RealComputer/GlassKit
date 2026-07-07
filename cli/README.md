@@ -175,9 +175,9 @@ Expected behavior: the process exits `0` when every gate passes, `1` when the ev
 
 Notes: threshold defaults are intentionally unset. Without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are visible in the report but do not fail the command. Always configure a gate for CI.
 
-### Use a Real Adapter Config File
+### Use an Adapter Config File
 
-Goal: pass non-secret runtime settings to your adapter without putting them in case YAML.
+Goal: pass runtime settings to your adapter without putting them in case YAML.
 
 Command:
 
@@ -193,35 +193,30 @@ model: "vision-checker"
 jpeg_quality: 90
 ```
 
-Notes: `--adapter-config` must be a YAML or JSON object. GlassKit does not expand environment variables inside this file. Read secrets from environment variables in your adapter.
+Notes: `--adapter-config` must be a YAML or JSON object. `glasskit eval` does not expand environment variables inside this file. Read secrets from environment variables in your adapter.
 
 ## Eval Directory Layout
 
 A typical layout keeps eval YAML and adapter code in the app repo while storing recordings outside the repo:
 
 ```text
-workspace/
-  recordings/
-    task-01.mp4
-    task-02.mp4
-  your-app/
-    eval/
-      adapter.py
-      config.yaml
-      cases/
-        task-01.yaml
-        task-02.yaml
+recordings/
+  task-01.mp4
+  task-02.mp4
+your-app-repo/
+  eval/
+    adapter.py
+    config.yaml # optional
+    cases/
+      task-01.yaml # Case YAML
+      task-02.yaml
 ```
 
-`config.yaml` is optional and currently supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip; GlassKit normalizes videos with nonzero presentation timestamps so the first decoded frame starts at `0.0`.
+You can also keep videos next to the case YAML and reference them with a local filename such as `video: task-01.mp4`. Tips: you might not want to commit large media files into normal git repository due to the file size. You can also consider cloud object storage or Git LFS.
 
-The `video:` path is resolved relative to the case YAML file:
+The `video:` path in the case YAML is resolved relative to the case YAML file.
 
-```yaml
-video: "../../../recordings/task-01.mp4"
-```
-
-You can also keep small synthetic fixtures next to the case YAML and reference them with a local filename such as `task-01.mp4`. Commit the labels, thresholds, and adapter code your team should review. Treat real recordings as potentially sensitive user data and store them according to your app's privacy and repository-size policy.
+`config.yaml` is optional and supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip.
 
 ## Case YAML Reference
 
