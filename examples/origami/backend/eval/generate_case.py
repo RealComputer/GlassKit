@@ -15,27 +15,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+import av
+import yaml
+from av import VideoFrame
+from av.error import FFmpegError
+from google import genai
+from PIL import Image
 
-import av  # noqa: E402
-import yaml  # noqa: E402
-from av import VideoFrame  # noqa: E402
-from av.error import FFmpegError  # noqa: E402
-from google import genai  # noqa: E402
-from PIL import Image  # noqa: E402
-
-from src.fold_check import (  # noqa: E402
+from src.fold_check import (
     compose_fold_check_image,
     load_fold_check_reference_images,
     load_fold_check_steps,
     parse_fold_check_result,
 )
-from src.fold_check_prompts import (  # noqa: E402
+from src.fold_check_prompts import (
     FOLD_CHECK_SYSTEM_PROMPT,
 )
-from src.origami_config import OrigamiStep  # noqa: E402
+from src.origami_config import OrigamiStep
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_SERVICE_TIER = "flex"

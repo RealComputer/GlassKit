@@ -119,7 +119,7 @@ Then generate a new case YAML from `backend/`:
 
 ```bash
 cd backend
-uv run --env-file .env python eval/generate_case.py \
+uv run --env-file .env python -m eval.generate_case \
   --plan eval/plans/full-run-label-plan.yaml \
   --output eval/cases/full-run-generated.yaml
 ```
