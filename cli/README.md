@@ -104,7 +104,6 @@ sampling:
   every_s: 0.5
 targets:
   step_2:
-    label: "Step 2"
     samples:
       - at: 0.0
         expect: false
