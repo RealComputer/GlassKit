@@ -33,7 +33,11 @@ _EPSILON = 1e-9
 
 
 def load_eval_suite(
-    eval_dir: Path, *, case_filter: str | None = None, allow_empty: bool = False
+    eval_dir: Path,
+    *,
+    case_filter: str | None = None,
+    target_filter: str | None = None,
+    allow_empty: bool = False,
 ) -> EvalSuite:
     eval_dir = eval_dir.expanduser().resolve()
     if not eval_dir.exists():
@@ -44,6 +48,13 @@ def load_eval_suite(
     thresholds = _load_eval_thresholds(eval_dir)
     case_paths = _discover_case_paths(eval_dir, case_filter)
     cases = [_load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
+    if target_filter is not None:
+        target_id = _normalize_target_filter(target_filter)
+        cases = _filter_cases_by_target(cases, target_id)
+        if not cases:
+            raise EvalConfigError(
+                f"no eval targets found matching target {target_filter!r}"
+            )
     if not allow_empty and not any(case.samples for case in cases):
         raise EvalConfigError("eval has no declared samples")
     return EvalSuite(path=eval_dir, cases=cases, thresholds=thresholds)
@@ -138,6 +149,31 @@ def _validate_case_filter(case_filter: str) -> None:
         or Path(case_filter).name != case_filter
     ):
         raise EvalConfigError("case must be a filename or stem under cases/")
+
+
+def _normalize_target_filter(target_filter: str) -> str:
+    if not target_filter or target_filter != target_filter.strip():
+        raise EvalConfigError("target must be a target id from case YAML")
+    return target_filter
+
+
+def _filter_cases_by_target(cases: list[EvalCase], target_id: str) -> list[EvalCase]:
+    filtered: list[EvalCase] = []
+    for case in cases:
+        targets = [target for target in case.targets if target.id == target_id]
+        if not targets:
+            continue
+        filtered.append(
+            EvalCase(
+                name=case.name,
+                path=case.path,
+                video_path=case.video_path,
+                description=case.description,
+                targets=targets,
+                thresholds=case.thresholds,
+            )
+        )
+    return filtered
 
 
 def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:

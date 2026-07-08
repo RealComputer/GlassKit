@@ -47,6 +47,7 @@ async def validate_eval_suite(options: RunOptions) -> ValidationReport:
         suite = load_eval_suite(
             options.eval_dir,
             case_filter=options.case_filter,
+            target_filter=options.target_filter,
             allow_empty=options.allow_empty,
         )
     except EvalConfigError as error:
@@ -84,6 +85,7 @@ async def run_eval(
     suite = load_eval_suite(
         options.eval_dir,
         case_filter=options.case_filter,
+        target_filter=options.target_filter,
         allow_empty=options.allow_empty,
     )
     validation_issues = _validate_videos(suite)
@@ -403,7 +405,10 @@ def _apply_quality_gates(
                 results,
                 global_thresholds,
                 "eval",
-                fail_empty_targets=options.case_filter is None,
+                selected_target=options.target_filter,
+                fail_empty_targets=(
+                    options.case_filter is None and options.target_filter is None
+                ),
             )
         )
 
@@ -441,6 +446,8 @@ def _case_gates(
             )
         )
     for target_id, threshold in thresholds.per_target.items():
+        if options.target_filter is not None and target_id != options.target_filter:
+            continue
         if threshold.min_pass_rate is None:
             continue
         target_results = [result for result in results if result.target_id == target_id]
@@ -473,14 +480,21 @@ def _configured_target_pass_rate_gates(
     thresholds: Thresholds,
     prefix: str,
     *,
+    selected_target: str | None,
     fail_empty_targets: bool,
 ) -> list[GateResult]:
     gates: list[GateResult] = []
     for target_id, threshold in thresholds.per_target.items():
+        if selected_target is not None and target_id != selected_target:
+            continue
         if threshold.min_pass_rate is None:
             continue
         target_results = [result for result in results if result.target_id == target_id]
-        if not target_results and not fail_empty_targets:
+        if (
+            not target_results
+            and not fail_empty_targets
+            and target_id != selected_target
+        ):
             continue
         gates.append(
             _pass_rate_gate(

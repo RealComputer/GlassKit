@@ -47,6 +47,10 @@ def eval_run(
         str | None,
         typer.Option("--case", help="Only run one case by filename or stem."),
     ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option("--target", help="Only run one target id from selected cases."),
+    ] = None,
     adapter_config: Annotated[
         Path | None,
         typer.Option(
@@ -130,6 +134,7 @@ def eval_run(
         adapter=adapter_target,
         eval_dir=eval_dir,
         case_filter=case,
+        target_filter=target,
         adapter_config=_load_config(adapter_config),
         min_pass_rate=min_pass_rate,
         min_target_pass_rate=min_target_pass_rate,
@@ -171,6 +176,12 @@ def eval_validate(
         str | None,
         typer.Option("--case", help="Only validate one case by filename or stem."),
     ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target", help="Only validate one target id from selected cases."
+        ),
+    ] = None,
     adapter_config: Annotated[
         Path | None,
         typer.Option(
@@ -186,6 +197,7 @@ def eval_validate(
         adapter=adapter,
         eval_dir=eval_dir,
         case_filter=case,
+        target_filter=target,
         adapter_config=_load_config(adapter_config),
         allow_empty=allow_empty,
     )
@@ -203,13 +215,22 @@ def eval_list_samples(
         str | None,
         typer.Option("--case", help="Only list one case by filename or stem."),
     ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option("--target", help="Only list one target id from selected cases."),
+    ] = None,
     allow_empty: Annotated[
         bool,
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
     try:
-        loaded = load_eval_suite(eval_dir, case_filter=case, allow_empty=allow_empty)
+        loaded = load_eval_suite(
+            eval_dir,
+            case_filter=case,
+            target_filter=target,
+            allow_empty=allow_empty,
+        )
     except EvalError as error:
         Console().print(f"[red]Could not list samples[/red]: {error}")
         raise typer.Exit(2) from error

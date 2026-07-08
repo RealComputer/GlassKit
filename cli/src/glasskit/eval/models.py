@@ -250,6 +250,7 @@ class RunOptions:
     eval_dir: Path
     adapter: str | None = None
     case_filter: str | None = None
+    target_filter: str | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
     min_pass_rate: float | None = None
     min_target_pass_rate: float | None = None

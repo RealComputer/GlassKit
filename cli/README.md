@@ -140,6 +140,7 @@ Command:
 
 ```bash
 uv run glasskit eval list-samples --case task-01
+uv run glasskit eval list-samples --case task-01 --target step_1
 ```
 
 Expected output: a Rich table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
@@ -153,10 +154,10 @@ Goal: run a focused eval and print every sample result.
 Command:
 
 ```bash
-uv run glasskit eval run --case task-01 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
+uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
 ```
 
-Expected output: case and target progress, every sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
+Expected output: focused case and target progress, every selected sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
 
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
@@ -494,6 +495,7 @@ Options:
 | `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
+| `--target TEXT` | All targets | Only run one target id from the selected cases. May be used with or without `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
 | `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
@@ -523,6 +525,7 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
 | `--case TEXT` | All cases | Only validate one case by filename or stem. |
+| `--target TEXT` | All targets | Only validate one target id from the selected cases. May be used with or without `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
@@ -542,6 +545,7 @@ Options:
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
+| `--target TEXT` | All targets | Only list one target id from the selected cases. May be used with or without `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when the samples can be listed and `2` when the eval suite cannot be loaded.
@@ -587,7 +591,7 @@ Threshold precedence:
 | `--min-pass-rate` | Selected run | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
 | `--max-failures` | Selected run | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
 | `--min-target-pass-rate` | Selected run targets | Adds the same per-target pass-rate gate for each target present in the selected results and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
-| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a `--case` filtered run are skipped. |
+| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a `--case` or `--target` filtered run are skipped. |
 | `cases/<case>.yaml` `thresholds` | That case | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
 
 Other precedence rules:
@@ -680,7 +684,7 @@ Then inspect samples and run one case:
 
 ```bash
 uv run glasskit eval list-samples --case task-01
-uv run glasskit eval run --case task-01 --verbose --keep-going
+uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
 ```
 
 Common failures:
@@ -690,6 +694,7 @@ Common failures:
 | `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
 | `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add YAML files under `cases/` and reference videos from them. |
 | `no eval cases found` | No YAML files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
+| `no eval targets found` | `--target` does not match any target id in the selected cases. | Check the target id in case YAML or broaden the case filter. |
 | `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |

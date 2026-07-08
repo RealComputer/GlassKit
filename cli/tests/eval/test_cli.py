@@ -17,6 +17,14 @@ def test_eval_help_lists_current_commands() -> None:
     assert "init-case" not in result.output
 
 
+def test_eval_commands_include_target_filter() -> None:
+    for command in ("run", "validate", "list-samples"):
+        result = CliRunner().invoke(app, ["eval", command, "--help"])
+
+        assert result.exit_code == 0
+        assert "--target" in result.output
+
+
 def test_default_adapter_target_follows_eval_dir() -> None:
     assert (
         _default_adapter_target(Path("custom-eval"))

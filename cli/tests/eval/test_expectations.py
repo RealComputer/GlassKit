@@ -296,6 +296,97 @@ def test_case_filter_accepts_yml_filename(tmp_path: Path) -> None:
     assert suite.cases[0].name == "case-001"
 
 
+def test_target_filter_selects_only_matching_target(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: false
+          step_2:
+            samples:
+              - at: [1.0, 2.0]
+                expect: true
+        """,
+    )
+
+    suite = load_eval_suite(eval_dir, case_filter="case-001", target_filter="step_2")
+
+    case = suite.cases[0]
+    assert [target.id for target in case.targets] == ["step_2"]
+    assert [sample.target_id for sample in case.samples] == ["step_2", "step_2"]
+    assert [sample.sample_index for sample in case.samples] == [1, 2]
+
+
+def test_target_filter_without_case_keeps_matching_cases(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "cases" / "case-002.yaml").write_text(
+        """
+        video: video.mp4
+        targets:
+          step_2:
+            samples:
+              - at: 1.0
+                expect: true
+        """,
+        encoding="utf-8",
+    )
+
+    suite = load_eval_suite(eval_dir, target_filter="step_2")
+
+    assert [case.name for case in suite.cases] == ["case-002"]
+    assert [target.id for target in suite.cases[0].targets] == ["step_2"]
+
+
+def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError, match="no eval targets found matching target 'step_2'"
+    ):
+        load_eval_suite(eval_dir, target_filter="step_2")
+
+
+def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="target must be a target id"):
+        load_eval_suite(eval_dir, target_filter="")
+
+
 def test_uppercase_yaml_case_suffix_is_ignored(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
