@@ -95,6 +95,7 @@ class _CaseYamlDumper(yaml.SafeDumper):
         flow: bool = False,
         indentless: bool = False,
     ) -> None:
+        del indentless
         return super().increase_indent(flow, False)
 
 
@@ -673,11 +674,18 @@ def _average_rate(stream: Any) -> float:
 
 
 def _frame_timestamp_s(frame: VideoFrame, frame_index: int, frame_rate: float) -> float:
-    if frame.time is not None:
-        return float(frame.time)
-    if frame.pts is not None and frame.time_base is not None:
-        return float(frame.pts * frame.time_base)
+    frame_time = _optional_frame_attr(frame, "time")
+    if frame_time is not None:
+        return float(frame_time)
+    pts = _optional_frame_attr(frame, "pts")
+    time_base = _optional_frame_attr(frame, "time_base")
+    if pts is not None and time_base is not None:
+        return float(pts * time_base)
     return frame_index / frame_rate
+
+
+def _optional_frame_attr(frame: VideoFrame, name: str) -> Any | None:
+    return getattr(frame, name, None)
 
 
 def _nearest_frame(
