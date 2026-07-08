@@ -102,9 +102,9 @@ The two step-image sets are byte-identical copies kept in both locations because
 
 The backend includes a `glasskit eval` suite under `backend/eval/`. Its default adapter at `backend/eval/adapter.py` evaluates recorded camera-input videos, composes the same reference-image header used by the live fold-check path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with the case YAML expectations.
 
-Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, keeping generated MP4 files outside the repository, and labeling stable timestamp ranges in `backend/eval/cases/*.yaml` with `video:` paths relative to the case file.
+Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true` and keeping the generated MP4 files outside the repository. Hand-authored eval cases live under `backend/eval/cases/*.yaml` and use `video:` paths relative to the case file.
 
-To bootstrap a case with Gemini labels, write a small label plan YAML with the recording path, sampling interval, and target timestamp ranges:
+To bootstrap a case with Gemini labels, write a label plan YAML first. The plan is not an eval case; it only names the recording, sampling interval, and timestamp ranges to label for each target:
 
 ```yaml
 video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
@@ -113,9 +113,15 @@ sampling:
 targets:
   step_1:
     range: [0.0, 51.0]
+  step_2:
+    ranges:
+      - [52.0, 64.0]
+      - [70.0, 82.5]
 ```
 
-Then generate a new case YAML from `backend/`:
+Optional top-level `description` and per-target `label` fields are copied into the generated case. Keep plans outside `eval/cases/`, for example under `backend/eval/plans/`, so draft labeling instructions are separate from runnable cases.
+
+Generate a new case YAML from `backend/`:
 
 ```bash
 cd backend
@@ -124,7 +130,7 @@ uv run --env-file .env python -m eval.generate_case \
   --output eval/cases/full-run-generated.yaml
 ```
 
-Use `--target step_1` to label only one target while smoke testing or resuming a focused part of the plan. The generator calls Gemini 3.5 Flash on frames sampled from each requested range, writes a resumable partial cache under `eval/runs/generate-case/` while it is running, and removes that cache after a successful output write. Review the generated YAML before running the eval against the runtime Qwen setup.
+Use `--target step_1` to label only one target while smoke testing or focusing on part of the plan; repeat the flag to include multiple targets. The generator calls Gemini 3.5 Flash with the same fold-check prompt shape used by the runtime path, samples frames from the requested ranges, and writes a resumable partial cache under `eval/runs/generate-case/` while it runs. If a Gemini or network error stops the run after some labels are written, the script prints `partial cache kept at ...` followed by `rerun the same command to resume; delete this file to start over`. Rerun the same command to reuse completed labels, then review the generated YAML before running the eval against the runtime Qwen setup.
 
 Run evals locally from `backend/` with the published CLI package:
 
