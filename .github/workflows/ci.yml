@@ -1,8 +1,5 @@
 name: CI
 
-env:
-  UV_PYTHON: "3.12"
-
 on:
   pull_request:
     paths:
@@ -21,11 +18,19 @@ on:
 
 jobs:
   test-cli:
-    name: Test CLI package
+    name: Test CLI package (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     defaults:
       run:
@@ -43,13 +48,13 @@ jobs:
           working-directory: cli
 
       - name: Install Python
-        run: uv python install 3.12
+        run: uv python install "${{ matrix.python-version }}"
 
       - name: Sync dependencies
         run: uv sync --locked --dev
 
       - name: Verify Python runtime
-        run: uv run python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+        run: uv run python -c "import os, sys; expected = tuple(map(int, os.environ['UV_PYTHON'].split('.'))); assert sys.version_info[:2] == expected, sys.version"
 
       - name: Type check
         run: uv run ty check

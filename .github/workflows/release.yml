@@ -1,7 +1,7 @@
 name: Release
 
 env:
-  UV_PYTHON: "3.12"
+  UV_PYTHON: "3.13"
 
 on:
   push:
@@ -45,13 +45,13 @@ jobs:
           working-directory: cli
 
       - name: Install Python
-        run: uv python install 3.12
+        run: uv python install 3.13
 
       - name: Sync dependencies
         run: uv sync --locked --dev
 
       - name: Verify Python runtime
-        run: uv run python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+        run: uv run python -c "import sys; assert sys.version_info[:2] == (3, 13), sys.version"
 
       - name: Verify tag matches package version
         shell: bash
