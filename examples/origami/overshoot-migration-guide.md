@@ -33,7 +33,7 @@ For single-frame checks, reference the latest ingested stream frame as an image 
 ```json
 {
   "model": "your-confirmed-model",
-  "max_tokens": 8,
+  "max_completion_tokens": 4,
   "messages": [
     {
       "role": "system",
