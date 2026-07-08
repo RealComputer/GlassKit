@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast, override
+from typing import Any, cast
 
 import av
 import yaml
@@ -90,7 +90,6 @@ class _FlowList(list[float]):
 
 
 class _CaseYamlDumper(yaml.SafeDumper):
-    @override
     def increase_indent(
         self,
         flow: bool = False,
@@ -533,16 +532,10 @@ def _decode_sample_images(
     video_path: Path,
     timestamps_s: list[float],
 ) -> Iterator[tuple[str, Image.Image]]:
+    if not timestamps_s:
+        return
+
     requested = sorted({_time_value(timestamp_s) for timestamp_s in timestamps_s})
-    if not requested:
-        return iter(())
-    return _decode_requested_sample_images(video_path, requested)
-
-
-def _decode_requested_sample_images(
-    video_path: Path,
-    requested: list[float],
-) -> Iterator[tuple[str, Image.Image]]:
     try:
         with av.open(str(video_path)) as container:
             stream = _video_stream(container)
