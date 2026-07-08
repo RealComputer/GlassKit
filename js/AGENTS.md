@@ -16,3 +16,6 @@ This package provides the `@glasskit.ai/create` npm package used by `npm create 
 - `npm run build`: refresh `dist/template/rokid-hello-world` from the canonical starter.
 - `npm pack --dry-run`: inspect the publishable package contents.
 - `npm pack --pack-destination /tmp/npm-package`: build a local tarball for smoke testing.
+
+# Notes
+- Commit messages for changes under this directory should start with `js: `.

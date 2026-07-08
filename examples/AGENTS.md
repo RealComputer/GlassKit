@@ -1,1 +1,1 @@
-- Start commit messages for example projects with `example: `.
+- Commit messages for changes under this directory should start with `example: `.
