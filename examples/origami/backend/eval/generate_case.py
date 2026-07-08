@@ -137,8 +137,7 @@ def _print_resume_cache_hint(cache_path: Path) -> None:
         return
     print(f"partial cache kept at {cache_path}", file=sys.stderr)
     print(
-        "rerun the same command with the same --output to resume; "
-        "delete this file to start over",
+        "rerun the same command to resume; delete this file to start over",
         file=sys.stderr,
     )
 
