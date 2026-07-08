@@ -29,7 +29,9 @@ from src.fold_check import (
     parse_fold_check_result,
 )
 from src.fold_check_prompts import (
+    FOLD_CHECK_CRITERIA_PREFIX,
     FOLD_CHECK_SYSTEM_PROMPT,
+    fold_check_criteria_text,
 )
 from src.origami_config import OrigamiStep
 
@@ -402,6 +404,7 @@ def _sample_cache_key(
         "thinking_level": GEMINI_THINKING_LEVEL,
         "jpeg_quality": JPEG_QUALITY,
         "system_prompt": FOLD_CHECK_SYSTEM_PROMPT,
+        "criteria_prefix": FOLD_CHECK_CRITERIA_PREFIX,
         "video": _file_fingerprint(plan.video_path),
         "reference": _file_fingerprint(step.reference_path),
         "code": _code_fingerprint(),
@@ -429,7 +432,7 @@ def _call_gemini(
                 model=GEMINI_MODEL,
                 system_instruction=FOLD_CHECK_SYSTEM_PROMPT,
                 input=[
-                    {"type": "text", "text": f"Criteria: {prompt}"},
+                    {"type": "text", "text": fold_check_criteria_text(prompt)},
                     {
                         "type": "image",
                         "data": encoded_image,
