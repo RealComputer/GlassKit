@@ -8,15 +8,9 @@ from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
 
-HELP_TERMINAL_WIDTH = 120
-
 
 def test_eval_help_lists_current_commands() -> None:
-    result = CliRunner().invoke(
-        app,
-        ["eval", "--help"],
-        terminal_width=HELP_TERMINAL_WIDTH,
-    )
+    result = CliRunner().invoke(app, ["eval", "--help"])
 
     assert result.exit_code == 0
     assert "run" in result.output
