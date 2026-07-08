@@ -72,6 +72,7 @@ class SampleRequest:
     target_id: str
     timestamp_s: float
     interval_end_s: float
+    next_grid_timestamp_s: float
     cache_key: str
 
 
@@ -362,6 +363,7 @@ def _build_requests(
                         target_id=target.id,
                         timestamp_s=_time_value(timestamp_s),
                         interval_end_s=_time_value(interval_end_s),
+                        next_grid_timestamp_s=_time_value(timestamp_s + plan.every_s),
                         cache_key=_sample_cache_key(
                             plan=plan,
                             target_id=target.id,
@@ -496,6 +498,7 @@ def _append_cache_result(
         "target_id": request.target_id,
         "timestamp_s": request.timestamp_s,
         "interval_end_s": request.interval_end_s,
+        "next_grid_timestamp_s": request.next_grid_timestamp_s,
         "value": result.value,
         "response_text": result.response_text,
         "interaction_id": result.interaction_id,
@@ -600,11 +603,18 @@ def _sample_blocks(
     results: dict[str, GeminiResult],
 ) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
+    previous_request: SampleRequest | None = None
     for request in requests:
         result = results[request.cache_key]
         if (
-            blocks
+            previous_request is not None
+            and blocks
             and blocks[-1]["expect"] == result.value
+            and math.isclose(
+                previous_request.next_grid_timestamp_s,
+                request.timestamp_s,
+                abs_tol=1e-6,
+            )
             and math.isclose(
                 cast("list[float]", blocks[-1]["range"])[1],
                 request.timestamp_s,
@@ -612,6 +622,7 @@ def _sample_blocks(
             )
         ):
             cast("list[float]", blocks[-1]["range"])[1] = request.interval_end_s
+            previous_request = request
             continue
         blocks.append(
             {
@@ -624,6 +635,7 @@ def _sample_blocks(
                 "expect": result.value,
             }
         )
+        previous_request = request
     return blocks
 
 
