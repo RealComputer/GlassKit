@@ -121,7 +121,7 @@ targets:
 
 Optional top-level `description` and per-target `label` fields are copied into the generated case. Keep plans outside `eval/cases/`, for example under `backend/eval/plans/`, so draft labeling instructions are separate from runnable cases.
 
-Generate a new case YAML from `backend/`:
+Before running the generator, add `GEMINI_API_KEY` to `backend/.env`; the Google GenAI SDK also accepts `GOOGLE_API_KEY`. Generate a new case YAML from `backend/`:
 
 ```bash
 cd backend
