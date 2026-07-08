@@ -45,6 +45,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+          cache-suffix: python-${{ matrix.python-version }}
           working-directory: cli
 
       - name: Install Python
