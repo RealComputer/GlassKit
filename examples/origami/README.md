@@ -104,6 +104,28 @@ The backend includes a `glasskit eval` suite under `backend/eval/`. Its default 
 
 Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, keeping generated MP4 files outside the repository, and labeling stable timestamp ranges in `backend/eval/cases/*.yaml` with `video:` paths relative to the case file.
 
+To bootstrap a case with Gemini labels, write a small label plan YAML with the recording path, sampling interval, and target timestamp ranges:
+
+```yaml
+video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
+sampling:
+  every_s: 0.5
+targets:
+  step_1:
+    range: [0.0, 51.0]
+```
+
+Then generate a new case YAML from `backend/`:
+
+```bash
+cd backend
+uv run --env-file .env python eval/generate_case.py \
+  --plan eval/plans/full-run-label-plan.yaml \
+  --output eval/cases/full-run-generated.yaml
+```
+
+Use `--target step_1` to label only one target while smoke testing or resuming a focused part of the plan. The generator calls Gemini 3.5 Flash on frames sampled from each requested range, writes a resumable partial cache under `eval/runs/generate-case/` while it is running, and removes that cache after a successful output write. Review the generated YAML before running the eval against the runtime Qwen setup.
+
 Run evals locally from `backend/` with the published CLI package:
 
 ```bash
