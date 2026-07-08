@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "livekit>=1.1.13",
     "pillow>=12.2.0",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]

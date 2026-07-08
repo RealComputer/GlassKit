@@ -124,6 +124,7 @@ dependencies = [
     { name = "httpx" },
     { name = "livekit" },
     { name = "pillow" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -141,6 +142,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "livekit", specifier = ">=1.1.13" },
     { name = "pillow", specifier = ">=12.2.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [package.metadata.requires-dev]
