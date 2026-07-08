@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typer.core import TyperGroup, TyperOption
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
@@ -23,16 +25,19 @@ def test_eval_help_lists_current_commands() -> None:
     assert "init-case" not in result.output
 
 
-def test_eval_commands_include_target_filter() -> None:
-    for command in ("run", "validate", "list-samples"):
-        result = CliRunner().invoke(
-            app,
-            ["eval", command, "--help"],
-            terminal_width=HELP_TERMINAL_WIDTH,
-        )
+def test_eval_commands_define_target_filter() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
 
-        assert result.exit_code == 0
-        assert "--target" in result.output
+    for command in ("run", "validate", "list-samples"):
+        command_options = eval_command.commands[command].params
+
+        assert any(
+            isinstance(option, TyperOption) and "--target" in option.opts
+            for option in command_options
+        )
 
 
 def test_default_adapter_target_follows_eval_dir() -> None:
