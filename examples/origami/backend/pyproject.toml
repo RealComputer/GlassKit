@@ -6,6 +6,7 @@ dependencies = [
     "aiortc>=1.14.0",
     "av>=16.1.0",
     "fastapi[standard]>=0.138.2",
+    "google-genai>=2.10.0",
     "httpx>=0.28.1",
     "livekit>=1.1.13",
     "pillow>=12.2.0",
