@@ -123,15 +123,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
-        if cache_path.exists():
-            print(f"partial cache kept at {cache_path}", file=sys.stderr)
+        _print_resume_cache_hint(cache_path)
         return 130
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
-        if cache_path.exists():
-            print(f"partial cache kept at {cache_path}", file=sys.stderr)
+        _print_resume_cache_hint(cache_path)
         return 1
     return 0
+
+
+def _print_resume_cache_hint(cache_path: Path) -> None:
+    if not cache_path.exists():
+        return
+    print(f"partial cache kept at {cache_path}", file=sys.stderr)
+    print(
+        "rerun the same command with the same --output to resume; "
+        "delete this file to start over",
+        file=sys.stderr,
+    )
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
