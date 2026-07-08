@@ -33,7 +33,6 @@ For single-frame checks, reference the latest ingested stream frame as an image 
 ```json
 {
   "model": "your-confirmed-model",
-  "temperature": 0,
   "max_tokens": 8,
   "messages": [
     {
