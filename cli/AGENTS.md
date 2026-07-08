@@ -14,7 +14,6 @@ This package provides the `glasskit` command. Its current command group is recor
 ## Key Files
 
 - `pyproject.toml`: package metadata, `glasskit = "glasskit.cli:app"` console entry point, runtime dependencies, and dev tools.
-- `.python-version`: local `uv run` should default to Python 3.13, matching CI.
 - `src/glasskit/cli.py`: Typer command definitions and CLI exit-code handling.
 - `src/glasskit/eval/models.py`: dataclasses, protocols, JSON value aliases, result types, and eval errors.
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
