@@ -39,6 +39,8 @@ from src.origami_config import OrigamiStep  # noqa: E402
 
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_SERVICE_TIER = "flex"
+GEMINI_IMAGE_RESOLUTION = "high"
+GEMINI_THINKING_LEVEL = "medium"
 JPEG_QUALITY = 90
 CACHE_VERSION = 1
 DEFAULT_EVERY_S = 0.5
@@ -398,6 +400,8 @@ def _sample_cache_key(
         "cache_version": CACHE_VERSION,
         "model": GEMINI_MODEL,
         "service_tier": GEMINI_SERVICE_TIER,
+        "image_resolution": GEMINI_IMAGE_RESOLUTION,
+        "thinking_level": GEMINI_THINKING_LEVEL,
         "jpeg_quality": JPEG_QUALITY,
         "system_prompt": FOLD_CHECK_SYSTEM_PROMPT,
         "video": _file_fingerprint(plan.video_path),
@@ -432,8 +436,10 @@ def _call_gemini(
                         "type": "image",
                         "data": encoded_image,
                         "mime_type": "image/jpeg",
+                        "resolution": GEMINI_IMAGE_RESOLUTION,
                     },
                 ],
+                generation_config={"thinking_level": GEMINI_THINKING_LEVEL},
                 service_tier=GEMINI_SERVICE_TIER,
                 store=False,
             )
@@ -512,6 +518,8 @@ def _append_cache_result(
         "interaction_id": result.interaction_id,
         "model": GEMINI_MODEL,
         "service_tier": GEMINI_SERVICE_TIER,
+        "image_resolution": GEMINI_IMAGE_RESOLUTION,
+        "thinking_level": GEMINI_THINKING_LEVEL,
         "plan": str(plan.path),
         "video": str(plan.video_path),
     }
