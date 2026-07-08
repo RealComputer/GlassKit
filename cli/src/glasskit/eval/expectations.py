@@ -47,14 +47,18 @@ def load_eval_suite(
 
     thresholds = _load_eval_thresholds(eval_dir)
     case_paths = _discover_case_paths(eval_dir, case_filter)
-    cases = [_load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
-    if target_filter is not None:
-        target_id = _normalize_target_filter(target_filter)
-        cases = _filter_cases_by_target(cases, target_id)
-        if not cases:
+    target_id = (
+        _normalize_target_filter(target_filter) if target_filter is not None else None
+    )
+    if target_id is not None:
+        case_paths = _filter_case_paths_by_target(case_paths, target_id)
+        if not case_paths:
             raise EvalConfigError(
                 f"no eval targets found matching target {target_filter!r}"
             )
+    cases = [_load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
+    if target_id is not None:
+        cases = _filter_cases_by_target(cases, target_id)
     if not allow_empty and not any(case.samples for case in cases):
         raise EvalConfigError("eval has no declared samples")
     return EvalSuite(path=eval_dir, cases=cases, thresholds=thresholds)
@@ -155,6 +159,19 @@ def _normalize_target_filter(target_filter: str) -> str:
     if not target_filter or target_filter != target_filter.strip():
         raise EvalConfigError("target must be a target id from case YAML")
     return target_filter
+
+
+def _filter_case_paths_by_target(case_paths: list[Path], target_id: str) -> list[Path]:
+    return [
+        case_path
+        for case_path in case_paths
+        if _case_yaml_declares_target(case_path, target_id)
+    ]
+
+
+def _case_yaml_declares_target(case_path: Path, target_id: str) -> bool:
+    raw_targets = _load_yaml_mapping(case_path).get("targets")
+    return isinstance(raw_targets, Mapping) and target_id in raw_targets
 
 
 def _filter_cases_by_target(cases: list[EvalCase], target_id: str) -> list[EvalCase]:

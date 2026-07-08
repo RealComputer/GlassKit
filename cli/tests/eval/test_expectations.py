@@ -351,6 +351,37 @@ def test_target_filter_without_case_keeps_matching_cases(tmp_path: Path) -> None
     assert [target.id for target in suite.cases[0].targets] == ["step_2"]
 
 
+def test_target_filter_skips_non_matching_case_before_resolving_video(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: missing.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "cases" / "case-002.yaml").write_text(
+        """
+        video: video.mp4
+        targets:
+          step_2:
+            samples:
+              - at: 1.0
+                expect: true
+        """,
+        encoding="utf-8",
+    )
+
+    suite = load_eval_suite(eval_dir, target_filter="step_2")
+
+    assert [case.name for case in suite.cases] == ["case-002"]
+
+
 def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
