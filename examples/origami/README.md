@@ -103,7 +103,7 @@ The two step-image sets are identical copies kept in both locations because Andr
 
 Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
 
-In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter uses the same fold-check path as the live backend: it composes the camera frame with the step reference image, sends the image to Overshoot, parses the VLM response, and returns `true` or `false`.
+In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step reference image, sends that composed frame to Overshoot, parses the VLM response, and returns `true` or `false`.
 
 The eval files live under `backend/eval/`:
 
@@ -117,7 +117,7 @@ To create a new eval, first record fold-check input video from the backend with 
 You can write the case YAML by hand, but generating a draft with a larger VLM is convenient. This works because the live app needs a fast model so the wearer gets instant feedback, but case generation is not in the user loop; it can spend more time per frame and use a smarter, slower model to draft labels. Start with a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. For example, `backend/eval/plans/full-run.yaml`:
 
 ```yaml
-video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
+video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
 sampling:
   every_s: 0.5
 targets:
@@ -145,7 +145,7 @@ The generator calls Gemini with the same fold-check prompt shape used by the run
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 
 ```yaml
-video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
+video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
 targets:
   step_1:
     samples:
