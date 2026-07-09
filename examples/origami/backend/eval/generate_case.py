@@ -458,6 +458,8 @@ def _label_missing_requests(
         nonlocal completed
         first_error: Exception | None = None
         for future in done:
+            if future.cancelled():
+                continue
             try:
                 labeled = future.result()
             except Exception as error:
@@ -481,8 +483,10 @@ def _label_missing_requests(
             )
         return first_error
 
-    def drain_pending() -> None:
+    def drain_pending(*, cancel_queued: bool = False) -> None:
         nonlocal pending
+        if cancel_queued:
+            pending = {future for future in pending if not future.cancel()}
         while pending:
             done, pending = wait(pending, return_when=FIRST_COMPLETED)
             record_completed(done)
@@ -521,7 +525,7 @@ def _label_missing_requests(
             if error is not None:
                 raise error
     except Exception:
-        drain_pending()
+        drain_pending(cancel_queued=True)
         raise
     finally:
         for future in pending:
