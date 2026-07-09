@@ -10,7 +10,7 @@ It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
 
 - Shows a visual reference for each origami folding step on the Rokid HUD
 - Checks the current fold with Overshoot and advances through the fixed workflow
-  - The camera input stream is composed with an reference origami state model, then sent to VLM for comparison/checking the the fold step is complete.
+  - The camera input stream is composed with a reference origami state image, then sent to a VLM to check whether the fold step is complete.
 - Controls:
   - Supports swiping forward/backward for manual step navigation
   - Uses a double tap to start from the start screen and reset while a session is running or completed
@@ -101,15 +101,46 @@ The two step-image sets are identical copies kept in both locations because Andr
 
 ### Recorded-Video Fold-Check Evals
 
-It's time-consuming to test this app using wearing actual glasses and repeat the same tasks over and over. To solve this, we use [`glasskit eval` CLI](../../cli/README.md).
+Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and then replay those checks with [`glasskit eval`](../../cli/README.md).
 
-The backend includes the eval suite under `backend/eval/`. It uses recorded task video, composes the same reference-image header used by the runtime, sends sampled frames to Overshoot, and compares the result with the YAML expectations.
+In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter uses the same fold-check path as the live backend: it composes the camera frame with the step reference image, sends the image to Overshoot, parses the VLM response, and returns `true`, `false`, or an error.
 
-Record a video by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`.
+The eval files live under `backend/eval/`:
 
-Create YAML (eval cases) from existing fold-check input recordings.
+- `adapter.py` connects `glasskit eval` to the origami fold-check logic.
+- `cases/*.yaml` are eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
+- `plans/*.yaml` are optional helper inputs for generating a first draft of a case from a recording.
+- `generate_case.py` can ask Gemini to pre-label planned timestamp ranges. Treat this as a bootstrap step, not ground truth; review the generated YAML before relying on it.
 
-Then you can create eval cases under `backend/eval/cases/*.yaml` and use `video:` paths to the video file. You can hand-author the file, but to make it easy, you can bootstrap the file using smarter (but slower) LLM, which does auto-label. To do this, write a label plan YAML; it only names the recording, sampling interval, and timestamp ranges to label for each target, for example `backend/eval/plans/full-run.yaml`:
+To create a new eval, first record fold-check input video from the app:
+
+```bash
+cd backend
+ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0
+```
+
+By default, recordings are written under `backend/debug/fold-check-inputs`. You can move the recording wherever you keep eval media, then reference it from a case YAML with `video:`. The path is resolved relative to the case YAML file.
+
+You can write a case YAML by hand under `backend/eval/cases/*.yaml`. A minimal case says which video to replay, how often to sample ranges, and what each step should return:
+
+```yaml
+video: "../../debug/fold-check-inputs/example-run.mp4"
+description: "Example run with incomplete and complete windows for step 1."
+sampling:
+  every_s: 0.5
+targets:
+  step_1:
+    label: "Step 1"
+    samples:
+      - range: [0.0, 12.0]
+        expect: false
+      - range: [12.0, 15.0]
+        expect: true
+```
+
+In this example, `glasskit eval` samples the video every 0.5 seconds. Frames from 0.0s up to 12.0s are expected to return `false`; frames from 12.0s up to 15.0s are expected to return `true`.
+
+For longer recordings, you can bootstrap a case with Gemini. Write a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. For example, `backend/eval/plans/full-run.yaml`:
 
 ```yaml
 video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
@@ -135,7 +166,7 @@ uv run --env-file .env python -m eval.generate_case \
   --output eval/cases/full-run-generated.yaml
 ```
 
-The generator calls Gemini with the same fold-check prompt shape used by the runtime path, and samples frames from the requested ranges. Then review/fix the generated YAML.
+The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. Review and fix the generated YAML before committing it, especially around transition moments where the fold changes from incomplete to complete.
 
 Run evals locally from `backend/` with the CLI:
 
@@ -147,7 +178,9 @@ uv run \
   glasskit eval run
 ```
 
-The committed `full-run` case expects the companion recordings directory at `../GlassKit_origami-recordings` relative to this repository checkout. See the [CLI README](../../cli/README.md) for details about the eval file format and command options.
+The command prints case progress, per-target results, and a final summary. Failures mean the model-backed fold checker returned a different value from the YAML expectation for one or more sampled frames. Use `glasskit eval list-samples` to inspect the timestamps that will be tested before running the model, and use `glasskit eval run --case <case-name> --target <step-id> --verbose --keep-going` when debugging one step.
+
+The committed `full-run` case expects the companion recordings directory at `../GlassKit_origami-recordings` relative to this repository checkout. See the [CLI README](../../cli/README.md) for the full eval file format, command options, and CI gate settings.
 
 ## Vision Path Comparison
 
