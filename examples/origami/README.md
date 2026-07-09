@@ -101,7 +101,7 @@ The two step-image sets are identical copies kept in both locations because Andr
 
 ### Recorded-Video Fold-Check Evals
 
-Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and then replay those checks with [`glasskit eval`](../../cli/README.md).
+Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
 
 In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter uses the same fold-check path as the live backend: it composes the camera frame with the step reference image, sends the image to Overshoot, parses the VLM response, and returns `true` or `false`.
 
@@ -109,19 +109,12 @@ The eval files live under `backend/eval/`:
 
 - `adapter.py` connects `glasskit eval` to the origami fold-check logic.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
-- `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter offline model and writes the first draft of a case.
+- `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
 
-To create a new eval, first record fold-check input video from the app:
+To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
 
-```bash
-cd backend
-ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0
-```
-
-By default, recordings are written under `backend/debug/fold-check-inputs`. You can move the recording wherever you keep eval media.
-
-For most new evals, generate the first case YAML instead of writing all expectations by hand. This works because case generation is offline. The live runtime needs a fast model so the wearer gets fold feedback without waiting too long, but case generation is not in the user loop; it can spend more time per frame and use a smarter, slower model to draft labels. Start with a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. The plan does not include the final `true` or `false` expectations; Gemini proposes those values when it generates the case. For example, `backend/eval/plans/full-run.yaml`:
+You can write the case YAML by hand, but generating a draft with a larger VLM is convenient. This works because the live app needs a fast model so the wearer gets instant feedback, but case generation is not in the user loop; it can spend more time per frame and use a smarter, slower model to draft labels. Start with a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. For example, `backend/eval/plans/full-run.yaml`:
 
 ```yaml
 video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
@@ -144,43 +137,36 @@ Generate a new case YAML:
 cd backend
 uv run --env-file .env python -m eval.generate_case \
   --plan eval/plans/full-run.yaml \
-  --output eval/cases/full-run-generated.yaml
+  --output eval/cases/full-run.yaml
 ```
 
-The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It writes a case YAML under `backend/eval/cases/`, with a `video:` path resolved relative to the case file. Review and fix the generated YAML before committing it, especially around transition moments where the fold changes from incomplete to complete. The reviewed case file is what `glasskit eval` runs.
+The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It writes a case YAML to `--output`. Review and fix the generated YAML before committing it. The reviewed case file is what `glasskit eval` runs.
 
-If you already know the exact expected windows, you can also hand-author a case YAML under `backend/eval/cases/*.yaml`. A minimal case says which video to replay, how often to sample ranges, and what each step should return:
+Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 
 ```yaml
-video: "../../debug/fold-check-inputs/example-run.mp4"
-description: "Example run with incomplete and complete windows for step 1."
-sampling:
-  every_s: 0.5
+video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
 targets:
   step_1:
-    label: "Step 1"
     samples:
-      - range: [0.0, 12.0]
+      - range: [0.0, 21.0]
         expect: false
-      - range: [12.0, 15.0]
+      - range: [21.0, 51.0]
         expect: true
+  step_2:
+    ...
 ```
 
-In this example, `glasskit eval` samples the video every 0.5 seconds. Frames from 0.0s up to 12.0s are expected to return `false`; frames from 12.0s up to 15.0s are expected to return `true`.
+In this example, frames from 0.0s up to 21.0s are expected to return `false`; frames from 21.0s up to 51.0s are expected to return `true`.
 
-Run evals locally from `backend/` with the CLI:
+Run evals locally from `backend/` with the default CLI options:
 
 ```bash
 cd backend
-uv run \
-  --with glasskit.ai \
-  --env-file .env \
-  glasskit eval run
+uv run --with glasskit.ai --env-file .env glasskit eval run
 ```
 
-The command prints case progress, per-target results, and a final summary. Failures mean the model-backed fold checker returned a different value from the YAML expectation for one or more sampled frames. Use `glasskit eval list-samples` to inspect the timestamps that will be tested before running the model, and use `glasskit eval run --case <case-name> --target <step-id> --verbose --keep-going` when debugging one step.
-
-The committed `full-run` case expects the companion recordings directory at `../GlassKit_origami-recordings` relative to this repository checkout.
+The command prints case progress, per-target results, and a final summary. You can use these results to improve the app and aim for a higher score.
 
 ## Vision Path Comparison
 
