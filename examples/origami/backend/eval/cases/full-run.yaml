@@ -1,60 +1,197 @@
-video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
-description: "Full origami workflow recording with expected incomplete/complete windows for each fold-check step."
+video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
+description: Full origami workflow recording
 sampling:
   every_s: 0.5
 targets:
   step_1:
-    label: "Step 1"
     samples:
-      - range: [0.0, 49.0]
+      - range: [0.0, 38.0]
         expect: false
-      - range: [49.0, 51.0]
+      - range: [38.0, 42.0]
         expect: true
-
+      - range: [42.0, 42.5]
+        expect: false
+      - range: [42.5, 51.5]
+        expect: true
+      - range: [51.5, 57.0]
+        expect: false
+      - range: [57.0, 57.5]
+        expect: true
+      - range: [57.5, 62.5]
+        expect: false
+      - range: [62.5, 64.0]
+        expect: true
   step_2:
-    label: "Step 2"
     samples:
-      - range: [64.0, 113.0]
+      - range: [64.0, 101.5]
         expect: false
-      - range: [113.0, 117.0]
+      - range: [101.5, 103.0]
         expect: true
-
+      - range: [103.0, 104.5]
+        expect: false
+      - range: [104.5, 105.5]
+        expect: true
+      - range: [105.5, 106.5]
+        expect: false
+      - range: [106.5, 107.0]
+        expect: true
+      - range: [107.0, 108.0]
+        expect: false
+      - range: [108.0, 108.5]
+        expect: true
+      - range: [108.5, 113.5]
+        expect: false
+      - range: [113.5, 114.0]
+        expect: true
+      - range: [114.0, 114.5]
+        expect: false
+      - range: [114.5, 117.0]
+        expect: true
   step_3:
-    label: "Step 3"
     samples:
-      - range: [117.0, 151.0]
+      - range: [117.0, 119.5]
         expect: false
-      - range: [151.0, 153.0]
+      - range: [119.5, 120.0]
         expect: true
-
+      - range: [120.0, 132.0]
+        expect: false
+      - range: [132.0, 133.0]
+        expect: true
+      - range: [133.0, 147.0]
+        expect: false
+      - range: [147.0, 147.5]
+        expect: true
+      - range: [147.5, 148.5]
+        expect: false
+      - range: [148.5, 149.5]
+        expect: true
+      - range: [149.5, 151.0]
+        expect: false
+      - range: [151.0, 154.0]
+        expect: true
+      - range: [154.0, 164.0]
+        expect: false
+      - range: [164.0, 164.5]
+        expect: true
+      - range: [164.5, 165.0]
+        expect: false
   step_4:
-    label: "Step 4"
     samples:
-      - range: [164.0, 194.0]
+      - range: [165.0, 176.5]
         expect: false
-      - range: [194.0, 195.0]
+      - range: [176.5, 177.5]
         expect: true
-
+      - range: [177.5, 178.5]
+        expect: false
+      - range: [178.5, 179.0]
+        expect: true
+      - range: [179.0, 182.5]
+        expect: false
+      - range: [182.5, 183.5]
+        expect: true
+      - range: [183.5, 184.0]
+        expect: false
+      - range: [184.0, 185.5]
+        expect: true
+      - range: [185.5, 186.5]
+        expect: false
+      - range: [186.5, 187.0]
+        expect: true
+      - range: [187.0, 187.5]
+        expect: false
+      - range: [187.5, 189.5]
+        expect: true
+      - range: [189.5, 190.0]
+        expect: false
+      - range: [190.0, 191.0]
+        expect: true
+      - range: [191.0, 193.0]
+        expect: false
+      - range: [193.0, 195.5]
+        expect: true
+      - range: [195.5, 200.0]
+        expect: false
   step_5:
-    label: "Step 5"
     samples:
-      - range: [195.0, 212.0]
+      - range: [200.0, 203.5]
         expect: false
-      - range: [212.0, 215.0]
+      - range: [203.5, 204.0]
         expect: true
-
+      - range: [204.0, 207.5]
+        expect: false
+      - range: [207.5, 208.0]
+        expect: true
+      - range: [208.0, 209.0]
+        expect: false
+      - range: [209.0, 210.5]
+        expect: true
+      - range: [210.5, 211.5]
+        expect: false
+      - range: [211.5, 212.0]
+        expect: true
+      - range: [212.0, 212.5]
+        expect: false
+      - range: [212.5, 213.0]
+        expect: true
+      - range: [213.0, 213.5]
+        expect: false
+      - range: [213.5, 215.0]
+        expect: true
+      - range: [215.0, 222.0]
+        expect: false
+      - range: [222.0, 222.5]
+        expect: true
+      - range: [222.5, 226.0]
+        expect: false
   step_6:
-    label: "Step 6"
     samples:
-      - range: [215.0, 247.0]
+      - range: [226.0, 234.0]
         expect: false
-      - range: [247.0, 248.0]
+      - range: [234.0, 235.0]
         expect: true
-
+      - range: [235.0, 237.5]
+        expect: false
+      - range: [237.5, 238.5]
+        expect: true
+      - range: [238.5, 239.5]
+        expect: false
+      - range: [239.5, 240.5]
+        expect: true
+      - range: [240.5, 242.5]
+        expect: false
+      - range: [242.5, 243.5]
+        expect: true
+      - range: [243.5, 244.0]
+        expect: false
+      - range: [244.0, 244.5]
+        expect: true
+      - range: [244.5, 247.5]
+        expect: false
+      - range: [247.5, 248.0]
+        expect: true
+      - range: [248.0, 258.0]
+        expect: false
   step_7:
-    label: "Step 7"
     samples:
-      - range: [248.0, 271.0]
+      - range: [258.0, 270.5]
         expect: false
-      - range: [290.0, 299.5]
+      - range: [270.5, 274.0]
         expect: true
+      - range: [274.0, 275.5]
+        expect: false
+      - range: [275.5, 277.5]
+        expect: true
+      - range: [277.5, 278.0]
+        expect: false
+      - range: [278.0, 278.5]
+        expect: true
+      - range: [278.5, 286.0]
+        expect: false
+      - range: [286.0, 287.0]
+        expect: true
+      - range: [287.0, 289.0]
+        expect: false
+      - range: [289.0, 289.5]
+        expect: true
+      - range: [289.5, 291.0]
+        expect: false
