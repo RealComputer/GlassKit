@@ -11,6 +11,7 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -44,6 +45,7 @@ GEMINI_THINKING_LEVEL = "medium"
 JPEG_QUALITY = 90
 CACHE_VERSION = 1
 DEFAULT_EVERY_S = 0.5
+DEFAULT_CONCURRENCY = 8
 TIME_EPSILON = 1e-9
 
 
@@ -85,6 +87,13 @@ class GeminiResult:
     interaction_id: str | None
 
 
+@dataclass(frozen=True)
+class LabeledSample:
+    request: SampleRequest
+    result: GeminiResult
+    elapsed_s: float
+
+
 class _FlowList(list[float]):
     pass
 
@@ -123,6 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=output_path,
             target_ids=set(args.target or []),
             cache_path=cache_path,
+            concurrency=args.concurrency,
         )
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
@@ -170,7 +180,23 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default=[],
         help="Target id to label. Repeat to label multiple targets. Defaults to all.",
     )
+    parser.add_argument(
+        "--concurrency",
+        type=_positive_int_arg,
+        default=DEFAULT_CONCURRENCY,
+        help=f"Maximum concurrent Gemini calls. Defaults to {DEFAULT_CONCURRENCY}.",
+    )
     return parser.parse_args(argv)
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return parsed
 
 
 def _run_generation(
@@ -179,7 +205,9 @@ def _run_generation(
     output_path: Path,
     target_ids: set[str],
     cache_path: Path,
+    concurrency: int,
 ) -> None:
+    run_start_s = time.monotonic()
     if output_path.exists():
         raise RuntimeError(f"output already exists: {output_path}")
 
@@ -202,49 +230,26 @@ def _run_generation(
     missing_requests = [
         request for request in requests if request.cache_key not in results
     ]
-    print(
-        f"labeling {len(requests)} samples "
-        f"({len(results)} cached, {len(missing_requests)} Gemini calls)"
-    )
-
+    call_text = f"{len(missing_requests)} Gemini calls"
     if missing_requests:
-        client = genai.Client()
-        missing_by_time: dict[str, list[SampleRequest]] = defaultdict(list)
-        for request in missing_requests:
-            missing_by_time[_time_key(request.timestamp_s)].append(request)
+        call_text += f", concurrency {concurrency}"
+    print(f"labeling {len(requests)} samples ({len(results)} cached, {call_text})")
 
-        completed = len(results)
-        for time_key, camera_image in _decode_sample_images(
-            plan.video_path,
-            [_time_value(request.timestamp_s) for request in missing_requests],
-        ):
-            for request in missing_by_time[time_key]:
-                step = steps[request.target_id]
-                composite = compose_fold_check_image(
-                    camera_image,
-                    reference_images[request.target_id],
-                )
-                result = _call_gemini(
-                    client,
-                    image=composite,
-                    prompt=step.criteria,
-                    log_context=(
-                        f"{request.target_id} at {_format_time(request.timestamp_s)}s"
-                    ),
-                )
-                results[request.cache_key] = result
-                _append_cache_result(
-                    cache_path,
-                    request=request,
-                    result=result,
-                    plan=plan,
-                )
-                completed += 1
-                print(
-                    f"[{completed}/{len(requests)}] {request.target_id} "
-                    f"{_format_time(request.timestamp_s)}s -> "
-                    f"{str(result.value).lower()}"
-                )
+    gemini_durations: list[float] = []
+    gemini_wall_s = 0.0
+    if missing_requests:
+        gemini_start_s = time.monotonic()
+        gemini_durations = _label_missing_requests(
+            plan=plan,
+            steps=steps,
+            reference_images=reference_images,
+            requests=requests,
+            missing_requests=missing_requests,
+            results=results,
+            cache_path=cache_path,
+            concurrency=concurrency,
+        )
+        gemini_wall_s = time.monotonic() - gemini_start_s
 
     missing_keys = expected_cache_keys - set(results)
     if missing_keys:
@@ -260,6 +265,15 @@ def _run_generation(
     if cache_path.exists():
         cache_path.unlink()
     print(f"wrote {output_path}")
+    print(
+        _format_completion_summary(
+            total_samples=len(requests),
+            cached_samples=len(requests) - len(gemini_durations),
+            gemini_durations=gemini_durations,
+            gemini_wall_s=gemini_wall_s,
+            total_elapsed_s=time.monotonic() - run_start_s,
+        )
+    )
 
 
 def _load_label_plan(path: Path, *, target_ids: set[str]) -> LabelPlan:
@@ -416,6 +430,108 @@ def _sample_cache_key(
     }
     raw = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _label_missing_requests(
+    *,
+    plan: LabelPlan,
+    steps: dict[str, OrigamiStep],
+    reference_images: dict[str, Image.Image],
+    requests: list[SampleRequest],
+    missing_requests: list[SampleRequest],
+    results: dict[str, GeminiResult],
+    cache_path: Path,
+    concurrency: int,
+) -> list[float]:
+    missing_by_time: dict[str, list[SampleRequest]] = defaultdict(list)
+    for request in missing_requests:
+        missing_by_time[_time_key(request.timestamp_s)].append(request)
+
+    completed = len(results)
+    durations: list[float] = []
+    pending: set[Future[LabeledSample]] = set()
+    submitted = 0
+    max_pending = concurrency * 2
+    executor = ThreadPoolExecutor(max_workers=concurrency)
+
+    def record_completed(done: set[Future[LabeledSample]]) -> None:
+        nonlocal completed
+        for future in done:
+            labeled = future.result()
+            results[labeled.request.cache_key] = labeled.result
+            _append_cache_result(
+                cache_path,
+                request=labeled.request,
+                result=labeled.result,
+                plan=plan,
+            )
+            completed += 1
+            durations.append(labeled.elapsed_s)
+            print(
+                f"[{completed}/{len(requests)}] {labeled.request.target_id} "
+                f"{_format_time(labeled.request.timestamp_s)}s -> "
+                f"{str(labeled.result.value).lower()} "
+                f"({_format_duration(labeled.elapsed_s)})"
+            )
+
+    try:
+        for time_key, camera_image in _decode_sample_images(
+            plan.video_path,
+            [_time_value(request.timestamp_s) for request in missing_requests],
+        ):
+            for request in missing_by_time.get(time_key, []):
+                while len(pending) >= max_pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    record_completed(done)
+                step = steps[request.target_id]
+                pending.add(
+                    executor.submit(
+                        _label_sample,
+                        request,
+                        camera_image.copy(),
+                        reference_images[request.target_id].copy(),
+                        step.criteria,
+                    )
+                )
+                submitted += 1
+
+            done, pending = wait(pending, timeout=0, return_when=FIRST_COMPLETED)
+            record_completed(done)
+
+        while pending:
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            record_completed(done)
+    finally:
+        for future in pending:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+
+    if submitted != len(missing_requests):
+        raise RuntimeError(
+            f"decoded {submitted} of {len(missing_requests)} requested samples"
+        )
+    return durations
+
+
+def _label_sample(
+    request: SampleRequest,
+    camera_image: Image.Image,
+    reference_image: Image.Image,
+    prompt: str,
+) -> LabeledSample:
+    start_s = time.monotonic()
+    composite = compose_fold_check_image(camera_image, reference_image)
+    result = _call_gemini(
+        genai.Client(),
+        image=composite,
+        prompt=prompt,
+        log_context=f"{request.target_id} at {_format_time(request.timestamp_s)}s",
+    )
+    return LabeledSample(
+        request=request,
+        result=result,
+        elapsed_s=time.monotonic() - start_s,
+    )
 
 
 def _call_gemini(
@@ -802,6 +918,40 @@ def _time_key(value: float) -> str:
 
 def _format_time(value: float) -> str:
     return f"{_time_value(value):g}"
+
+
+def _format_completion_summary(
+    *,
+    total_samples: int,
+    cached_samples: int,
+    gemini_durations: list[float],
+    gemini_wall_s: float,
+    total_elapsed_s: float,
+) -> str:
+    if not gemini_durations:
+        return (
+            f"finished {total_samples} samples in "
+            f"{_format_duration(total_elapsed_s)}; all samples cached"
+        )
+
+    avg_call_s = sum(gemini_durations) / len(gemini_durations)
+    wall_avg_s = gemini_wall_s / len(gemini_durations)
+    return (
+        f"finished {total_samples} samples in {_format_duration(total_elapsed_s)}; "
+        f"{cached_samples} cached, {len(gemini_durations)} Gemini calls, "
+        f"avg {_format_duration(avg_call_s)}/call "
+        f"(wall {_format_duration(wall_avg_s)}/call)"
+    )
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds < 1:
+        return f"{seconds * 1000:.0f}ms"
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    remaining = seconds - minutes * 60
+    return f"{minutes}m{remaining:04.1f}s"
 
 
 if __name__ == "__main__":
