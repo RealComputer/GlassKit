@@ -454,10 +454,16 @@ def _label_missing_requests(
     max_pending = concurrency * 2
     executor = ThreadPoolExecutor(max_workers=concurrency)
 
-    def record_completed(done: set[Future[LabeledSample]]) -> None:
+    def record_completed(done: set[Future[LabeledSample]]) -> Exception | None:
         nonlocal completed
+        first_error: Exception | None = None
         for future in done:
-            labeled = future.result()
+            try:
+                labeled = future.result()
+            except Exception as error:
+                if first_error is None:
+                    first_error = error
+                continue
             results[labeled.request.cache_key] = labeled.result
             _append_cache_result(
                 cache_path,
@@ -473,6 +479,13 @@ def _label_missing_requests(
                 f"{str(labeled.result.value).lower()} "
                 f"({_format_duration(labeled.elapsed_s)})"
             )
+        return first_error
+
+    def drain_pending() -> None:
+        nonlocal pending
+        while pending:
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            record_completed(done)
 
     try:
         for time_key, camera_image in _decode_sample_images(
@@ -482,7 +495,9 @@ def _label_missing_requests(
             for request in missing_by_time.get(time_key, []):
                 while len(pending) >= max_pending:
                     done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                    record_completed(done)
+                    error = record_completed(done)
+                    if error is not None:
+                        raise error
                 step = steps[request.target_id]
                 pending.add(
                     executor.submit(
@@ -496,11 +511,18 @@ def _label_missing_requests(
                 submitted += 1
 
             done, pending = wait(pending, timeout=0, return_when=FIRST_COMPLETED)
-            record_completed(done)
+            error = record_completed(done)
+            if error is not None:
+                raise error
 
         while pending:
             done, pending = wait(pending, return_when=FIRST_COMPLETED)
-            record_completed(done)
+            error = record_completed(done)
+            if error is not None:
+                raise error
+    except Exception:
+        drain_pending()
+        raise
     finally:
         for future in pending:
             future.cancel()
