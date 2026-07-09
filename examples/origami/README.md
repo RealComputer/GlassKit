@@ -10,6 +10,7 @@ It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
 
 - Shows a visual reference for each origami folding step on the Rokid HUD
 - Checks the current fold with Overshoot and advances through the fixed workflow
+  - The camera input stream is composed with an reference origami state model, then sent to VLM for comparison/checking the the fold step is complete.
 - Controls:
   - Supports swiping forward/backward for manual step navigation
   - Uses a double tap to start from the start screen and reset while a session is running or completed
@@ -93,18 +94,22 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 - Rokid HUD step images: `rokid/app/src/main/res/drawable-nodpi/origami_step_*.png`
 - Backend demo HUD step images: `backend/assets/step-imgs/origami_step_*.png`
 
-The two step-image sets are byte-identical copies kept in both locations because Android resources and backend demo assets load from separate trees.
+The two step-image sets are identical copies kept in both locations because Android resources and backend demo assets load from separate trees.
 
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
 
 ### Recorded-Video Fold-Check Evals
 
-The backend includes a `glasskit eval` suite under `backend/eval/`. Its default adapter at `backend/eval/adapter.py` evaluates recorded camera-input videos, composes the same reference-image header used by the live fold-check path, sends each sampled frame to Overshoot chat completions as a data URL, and compares the parsed boolean result with the case YAML expectations.
+It's time-consuming to test this app using wearing actual glasses and repeat the same tasks over and over. To solve this, we use [`glasskit eval` CLI](../../cli/README.md).
 
-Create eval cases from existing fold-check input recordings by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true` and keeping the generated MP4 files outside the repository. Hand-authored eval cases live under `backend/eval/cases/*.yaml` and use `video:` paths relative to the case file.
+The backend includes the eval suite under `backend/eval/`. It uses recorded task video, composes the same reference-image header used by the runtime, sends sampled frames to Overshoot, and compares the result with the YAML expectations.
 
-To bootstrap a case with Gemini labels, write a label plan YAML first. The plan is not an eval case; it only names the recording, sampling interval, and timestamp ranges to label for each target:
+Record a video by running the app with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`.
+
+Create YAML (eval cases) from existing fold-check input recordings.
+
+Then you can create eval cases under `backend/eval/cases/*.yaml` and use `video:` paths to the video file. You can hand-author the file, but to make it easy, you can bootstrap the file using smarter (but slower) LLM, which does auto-label. To do this, write a label plan YAML; it only names the recording, sampling interval, and timestamp ranges to label for each target, for example `backend/eval/plans/full-run.yaml`:
 
 ```yaml
 video: "../../../../../GlassKit_origami-recordings/full-run.mp4"
@@ -119,20 +124,20 @@ targets:
       - [70.0, 82.5]
 ```
 
-Optional top-level `description` and per-target `label` fields are copied into the generated case. Keep plans outside `eval/cases/`, for example under `backend/eval/plans/`, so draft labeling instructions are separate from runnable cases.
+Before running the generator, add `GEMINI_API_KEY` to `backend/.env`.
 
-Before running the generator, add `GEMINI_API_KEY` to `backend/.env`; the Google GenAI SDK also accepts `GOOGLE_API_KEY`. Generate a new case YAML from `backend/`:
+Generate a new case YAML:
 
 ```bash
 cd backend
 uv run --env-file .env python -m eval.generate_case \
-  --plan eval/plans/full-run-label-plan.yaml \
+  --plan eval/plans/full-run.yaml \
   --output eval/cases/full-run-generated.yaml
 ```
 
-Use `--target step_1` to label only one target while smoke testing or focusing on part of the plan; repeat the flag to include multiple targets. The generator calls Gemini 3.5 Flash with the same fold-check prompt shape used by the runtime path, samples frames from the requested ranges, and writes a resumable partial cache under `eval/runs/generate-case/` while it runs. If a Gemini or network error stops the run after some labels are written, the script prints `partial cache kept at ...` followed by `rerun the same command to resume; delete this file to start over`. Rerun the same command to reuse completed labels, then review the generated YAML before running the eval against the runtime Qwen setup.
+The generator calls Gemini with the same fold-check prompt shape used by the runtime path, and samples frames from the requested ranges. Then review/fix the generated YAML.
 
-Run evals locally from `backend/` with the published CLI package:
+Run evals locally from `backend/` with the CLI:
 
 ```bash
 cd backend
