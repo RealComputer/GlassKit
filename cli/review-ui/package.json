@@ -1,12 +1,16 @@
 {
-  "name": "review-ui",
+  "name": "glasskit-eval-review-ui",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run lint && npm run typecheck && npm run test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -28,6 +32,7 @@
     "oxlint": "^1.71.0",
     "typescript": "~7.0.2",
     "vite": "^8.1.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "jsdom": "^26.1.0"
   }
 }

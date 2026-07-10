@@ -1,34 +1,19 @@
-# React + TypeScript + Vite
+# GlassKit Eval Review UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+This Vite workspace builds the browser application embedded in the GlassKit Python package. The generated files are written to `../src/glasskit/eval/review/static/` and are committed so runtime users do not need Node.js.
 
-Currently, two official plugins are available:
+Start the local Python review server first:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd ..
+uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/two-state --port 8765 --no-open
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Then start Vite in another shell. `/api` is proxied to the Python server:
+
+```bash
+npm ci
+GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev
+```
+
+Use `npm run check` for lint, type checking, and unit tests. Use `npm run build` to type-check and replace the packaged static output. The browser preview is intentionally best effort; eval decoding still uses PyAV and may select an adjacent frame.
