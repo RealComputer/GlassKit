@@ -1,262 +1,215 @@
-import { Minus, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState, type RefObject } from 'react'
-import type {
-  CompareMode,
-  ExpectType,
-  ReviewPoint,
-} from '../api/types.ts'
-import { useApp } from '../state/AppContext.tsx'
-import { SAMPLE_DURATION_TOLERANCE_S } from '../state/reducer.ts'
-import { formatSeconds } from '../utils/format.ts'
+import { Minus, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import type { CompareMode, ExpectType, ReviewPoint } from "../api/types.ts";
+import { useApp } from "../state/AppContext.tsx";
+import { SAMPLE_DURATION_TOLERANCE_S } from "../state/reducer.ts";
+import { formatSeconds } from "../utils/format.ts";
 
-const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
+const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 const allModes: { value: CompareMode; label: string }[] = [
-  { value: 'exact', label: 'Exact' },
-  { value: 'numeric', label: 'Numeric' },
-  { value: 'json_subset', label: 'JSON subset' },
-  { value: 'set_equals', label: 'Set equals' },
-  { value: 'set_contains_any', label: 'Set contains any' },
-  { value: 'set_contains_all', label: 'Set contains all' },
-]
+  { value: "exact", label: "Exact" },
+  { value: "numeric", label: "Numeric" },
+  { value: "json_subset", label: "JSON subset" },
+  { value: "set_equals", label: "Set equals" },
+  { value: "set_contains_any", label: "Set contains any" },
+  { value: "set_contains_all", label: "Set contains all" },
+];
 
 function allowedModes(type: ExpectType): CompareMode[] {
-  if (type === 'number') return ['exact', 'numeric']
-  if (type === 'array') {
-    return [
-      'exact',
-      'json_subset',
-      'set_equals',
-      'set_contains_any',
-      'set_contains_all',
-    ]
+  if (type === "number") return ["exact", "numeric"];
+  if (type === "array") {
+    return ["exact", "json_subset", "set_equals", "set_contains_any", "set_contains_all"];
   }
-  if (type === 'object') return ['exact', 'json_subset']
-  return ['exact']
+  if (type === "object") return ["exact", "json_subset"];
+  return ["exact"];
 }
 
 function defaultJson(type: ExpectType): string {
   return {
-    null: 'null',
-    boolean: 'false',
-    number: '0',
+    null: "null",
+    boolean: "false",
+    number: "0",
     string: '""',
-    array: '[]',
-    object: '{}',
-  }[type]
+    array: "[]",
+    object: "{}",
+  }[type];
 }
 
 function editorText(point: ReviewPoint): string {
-  if (point.expect_type !== 'string') return point.expect_json
+  if (point.expect_type !== "string") return point.expect_json;
   try {
-    return JSON.parse(point.expect_json) as string
+    return JSON.parse(point.expect_json) as string;
   } catch {
-    return point.expect_json
+    return point.expect_json;
   }
 }
 
-function validateStructured(text: string, type: 'array' | 'object'): string | null {
+function validateStructured(text: string, type: "array" | "object"): string | null {
   try {
-    const parsed = JSON.parse(text) as unknown
+    const parsed = JSON.parse(text) as unknown;
     const valid =
-      type === 'array'
+      type === "array"
         ? Array.isArray(parsed)
-        : typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-    return valid ? null : `Enter a JSON ${type}.`
+        : typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+    return valid ? null : `Enter a JSON ${type}.`;
   } catch (error) {
-    return error instanceof SyntaxError ? error.message : 'Enter valid JSON.'
+    return error instanceof SyntaxError ? error.message : "Enter valid JSON.";
   }
 }
 
 export function Inspector() {
-  const {
-    state,
-    dispatch,
-    updatePoint,
-    deletePoint,
-    canDeletePoint,
-    setFormError,
-  } = useApp()
-  const workspace = state.selectedCaseId
-    ? state.documents[state.selectedCaseId]
-    : null
-  const target = workspace?.document.targets.find(
-    (item) => item.id === state.selectedTargetId,
-  )
-  const point = target?.points.find((item) => item.id === state.selectedPointId)
-  const pointRef = useRef(point)
-  pointRef.current = point
-  const workspaceRef = useRef(workspace)
-  workspaceRef.current = workspace
-  const selectionKey = target && point ? `${target.id}:${point.id}` : null
-  const [timestamp, setTimestamp] = useState('')
-  const [expectText, setExpectText] = useState('')
-  const [field, setField] = useState('')
-  const [tolerance, setTolerance] = useState('')
-  const [comment, setComment] = useState('')
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const expectationRef = useRef<
-    HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement
-  >(null)
+  const { state, dispatch, updatePoint, deletePoint, canDeletePoint, setFormError } = useApp();
+  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const target = workspace?.document.targets.find((item) => item.id === state.selectedTargetId);
+  const point = target?.points.find((item) => item.id === state.selectedPointId);
+  const pointRef = useRef(point);
+  pointRef.current = point;
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
+  const selectionKey = target && point ? `${target.id}:${point.id}` : null;
+  const [timestamp, setTimestamp] = useState("");
+  const [expectText, setExpectText] = useState("");
+  const [field, setField] = useState("");
+  const [tolerance, setTolerance] = useState("");
+  const [comment, setComment] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const expectationRef = useRef<HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement>(null);
 
   useEffect(() => {
-    const selected = pointRef.current
-    if (!selected) return
-    setTimestamp(String(selected.timestamp_s))
-    setExpectText(editorText(selected))
-    setField(selected.field ?? '')
-    setTolerance(
-      selected.compare.tolerance === null
-        ? ''
-        : String(selected.compare.tolerance),
-    )
-    setComment(selected.comment ?? '')
-    setErrors({})
-  }, [selectionKey])
+    const selected = pointRef.current;
+    if (!selected) return;
+    setTimestamp(String(selected.timestamp_s));
+    setExpectText(editorText(selected));
+    setField(selected.field ?? "");
+    setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
+    setComment(selected.comment ?? "");
+    setErrors({});
+  }, [selectionKey]);
 
   useEffect(() => {
-    const selected = pointRef.current
-    const currentWorkspace = workspaceRef.current
-    if (!selected || !selectionKey || !currentWorkspace) return
+    const selected = pointRef.current;
+    const currentWorkspace = workspaceRef.current;
+    if (!selected || !selectionKey || !currentWorkspace) return;
     const hasError = (name: string) =>
-      Boolean(currentWorkspace.formErrors[`${selectionKey}:${name}`])
-    if (!hasError('timestamp')) setTimestamp(String(selected.timestamp_s))
-    if (!hasError('expect')) setExpectText(editorText(selected))
-    setField(selected.field ?? '')
-    if (!hasError('tolerance')) {
-      setTolerance(
-        selected.compare.tolerance === null
-          ? ''
-          : String(selected.compare.tolerance),
-      )
+      Boolean(currentWorkspace.formErrors[`${selectionKey}:${name}`]);
+    if (!hasError("timestamp")) setTimestamp(String(selected.timestamp_s));
+    if (!hasError("expect")) setExpectText(editorText(selected));
+    setField(selected.field ?? "");
+    if (!hasError("tolerance")) {
+      setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
     }
-    setComment(selected.comment ?? '')
-    if (!['timestamp', 'expect', 'tolerance'].some(hasError)) setErrors({})
-  }, [selectionKey, workspace?.acceptedDocument])
+    setComment(selected.comment ?? "");
+    if (!["timestamp", "expect", "tolerance"].some(hasError)) setErrors({});
+  }, [selectionKey, workspace?.acceptedDocument]);
 
   useEffect(() => {
     if (point?.origin === null) {
-      requestAnimationFrame(() => expectationRef.current?.focus())
+      requestAnimationFrame(() => expectationRef.current?.focus());
     }
-  }, [point?.id, point?.origin])
+  }, [point?.id, point?.origin]);
 
-  const errorKey = (name: string) => `${target?.id}:${point?.id}:${name}`
+  const errorKey = (name: string) => `${target?.id}:${point?.id}:${name}`;
   const setError = (name: string, message: string | null) => {
     setErrors((current) => {
-      const next = { ...current }
-      if (message) next[name] = message
-      else delete next[name]
-      return next
-    })
-    setFormError(errorKey(name), message)
-  }
+      const next = { ...current };
+      if (message) next[name] = message;
+      else delete next[name];
+      return next;
+    });
+    setFormError(errorKey(name), message);
+  };
 
-  const duration = workspace?.document.video?.duration_s ?? null
+  const duration = workspace?.document.video?.duration_s ?? null;
   const validateTimestamp = (value: string): number | null => {
-    const parsed = Number(value)
-    let error: string | null = null
-    if (!value.trim() || !Number.isFinite(parsed)) error = 'Enter a finite time.'
-    else if (parsed < 0) error = 'Time cannot be negative.'
-    else if (
-      duration !== null &&
-      parsed > duration + SAMPLE_DURATION_TOLERANCE_S
-    ) {
-      error = `Time must not exceed ${duration.toFixed(3)} seconds.`
+    const parsed = Number(value);
+    let error: string | null = null;
+    if (!value.trim() || !Number.isFinite(parsed)) error = "Enter a finite time.";
+    else if (parsed < 0) error = "Time cannot be negative.";
+    else if (duration !== null && parsed > duration + SAMPLE_DURATION_TOLERANCE_S) {
+      error = `Time must not exceed ${duration.toFixed(3)} seconds.`;
     } else if (
       target?.points.some(
         (item) => item.id !== point?.id && Math.abs(item.timestamp_s - parsed) <= 1e-9,
       )
     ) {
-      error = 'Another point already uses this time.'
+      error = "Another point already uses this time.";
     }
-    setError('timestamp', error)
-    return error ? null : parsed
-  }
+    setError("timestamp", error);
+    return error ? null : parsed;
+  };
 
   const changeTimestamp = (value: string, immediate = false) => {
-    setTimestamp(value)
-    const parsed = validateTimestamp(value)
+    setTimestamp(value);
+    const parsed = validateTimestamp(value);
     if (parsed !== null && point && target) {
-      updatePoint(target.id, point.id, { timestamp_s: parsed }, immediate)
+      updatePoint(target.id, point.id, { timestamp_s: parsed }, immediate);
     }
-  }
+  };
 
   const changeExpect = (value: string, immediate = false) => {
-    if (!point || !target) return
-    setExpectText(value)
-    let error: string | null = null
-    let expectJson = value
-    if (point.expect_type === 'number') {
-      if (!JSON_NUMBER.test(value)) error = 'Enter a valid JSON number.'
-      else if (
-        (value.includes('.') || /[eE]/.test(value)) &&
-        !Number.isFinite(Number(value))
-      ) {
-        error = 'Enter a finite JSON number.'
+    if (!point || !target) return;
+    setExpectText(value);
+    let error: string | null = null;
+    let expectJson = value;
+    if (point.expect_type === "number") {
+      if (!JSON_NUMBER.test(value)) error = "Enter a valid JSON number.";
+      else if ((value.includes(".") || /[eE]/.test(value)) && !Number.isFinite(Number(value))) {
+        error = "Enter a finite JSON number.";
       }
-    } else if (point.expect_type === 'string') {
-      expectJson = JSON.stringify(value)
-    } else if (point.expect_type === 'array' || point.expect_type === 'object') {
-      error = validateStructured(value, point.expect_type)
+    } else if (point.expect_type === "string") {
+      expectJson = JSON.stringify(value);
+    } else if (point.expect_type === "array" || point.expect_type === "object") {
+      error = validateStructured(value, point.expect_type);
     }
-    setError('expect', error)
+    setError("expect", error);
     if (!error) {
-      updatePoint(target.id, point.id, { expect_json: expectJson }, immediate)
+      updatePoint(target.id, point.id, { expect_json: expectJson }, immediate);
     }
-  }
+  };
 
   const changeType = (type: ExpectType) => {
-    if (!point || !target) return
-    const allowed = allowedModes(type)
-    const modeCompatible =
-      point.compare.mode === null || allowed.includes(point.compare.mode)
+    if (!point || !target) return;
+    const allowed = allowedModes(type);
+    const modeCompatible = point.compare.mode === null || allowed.includes(point.compare.mode);
     const compare = {
       mode: modeCompatible ? point.compare.mode : null,
       tolerance:
-        type === 'number' &&
-        (modeCompatible ? point.compare.mode : null) !== 'exact'
+        type === "number" && (modeCompatible ? point.compare.mode : null) !== "exact"
           ? point.compare.tolerance
           : null,
-    }
-    const expect_json = defaultJson(type)
-    setExpectText(type === 'string' ? '' : expect_json)
-    setTolerance(compare.tolerance === null ? '' : String(compare.tolerance))
-    setError('expect', null)
-    setError('tolerance', null)
-    updatePoint(
-      target.id,
-      point.id,
-      { expect_type: type, expect_json, compare },
-      true,
-    )
+    };
+    const expect_json = defaultJson(type);
+    setExpectText(type === "string" ? "" : expect_json);
+    setTolerance(compare.tolerance === null ? "" : String(compare.tolerance));
+    setError("expect", null);
+    setError("tolerance", null);
+    updatePoint(target.id, point.id, { expect_type: type, expect_json, compare }, true);
     if (!modeCompatible || point.compare.tolerance !== compare.tolerance) {
       dispatch({
-        type: 'SET_TOAST',
-        value: 'Comparison settings were reset for the new expectation type.',
-      })
+        type: "SET_TOAST",
+        value: "Comparison settings were reset for the new expectation type.",
+      });
     }
-    requestAnimationFrame(() => expectationRef.current?.focus())
-  }
+    requestAnimationFrame(() => expectationRef.current?.focus());
+  };
 
   const comparisonOptions = (() => {
-    if (!point) return []
-    const allowed = allowedModes(point.expect_type)
-    const options = allModes.filter((item) => allowed.includes(item.value))
-    if (
-      point.compare.mode &&
-      !options.some((item) => item.value === point.compare.mode)
-    ) {
+    if (!point) return [];
+    const allowed = allowedModes(point.expect_type);
+    const options = allModes.filter((item) => allowed.includes(item.value));
+    if (point.compare.mode && !options.some((item) => item.value === point.compare.mode)) {
       options.unshift({
         value: point.compare.mode,
         label: `Current: ${point.compare.mode}`,
-      })
+      });
     }
-    return options
-  })()
+    return options;
+  })();
 
   const group = target?.display_groups.find((item) =>
     point ? item.point_ids.includes(point.id) : false,
-  )
-  const editingDisabled = !workspace?.document.editing_enabled
+  );
+  const editingDisabled = !workspace?.document.editing_enabled;
 
   if (!point || !target || !workspace) {
     return (
@@ -266,12 +219,12 @@ export function Inspector() {
         </div>
         <div className="empty-state">Select a sample to inspect its expectation.</div>
       </aside>
-    )
+    );
   }
 
   const numericTolerance =
-    point.expect_type === 'number' &&
-    (point.compare.mode === null || point.compare.mode === 'numeric')
+    point.expect_type === "number" &&
+    (point.compare.mode === null || point.compare.mode === "numeric");
 
   return (
     <aside className="inspector" aria-label="Sample inspector">
@@ -291,11 +244,7 @@ export function Inspector() {
               className="mono"
               type="number"
               min="0"
-              max={
-                duration === null
-                  ? undefined
-                  : duration + SAMPLE_DURATION_TOLERANCE_S
-              }
+              max={duration === null ? undefined : duration + SAMPLE_DURATION_TOLERANCE_S}
               step="0.001"
               value={timestamp}
               aria-invalid={Boolean(errors.timestamp)}
@@ -318,7 +267,7 @@ export function Inspector() {
                     true,
                   )
                 }
-                aria-label={`${delta > 0 ? 'Add' : 'Subtract'} ${Math.abs(delta)} seconds`}
+                aria-label={`${delta > 0 ? "Add" : "Subtract"} ${Math.abs(delta)} seconds`}
               >
                 {delta < 0 ? <Minus size={12} /> : <Plus size={12} />}
                 {Math.abs(delta).toFixed(1)}
@@ -346,33 +295,29 @@ export function Inspector() {
 
         <div className="field-group">
           <label htmlFor="expect-value">Expected value</label>
-          {point.expect_type === 'null' ? (
+          {point.expect_type === "null" ? (
             <div className="null-value mono">null</div>
-          ) : point.expect_type === 'boolean' ? (
+          ) : point.expect_type === "boolean" ? (
             <div className="segmented boolean-control" id="expect-value">
               <button
                 type="button"
                 ref={expectationRef as RefObject<HTMLButtonElement>}
-                className={point.expect_json === 'true' ? 'selected' : ''}
-                aria-pressed={point.expect_json === 'true'}
-                onClick={() =>
-                  updatePoint(target.id, point.id, { expect_json: 'true' }, true)
-                }
+                className={point.expect_json === "true" ? "selected" : ""}
+                aria-pressed={point.expect_json === "true"}
+                onClick={() => updatePoint(target.id, point.id, { expect_json: "true" }, true)}
               >
                 True
               </button>
               <button
                 type="button"
-                className={point.expect_json === 'false' ? 'selected' : ''}
-                aria-pressed={point.expect_json === 'false'}
-                onClick={() =>
-                  updatePoint(target.id, point.id, { expect_json: 'false' }, true)
-                }
+                className={point.expect_json === "false" ? "selected" : ""}
+                aria-pressed={point.expect_json === "false"}
+                onClick={() => updatePoint(target.id, point.id, { expect_json: "false" }, true)}
               >
                 False
               </button>
             </div>
-          ) : point.expect_type === 'string' ? (
+          ) : point.expect_type === "string" ? (
             <textarea
               id="expect-value"
               ref={expectationRef as RefObject<HTMLTextAreaElement>}
@@ -381,7 +326,7 @@ export function Inspector() {
               onChange={(event) => changeExpect(event.target.value)}
               onBlur={(event) => changeExpect(event.target.value, true)}
             />
-          ) : point.expect_type === 'array' || point.expect_type === 'object' ? (
+          ) : point.expect_type === "array" || point.expect_type === "object" ? (
             <textarea
               id="expect-value"
               ref={expectationRef as RefObject<HTMLTextAreaElement>}
@@ -410,7 +355,9 @@ export function Inspector() {
         </div>
 
         <div className="field-group">
-          <label htmlFor="field-path">Field <span className="optional">optional</span></label>
+          <label htmlFor="field-path">
+            Field <span className="optional">optional</span>
+          </label>
           <input
             id="field-path"
             className="mono"
@@ -418,16 +365,16 @@ export function Inspector() {
             value={field}
             placeholder="result.matches"
             onChange={(event) => {
-              const value = event.target.value
-              setField(value)
+              const value = event.target.value;
+              setField(value);
               updatePoint(target.id, point.id, {
                 field: value.trim() ? value : null,
-              })
+              });
             }}
             onBlur={() => {
-              const value = field.trim()
-              setField(value)
-              updatePoint(target.id, point.id, { field: value || null }, true)
+              const value = field.trim();
+              setField(value);
+              updatePoint(target.id, point.id, { field: value || null }, true);
             }}
           />
         </div>
@@ -437,21 +384,20 @@ export function Inspector() {
             <label htmlFor="compare-mode">Comparison</label>
             <select
               id="compare-mode"
-              value={point.compare.mode ?? ''}
+              value={point.compare.mode ?? ""}
               onChange={(event) => {
-                const mode = (event.target.value || null) as CompareMode | null
+                const mode = (event.target.value || null) as CompareMode | null;
                 const nextTolerance =
-                  point.expect_type === 'number' &&
-                  (mode === null || mode === 'numeric')
+                  point.expect_type === "number" && (mode === null || mode === "numeric")
                     ? point.compare.tolerance
-                    : null
-                if (nextTolerance === null) setTolerance('')
+                    : null;
+                if (nextTolerance === null) setTolerance("");
                 updatePoint(
                   target.id,
                   point.id,
                   { compare: { mode, tolerance: nextTolerance } },
                   true,
-                )
+                );
               }}
             >
               <option value="">Auto</option>
@@ -474,26 +420,26 @@ export function Inspector() {
               value={tolerance}
               aria-invalid={Boolean(errors.tolerance)}
               onChange={(event) => {
-                const value = event.target.value
-                setTolerance(value)
-                const parsed = Number(value)
+                const value = event.target.value;
+                setTolerance(value);
+                const parsed = Number(value);
                 const error =
                   value && (!Number.isFinite(parsed) || parsed < 0)
-                    ? 'Use a nonnegative finite number.'
-                    : null
-                setError('tolerance', error)
+                    ? "Use a nonnegative finite number."
+                    : null;
+                setError("tolerance", error);
                 if (!error) {
                   updatePoint(target.id, point.id, {
                     compare: {
                       ...point.compare,
                       tolerance: value ? parsed : null,
                     },
-                  })
+                  });
                 }
               }}
               onBlur={(event) => {
-                const value = event.target.value
-                const parsed = Number(value)
+                const value = event.target.value;
+                const parsed = Number(value);
                 if (!value || (Number.isFinite(parsed) && parsed >= 0)) {
                   updatePoint(
                     target.id,
@@ -505,33 +451,33 @@ export function Inspector() {
                       },
                     },
                     true,
-                  )
+                  );
                 }
               }}
             />
-            {errors.tolerance && (
-              <p className="field-error">{errors.tolerance}</p>
-            )}
+            {errors.tolerance && <p className="field-error">{errors.tolerance}</p>}
           </div>
         </div>
 
         <div className="field-group">
-          <label htmlFor="sample-comment">Comment <span className="optional">optional</span></label>
+          <label htmlFor="sample-comment">
+            Comment <span className="optional">optional</span>
+          </label>
           <textarea
             id="sample-comment"
             rows={3}
             value={comment}
             onChange={(event) => {
-              const value = event.target.value
-              setComment(value)
+              const value = event.target.value;
+              setComment(value);
               updatePoint(target.id, point.id, {
                 comment: value.trim() ? value : null,
-              })
+              });
             }}
             onBlur={() => {
-              const value = comment.trim()
-              setComment(value)
-              updatePoint(target.id, point.id, { comment: value || null }, true)
+              const value = comment.trim();
+              setComment(value);
+              updatePoint(target.id, point.id, { comment: value || null }, true);
             }}
           />
         </div>
@@ -539,9 +485,9 @@ export function Inspector() {
         {group && (
           <div className="derived-group">
             <span>Serialized group</span>
-            <strong>{group.kind === 'range' ? 'Range' : 'At points'}</strong>
+            <strong>{group.kind === "range" ? "Range" : "At points"}</strong>
             <small>
-              {group.point_ids.length} point{group.point_ids.length === 1 ? '' : 's'}
+              {group.point_ids.length} point{group.point_ids.length === 1 ? "" : "s"}
               {group.every_s !== null && ` · every ${group.every_s}s`}
             </small>
           </div>
@@ -551,7 +497,7 @@ export function Inspector() {
           <div className="backend-errors" role="alert">
             {workspace.saveError && <p>{workspace.saveError}</p>}
             {workspace.saveDetails.map((detail, index) => (
-              <p key={`${detail.path ?? 'error'}-${index}`}>
+              <p key={`${detail.path ?? "error"}-${index}`}>
                 {detail.path && <code>{detail.path}</code>} {detail.message}
               </p>
             ))}
@@ -565,8 +511,8 @@ export function Inspector() {
           onClick={() => deletePoint(target.id, point.id)}
           title={
             canDeletePoint(target.id, point.id)
-              ? 'Delete this point'
-              : 'A valid target must keep at least one point'
+              ? "Delete this point"
+              : "A valid target must keep at least one point"
           }
         >
           <Trash2 size={16} /> Delete point
@@ -578,5 +524,5 @@ export function Inspector() {
         </div>
       )}
     </aside>
-  )
+  );
 }

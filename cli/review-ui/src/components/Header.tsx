@@ -1,23 +1,21 @@
-import { CircleAlert, CircleHelp, RefreshCw, RotateCcw } from 'lucide-react'
-import { useApp } from '../state/AppContext.tsx'
-import { formatTime } from '../utils/format.ts'
+import { CircleAlert, CircleHelp, RefreshCw, RotateCcw } from "lucide-react";
+import { useApp } from "../state/AppContext.tsx";
+import { formatTime } from "../utils/format.ts";
 
 const labels = {
-  saved: 'Saved',
-  unsaved: 'Unsaved',
-  saving: 'Saving',
-  repairs: 'Complete repairs',
-  invalid: 'Fix errors',
-  failed: 'Save failed',
-} as const
+  saved: "Saved",
+  unsaved: "Unsaved",
+  saving: "Saving",
+  repairs: "Complete repairs",
+  invalid: "Fix errors",
+  failed: "Save failed",
+} as const;
 
 export function Header() {
-  const { state, dispatch, retrySave, reloadFromDisk } = useApp()
-  const workspace = state.selectedCaseId
-    ? state.documents[state.selectedCaseId]
-    : null
-  const currentCase = workspace?.document
-  const phase = workspace?.savePhase ?? 'saved'
+  const { state, dispatch, retrySave, reloadFromDisk } = useApp();
+  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const currentCase = workspace?.document;
+  const phase = workspace?.savePhase ?? "saved";
   return (
     <header className="app-header">
       <div className="brand">GlassKit Eval Review</div>
@@ -36,28 +34,26 @@ export function Header() {
         )}
       </div>
       <div className="header-time mono">
-        {formatTime(state.video.currentTime)} /{' '}
-        {state.video.duration === null
-          ? '--:--.---'
-          : formatTime(state.video.duration)}
+        {formatTime(state.video.currentTime)} /{" "}
+        {state.video.duration === null ? "--:--.---" : formatTime(state.video.duration)}
       </div>
       <button
         type="button"
         className="icon-button header-help"
         aria-label="Show keyboard shortcuts"
         title="Keyboard shortcuts"
-        onClick={() => dispatch({ type: 'SET_HELP_OPEN', value: true })}
+        onClick={() => dispatch({ type: "SET_HELP_OPEN", value: true })}
       >
         <CircleHelp size={17} />
       </button>
       <div className={`save-status save-${phase}`} role="status">
-        {phase === 'failed' || phase === 'invalid' ? (
+        {phase === "failed" || phase === "invalid" ? (
           <CircleAlert size={15} aria-hidden="true" />
-        ) : phase === 'saving' ? (
+        ) : phase === "saving" ? (
           <RefreshCw size={15} className="spin" aria-hidden="true" />
         ) : null}
         <span>{labels[phase]}</span>
-        {phase === 'failed' && (
+        {phase === "failed" && (
           <span className="save-actions">
             <button type="button" className="text-button" onClick={retrySave}>
               Retry
@@ -73,7 +69,7 @@ export function Header() {
             </button>
           </span>
         )}
-        {(phase === 'repairs' || phase === 'invalid') && (
+        {(phase === "repairs" || phase === "invalid") && (
           <button
             type="button"
             className="text-button discard-button"
@@ -86,5 +82,5 @@ export function Header() {
         )}
       </div>
     </header>
-  )
+  );
 }

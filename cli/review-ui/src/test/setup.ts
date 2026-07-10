@@ -1,10 +1,10 @@
-import { cleanup } from '@testing-library/react'
-import { afterEach, vi } from 'vitest'
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
 
 afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
+  cleanup();
+  vi.useRealTimers();
+});
 
 class ResizeObserverStub {
   observe() {}
@@ -12,29 +12,29 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-Object.defineProperty(globalThis, 'ResizeObserver', {
+Object.defineProperty(globalThis, "ResizeObserver", {
   configurable: true,
   value: ResizeObserverStub,
-})
+});
 
-Object.defineProperty(Element.prototype, 'scrollIntoView', {
+Object.defineProperty(Element.prototype, "scrollIntoView", {
   configurable: true,
   value: vi.fn(),
-})
+});
 
-Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+Object.defineProperty(HTMLMediaElement.prototype, "pause", {
   configurable: true,
   value: vi.fn(),
-})
+});
 
-Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+Object.defineProperty(HTMLMediaElement.prototype, "play", {
   configurable: true,
   value: vi.fn(() => Promise.resolve()),
-})
+});
 
-if (!globalThis.CSS) Object.defineProperty(globalThis, 'CSS', { value: {} })
+if (!globalThis.CSS) Object.defineProperty(globalThis, "CSS", { value: {} });
 if (!globalThis.CSS.escape) {
-  Object.defineProperty(globalThis.CSS, 'escape', {
-    value: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '\\$&'),
-  })
+  Object.defineProperty(globalThis.CSS, "escape", {
+    value: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "\\$&"),
+  });
 }

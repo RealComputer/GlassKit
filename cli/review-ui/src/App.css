@@ -82,7 +82,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workspace-grid {
@@ -712,7 +714,7 @@ kbd {
   bottom: 4px;
   left: 7px;
   width: 2px;
-  content: '';
+  content: "";
   background: #59636e;
   border-radius: 1px;
 }
@@ -723,7 +725,7 @@ kbd {
   left: 4px;
   width: 8px;
   height: 8px;
-  content: '';
+  content: "";
   background: var(--surface);
   border: 2px solid #59636e;
   border-radius: 50%;
@@ -762,7 +764,7 @@ kbd {
   left: -4px;
   width: 0;
   height: 0;
-  content: '';
+  content: "";
   border-top: 6px solid var(--danger);
   border-right: 4px solid transparent;
   border-left: 4px solid transparent;
@@ -825,13 +827,27 @@ th {
   font-weight: 600;
 }
 
-th:nth-child(1) { width: 78px; }
-th:nth-child(2) { width: 25%; }
-th:nth-child(3) { width: 17%; }
-th:nth-child(4) { width: 112px; }
-th:nth-child(5) { width: 74px; }
-th:nth-child(6) { width: 48px; }
-th:nth-child(7) { width: 58px; }
+th:nth-child(1) {
+  width: 78px;
+}
+th:nth-child(2) {
+  width: 25%;
+}
+th:nth-child(3) {
+  width: 17%;
+}
+th:nth-child(4) {
+  width: 112px;
+}
+th:nth-child(5) {
+  width: 74px;
+}
+th:nth-child(6) {
+  width: 48px;
+}
+th:nth-child(7) {
+  width: 58px;
+}
 
 tbody tr {
   cursor: pointer;
@@ -931,8 +947,8 @@ tbody tr.selected {
   tab-size: 2;
 }
 
-input[aria-invalid='true'],
-textarea[aria-invalid='true'] {
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
   border-color: var(--danger);
   outline: 1px solid var(--danger);
 }
@@ -1196,7 +1212,9 @@ textarea[aria-invalid='true'] {
 }
 
 @keyframes skeleton {
-  to { background-position: -200% 0; }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 1199px) {

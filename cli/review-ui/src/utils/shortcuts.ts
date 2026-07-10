@@ -1,10 +1,10 @@
 export function isInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false
+  if (!(target instanceof Element)) return false;
   return Boolean(
     target.closest(
       'input, textarea, select, button, a, video, [contenteditable="true"], [role="button"], [role="link"]',
     ),
-  )
+  );
 }
 
 export function shouldHandleShortcut(event: KeyboardEvent): boolean {
@@ -15,9 +15,7 @@ export function shouldHandleShortcut(event: KeyboardEvent): boolean {
     event.ctrlKey ||
     event.metaKey ||
     event.altKey ||
-    (event.shiftKey &&
-      event.key !== 'ArrowLeft' &&
-      event.key !== 'ArrowRight') ||
+    (event.shiftKey && event.key !== "ArrowLeft" && event.key !== "ArrowRight") ||
     isInteractiveTarget(event.target)
-  )
+  );
 }

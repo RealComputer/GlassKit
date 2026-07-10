@@ -31,7 +31,7 @@ This package provides the `glasskit` command. Its current command group is recor
 ## Commands
 
 - `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after code changes.
-- `cd review-ui && npm ci && npm run check`: install and check the review UI after frontend changes. `uv build --no-sources --clear` rebuilds and embeds its production assets automatically.
+- `cd review-ui && npm ci && npm run fix && npm run check`: install dependencies, apply lint fixes and formatting, and check the review UI after frontend changes. `uv build --no-sources --clear` rebuilds and embeds its production assets automatically.
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
 - `uv build --no-sources --clear`, followed by `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review`: build and launch the packaged review UI against the committed synthetic fixture.
 - `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review --port 8765 --no-open`, followed by `cd review-ui && GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` in another shell: run the frontend development server against the Python backend.

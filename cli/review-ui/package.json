@@ -1,16 +1,16 @@
 {
   "name": "glasskit-eval-review-ui",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "fix": "oxlint --fix && oxfmt",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run typecheck && npm run test",
+    "check": "oxlint && oxfmt --check && npm run typecheck && npm run test",
     "preview": "vite preview"
   },
   "dependencies": {

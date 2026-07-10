@@ -1,19 +1,12 @@
-import {
-  AlertTriangle,
-  FileCode2,
-  Search,
-  SlidersHorizontal,
-} from 'lucide-react'
-import { useMemo } from 'react'
-import { useApp } from '../state/AppContext.tsx'
+import { AlertTriangle, FileCode2, Search, SlidersHorizontal } from "lucide-react";
+import { useMemo } from "react";
+import { useApp } from "../state/AppContext.tsx";
 
 export function Sidebar() {
-  const { state, dispatch, selectCase, selectTarget } = useApp()
-  const workspace = state.selectedCaseId
-    ? state.documents[state.selectedCaseId]
-    : null
-  const caseNeedle = state.caseFilter.trim().toLowerCase()
-  const targetNeedle = state.targetFilter.trim().toLowerCase()
+  const { state, dispatch, selectCase, selectTarget } = useApp();
+  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const caseNeedle = state.caseFilter.trim().toLowerCase();
+  const targetNeedle = state.targetFilter.trim().toLowerCase();
   const filteredCases = useMemo(
     () =>
       (state.suite?.cases ?? []).filter(
@@ -23,7 +16,7 @@ export function Sidebar() {
           item.description?.toLowerCase().includes(caseNeedle),
       ),
     [caseNeedle, state.suite?.cases],
-  )
+  );
   const filteredTargets = useMemo(
     () =>
       (workspace?.document.targets ?? []).filter(
@@ -33,7 +26,7 @@ export function Sidebar() {
           target.label?.toLowerCase().includes(targetNeedle),
       ),
     [targetNeedle, workspace?.document.targets],
-  )
+  );
 
   return (
     <aside className="sidebar" aria-label="Eval navigation">
@@ -49,9 +42,7 @@ export function Sidebar() {
             type="search"
             value={state.caseFilter}
             placeholder="Filter cases"
-            onChange={(event) =>
-              dispatch({ type: 'SET_CASE_FILTER', value: event.target.value })
-            }
+            onChange={(event) => dispatch({ type: "SET_CASE_FILTER", value: event.target.value })}
           />
         </label>
         <div className="nav-list case-list">
@@ -59,15 +50,15 @@ export function Sidebar() {
             <button
               key={item.id}
               type="button"
-              className={`nav-row ${state.selectedCaseId === item.id ? 'selected' : ''}`}
+              className={`nav-row ${state.selectedCaseId === item.id ? "selected" : ""}`}
               onClick={() => void selectCase(item.id)}
-              aria-current={state.selectedCaseId === item.id ? 'page' : undefined}
+              aria-current={state.selectedCaseId === item.id ? "page" : undefined}
             >
               <span className="nav-row-main">
                 <span className="truncate" title={item.name}>
                   {item.name}
                 </span>
-                {item.status === 'blocked' && (
+                {item.status === "blocked" && (
                   <AlertTriangle
                     size={14}
                     className="danger"
@@ -76,7 +67,7 @@ export function Sidebar() {
                 )}
               </span>
               <span className="count-badge">
-                {item.point_count === null ? '—' : item.point_count}
+                {item.point_count === null ? "—" : item.point_count}
               </span>
               {item.description && (
                 <span className="nav-description" title={item.description}>
@@ -85,9 +76,7 @@ export function Sidebar() {
               )}
             </button>
           ))}
-          {filteredCases.length === 0 && (
-            <p className="empty-inline">No matching cases</p>
-          )}
+          {filteredCases.length === 0 && <p className="empty-inline">No matching cases</p>}
         </div>
       </section>
 
@@ -104,9 +93,7 @@ export function Sidebar() {
             value={state.targetFilter}
             placeholder="Filter targets"
             disabled={!workspace}
-            onChange={(event) =>
-              dispatch({ type: 'SET_TARGET_FILTER', value: event.target.value })
-            }
+            onChange={(event) => dispatch({ type: "SET_TARGET_FILTER", value: event.target.value })}
           />
         </label>
         <div className="nav-list target-list">
@@ -114,11 +101,9 @@ export function Sidebar() {
             <button
               key={target.id}
               type="button"
-              className={`nav-row ${state.selectedTargetId === target.id ? 'selected' : ''}`}
+              className={`nav-row ${state.selectedTargetId === target.id ? "selected" : ""}`}
               onClick={() => void selectTarget(target.id)}
-              aria-current={
-                state.selectedTargetId === target.id ? 'true' : undefined
-              }
+              aria-current={state.selectedTargetId === target.id ? "true" : undefined}
             >
               <span className="nav-row-main">
                 <span className="truncate" title={target.label ?? target.id}>
@@ -145,7 +130,7 @@ export function Sidebar() {
             <summary>Case details</summary>
             <p>{workspace.document.description}</p>
             <p className="muted mono path-text">
-              {workspace.document.video?.display_path ?? 'Video unavailable'}
+              {workspace.document.video?.display_path ?? "Video unavailable"}
             </p>
           </details>
         )}
@@ -153,7 +138,7 @@ export function Sidebar() {
           type="button"
           className="drawer-button"
           disabled={!workspace}
-          onClick={() => dispatch({ type: 'SET_SOURCE_DRAWER', value: 'case' })}
+          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "case" })}
         >
           <FileCode2 size={15} /> Case YAML
         </button>
@@ -161,13 +146,11 @@ export function Sidebar() {
           type="button"
           className="drawer-button"
           disabled={!state.suite?.config_source_yaml}
-          onClick={() =>
-            dispatch({ type: 'SET_SOURCE_DRAWER', value: 'config' })
-          }
+          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "config" })}
         >
           <SlidersHorizontal size={15} /> Eval config
         </button>
       </div>
     </aside>
-  )
+  );
 }
