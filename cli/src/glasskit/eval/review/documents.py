@@ -524,7 +524,7 @@ def _points_for_target(
 def _parse_case_source(source: str, path: Path) -> tuple[dict[str, Any], RawCaseYaml]:
     try:
         value = yaml.safe_load(source)
-    except yaml.YAMLError as error:
+    except (yaml.YAMLError, RecursionError) as error:
         raise EvalConfigError(f"{path}: invalid YAML: {error}") from error
     if value is None:
         value = {}
@@ -560,7 +560,7 @@ def _blocked_document(
 def _partial_video_from_unparsed_source(source: str) -> VideoDocument | None:
     try:
         value = yaml.safe_load(source)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
         return None
     if isinstance(value, Mapping) and isinstance(value.get("video"), str):
         try:

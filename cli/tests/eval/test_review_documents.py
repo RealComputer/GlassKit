@@ -105,6 +105,30 @@ targets:
     assert "Unicode scalar" in document.load_error.message
 
 
+def test_recursive_yaml_is_isolated_as_a_blocked_case(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "recursive.yaml"
+    path.write_text(
+        "metadata: " + "[" * 600 + "null" + "]" * 600,
+        encoding="utf-8",
+    )
+    repository = ReviewRepository(eval_dir)
+
+    suite = repository.suite_document(write_token="secret")
+    summary = next(case for case in suite.cases if case.id == "recursive.yaml")
+    document = repository.case_document("recursive.yaml")
+
+    valid_summary = next(case for case in suite.cases if case.id == "assembly.yaml")
+
+    assert valid_summary.status == "ready"
+    assert summary.status == "blocked"
+    assert summary.error is not None
+    assert summary.error.code == "invalid_case"
+    assert document.status == "blocked"
+    assert document.load_error is not None
+    assert document.load_error.code == "invalid_case"
+
+
 def test_empty_and_over_duration_targets_are_repairable(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"
