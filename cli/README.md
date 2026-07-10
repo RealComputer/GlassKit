@@ -149,7 +149,9 @@ Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` wit
 
 ### Review and Correct Expectations in the Browser
 
-Goal: review timed YAML expectations together with their source video instead of keeping a media player and text editor synchronized, translating timestamps manually, and switching back and forth to make corrections.
+Goal: make recorded-video expectations faster to verify and correct.
+
+Without the review UI, you must open the recording in a media player and the case YAML in a text editor, navigate both tools independently, translate timestamps manually, and repeatedly switch context. Confirming one expectation is slow, and fixing an incorrect value or timestamp adds another error-prone editing step. The review UI keeps the video, expanded sample schedule, and editing controls together.
 
 Command:
 
