@@ -53,6 +53,4 @@ git push --atomic origin main "pypi-glasskit-ai-v${VERSION}"
 
 Pushing the `pypi-glasskit-ai-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow installs Node 24, checks that the tag matches `pyproject.toml`, and runs Python type checks, tests, lint, formatting checks, and source CLI help checks before invoking `uv build`. The Hatchling hook reinstalls the locked frontend dependencies, rebuilds the review UI, and embeds it in the wheel and sdist. The workflow then checks the review UI, smoke-tests both artifacts and their packaged assets, publishes to PyPI with `uv publish --trusted-publishing always`, and creates a package-scoped GitHub Release with the built artifacts attached.
 
-Generated files under `src/glasskit/eval/review/static/` are ignored and must not be committed. A source-checkout build requires Node.js and npm; the build hook always runs `npm ci` before Vite so existing local dependencies cannot make a distribution diverge from `package-lock.json`. The resulting sdist contains the built UI but excludes the frontend workspace, so installing or rebuilding that sdist does not require Node.js.
-
 After pushing the release tag, open the GitHub Actions release run and approve the `pypi` deployment when GitHub asks for review.
