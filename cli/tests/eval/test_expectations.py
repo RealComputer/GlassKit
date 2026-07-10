@@ -223,6 +223,26 @@ def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -
         load_eval_suite(eval_dir)
 
 
+def test_huge_finite_timestamp_loads_without_tick_overflow(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 1.0e308
+                expect: true
+        """,
+    )
+
+    suite = load_eval_suite(eval_dir)
+
+    assert suite.samples[0].timestamp_s == 1.0e308
+
+
 def test_range_expansion_budget_is_checked_before_materialization(
     tmp_path: Path,
 ) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -610,4 +611,4 @@ def _round_timestamp(value: float) -> float:
 
 
 def _timestamp_tick(value: float) -> int:
-    return round(value * _NANOSECONDS_PER_SECOND)
+    return int(Decimal(str(value)) * _NANOSECONDS_PER_SECOND)
