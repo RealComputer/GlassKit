@@ -163,13 +163,7 @@ To jump directly to a failure reported by a separate eval run, include its case,
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
-The command starts a local-only server on `127.0.0.1`, prints its exact URL, and opens the default browser. Use `--no-open` when you only want the URL. The review app shows every expanded point on the video timeline and in a table; selecting a point seeks the browser preview, while the inspector can create, move, edit, or delete points. Valid edits autosave to the case YAML, and the persistent header reports `Saved`, `Unsaved`, `Saving`, `Complete repairs`, `Fix errors`, or `Save failed`. There is no separate save button.
-
-The editor works with normalized points and derives compact range blocks during each save. Consequently, an edited file can have different block boundaries, chronological block order, quoting, comments, anchors, or whitespace even when its read-only values are unchanged. Commit or copy important case files before editing when you want an easy textual comparison. YAML syntax comments are not preserved; the explicit sample `comment` field is eval data and is preserved.
-
-The video is a best-effort browser preview. The app reports the authoritative sample timestamp separately from the browser-presented frame time when the browser exposes it, but it does not promise the exact frame PyAV chooses during `glasskit eval run`. Browser codec support also varies by platform. If a source container or codec is not natively playable, the app keeps source inspection and editing available when the backend can still probe the video duration, and it does not transcode the recording.
-
-The app warns before leaving only while a valid save is queued or running, a repair draft is incomplete, an invalid field is dirty, or a save has failed. A browser cannot reliably finish an asynchronous save after a tab is closed, so remain on the page until the header says `Saved`.
+The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete expectations. Changes are saved automatically to the case YAML.
 
 ### Run One Case While Debugging
 
@@ -525,6 +519,10 @@ Options:
 | `--time FLOAT` | None | Initially seek to a finite, nonnegative time in the selected case. Requires `--case`. |
 | `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
 | `--no-open` | `false` | Print the URL without opening the default browser. |
+
+Because edits are saved directly to the case YAML, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
+
+The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
 Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, missing packaged assets, or bind failure. Failure to open the browser is nonfatal because the printed URL remains usable.
 
