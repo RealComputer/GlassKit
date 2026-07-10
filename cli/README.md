@@ -149,7 +149,7 @@ Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` wit
 
 ### Review and Correct Expectations in the Browser
 
-Goal: inspect labeled moments against their source video and correct timestamps or expected values without switching between a media player and a YAML editor.
+Goal: review timed YAML expectations together with their source video instead of keeping a media player and text editor synchronized, translating timestamps manually, and switching back and forth to make corrections.
 
 Command:
 
