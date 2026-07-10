@@ -151,7 +151,7 @@ Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` wit
 
 Goal: make recorded-video expectations faster to verify and correct.
 
-Without the review UI, you must open the recording in a media player and the case YAML in a text editor, navigate both tools independently, translate timestamps manually, and repeatedly switch context. Confirming one expectation is slow, and fixing an incorrect value or timestamp adds another error-prone editing step. The review UI keeps the video, expanded sample schedule, and editing controls together.
+Without the review UI, verifying expectations means juggling a media player and YAML editor while matching timestamps by hand. The review UI puts the video, expanded sample schedule, and editing controls in one place, making corrections faster and less error-prone.
 
 Command:
 
