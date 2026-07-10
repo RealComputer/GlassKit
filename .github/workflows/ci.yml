@@ -77,6 +77,54 @@ jobs:
       - name: Build package
         run: uv build --no-sources --clear
 
+      - name: Smoke test built distributions
+        run: |
+          uv run --isolated --no-project --with dist/*.whl glasskit --help
+          uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
+          uv run --isolated --no-project --with dist/*.whl python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
+          uv run --isolated --no-project --with dist/*.tar.gz python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
+
+  test-review-ui:
+    name: Test review UI
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: cli/review-ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: cli/review-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check frontend
+        run: npm run check
+
+      - name: Build packaged assets
+        run: npm run build
+
+      - name: Verify generated assets are committed
+        working-directory: cli
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain -- src/glasskit/eval/review/static)" ]]; then
+            git status --short -- src/glasskit/eval/review/static
+            echo "::error::Review UI build output is not up to date."
+            exit 1
+          fi
+
   test-js:
     name: Test JS create package
     runs-on: ubuntu-latest

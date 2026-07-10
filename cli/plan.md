@@ -1169,3 +1169,10 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 - Timeline virtualization based on measured large-suite performance.
 - Dense-marker clustering beyond the v1 focus/table/previous-next accessibility behavior.
 - Remote serving or collaborative review.
+
+## Implementation Notes And Deviations
+
+- The packaged server uses `style-src 'self' 'unsafe-inline'` instead of a strictly same-origin-only style policy. The React timeline sets marker, band, playhead, ruler, and zoom geometry through dynamic style attributes, so allowing inline styles is necessary for the specified DOM/CSS timeline. Scripts, media, and connections remain restricted to the same origin, and object embedding, base URL changes, and framing remain disabled.
+- Manual browser acceptance used the installed headless Chromium through `agent-browser`. That Chromium build could not decode the committed synthetic MP4 codec, so live playback and presented-frame PTS were verified through focused Vitest media mocks while the packaged browser run exercised the required preview-unavailable, editing-enabled behavior. Firefox, Safari, and a live `requestVideoFrameCallback()` presentation were not manually exercised in this environment.
+- The test-plan organization was not followed literally one test per bullet. Related scenarios were consolidated into table-driven checks, an 80-schedule seeded reconstruction loop, document and server integration flows, reducer and context concurrency tests, media-generation tests, and packaged browser acceptance. This keeps the suite focused while covering the specified reconstruction, atomic-write warning, concurrent batch, protocol, autosave, navigation, and seek invariants.
+- Because all agents shared one Git index, deletion of the unused Vite starter `hero.png` was staged concurrently and landed in commit `f0cff69` with a timestamp-overflow fix instead of the later frontend commit. The resulting tree follows the plan, and the commit was not amended because this repository requires follow-up commits rather than amended history.
