@@ -407,8 +407,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (item) => item.id === targetId,
       )
       if (!caseId || !workspace || !target) return
+      const currentPoint = target.points.find((point) => point.id === pointId)
+      if (!currentPoint) return
+      const normalizedUpdate: Partial<ReviewPoint> = { ...update }
+      if ('field' in update) {
+        normalizedUpdate.field = update.field?.trim() || null
+      }
+      if ('comment' in update) {
+        normalizedUpdate.comment = update.comment?.trim() || null
+      }
+      const nextPoint = { ...currentPoint, ...normalizedUpdate }
+      const unchanged =
+        nextPoint.timestamp_s === currentPoint.timestamp_s &&
+        nextPoint.expect_type === currentPoint.expect_type &&
+        nextPoint.expect_json === currentPoint.expect_json &&
+        nextPoint.field === currentPoint.field &&
+        nextPoint.comment === currentPoint.comment &&
+        nextPoint.compare.mode === currentPoint.compare.mode &&
+        nextPoint.compare.tolerance === currentPoint.compare.tolerance
+      if (unchanged) return
       const points = target.points
-        .map((point) => (point.id === pointId ? { ...point, ...update } : point))
+        .map((point) => (point.id === pointId ? nextPoint : point))
         .sort((left, right) => left.timestamp_s - right.timestamp_s)
       dispatch({
         type: 'REPLACE_TARGET_POINTS',
@@ -417,11 +436,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         points,
         immediate,
       })
-      if (update.timestamp_s !== undefined) {
+      if (normalizedUpdate.timestamp_s !== undefined) {
         dispatch({
           type: 'REQUEST_SEEK',
-          time: update.timestamp_s,
-          sampleTime: update.timestamp_s,
+          time: normalizedUpdate.timestamp_s,
+          sampleTime: normalizedUpdate.timestamp_s,
         })
       }
     },

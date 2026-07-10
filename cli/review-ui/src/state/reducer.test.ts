@@ -11,6 +11,42 @@ function loadedState() {
 }
 
 describe('appReducer save ordering', () => {
+  it('caches a late case response without stealing active selection or video state', () => {
+    const active = {
+      ...document([target('active_target', [point('active-point', 4)])]),
+      id: 'active.yaml',
+      name: 'active',
+    }
+    const late = {
+      ...document([target('late_target', [point('late-point', 8)])]),
+      id: 'late.yaml',
+      name: 'late',
+    }
+    let state = appReducer(
+      { ...initialState, selectedCaseId: active.id },
+      { type: 'CASE_LOADED', document: active },
+    )
+    state = appReducer(state, { type: 'CASE_LOADED', document: late })
+    expect(state.documents).toHaveProperty(late.id)
+    expect(state.selectedCaseId).toBe(active.id)
+    expect(state.selectedTargetId).toBe('active_target')
+    expect(state.selectedPointId).toBe('active-point')
+    expect(state.video.currentTime).toBe(4)
+  })
+
+  it('selects and seeks the first point when a target receives focus', () => {
+    let state = loadedState()
+    const generation = state.video.seekRequest.generation
+    state = appReducer(state, { type: 'SELECT_TARGET', targetId: 'target_b' })
+    expect(state.selectedPointId).toBe('target_b-point')
+    expect(state.video.currentTime).toBe(1)
+    expect(state.video.seekRequest).toEqual({
+      generation: generation + 1,
+      time: 1,
+      sampleTime: 1,
+    })
+  })
+
   it('keeps a newer local edit when an older response arrives', () => {
     let state = loadedState()
     const caseId = 'case-001.yaml'

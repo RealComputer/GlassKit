@@ -178,6 +178,22 @@ function firstPointId(
   )
 }
 
+function videoAtPoint(video: VideoState, point: ReviewPoint | undefined): VideoState {
+  if (!point) return video
+  return {
+    ...video,
+    currentTime: point.timestamp_s,
+    seekRequest: {
+      generation: video.seekRequest.generation + 1,
+      time: point.timestamp_s,
+      sampleTime: point.timestamp_s,
+    },
+    previewStatus: 'seeking',
+    shownFrameTime: null,
+    previewMessage: null,
+  }
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SUITE_LOADED': {
@@ -216,6 +232,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
       }
     case 'CASE_LOADED': {
+      const caseLoadErrors = Object.fromEntries(
+        Object.entries(state.caseLoadErrors).filter(
+          ([caseId]) => caseId !== action.document.id,
+        ),
+      )
+      const cachedState: AppState = {
+        ...state,
+        documents: {
+          ...state.documents,
+          [action.document.id]: workspaceFor(action.document),
+        },
+        loadingCases: { ...state.loadingCases, [action.document.id]: false },
+        caseLoadErrors,
+      }
+      if (state.selectedCaseId !== action.document.id) return cachedState
       const oldWorkspace = state.documents[action.document.id]
       const preferred = action.preferredTargetId
       const targetId =
@@ -228,27 +259,23 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               )
             ? state.selectedTargetId
             : firstTargetId(action.document)
+      const point = action.document.targets
+        .find((target) => target.id === targetId)
+        ?.points.at(0)
       return {
-        ...state,
-        documents: {
-          ...state.documents,
-          [action.document.id]: workspaceFor(action.document),
-        },
-        loadingCases: { ...state.loadingCases, [action.document.id]: false },
-        caseLoadErrors: Object.fromEntries(
-          Object.entries(state.caseLoadErrors).filter(
-            ([caseId]) => caseId !== action.document.id,
-          ),
-        ),
+        ...cachedState,
         selectedTargetId: targetId,
-        selectedPointId: firstPointId(action.document, targetId),
+        selectedPointId: point?.id ?? null,
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,
-        video: {
-          ...initialState.video,
-          duration: action.document.video?.duration_s ?? null,
-        },
+        video: videoAtPoint(
+          {
+            ...initialState.video,
+            duration: action.document.video?.duration_s ?? null,
+          },
+          point,
+        ),
       }
     }
     case 'SELECT_CASE': {
@@ -260,34 +287,40 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           : cached
             ? firstTargetId(cached)
             : null
+      const point = cached?.targets
+        .find((target) => target.id === targetId)
+        ?.points.at(0)
+      const baseVideo = cached
+        ? { ...initialState.video, duration: cached.video?.duration_s ?? null }
+        : initialState.video
       return {
         ...state,
         selectedCaseId: action.caseId,
         selectedTargetId: targetId,
-        selectedPointId: cached ? firstPointId(cached, targetId) : null,
+        selectedPointId: point?.id ?? null,
         targetFilter: '',
         sourceDrawer: null,
-        video: cached
-          ? { ...initialState.video, duration: cached.video?.duration_s ?? null }
-          : initialState.video,
+        video: videoAtPoint(baseVideo, point),
       }
     }
     case 'SELECT_TARGET': {
       const workspace = state.selectedCaseId
         ? state.documents[state.selectedCaseId]
         : null
+      const point = workspace?.document.targets
+        .find((target) => target.id === action.targetId)
+        ?.points.at(0)
       return {
         ...state,
         selectedTargetId: action.targetId,
-        selectedPointId: workspace
-          ? firstPointId(workspace.document, action.targetId)
-          : null,
+        selectedPointId: point?.id ?? null,
         lastTargetByCase: state.selectedCaseId
           ? {
               ...state.lastTargetByCase,
               [state.selectedCaseId]: action.targetId,
             }
           : state.lastTargetByCase,
+        video: videoAtPoint(state.video, point),
       }
     }
     case 'SELECT_POINT':

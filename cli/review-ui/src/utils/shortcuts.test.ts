@@ -31,5 +31,15 @@ describe('keyboard shortcut filtering', () => {
     })
     handled.preventDefault()
     expect(shouldHandleShortcut(handled)).toBe(false)
+    expect(
+      shouldHandleShortcut(
+        new KeyboardEvent('keydown', { key: ' ', shiftKey: true }),
+      ),
+    ).toBe(false)
+    expect(
+      shouldHandleShortcut(
+        new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true }),
+      ),
+    ).toBe(true)
   })
 })

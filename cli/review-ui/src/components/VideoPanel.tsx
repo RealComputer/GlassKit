@@ -7,7 +7,7 @@ import {
   StepBack,
   StepForward,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext.tsx'
 import { formatSeconds } from '../utils/format.ts'
 import { PreciseVideoSeeker } from '../video/PreciseVideoSeeker.ts'
@@ -21,7 +21,10 @@ export function VideoPanel() {
     seek,
   } = useApp()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const timeInputRef = useRef<HTMLInputElement>(null)
   const seekerRef = useRef<PreciseVideoSeeker | null>(null)
+  const skipNextTimeBlur = useRef(false)
+  const [timeDraft, setTimeDraft] = useState('0.000')
   const workspace = state.selectedCaseId
     ? state.documents[state.selectedCaseId]
     : null
@@ -33,6 +36,12 @@ export function VideoPanel() {
     () => [...(target?.points ?? [])].sort((a, b) => a.timestamp_s - b.timestamp_s),
     [target?.points],
   )
+
+  useEffect(() => {
+    if (globalThis.document.activeElement !== timeInputRef.current) {
+      setTimeDraft(state.video.currentTime.toFixed(3))
+    }
+  }, [state.video.currentTime])
 
   useEffect(() => {
     const video = videoRef.current
@@ -137,6 +146,19 @@ export function VideoPanel() {
         Math.max(0, state.video.currentTime + delta),
       ),
     )
+  const commitTimeDraft = () => {
+    const parsed = Number(timeDraft)
+    if (!timeDraft.trim() || !Number.isFinite(parsed)) {
+      setTimeDraft(state.video.currentTime.toFixed(3))
+      return
+    }
+    const clamped = Math.min(
+      state.video.duration ?? Number.POSITIVE_INFINITY,
+      Math.max(0, parsed),
+    )
+    setTimeDraft(clamped.toFixed(3))
+    seek(clamped)
+  }
 
   return (
     <section className="video-section" aria-label="Video preview">
@@ -261,12 +283,32 @@ export function VideoPanel() {
           <span>Time</span>
           <input
             className="mono"
+            ref={timeInputRef}
             type="number"
             min="0"
             max={state.video.duration ?? undefined}
             step="0.001"
-            value={state.video.currentTime.toFixed(3)}
-            onChange={(event) => seek(Number(event.target.value))}
+            value={timeDraft}
+            onChange={(event) => setTimeDraft(event.target.value)}
+            onBlur={() => {
+              if (skipNextTimeBlur.current) {
+                skipNextTimeBlur.current = false
+              } else {
+                commitTimeDraft()
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                skipNextTimeBlur.current = true
+                commitTimeDraft()
+                event.currentTarget.blur()
+              } else if (event.key === 'Escape') {
+                skipNextTimeBlur.current = true
+                setTimeDraft(state.video.currentTime.toFixed(3))
+                event.currentTarget.blur()
+              }
+            }}
           />
         </label>
         <label className="rate-control">
@@ -310,6 +352,9 @@ export function VideoPanel() {
       {state.video.previewMessage && (
         <div className="inline-warning" role="alert">
           {state.video.previewMessage}{' '}
+          {document?.video?.display_path && (
+            <span className="mono">{document.video.display_path}</span>
+          )}{' '}
           {document?.video?.content_type && `(${document.video.content_type})`}
         </div>
       )}

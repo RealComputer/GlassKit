@@ -20,7 +20,13 @@ function deferred<T>() {
 }
 
 function Harness() {
-  const { state, updatePoint, reloadFromDisk, flushCurrentCase } = useApp()
+  const {
+    state,
+    updatePoint,
+    reloadFromDisk,
+    flushCurrentCase,
+    selectCase,
+  } = useApp()
   const [flushed, setFlushed] = useState('idle')
   const workspace = state.selectedCaseId
     ? state.documents[state.selectedCaseId]
@@ -32,6 +38,9 @@ function Harness() {
       <output data-testid="time">{currentPoint?.timestamp_s}</output>
       <output data-testid="phase">{workspace?.savePhase}</output>
       <output data-testid="flushed">{flushed}</output>
+      <output data-testid="selected-case">{state.selectedCaseId}</output>
+      <output data-testid="selected-target">{state.selectedTargetId}</output>
+      <output data-testid="video-time">{state.video.currentTime}</output>
       <button
         type="button"
         onClick={() =>
@@ -61,6 +70,9 @@ function Harness() {
       >
         Flush
       </button>
+      <button type="button" onClick={() => void selectCase('case-002.yml')}>
+        Switch case
+      </button>
     </div>
   )
 }
@@ -78,6 +90,42 @@ afterEach(() => {
 })
 
 describe('case save queue', () => {
+  it('keeps a later-selected case active when the earlier GET resolves last', async () => {
+    const first = deferred<Response>()
+    const second = deferred<Response>()
+    const firstDocument = {
+      ...caseDocument([target('first_target', [point('first-point', 2)])]),
+      id: 'case-001.yaml',
+      name: 'case-001',
+    }
+    const secondDocument = {
+      ...caseDocument([target('second_target', [point('second-point', 7)])]),
+      id: 'case-002.yml',
+      name: 'case-002',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/suite') return Promise.resolve(response(suite()))
+        if (url.includes('case-001.yaml')) return first.promise
+        if (url.includes('case-002.yml')) return second.promise
+        throw new Error(`Unexpected request: ${url}`)
+      }),
+    )
+    renderHarness()
+    await screen.findByText('case-001.yaml')
+    fireEvent.click(screen.getByText('Switch case'))
+    second.resolve(response(secondDocument))
+    await screen.findByText('second_target')
+    first.resolve(response(firstDocument))
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(screen.getByTestId('selected-case').textContent).toBe('case-002.yml')
+    expect(screen.getByTestId('selected-target').textContent).toBe('second_target')
+    expect(screen.getByTestId('video-time').textContent).toBe('7')
+  })
+
   it('invalidates a late PUT response after reload from disk', async () => {
     const original = { ...caseDocument([target('target_a')]), source_yaml: 'original' }
     const reloaded = {

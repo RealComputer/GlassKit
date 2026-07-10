@@ -22,6 +22,16 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
   value: vi.fn(),
 })
 
+Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+  configurable: true,
+  value: vi.fn(),
+})
+
+Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+  configurable: true,
+  value: vi.fn(() => Promise.resolve()),
+})
+
 if (!globalThis.CSS) Object.defineProperty(globalThis, 'CSS', { value: {} })
 if (!globalThis.CSS.escape) {
   Object.defineProperty(globalThis.CSS, 'escape', {

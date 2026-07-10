@@ -73,6 +73,17 @@ export function Header() {
             </button>
           </span>
         )}
+        {(phase === 'repairs' || phase === 'invalid') && (
+          <button
+            type="button"
+            className="text-button discard-button"
+            onClick={() => void reloadFromDisk()}
+            aria-label="Discard local drafts and reload this case from disk"
+            title="Discard drafts and reload from disk"
+          >
+            <RotateCcw size={13} /> Discard drafts
+          </button>
+        )}
       </div>
     </header>
   )

@@ -15,6 +15,9 @@ export function shouldHandleShortcut(event: KeyboardEvent): boolean {
     event.ctrlKey ||
     event.metaKey ||
     event.altKey ||
+    (event.shiftKey &&
+      event.key !== 'ArrowLeft' &&
+      event.key !== 'ArrowRight') ||
     isInteractiveTarget(event.target)
   )
 }

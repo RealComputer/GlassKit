@@ -376,6 +376,10 @@
   border-radius: var(--radius);
 }
 
+.discard-button {
+  color: var(--danger);
+}
+
 .icon-button {
   width: 32px;
   padding: 5px;

@@ -82,6 +82,11 @@ export function Inspector() {
     (item) => item.id === state.selectedTargetId,
   )
   const point = target?.points.find((item) => item.id === state.selectedPointId)
+  const pointRef = useRef(point)
+  pointRef.current = point
+  const workspaceRef = useRef(workspace)
+  workspaceRef.current = workspace
+  const selectionKey = target && point ? `${target.id}:${point.id}` : null
   const [timestamp, setTimestamp] = useState('')
   const [expectText, setExpectText] = useState('')
   const [field, setField] = useState('')
@@ -93,16 +98,39 @@ export function Inspector() {
   >(null)
 
   useEffect(() => {
-    if (!point) return
-    setTimestamp(String(point.timestamp_s))
-    setExpectText(editorText(point))
-    setField(point.field ?? '')
+    const selected = pointRef.current
+    if (!selected) return
+    setTimestamp(String(selected.timestamp_s))
+    setExpectText(editorText(selected))
+    setField(selected.field ?? '')
     setTolerance(
-      point.compare.tolerance === null ? '' : String(point.compare.tolerance),
+      selected.compare.tolerance === null
+        ? ''
+        : String(selected.compare.tolerance),
     )
-    setComment(point.comment ?? '')
+    setComment(selected.comment ?? '')
     setErrors({})
-  }, [point])
+  }, [selectionKey])
+
+  useEffect(() => {
+    const selected = pointRef.current
+    const currentWorkspace = workspaceRef.current
+    if (!selected || !selectionKey || !currentWorkspace) return
+    const hasError = (name: string) =>
+      Boolean(currentWorkspace.formErrors[`${selectionKey}:${name}`])
+    if (!hasError('timestamp')) setTimestamp(String(selected.timestamp_s))
+    if (!hasError('expect')) setExpectText(editorText(selected))
+    setField(selected.field ?? '')
+    if (!hasError('tolerance')) {
+      setTolerance(
+        selected.compare.tolerance === null
+          ? ''
+          : String(selected.compare.tolerance),
+      )
+    }
+    setComment(selected.comment ?? '')
+    if (!['timestamp', 'expect', 'tolerance'].some(hasError)) setErrors({})
+  }, [selectionKey, workspace?.acceptedDocument])
 
   useEffect(() => {
     if (point?.origin === null) {

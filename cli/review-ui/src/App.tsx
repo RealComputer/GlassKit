@@ -24,6 +24,7 @@ function ReviewApp() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (state.helpOpen || state.sourceDrawer) return
       if (!shouldHandleShortcut(event)) return
       const points = [...(target?.points ?? [])].sort(
         (left, right) => left.timestamp_s - right.timestamp_s,
@@ -102,6 +103,8 @@ function ReviewApp() {
     seek,
     selectPoint,
     state.selectedPointId,
+    state.helpOpen,
+    state.sourceDrawer,
     state.video.currentTime,
     state.video.duration,
     target,
