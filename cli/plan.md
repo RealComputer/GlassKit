@@ -6,7 +6,7 @@ This document is the implementation source of truth for the first complete versi
 
 The feature belongs to the existing `glasskit eval` command group and is launched with `glasskit eval review --eval-dir eval`. It is a local, desktop-oriented browser application for reviewing case YAML expectations against case videos and writing corrected timed expectations back to the YAML.
 
-There are no unresolved decisions that block implementation. Items under "Deferred Work" are explicitly outside this version and should not be pulled into the initial implementation unless a concrete blocker is found.
+Items under "Deferred Work" are explicitly outside this version and should not be pulled into the initial implementation unless a concrete blocker is found.
 
 ## Problem
 
@@ -996,8 +996,6 @@ uv run glasskit eval --help
 Also run the frontend `npm run check` and `npm run build`.
 
 ## Delivery Plan
-
-Each phase should leave tests green and should be committed separately when it is a coherent change. Follow the repository requirement that commits under this package start with `cli: ` and include a detailed body.
 
 ### Phase 1: Shared Document And Serialization Core
 
