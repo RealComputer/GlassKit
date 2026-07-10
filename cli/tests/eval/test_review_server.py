@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import email.utils
+import hashlib
 import http.client
 import json
+import os
 import shutil
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
 
+import pytest
+
+import glasskit.eval.review.server as review_server_module
 from glasskit.eval.review.server import ReviewServer, create_review_server
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -174,7 +181,7 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
         assert status == 200
         assert body == expected
         assert headers["accept-ranges"] == "bytes"
-        assert headers["etag"].startswith('"')
+        assert headers["etag"] == f'"sha256-{hashlib.sha256(expected).hexdigest()}"'
         assert headers["last-modified"].endswith(" GMT")
         assert int(headers["content-length"]) == len(expected)
 
@@ -316,6 +323,7 @@ def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
         _status, headers, _body = _request(server, "GET", route)
         etag = headers["etag"]
         last_modified = headers["last-modified"]
+        original_stat = video_path.stat()
 
         status, response_headers, body = _request(
             server,
@@ -343,8 +351,28 @@ def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
             assert body == expected
             assert "content-range" not in response_headers
 
-        replacement = b"replacement video bytes"
+        replacement = bytes(len(expected))
         video_path.write_bytes(replacement)
+        os.utime(
+            video_path,
+            ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+        )
+        replaced_stat = video_path.stat()
+        assert replaced_stat.st_size == original_stat.st_size
+        assert replaced_stat.st_mtime_ns == original_stat.st_mtime_ns
+
+        status, response_headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={"If-None-Match": etag},
+        )
+        assert status == 200
+        assert body == replacement
+        assert response_headers["etag"] == (
+            f'"sha256-{hashlib.sha256(replacement).hexdigest()}"'
+        )
+
         for validator in (etag, last_modified):
             status, response_headers, body = _request(
                 server,
@@ -356,6 +384,49 @@ def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
             assert body == replacement
             assert response_headers["etag"] != etag
             assert "content-range" not in response_headers
+
+
+def test_video_last_modified_is_not_in_the_future(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    video_path = tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4"
+    response_time = int(time.time())
+    monkeypatch.setattr(review_server_module, "wall_time", lambda: response_time)
+    future = response_time + 24 * 60 * 60
+    os.utime(video_path, (future, future))
+
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        route = "/api/cases/assembly.yaml/video"
+        status, headers, _body = _request(
+            server,
+            "GET",
+            route,
+        )
+        assert status == 200
+        response_date = email.utils.parsedate_to_datetime(headers["date"])
+        last_modified = email.utils.parsedate_to_datetime(headers["last-modified"])
+        assert last_modified <= response_date
+        assert headers["last-modified"] == email.utils.formatdate(
+            response_time, usegmt=True
+        )
+
+        replacement = b"replacement video bytes"
+        video_path.write_bytes(replacement)
+        os.utime(video_path, (response_time + 1, response_time + 1))
+        monkeypatch.setattr(
+            review_server_module,
+            "wall_time",
+            lambda: response_time + 2,
+        )
+        status, _headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={"If-Modified-Since": headers["last-modified"]},
+        )
+        assert status == 200
+        assert body == replacement
 
 
 def test_structured_put_success_and_request_validation(tmp_path: Path) -> None:

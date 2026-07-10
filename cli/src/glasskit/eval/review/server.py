@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import email.utils
+import hashlib
 import http.server
 import importlib.resources
 import ipaddress
 import json
 import mimetypes
+import os
 import re
 import secrets
+import threading
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
+from time import time as wall_time
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
@@ -48,6 +52,22 @@ class StaticAsset:
     cache_control: str
 
 
+@dataclass(frozen=True)
+class _VideoFileIdentity:
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+    ctime_ns: int
+    generation: int | None
+
+
+@dataclass(frozen=True)
+class _CachedVideoETag:
+    identity: _VideoFileIdentity
+    value: str
+
+
 class ReviewServer(http.server.ThreadingHTTPServer):
     """Threaded loopback server carrying review API and packaged assets."""
 
@@ -65,6 +85,8 @@ class ReviewServer(http.server.ThreadingHTTPServer):
         self.repository = repository
         self.static_assets = static_assets
         self.write_token = write_token
+        self._video_etag_cache: dict[Path, _CachedVideoETag] = {}
+        self._video_etag_lock = threading.Lock()
         super().__init__(server_address, ReviewRequestHandler)
 
     @property
@@ -74,6 +96,34 @@ class ReviewServer(http.server.ThreadingHTTPServer):
     @property
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/"
+
+    def video_metadata(self, path: Path) -> tuple[os.stat_result, str]:
+        with self._video_etag_lock:
+            while True:
+                path_stat = path.stat()
+                identity = _video_file_identity(path_stat)
+                cached = self._video_etag_cache.get(path)
+                if cached is not None and cached.identity == identity:
+                    return path_stat, cached.value
+
+                with path.open("rb") as stream:
+                    opened_identity = _video_file_identity(os.fstat(stream.fileno()))
+                    if opened_identity != identity:
+                        continue
+                    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                    hashed_identity = _video_file_identity(os.fstat(stream.fileno()))
+
+                current_stat = path.stat()
+                current_identity = _video_file_identity(current_stat)
+                if opened_identity != hashed_identity or identity != current_identity:
+                    continue
+
+                etag = f'"sha256-{digest}"'
+                self._video_etag_cache[path] = _CachedVideoETag(
+                    identity=current_identity,
+                    value=etag,
+                )
+                return current_stat, etag
 
 
 class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -336,11 +386,10 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _serve_video(self, case_id: str, *, send_body: bool) -> None:
         path = self.server.repository.video_path(case_id)
-        stat_result = path.stat()
+        stat_result, etag = self.server.video_metadata(path)
         size = stat_result.st_size
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        etag = f'"{stat_result.st_mtime_ns:x}-{size:x}"'
-        last_modified_seconds = int(stat_result.st_mtime)
+        last_modified_seconds = min(int(stat_result.st_mtime), int(wall_time()))
         last_modified = email.utils.formatdate(last_modified_seconds, usegmt=True)
         common_headers = {
             "Accept-Ranges": "bytes",
@@ -634,6 +683,17 @@ def _load_static_assets(root: Any) -> dict[str, StaticAsset]:
 
     visit(root, "")
     return assets
+
+
+def _video_file_identity(stat_result: os.stat_result) -> _VideoFileIdentity:
+    return _VideoFileIdentity(
+        device=stat_result.st_dev,
+        inode=stat_result.st_ino,
+        size=stat_result.st_size,
+        mtime_ns=stat_result.st_mtime_ns,
+        ctime_ns=stat_result.st_ctime_ns,
+        generation=getattr(stat_result, "st_gen", None),
+    )
 
 
 def _route_segments(encoded_path: str) -> list[str]:
