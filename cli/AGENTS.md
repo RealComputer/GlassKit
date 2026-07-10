@@ -35,7 +35,6 @@ This package provides the `glasskit` command. Its current command group is recor
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
 - `uv build --no-sources --clear`, followed by `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review`: build and launch the packaged review UI against the committed synthetic fixture.
 - `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review --port 8765 --no-open`, followed by `cd review-ui && GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` in another shell: run the frontend development server against the Python backend.
-- For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run --adapter eval_adapter.py:create_evaluator --eval-dir ../../../tmp/origami-full-run-eval-suite`
 
 ## Notes
 - Commit messages for changes under this directory should start with `cli: `.
