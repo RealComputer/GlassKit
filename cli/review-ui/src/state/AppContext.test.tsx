@@ -248,4 +248,46 @@ describe('case save queue', () => {
 
     expect(putCount).toBe(1)
   })
+
+  it('does not resume a settled save continuation after unmount', async () => {
+    const original = caseDocument([target('target_a')])
+    const first = deferred<Response>()
+    const later = deferred<Response>()
+    let putCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url === '/api/suite') return Promise.resolve(response(suite()))
+        if (init?.method === 'PUT') {
+          putCount += 1
+          return putCount === 1 ? first.promise : later.promise
+        }
+        if (url.includes('/api/cases/')) return Promise.resolve(response(original))
+        throw new Error(`Unexpected request: ${url}`)
+      }),
+    )
+    const { unmount } = renderHarness()
+    await screen.findByText('video: fixture.mp4')
+    fireEvent.click(screen.getByText('Edit two'))
+    await waitFor(() => expect(putCount).toBe(1))
+    fireEvent.click(screen.getByText('Edit three'))
+
+    const realSetTimeout = window.setTimeout.bind(window)
+    vi.useFakeTimers()
+    first.resolve(
+      response({
+        ...original,
+        revision: 'accepted-two',
+        targets: [target('target_a', [point('target_a-point', 2)])],
+      }),
+    )
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 0))
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    unmount()
+    await vi.runAllTimersAsync()
+
+    expect(putCount).toBe(1)
+  })
 })

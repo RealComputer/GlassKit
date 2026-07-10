@@ -81,22 +81,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const inFlight = useRef(new Map<string, Promise<boolean>>())
   const saveGenerations = useRef(new Map<string, number>())
   const liveFormErrors = useRef(new Map<string, Set<string>>())
+  const providerMounted = useRef(false)
+  const providerGeneration = useRef(0)
 
-  useEffect(
-    () => () => {
-      for (const controller of caseLoads.current.values()) controller.abort()
-      caseLoads.current.clear()
-      for (const timer of saveTimers.current.values()) window.clearTimeout(timer)
-      saveTimers.current.clear()
-      for (const caseId of inFlight.current.keys()) {
-        saveGenerations.current.set(
+  useEffect(() => {
+    const loads = caseLoads.current
+    const timers = saveTimers.current
+    const saves = inFlight.current
+    const generations = saveGenerations.current
+    providerMounted.current = true
+    providerGeneration.current += 1
+    return () => {
+      providerMounted.current = false
+      providerGeneration.current += 1
+      for (const controller of loads.values()) controller.abort()
+      loads.clear()
+      for (const timer of timers.values()) window.clearTimeout(timer)
+      timers.clear()
+      for (const caseId of saves.keys()) {
+        generations.set(
           caseId,
-          (saveGenerations.current.get(caseId) ?? 0) + 1,
+          (generations.get(caseId) ?? 0) + 1,
         )
       }
-    },
-    [],
-  )
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -187,11 +196,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const performSave = useCallback(
     async (caseId: string, retryFailed = false): Promise<boolean> => {
+      const lifecycleGeneration = providerGeneration.current
+      const providerIsLive = () =>
+        providerMounted.current &&
+        providerGeneration.current === lifecycleGeneration
+      if (!providerIsLive()) return false
       const running = inFlight.current.get(caseId)
       if (running) {
         const completed = await running
+        if (!providerIsLive()) return false
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
-        if (!completed) return false
+        if (!providerIsLive() || !completed) return false
         return performSave(caseId, retryFailed)
       }
       const snapshot = stateRef.current.documents[caseId]
@@ -223,7 +238,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const requestGeneration = saveGenerations.current.get(caseId) ?? 0
       const promise = replaceTargetSamples(caseId, suite.write_token, { targets })
         .then((document) => {
-          if ((saveGenerations.current.get(caseId) ?? 0) !== requestGeneration) {
+          if (
+            !providerIsLive() ||
+            (saveGenerations.current.get(caseId) ?? 0) !== requestGeneration
+          ) {
             return false
           }
           dispatch({
@@ -235,7 +253,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return true
         })
         .catch((error: unknown) => {
-          if ((saveGenerations.current.get(caseId) ?? 0) !== requestGeneration) {
+          if (
+            !providerIsLive() ||
+            (saveGenerations.current.get(caseId) ?? 0) !== requestGeneration
+          ) {
             return false
           }
           dispatch({
@@ -254,8 +275,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       inFlight.current.set(caseId, promise)
       const completed = await promise
+      if (!providerIsLive()) return false
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
-      if (!completed) return false
+      if (!providerIsLive() || !completed) return false
       const latest = stateRef.current.documents[caseId]
       if (latest?.dirtyTargetIds.length) {
         return performSave(caseId, retryFailed)
