@@ -62,6 +62,8 @@ The current eval implementation is app-agnostic:
 
 The review feature must reuse these rules instead of creating a second interpretation of case YAML.
 
+The repository also contains a committed `review-ui/` contributor workspace generated from the React, TypeScript, and Vite template. Its package and lock files already include React, React DOM, Lucide React, Vite, TypeScript, Vitest, React Testing Library, Oxlint, and the template's React Compiler integration. It currently renders only the Vite starter demo: the product application structure, API proxy, packaged-output directory, test environment, product metadata, and required CI scripts still need to be implemented. Treat this scaffold as the frontend starting point rather than generating or introducing another workspace.
+
 ### Eval Directory Shape
 
 An eval directory normally has this shape:
@@ -622,32 +624,52 @@ Expected existing-file changes are:
 
 ### Frontend Workspace
 
-Add a separate contributor workspace:
+Continue from the committed contributor workspace:
 
 ```text
 review-ui/
+  README.md
   package.json
   package-lock.json
   tsconfig.json
+  tsconfig.app.json
+  tsconfig.node.json
   vite.config.ts
   index.html
+  public/              # temporary Vite starter assets
   src/
     main.tsx
-    app/
-    api/
-    components/
-    state/
-    timeline/
-    styles/
+    App.tsx            # temporary Vite starter application
+    App.css
+    index.css
+    assets/             # temporary Vite starter assets
 ```
 
-Use npm because the repository already uses npm and commits lockfiles. Use the repository's CI Node version, currently Node 24.
+Replace the starter application rather than layering the product UI around it. Remove the counter, Vite and React promotional links, template hero art, template icons, unused starter styles, and other unreferenced public assets. Change the document title and any retained favicon to GlassKit-specific metadata, and replace the generic scaffold README with concise contributor commands and the Python-server development workflow. Do not retain starter assets merely because Vite would copy them into the packaged build.
 
-Frontend runtime dependencies are `react`, `react-dom`, and `lucide-react`. Use Vite and TypeScript for development, and Vitest plus React Testing Library for focused frontend tests. Do not add a component framework, CSS-in-JS runtime, state library, router, data-fetching library, timeline package, or heavyweight code editor in this implementation.
+Organize the product source as it grows:
+
+```text
+review-ui/src/
+  main.tsx
+  app/
+  api/
+  components/
+  state/
+  timeline/
+  styles/
+  test/
+```
+
+This organization is a target, not a requirement to create empty directories. Add modules when they acquire a concrete responsibility, and keep small feature-specific tests next to their modules where that is clearer than placing them under `test/`.
+
+Use npm and the committed lockfile. Use the repository's CI Node version, currently Node 24. Do not replace the scaffold with another package manager, bundler, linter, or test runner.
+
+Reuse the installed `react`, `react-dom`, and `lucide-react` runtime dependencies and the installed Vite, TypeScript, Vitest, React Testing Library, Oxlint, and React Compiler development setup. Add `jsdom` as the expected missing test dependency when component tests begin. Keep the React Compiler configuration unless it causes a demonstrated correctness or tool-compatibility problem; if it must be removed, remove its Babel integration and now-unused packages together and record why. Do not add a component framework, CSS-in-JS runtime, state library, router, data-fetching library, timeline package, heavyweight code editor, or a second lint stack in this implementation.
 
 Use React context plus `useReducer` for selected case, selected target, video state, normalized case drafts, selected point, zoom, lane mode, and save queue status. Keep pure grouping-independent display helpers in ordinary TypeScript modules so they can be tested directly.
 
-Vite development uses a proxy for `/api` and case video requests to a separately running Python review server. Production uses the packaged same-origin assets. No CORS support is needed.
+Vite development proxies `/api`, including case video requests, to a separately running Python review server. Production uses the packaged same-origin assets. No CORS support is needed.
 
 `npm run build` outputs directly to `src/glasskit/eval/review/static/`. Because that directory is outside the Vite workspace root, set `build.emptyOutDir: true` explicitly so obsolete hashed assets cannot accumulate. The static directory contains generated output only. Built assets are committed so source distributions and release jobs can build Python packages without fetching npm dependencies. The build must be deterministic enough for CI to rebuild and fail when either tracked differences or untracked static files remain.
 
@@ -898,10 +920,14 @@ Required npm scripts:
 ```text
 dev        Start Vite
 build      Type-check and build packaged assets
+lint       Run Oxlint
+typecheck  Type-check without emitting application files
 test       Run Vitest once
 test:watch Run Vitest in watch mode
-check      Type-check and run tests
+check      Run lint, typecheck, and tests
 ```
+
+The scaffold already has `dev`, `build`, `lint`, and `preview`; retain or refine those commands and add the missing `typecheck`, `test`, `test:watch`, and `check` scripts. `preview` may remain as an asset-only development helper, but it is not a substitute for testing against the Python server and is not part of the CI contract.
 
 ### Python Package
 
@@ -1048,15 +1074,17 @@ Exit gate: pure Python invariant tests can load fixture and generated targets in
 - Add suite indexing with per-case errors.
 - Implement API routing, structured errors, write token, case locks, video ranges, static serving, and security headers.
 - Add `glasskit eval review` with exact launch and shutdown behavior.
-- Serve a minimal checked-in placeholder index until the React build lands.
+- Make the static-resource location injectable in server tests so routing can be verified with a tiny test fixture before the production frontend build exists. Do not introduce a separate hand-authored production placeholder beside the Vite application.
 
-Exit gate: server and CLI tests pass, a browser can seek the fixture video, and direct API single-target and multi-target batches atomically change copied YAML files.
+Exit gate: server and CLI tests pass, the video route supports browser seeking, and direct API single-target and multi-target batches atomically change copied YAML files.
 
 ### Phase 3: Read-Only React Review Experience
 
-- Scaffold `review-ui`.
+- Adopt the committed `review-ui` scaffold, replace its starter demo and metadata, and remove all unreferenced template assets.
+- Configure the Python-server proxy, packaged static output, Vitest DOM environment, and complete npm script contract.
 - Implement application shell, case/target sidebar, native video, review transport, timeline lanes and zoom, samples table, inspector display, source drawers, responsive behavior, and shortcuts that do not mutate.
 - Add frontend unit tests for selection, timeline, zoom, and keyboard behavior.
+- Build and commit the first functional static application; do not wait until packaging work to discover static-serving or CSP integration failures.
 
 Exit gate: a user can review every fixture point, click through targets, and inspect all case/eval YAML values without opening another tool.
 
@@ -1071,7 +1099,7 @@ Exit gate: the full primary workflow works against a copied fixture and normal e
 
 ### Phase 5: Packaging, CI, Documentation, And Product Polish
 
-- Build and commit static assets.
+- Rebuild and commit final static assets after product polish.
 - Ensure wheel and sdist include them.
 - Add frontend CI/release checks.
 - Update README, AGENTS, and PUBLISHING as needed.
@@ -1106,6 +1134,7 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 - Cases written by the UI pass normal eval loading and video timestamp validation.
 - Static assets are present in wheel and sdist, and runtime use requires no Node installation.
 - Frontend builds clean the external Vite output directory and CI rejects tracked or untracked generated-asset drift.
+- The committed frontend contains no Vite starter screen, promotional links, template artwork, or unused template public assets.
 - Default Python tests remain offline and do not require a system `ffmpeg`.
 - README explains autosave, formatting loss, local-only behavior, video codec support, and the browser-versus-PyAV frame caveat.
 
