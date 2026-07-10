@@ -124,7 +124,7 @@ Target sample lists are allowed by the Pydantic shape to be empty, but normal ev
 | Bind address | Always `127.0.0.1` in this version |
 | Frontend | Vite, React, TypeScript, plain CSS, and Lucide React icons |
 | Frontend state | React context plus `useReducer`; no external state-management package |
-| Video | Original file through HTML5 `<video>` with HTTP byte-range support |
+| Video | Best-effort HTML5 `<video>` preview with HTTP byte-range support and presented-frame timestamp reporting |
 | Timeline | DOM and CSS, one lane per target, derived range bands, and point markers |
 | Editing model | Normalized point samples; ranges are derived display and storage groups |
 | Saving | Validated autosave, serialized per case, with visible state |
@@ -133,7 +133,7 @@ Target sample lists are allowed by the Pydantic shape to be empty, but normal ev
 | History | No backup, confirmation dialog, or undo stack; rely on Git |
 | Browser support | Current desktop Chromium, Firefox, and Safari where the source codec is natively playable |
 | API style | Same-origin JSON under `/api`, snake_case field names, structured errors |
-| Exact eval frames | Deferred; preserve an extension point for a PyAV JPEG endpoint |
+| Exact eval frames | Not included; the shipped UI does not guarantee browser/PyAV frame identity |
 
 ## User Experience
 
@@ -248,17 +248,21 @@ Seeking clamps to `[0, duration]`. Creating a point rounds the browser playhead 
 
 Previous and next operate relative to the selected point when one exists, otherwise relative to the playhead. They do not wrap at the ends; the unavailable direction is disabled.
 
-Clicking a point seeks to that exact requested timestamp and pauses playback. Browser decoding may display a nearby frame depending on keyframes, codec, and browser behavior. The numeric sample timestamp remains the authoritative value shown in the UI.
+Clicking a point pauses playback and assigns its timestamp to `video.currentTime`; do not use `fastSeek()`. Increment a monotonically increasing seek generation and mark the preview as seeking until the current generation receives `seeked`. When `HTMLVideoElement.requestVideoFrameCallback()` is available, request a callback as part of the same seek cycle and prefer to keep the preview in the seeking state until a callback for the current generation supplies `metadata.mediaTime`. Ignore a callback observed before that generation's `seeked`, request another, and fall back to ready without a shown-frame value when no post-seek callback arrives within `500 ms` of `seeked`. Cancel prior callback handles and ignore every listener, callback, and timeout whose generation is stale.
+
+The transport shows the authoritative eval sample time and, when available, the browser-presented frame PTS, for example `Sample 03.500s | Shown 03.467s`. The shown time is diagnostic only: do not rewrite the sample timestamp, perform a corrective second seek, or claim that the browser frame is the frame selected by PyAV. When `requestVideoFrameCallback()` is unavailable, complete the preview after `seeked` and omit the shown-frame value.
 
 When the browser reports that the media cannot play, show the video path, container, and a clear browser-codec error. The user may still inspect source data, but editing is disabled when video duration cannot be established because timestamp bounds cannot be validated. Do not add transcoding in this version.
 
 ### Frame Accuracy Decision
 
-HTML5 video is the right first implementation because it provides smooth playback, native seeking, rate controls, low latency, and simple packaging. It will usually be close enough for correcting labeled moments, but it is not guaranteed to show the exact frame selected by `decode_sample_frames`.
+The product decision is to ship a best-effort HTML video preview and accept that it is not frame-identical to eval decoding. HTML video provides smooth playback, native seeking, rate controls, low latency, and simple packaging. No PyAV still-image endpoint, WebCodecs decoder, browser-frame correction loop, or exact-frame mode is required by this implementation.
 
-The eval decoder uses PyAV and chooses the nearest decoded frame after subtracting the first decoded frame timestamp. A browser uses its own media pipeline and may land differently around keyframes or unusual timestamp offsets. The UI must not claim frame-exact parity.
+The eval decoder uses PyAV and chooses the nearest decoded frame after subtracting the first decoded frame timestamp. A browser uses its own media timeline and presentation policy. For ordinary well-timestamped video, the browser will commonly show the same or an adjacent frame: approximately `42 ms` at 24 fps, `33 ms` at 30 fps, or `17 ms` at 60 fps. Adjacent frames usually have the same workflow meaning, but a state transition, scene cut, brief occlusion, motion blur, rapidly changing text, variable frame rate, or unusual timestamp origin can make the difference visible or semantically important. This is an accepted limitation, not a correctness guarantee.
 
-Keep backend routing and frontend preview state open to a later `GET /api/cases/{case_id}/frame?timestamp_s=...` endpoint that returns a PyAV-decoded JPEG and actual frame index. Do not build that endpoint until real review work demonstrates that browser seeking causes material mistakes.
+HTTP Range support and `currentTime` provide a precise media-time seek request; keyframe spacing may affect seek latency but should not be treated as permission to intentionally stop at a keyframe. `requestVideoFrameCallback()` improves readiness and observability by reporting the PTS actually presented, but it does not force browser/PyAV parity. The UI and README must use language such as "browser preview" or "shown frame," never "eval frame" or "exact frame."
+
+Keep an exact PyAV still preview as deferred work only. Add it later if representative recordings demonstrate material expectation mistakes from adjacent-frame or timeline-origin differences; the present architecture does not need to implement speculative endpoint or caching code for it.
 
 ### Timeline
 
@@ -947,6 +951,9 @@ Use Vitest and React Testing Library for behavior with meaningful regression ris
 - Timeline point positioning and displayed range bands from backend groups.
 - Zoom calculations and scroll anchoring helpers.
 - Marker/table/inspector selection synchronization.
+- Seek readiness waits for the current `seeked` event and, when supported, prefers the current `requestVideoFrameCallback()` generation without hanging past the `500 ms` fallback.
+- Rapid consecutive seeks cancel or ignore stale events, callbacks, and timeouts, while browsers without `requestVideoFrameCallback()` fall back to `seeked`.
+- Presented-frame `mediaTime` is displayed diagnostically and never mutates the sample timestamp.
 - New-point defaults and duplicate-time selection.
 - Type-aware expectation controls.
 - Comparison reset after incompatible type change.
@@ -964,14 +971,16 @@ Use a copied fixture so the repository fixture is not modified:
 
 1. Launch the packaged UI and confirm the browser opens at the printed loopback URL.
 2. Play, pause, seek, change playback rate, and use every visible shortcut.
-3. Click markers across multiple target lanes and confirm target focus, video time, table row, and inspector stay synchronized.
+3. Click markers rapidly across multiple target lanes and confirm target focus, video time, table row, inspector, and preview-ready state stay synchronized without a stale frame winning.
 4. Create a point, edit each expectation type, edit field/compare/tolerance/comment, move its timestamp, and delete another point.
 5. Confirm save state transitions and inspect the rewritten YAML.
 6. Confirm range bands match emitted range blocks.
 7. Run `glasskit eval validate` and `glasskit eval list-samples` on the edited copy.
 8. Trigger invalid JSON, a duplicate timestamp, a simulated write failure, and a browser refresh with unsaved data.
 9. Test Fit, 2x, 4x, and 8x timeline modes at desktop widths near 1024, 1280, and 1600 px.
-10. Build wheel and sdist, install each in isolation, launch review with `--no-open`, and fetch the packaged index.
+10. In a browser with `requestVideoFrameCallback()`, confirm the shown-frame PTS appears after seeking and does not alter the sample time; feature-disable it in developer tools or a test build and confirm the `seeked` fallback.
+11. Review the nonzero-PTS `offset-start-64x64.mp4` fixture and confirm sample-time seeking remains usable while any browser timeline difference is reported honestly.
+12. Build wheel and sdist, install each in isolation, launch review with `--no-open`, and fetch the packaged index.
 
 After code changes, run the repository-required Python checks:
 
@@ -1041,6 +1050,9 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 - The command binds only to loopback, opens after listening, prints its URL, and shuts down cleanly.
 - Cases and targets are navigable, filterable, and shown in source order.
 - The original video seeks through a byte-range endpoint.
+- Point selection uses `currentTime`, waits for the current seek to present, and cannot be completed by stale events from an earlier selection.
+- The transport distinguishes authoritative sample time from browser-presented frame PTS when the browser exposes it.
+- The UI and documentation describe video as a best-effort browser preview and never promise the same frame chosen by PyAV.
 - Every expanded point is visible in a target lane and table.
 - Point selection synchronizes video, timeline, table, and inspector.
 - All agreed keyboard shortcuts are visible and work outside form controls.
@@ -1061,7 +1073,7 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 
 | Risk | Mitigation |
 | --- | --- |
-| Browser frame differs from eval frame | Show authoritative timestamp, document limitation, retain exact-frame endpoint extension point |
+| Browser frame differs from eval frame | Show sample time and browser-presented PTS separately, wait for the completed presentation, and document the accepted best-effort limitation |
 | Browser cannot play a CLI-supported container or codec | Show a specific disabled-video error; do not silently transcode |
 | Rapid autosaves lose edits across targets | Serialize writes per case in frontend and server; reread under lock |
 | YAML rewrite creates a large diff | Replace only sample data semantically, preserve mapping order and omissions, document PyYAML formatting behavior |
@@ -1073,7 +1085,7 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 
 ## Deferred Work
 
-- PyAV-backed exact-frame JPEG preview and frame-step controls.
+- PyAV-backed eval-frame still preview and frame-step controls, reconsidered only if representative recordings show material labeling mistakes from browser/PyAV differences.
 - Browser-compatible transcoding or proxy playback for unsupported codecs.
 - Importing eval result JSON and jumping directly among failed samples.
 - Showing observed values or running adapters from the UI.
