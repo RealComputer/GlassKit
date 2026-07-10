@@ -37,6 +37,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: cli/review-ui/package-lock.json
+
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -81,14 +88,23 @@ jobs:
           uv run glasskit --help
           uv run glasskit eval --help
 
-      - name: Build distributions
+      - name: Build distributions and review UI
         run: uv build --no-sources --clear
+
+      - name: Check review UI
+        working-directory: cli/review-ui
+        run: npm run check
 
       - name: Smoke test wheel
         run: uv run --isolated --no-project --with dist/*.whl glasskit --help
 
       - name: Smoke test source distribution
         run: uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
+
+      - name: Verify packaged review UI assets
+        run: |
+          uv run --isolated --no-project --with dist/*.whl python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
+          uv run --isolated --no-project --with dist/*.tar.gz python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
 
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always

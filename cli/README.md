@@ -147,6 +147,26 @@ Expected output: a Rich table with `Case`, `Target`, `Time`, `Expected`, `Mode`,
 
 Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
 
+### Review and Correct Expectations in the Browser
+
+Goal: make recorded-video expectations faster to verify and correct.
+
+Without the review UI, verifying expectations means juggling a media player and YAML editor while matching timestamps by hand. The review UI puts the video, expanded sample schedule, and editing controls in one place, making corrections faster and less error-prone.
+
+Command:
+
+```bash
+uv run glasskit eval review --eval-dir eval
+```
+
+To jump directly to a failure reported by a separate eval run, include its case, target, and timestamp:
+
+```bash
+uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
+```
+
+The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete expectations. Changes are saved automatically to the case YAML.
+
 ### Run One Case While Debugging
 
 Goal: run a focused eval and print every sample result.
@@ -236,6 +256,7 @@ targets:
     samples:
       - range: [0.0, 6.8]
         expect: false
+        comment: "The bracket is not seated yet."
       - range: [7.4, 11.8]
         every_s: 0.25
         field: result.matches
@@ -299,8 +320,9 @@ Sample block fields:
 | `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
+| `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
 
-Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping samples for the same target are invalid.
+Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 points across all targets in one case; pathological ranges are rejected before their points are materialized.
 
 ## Comparison Reference
 
@@ -479,6 +501,32 @@ Commands:
 | `run` | Decode frames, call the adapter, compare observations, apply gates, and report results. |
 | `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
 | `list-samples` | Print the expanded sample schedule. |
+| `review` | Open the local browser UI for inspecting and correcting timed expectations. |
+
+### `glasskit eval review`
+
+Purpose: launch the local eval review UI without loading or running an adapter.
+
+```bash
+glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--case TEXT` | First case | Initially open one case by filename or stem. It does not hide other cases. |
+| `--target TEXT` | First target | Initially focus one target from `--case`. Requires `--case` and does not hide other targets. |
+| `--time FLOAT` | None | Initially seek to a finite, nonnegative time in the selected case. Requires `--case`. |
+| `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
+| `--no-open` | `false` | Print the URL without opening the default browser. |
+
+Because edits are saved directly to the case YAML, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
+
+The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
+
+Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, missing packaged assets, or bind failure. Failure to open the browser is nonfatal because the printed URL remains usable.
 
 ### `glasskit eval run`
 
@@ -701,6 +749,8 @@ Common failures:
 | `could not open video` or `could not decode video` | PyAV cannot read the file. | Check that the file is a real video and can be decoded locally. |
 | `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
 | `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled points. |
+| `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 points. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
+| Browser preview is unavailable | The browser cannot play the source container or codec, even though PyAV may be able to probe it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
 | `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
 | `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
 | `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |

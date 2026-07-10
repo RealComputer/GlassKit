@@ -114,6 +114,7 @@ class SampleExpectation:
     field: str | None = None
     compare: ComparisonConfig = dc_field(default_factory=ComparisonConfig)
     source: str = ""
+    comment: str | None = None
 
 
 @dataclass(frozen=True)

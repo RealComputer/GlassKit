@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from .models import (
     Thresholds,
 )
 from .schemas import (
+    RawCaseYaml,
     RawCompare,
     RawSampleBlock,
     RawThresholds,
@@ -29,6 +31,8 @@ SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 YAML_SUFFIXES = (".yaml", ".yml")
 EVAL_CONFIG_NAMES = ("config.yaml", "config.yml")
 CASES_DIR_NAME = "cases"
+MAX_EXPANDED_POINTS_PER_CASE = 10_000
+_NANOSECONDS_PER_SECOND = 1_000_000_000
 _EPSILON = 1e-9
 
 
@@ -39,16 +43,11 @@ def load_eval_suite(
     target_filter: str | None = None,
     allow_empty: bool = False,
 ) -> EvalSuite:
-    eval_dir = eval_dir.expanduser().resolve()
-    if not eval_dir.exists():
-        raise EvalConfigError(f"eval directory does not exist: {eval_dir}")
-    if not eval_dir.is_dir():
-        raise EvalConfigError(f"eval directory must be a directory: {eval_dir}")
-
+    eval_dir = _resolve_eval_dir(eval_dir)
     thresholds = _load_eval_thresholds(eval_dir)
-    case_paths = _discover_case_paths(eval_dir, case_filter)
+    case_paths = discover_case_paths(eval_dir, case_filter)
     target_id = (
-        _normalize_target_filter(target_filter) if target_filter is not None else None
+        normalize_target_filter(target_filter) if target_filter is not None else None
     )
     if target_id is not None:
         case_paths = _filter_case_paths_by_target(case_paths, target_id)
@@ -56,7 +55,7 @@ def load_eval_suite(
             raise EvalConfigError(
                 f"no eval targets found matching target {target_filter!r}"
             )
-    cases = [_load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
+    cases = [load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
     if target_id is not None:
         cases = _filter_cases_by_target(cases, target_id)
     if not allow_empty and not any(case.samples for case in cases):
@@ -85,6 +84,15 @@ def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
     return rows
 
 
+def _resolve_eval_dir(eval_dir: Path) -> Path:
+    eval_dir = eval_dir.expanduser().resolve()
+    if not eval_dir.exists():
+        raise EvalConfigError(f"eval directory does not exist: {eval_dir}")
+    if not eval_dir.is_dir():
+        raise EvalConfigError(f"eval directory must be a directory: {eval_dir}")
+    return eval_dir
+
+
 def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
     paths = [
         child
@@ -97,11 +105,13 @@ def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
         names = ", ".join(path.name for path in paths)
         raise EvalConfigError(f"multiple eval config files found: {names}; keep one")
     path = paths[0]
-    raw = parse_eval_config_yaml(_load_yaml_mapping(path), label=str(path))
+    raw = parse_eval_config_yaml(load_yaml_mapping(path), label=str(path))
     return _thresholds_from_raw(raw.thresholds)
 
 
-def _discover_case_paths(eval_dir: Path, case_filter: str | None) -> list[Path]:
+def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[Path]:
+    """Discover unambiguous case files using the normal eval path rules."""
+    eval_dir = _resolve_eval_dir(eval_dir)
     cases_dir = eval_dir / CASES_DIR_NAME
     if not cases_dir.exists():
         raise EvalConfigError(f"eval cases directory does not exist: {cases_dir}")
@@ -114,7 +124,7 @@ def _discover_case_paths(eval_dir: Path, case_filter: str | None) -> list[Path]:
         if child.is_file() and child.suffix in YAML_SUFFIXES
     )
     if case_filter is not None:
-        case_name = _normalize_case_filter(case_filter)
+        case_name = normalize_case_filter(case_filter)
         candidates = [path for path in discovered if path.stem == case_name]
     else:
         candidates = discovered
@@ -138,7 +148,7 @@ def _validate_unique_case_stems(case_paths: list[Path]) -> None:
         raise EvalConfigError(f"multiple eval case files share a name: {details}")
 
 
-def _normalize_case_filter(case_filter: str) -> str:
+def normalize_case_filter(case_filter: str) -> str:
     _validate_case_filter(case_filter)
     path = Path(case_filter)
     if path.suffix in YAML_SUFFIXES:
@@ -155,7 +165,7 @@ def _validate_case_filter(case_filter: str) -> None:
         raise EvalConfigError("case must be a filename or stem under cases/")
 
 
-def _normalize_target_filter(target_filter: str) -> str:
+def normalize_target_filter(target_filter: str) -> str:
     if not target_filter or target_filter != target_filter.strip():
         raise EvalConfigError("target must be a target id from case YAML")
     return target_filter
@@ -170,7 +180,7 @@ def _filter_case_paths_by_target(case_paths: list[Path], target_id: str) -> list
 
 
 def _case_yaml_declares_target(case_path: Path, target_id: str) -> bool:
-    raw_targets = _load_yaml_mapping(case_path).get("targets")
+    raw_targets = load_yaml_mapping(case_path).get("targets")
     return isinstance(raw_targets, Mapping) and target_id in raw_targets
 
 
@@ -193,10 +203,30 @@ def _filter_cases_by_target(cases: list[EvalCase], target_id: str) -> list[EvalC
     return filtered
 
 
-def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:
-    raw = parse_case_yaml(_load_yaml_mapping(case_path), label=str(case_path))
+def load_case(
+    case_path: Path,
+    *,
+    allow_empty: bool = False,
+    raw_case: RawCaseYaml | None = None,
+    resolve_video: bool = True,
+) -> EvalCase:
+    """Load one case, optionally expanding an already-parsed in-memory candidate.
 
-    video_path = _resolve_video_path(case_path, raw.video)
+    ``case_path`` remains the logical source path when ``raw_case`` is supplied, so
+    relative video paths and user-facing errors behave exactly like an on-disk load.
+    Review callers may disable video validation to retain normalized targets while
+    separately reporting a missing, unsupported, or otherwise unusable video.
+    """
+    raw = raw_case
+    if raw is None:
+        raw = parse_case_yaml(load_yaml_mapping(case_path), label=str(case_path))
+
+    video_path = (
+        resolve_video_path(case_path, raw.video)
+        if resolve_video
+        else _logical_video_path(case_path, raw.video)
+    )
+    _preflight_case_expansion(raw, case_path=case_path)
     workflow_targets = {
         target.id: workflow_target_metadata(target) for target in raw.workflow.targets
     }
@@ -228,6 +258,11 @@ def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:
             samples.extend(block_samples)
             next_sample_index += len(block_samples)
 
+        _validate_target_normalized_timestamps(
+            samples,
+            case_path=case_path,
+            target_id=target_id,
+        )
         if not allow_empty and not samples:
             raise EvalConfigError(f"{case_path}: target {target_id!r} has no samples")
         targets.append(
@@ -253,7 +288,8 @@ def _load_case(case_path: Path, *, allow_empty: bool) -> EvalCase:
     )
 
 
-def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+def load_yaml_mapping(path: Path) -> dict[str, Any]:
+    """Read a YAML file and require an object at its top level."""
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
@@ -267,10 +303,9 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return raw
 
 
-def _resolve_video_path(case_path: Path, raw_video: Any) -> Path:
-    if not isinstance(raw_video, str) or not raw_video.strip():
-        raise EvalConfigError(f"{case_path}: video must be a path")
-    path = (case_path.parent / raw_video).resolve()
+def resolve_video_path(case_path: Path, raw_video: Any) -> Path:
+    """Resolve and validate a case video using normal eval rules."""
+    path = _logical_video_path(case_path, raw_video)
     if not path.exists():
         raise EvalConfigError(f"video file does not exist: {path}")
     if not path.is_file():
@@ -278,6 +313,12 @@ def _resolve_video_path(case_path: Path, raw_video: Any) -> Path:
     if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
         raise EvalConfigError(f"unsupported video file type: {path}")
     return path
+
+
+def _logical_video_path(case_path: Path, raw_video: Any) -> Path:
+    if not isinstance(raw_video, str) or not raw_video.strip():
+        raise EvalConfigError(f"{case_path}: video must be a path")
+    return (case_path.parent / raw_video).resolve()
 
 
 def _target_config(
@@ -290,6 +331,22 @@ def _target_config(
     }
     config.update(raw_config)
     return config
+
+
+def _preflight_case_expansion(raw_case: RawCaseYaml, *, case_path: Path) -> None:
+    total_points = 0
+    for target_id, raw_target in raw_case.targets.items():
+        for block_index, raw_block in enumerate(raw_target.samples, start=1):
+            total_points += _sample_block_point_count(
+                raw_block, default_every_s=raw_case.sampling.every_s
+            )
+            if total_points > MAX_EXPANDED_POINTS_PER_CASE:
+                _raise_expansion_budget_error(
+                    case_path=case_path,
+                    target_id=target_id,
+                    block_index=block_index,
+                    calculated_count=total_points,
+                )
 
 
 def _expand_sample_block(
@@ -307,17 +364,21 @@ def _expand_sample_block(
     case_path: Path,
     intervals: list[tuple[float, float, str]],
 ) -> list[SampleExpectation]:
-    every_s = raw_block.every_s if raw_block.every_s is not None else default_every_s
     compare = _compare_from_raw(raw_block.compare)
+    timestamps = expand_sample_timestamps(
+        raw_block,
+        default_every_s=default_every_s,
+        case_path=case_path,
+        target_id=target_id,
+        block_index=block_index,
+    )
 
     if raw_block.range_ is not None:
-        timestamps, source_interval = _expand_range(
-            raw_block.range_, every_s, case_path, target_id, block_index
-        )
+        start, end = raw_block.range_
+        source_interval = (start, end, f"sample {block_index}")
         _add_interval(intervals, source_interval, case_path, target_id, block_index)
         source = f"range [{source_interval[0]:g}, {source_interval[1]:g})"
     else:
-        timestamps = _expand_at(raw_block.at, case_path, target_id, block_index)
         for timestamp in timestamps:
             _add_point(intervals, timestamp, case_path, target_id, block_index)
         source = "at"
@@ -336,6 +397,7 @@ def _expand_sample_block(
             field=raw_block.field,
             compare=compare,
             source=source,
+            comment=raw_block.comment,
         )
         for offset, timestamp in enumerate(timestamps)
     ]
@@ -351,36 +413,129 @@ def _compare_from_raw(raw_compare: RawCompare | None) -> ComparisonConfig:
     )
 
 
-def _expand_range(
-    raw_range: list[float],
-    every_s: float,
-    case_path: Path,
-    target_id: str,
-    block_index: int,
-) -> tuple[list[float], tuple[float, float, str]]:
-    start, end = raw_range
-    timestamps: list[float] = []
-    current = start
-    while current < end - _EPSILON:
-        timestamps.append(_round_timestamp(current))
-        current += every_s
-    return timestamps, (start, end, f"sample {block_index}")
-
-
-def _expand_at(
-    raw_at: Any,
+def expand_sample_timestamps(
+    raw_block: RawSampleBlock,
+    *,
+    default_every_s: float,
     case_path: Path,
     target_id: str,
     block_index: int,
 ) -> list[float]:
-    raw_values = raw_at if isinstance(raw_at, list | tuple) else [raw_at]
-    timestamps = [_round_timestamp(float(value)) for value in raw_values]
-    if not timestamps:
-        raise EvalConfigError(
-            f"{case_path}: target {target_id!r} sample {block_index} "
-            "at must contain at least one timestamp"
+    """Expand one parsed block with the shared bounded timestamp rules."""
+    point_count = _sample_block_point_count(raw_block, default_every_s=default_every_s)
+    if point_count > MAX_EXPANDED_POINTS_PER_CASE:
+        _raise_expansion_budget_error(
+            case_path=case_path,
+            target_id=target_id,
+            block_index=block_index,
+            calculated_count=point_count,
         )
-    return sorted(timestamps)
+
+    if raw_block.range_ is not None:
+        start, _end = raw_block.range_
+        every_s = (
+            raw_block.every_s if raw_block.every_s is not None else default_every_s
+        )
+        timestamps: list[float] = []
+        current = start
+        for _ in range(point_count):
+            timestamps.append(_round_timestamp(current))
+            current += every_s
+    else:
+        if raw_block.at is None:
+            raise EvalConfigError(
+                f"{case_path}: target {target_id!r} sample {block_index} "
+                "at must contain at least one timestamp"
+            )
+        raw_values = raw_block.at if isinstance(raw_block.at, list) else [raw_block.at]
+        timestamps = sorted(_round_timestamp(float(value)) for value in raw_values)
+    _validate_normalized_timestamps(
+        timestamps,
+        case_path=case_path,
+        target_id=target_id,
+        block_index=block_index,
+    )
+    return timestamps
+
+
+def _sample_block_point_count(
+    raw_block: RawSampleBlock, *, default_every_s: float
+) -> int:
+    if raw_block.range_ is None:
+        return len(raw_block.at) if isinstance(raw_block.at, list | tuple) else 1
+
+    start, end = raw_block.range_
+    every_s = raw_block.every_s if raw_block.every_s is not None else default_every_s
+    current = start
+    threshold = end - _EPSILON
+    for count in range(MAX_EXPANDED_POINTS_PER_CASE + 1):
+        if not current < threshold:
+            return count
+        current += every_s
+    prospective_count = _prospective_range_point_count(start, end, every_s)
+    return max(prospective_count, MAX_EXPANDED_POINTS_PER_CASE + 1)
+
+
+def _prospective_range_point_count(start: float, end: float, every_s: float) -> int:
+    span = (end - _EPSILON) - start
+    if span <= 0:
+        return 0
+
+    span_numerator, span_denominator = span.as_integer_ratio()
+    step_numerator, step_denominator = every_s.as_integer_ratio()
+    numerator = span_numerator * step_denominator
+    denominator = span_denominator * step_numerator
+    return (numerator + denominator - 1) // denominator
+
+
+def _raise_expansion_budget_error(
+    *,
+    case_path: Path,
+    target_id: str,
+    block_index: int,
+    calculated_count: int,
+) -> None:
+    raise EvalConfigError(
+        f"{case_path}: target {target_id!r} sample {block_index} would expand "
+        f"the case to {calculated_count} points; limit is "
+        f"{MAX_EXPANDED_POINTS_PER_CASE}"
+    )
+
+
+def _validate_normalized_timestamps(
+    timestamps: list[float],
+    *,
+    case_path: Path,
+    target_id: str,
+    block_index: int,
+) -> None:
+    for previous, timestamp in zip(timestamps, timestamps[1:], strict=False):
+        if _timestamp_tick(timestamp) - _timestamp_tick(previous) <= 1:
+            raise EvalConfigError(
+                f"{case_path}: target {target_id!r} sample {block_index} "
+                f"timestamp {timestamp:g} duplicates timestamp {previous:g} "
+                "after nine-decimal normalization"
+            )
+
+
+def _validate_target_normalized_timestamps(
+    samples: list[SampleExpectation],
+    *,
+    case_path: Path,
+    target_id: str,
+) -> None:
+    ordered = sorted(
+        (_timestamp_tick(sample.timestamp_s), sample.timestamp_s) for sample in samples
+    )
+    for (previous_tick, previous), (tick, timestamp) in zip(
+        ordered, ordered[1:], strict=False
+    ):
+        if tick - previous_tick <= 1:
+            raise EvalConfigError(
+                f"{case_path}: target {target_id!r} timestamps "
+                f"{previous:.9f} and {timestamp:.9f} are within 1e-9 seconds "
+                "after nine-decimal normalization"
+            )
 
 
 def _add_interval(
@@ -450,3 +605,7 @@ def _optional_string(value: Any) -> str | None:
 
 def _round_timestamp(value: float) -> float:
     return round(value, 9)
+
+
+def _timestamp_tick(value: float) -> int:
+    return int(Decimal(str(value)) * _NANOSECONDS_PER_SECOND)

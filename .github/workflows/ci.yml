@@ -74,8 +74,76 @@ jobs:
           uv run glasskit --help
           uv run glasskit eval --help
 
-      - name: Build package
+  test-review-ui:
+    name: Test review UI and distributions
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: cli/review-ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: cli/review-ui/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-suffix: package-build
+          working-directory: cli
+
+      - name: Install Python
+        working-directory: cli
+        run: uv python install 3.13
+
+      - name: Build distributions and review UI
+        working-directory: cli
         run: uv build --no-sources --clear
+
+      - name: Check frontend
+        run: npm run check
+
+      - name: Smoke test built distributions
+        working-directory: cli
+        run: |
+          uv run --isolated --no-project --with dist/*.whl glasskit --help
+          uv run --isolated --no-project --with dist/*.tar.gz glasskit --help
+          uv run --isolated --no-project --with dist/*.whl python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
+          uv run --isolated --no-project --with dist/*.tar.gz python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
+
+      - name: Rebuild source distribution without Node
+        working-directory: cli
+        shell: bash
+        run: |
+          UV_BIN="$(command -v uv)"
+          NODE_FREE_PATH="${RUNNER_TEMP}/glasskit-node-free-path"
+          REBUILT_WHEEL_DIR="${RUNNER_TEMP}/glasskit-rebuilt-wheel"
+          mkdir -p "${NODE_FREE_PATH}" "${REBUILT_WHEEL_DIR}"
+
+          if PATH="${NODE_FREE_PATH}" command -v node >/dev/null 2>&1; then
+            echo "::error::Node is unexpectedly available in the restricted build environment"
+            exit 1
+          fi
+          if PATH="${NODE_FREE_PATH}" command -v npm >/dev/null 2>&1; then
+            echo "::error::npm is unexpectedly available in the restricted build environment"
+            exit 1
+          fi
+
+          PATH="${NODE_FREE_PATH}" "${UV_BIN}" build --no-sources --wheel --out-dir "${REBUILT_WHEEL_DIR}" dist/*.tar.gz
+          uv run --isolated --no-project --with "${REBUILT_WHEEL_DIR}"/*.whl glasskit --help
+          uv run --isolated --no-project --with "${REBUILT_WHEEL_DIR}"/*.whl python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
 
   test-js:
     name: Test JS create package

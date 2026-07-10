@@ -1,0 +1,6 @@
+thresholds:
+  min_pass_rate: 0.8
+  max_failures: 3
+  per_target:
+    bracket_seated:
+      min_pass_rate: 1.0

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import webbrowser
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlencode
 
 import typer
 import yaml
@@ -17,6 +20,8 @@ from .eval.report import (
     print_sample_schedule,
     print_validation_report,
 )
+from .eval.review.documents import ReviewRepository
+from .eval.review.server import create_review_server
 from .eval.runner import run_eval, validate_eval_suite
 
 app = typer.Typer(no_args_is_help=True)
@@ -235,6 +240,112 @@ def eval_list_samples(
         Console().print(f"[red]Could not list samples[/red]: {error}")
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
+
+
+@eval_app.command("review")
+def eval_review(
+    eval_dir: Annotated[
+        Path,
+        typer.Option("--eval-dir", help="Eval directory."),
+    ] = DEFAULT_EVAL_DIR,
+    case: Annotated[
+        str | None,
+        typer.Option(
+            "--case",
+            help=(
+                "Initially open this case by filename or stem; all cases remain "
+                "available."
+            ),
+        ),
+    ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target",
+            help=(
+                "Initially focus this target; requires --case and does not filter "
+                "the suite."
+            ),
+        ),
+    ] = None,
+    time_s: Annotated[
+        float | None,
+        typer.Option(
+            "--time",
+            help="Initially seek to this nonnegative time; requires --case.",
+        ),
+    ] = None,
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            min=0,
+            max=65535,
+            help="Local port; 0 chooses an available port.",
+        ),
+    ] = 0,
+    no_open: Annotated[
+        bool,
+        typer.Option("--no-open", help="Print the URL without opening a browser."),
+    ] = False,
+) -> None:
+    """Review and edit timed expectations in a local browser UI."""
+
+    if target is not None and case is None:
+        raise typer.BadParameter("--target requires --case", param_hint="--target")
+    if time_s is not None and case is None:
+        raise typer.BadParameter("--time requires --case", param_hint="--time")
+    if time_s is not None and (not math.isfinite(time_s) or time_s < 0):
+        raise typer.BadParameter(
+            "must be a finite, nonnegative number", param_hint="--time"
+        )
+
+    console = Console()
+    server = None
+    try:
+        repository = ReviewRepository(eval_dir)
+        case_id = repository.resolve_case_selector(case) if case is not None else None
+        target_id = (
+            repository.validate_target_selector(case_id, target)
+            if case_id is not None and target is not None
+            else None
+        )
+        server = create_review_server(
+            eval_dir,
+            port=port,
+            repository=repository,
+        )
+    except (EvalError, OSError, ValueError) as error:
+        console.print(f"[red]Could not start review UI[/red]: {error}")
+        raise typer.Exit(2) from error
+
+    query: dict[str, str | float] = {}
+    if case_id is not None:
+        query["case"] = case_id
+    if target_id is not None:
+        query["target"] = target_id
+    if time_s is not None:
+        query["time"] = time_s
+    url = server.url + (f"?{urlencode(query)}" if query else "")
+    console.print(f"Review UI: [link={url}]{url}[/link]")
+
+    if not no_open:
+        try:
+            opened = webbrowser.open(url)
+        except Exception as error:  # Browser launch is intentionally nonfatal.
+            console.print(f"[yellow]Could not open browser[/yellow]: {error}")
+        else:
+            if not opened:
+                console.print(
+                    "[yellow]Could not open browser automatically; "
+                    "use the URL above.[/yellow]"
+                )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
+    finally:
+        server.server_close()
 
 
 def _load_config(path: Path | None) -> dict[str, Any]:

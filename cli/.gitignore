@@ -1,2 +1,3 @@
 __pycache__/
-eval/runs/
+/eval/runs/
+/src/glasskit/eval/review/static/
