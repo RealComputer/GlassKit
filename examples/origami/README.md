@@ -117,7 +117,7 @@ To create a new eval, first record fold-check input video from the backend with 
 You can write the case YAML by hand, but generating a draft with a larger VLM is convenient. This works because the live app needs a fast model so the wearer gets instant feedback, but case generation is not in the user loop; it can spend more time per frame and use a smarter, slower model to draft labels. Start with a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. For example, `backend/eval/plans/full-run.yaml`:
 
 ```yaml
-video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
+video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
 sampling:
   every_s: 0.5
 targets:
@@ -125,8 +125,8 @@ targets:
     range: [0.0, 51.0]
   step_2:
     ranges:
-      - [52.0, 64.0]
-      - [70.0, 82.5]
+    - [52.0, 64.0]
+    - [70.0, 82.5]
 ```
 
 The plan's `video:` path is resolved relative to the plan YAML file. Before running the generator, add `GEMINI_API_KEY` to `backend/.env`.
@@ -145,14 +145,14 @@ The generator calls Gemini with the same fold-check prompt shape used by the run
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 
 ```yaml
-video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
+video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
 targets:
   step_1:
     samples:
-      - range: [0.0, 21.0]
-        expect: false
-      - range: [21.0, 51.0]
-        expect: true
+    - range: [0.0, 21.0]
+      expect: false
+    - range: [21.0, 51.0]
+      expect: true
   step_2:
     ...
 ```

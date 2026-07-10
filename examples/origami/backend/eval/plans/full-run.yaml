@@ -1,5 +1,5 @@
-video: "../../../../../../GlassKit_origami-recordings/full-run.mp4"
-description: "Full origami workflow recording"
+video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
+description: Full origami workflow recording
 targets:
   step_1:
     range: [0, 64]
