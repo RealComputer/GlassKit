@@ -5,7 +5,7 @@ This Vite workspace builds the browser application embedded in the GlassKit Pyth
 Editable installs intentionally skip the frontend build, so a clean source checkout does not initially contain the ignored static bundle required by the Python server. Install the frontend dependencies and generate that bundle once:
 
 ```bash
-npm ci
+npm install
 npm run build
 ```
 

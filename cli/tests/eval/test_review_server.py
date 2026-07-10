@@ -25,7 +25,7 @@ FIXTURES = Path(__file__).parents[1] / "fixtures"
 def test_missing_static_assets_explain_source_checkout_build(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
 
-    with pytest.raises(EvalConfigError, match=r"npm ci && npm run build"):
+    with pytest.raises(EvalConfigError, match=r"npm install && npm run build"):
         create_review_server(eval_dir, static_dir=tmp_path / "missing-static")
 
 

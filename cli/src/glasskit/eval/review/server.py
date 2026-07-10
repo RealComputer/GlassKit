@@ -650,7 +650,7 @@ def create_review_server(
     if "/index.html" not in assets:
         raise EvalConfigError(
             "review UI static/index.html is missing; from the CLI source directory, "
-            "run `cd review-ui && npm ci && npm run build`"
+            "run `cd review-ui && npm install && npm run build`"
         )
     resolved_repository = repository or ReviewRepository(eval_dir)
     return ReviewServer(
@@ -669,7 +669,7 @@ def _load_static_assets(root: Any) -> dict[str, StaticAsset]:
     if not root_is_dir:
         raise EvalConfigError(
             "review UI static assets are missing; from the CLI source directory, "
-            "run `cd review-ui && npm ci && npm run build`"
+            "run `cd review-ui && npm install && npm run build`"
         )
 
     assets: dict[str, StaticAsset] = {}
