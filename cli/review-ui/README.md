@@ -16,4 +16,4 @@ npm ci
 GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev
 ```
 
-Use `npm run check` for lint, type checking, and unit tests. Use `npm run build` when you want to exercise the packaged static output directly; `uv build` also runs this build automatically. The browser preview is intentionally best effort; eval decoding still uses PyAV and may select an adjacent frame.
+Use `npm run check` for lint, type checking, and unit tests. Use `npm run build` when you want to exercise the packaged static output directly; `uv build` first restores the locked dependencies with `npm ci` and then runs this build automatically. The browser preview is intentionally best effort; eval decoding still uses PyAV and may select an adjacent frame.

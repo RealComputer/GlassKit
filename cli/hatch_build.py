@@ -23,14 +23,7 @@ class CustomBuildHook(BuildHookInterface):
         frontend = root / "review-ui"
         static = root / _STATIC_PATH
         if frontend.is_dir():
-            npm = shutil.which("npm")
-            if npm is None:
-                raise RuntimeError(
-                    "Building GlassKit from a source checkout requires Node.js and npm."
-                )
-            if not (frontend / "node_modules").is_dir():
-                subprocess.run([npm, "ci"], cwd=frontend, check=True)
-            subprocess.run([npm, "run", "build"], cwd=frontend, check=True)
+            _build_frontend(frontend)
 
         _verify_static_bundle(static)
         destination = (
@@ -39,6 +32,16 @@ class CustomBuildHook(BuildHookInterface):
             else _STATIC_PATH.as_posix()
         )
         build_data["force_include"][str(static)] = destination
+
+
+def _build_frontend(frontend: Path) -> None:
+    npm = shutil.which("npm")
+    if npm is None:
+        raise RuntimeError(
+            "Building GlassKit from a source checkout requires Node.js and npm."
+        )
+    subprocess.run([npm, "ci"], cwd=frontend, check=True)
+    subprocess.run([npm, "run", "build"], cwd=frontend, check=True)
 
 
 def _verify_static_bundle(static: Path) -> None:
