@@ -63,9 +63,10 @@ class _VideoFileIdentity:
 
 
 @dataclass(frozen=True)
-class _CachedVideoETag:
+class _CachedVideoMetadata:
     identity: _VideoFileIdentity
-    value: str
+    etag: str
+    last_modified_seconds: int
 
 
 class ReviewServer(http.server.ThreadingHTTPServer):
@@ -85,8 +86,8 @@ class ReviewServer(http.server.ThreadingHTTPServer):
         self.repository = repository
         self.static_assets = static_assets
         self.write_token = write_token
-        self._video_etag_cache: dict[Path, _CachedVideoETag] = {}
-        self._video_etag_lock = threading.Lock()
+        self._video_metadata_cache: dict[Path, _CachedVideoMetadata] = {}
+        self._video_metadata_lock = threading.Lock()
         super().__init__(server_address, ReviewRequestHandler)
 
     @property
@@ -97,14 +98,16 @@ class ReviewServer(http.server.ThreadingHTTPServer):
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/"
 
-    def video_metadata(self, path: Path) -> tuple[os.stat_result, str]:
-        with self._video_etag_lock:
+    def video_metadata(
+        self, path: Path, *, response_time: int
+    ) -> tuple[os.stat_result, str, int]:
+        with self._video_metadata_lock:
             while True:
                 path_stat = path.stat()
                 identity = _video_file_identity(path_stat)
-                cached = self._video_etag_cache.get(path)
+                cached = self._video_metadata_cache.get(path)
                 if cached is not None and cached.identity == identity:
-                    return path_stat, cached.value
+                    return path_stat, cached.etag, cached.last_modified_seconds
 
                 with path.open("rb") as stream:
                     opened_identity = _video_file_identity(os.fstat(stream.fileno()))
@@ -119,11 +122,13 @@ class ReviewServer(http.server.ThreadingHTTPServer):
                     continue
 
                 etag = f'"sha256-{digest}"'
-                self._video_etag_cache[path] = _CachedVideoETag(
+                last_modified_seconds = min(int(current_stat.st_mtime), response_time)
+                self._video_metadata_cache[path] = _CachedVideoMetadata(
                     identity=current_identity,
-                    value=etag,
+                    etag=etag,
+                    last_modified_seconds=last_modified_seconds,
                 )
-                return current_stat, etag
+                return current_stat, etag, last_modified_seconds
 
 
 class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -386,10 +391,12 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _serve_video(self, case_id: str, *, send_body: bool) -> None:
         path = self.server.repository.video_path(case_id)
-        stat_result, etag = self.server.video_metadata(path)
+        stat_result, etag, last_modified_seconds = self.server.video_metadata(
+            path,
+            response_time=int(wall_time()),
+        )
         size = stat_result.st_size
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        last_modified_seconds = min(int(stat_result.st_mtime), int(wall_time()))
         last_modified = email.utils.formatdate(last_modified_seconds, usegmt=True)
         common_headers = {
             "Accept-Ranges": "bytes",

@@ -386,11 +386,12 @@ def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
             assert "content-range" not in response_headers
 
 
-def test_video_last_modified_is_not_in_the_future(
+def test_video_future_last_modified_is_clamped_and_stable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     video_path = tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4"
+    expected = video_path.read_bytes()
     response_time = int(time.time())
     monkeypatch.setattr(review_server_module, "wall_time", lambda: response_time)
     future = response_time + 24 * 60 * 60
@@ -411,14 +412,34 @@ def test_video_last_modified_is_not_in_the_future(
             response_time, usegmt=True
         )
 
-        replacement = b"replacement video bytes"
-        video_path.write_bytes(replacement)
-        os.utime(video_path, (response_time + 1, response_time + 1))
         monkeypatch.setattr(
             review_server_module,
             "wall_time",
             lambda: response_time + 2,
         )
+        status, revalidated_headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={"If-Modified-Since": headers["last-modified"]},
+        )
+        assert status == 304
+        assert body == b""
+        assert revalidated_headers["last-modified"] == headers["last-modified"]
+
+        status, revalidated_headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={"If-Unmodified-Since": headers["last-modified"]},
+        )
+        assert status == 200
+        assert body == expected
+        assert revalidated_headers["last-modified"] == headers["last-modified"]
+
+        replacement = b"replacement video bytes"
+        video_path.write_bytes(replacement)
+        os.utime(video_path, (response_time + 1, response_time + 1))
         status, _headers, body = _request(
             server,
             "GET",
