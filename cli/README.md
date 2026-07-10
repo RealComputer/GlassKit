@@ -42,12 +42,12 @@ Create the eval directory and write a case YAML file that points at the recordin
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-01.yaml <<'YAML'
-video: "../../../recordings/task-01.mp4"
+video: ../../../recordings/task-01.mp4
 targets:
   step_1:
     samples:
-      - range: [0.0, 3.0]
-        expect: true
+    - range: [0.0, 3.0]
+      expect: true
 YAML
 ```
 
@@ -98,15 +98,15 @@ Commands:
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-02.yaml <<'YAML'
-video: "../../../recordings/task-02.mov"
-description: "Replace this note with what task-02 should cover."
+video: ../../../recordings/task-02.mov
+description: Replace this note with what task-02 should cover.
 sampling:
   every_s: 0.5
 targets:
   step_2:
     samples:
-      - at: 0.0
-        expect: false
+    - at: 0.0
+      expect: false
 YAML
 ```
 
@@ -208,8 +208,8 @@ uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yam
 Example `eval/local-adapter.yaml`:
 
 ```yaml
-api_url: "https://example.test/v1"
-model: "vision-checker"
+api_url: https://example.test/v1
+model: vision-checker
 jpeg_quality: 90
 ```
 
@@ -243,29 +243,29 @@ The `video:` path in the case YAML is resolved relative to the case YAML file.
 Here is a representative case file:
 
 ```yaml
-video: "task-01.mp4"
-description: "Step 1 should be detected after the bracket is seated."
+video: task-01.mp4
+description: Step 1 should be detected after the bracket is seated.
 sampling:
   every_s: 0.5
 targets:
   step_1:
-    label: "Step 1"
+    label: Step 1
     config:
       prompt_id: workflow.step_1
       reference_image: assets/step_1.png
     samples:
-      - range: [0.0, 6.8]
-        expect: false
-        comment: "The bracket is not seated yet."
-      - range: [7.4, 11.8]
-        every_s: 0.25
-        field: result.matches
-        expect: true
+    - range: [0.0, 6.8]
+      expect: false
+      comment: The bracket is not seated yet.
+    - range: [7.4, 11.8]
+      every_s: 0.25
+      field: result.matches
+      expect: true
   step_2:
-    label: "Step 2"
+    label: Step 2
     samples:
-      - at: [4.0, 6.0]
-        expect: false
+    - at: [4.0, 6.0]
+      expect: false
 thresholds:
   min_pass_rate: 0.9
   max_failures: 2
@@ -298,16 +298,16 @@ Most evals should put adapter metadata directly under `targets.<id>.config`. `wo
 ```yaml
 workflow:
   targets:
-    - id: step_1
-      app_step_id: 123
-      prompt_id: workflow.step_1
+  - id: step_1
+    app_step_id: 123
+    prompt_id: workflow.step_1
 targets:
   step_1:
     config:
       confidence_threshold: 0.85
     samples:
-      - at: 8.0
-        expect: true
+    - at: 8.0
+      expect: true
 ```
 
 Sample block fields:
@@ -349,20 +349,22 @@ Example:
 targets:
   detector:
     samples:
-      - at: 2.0
-        field: result.matches
-        expect: true
-      - at: 3.0
-        field: result.confidence
-        expect: 0.8
-        compare:
-          mode: numeric
-          tolerance: 0.05
-      - at: 4.0
-        field: detected_classes
-        expect: ["bracket", "fastener"]
-        compare:
-          mode: set_contains_all
+    - at: 2.0
+      field: result.matches
+      expect: true
+    - at: 3.0
+      field: result.confidence
+      expect: 0.8
+      compare:
+        mode: numeric
+        tolerance: 0.05
+    - at: 4.0
+      field: detected_classes
+      expect:
+      - bracket
+      - fastener
+      compare:
+        mode: set_contains_all
 ```
 
 ## Adapter Reference

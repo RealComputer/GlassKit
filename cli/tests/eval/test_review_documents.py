@@ -216,6 +216,24 @@ def test_atomic_multi_target_write_preserves_metadata_ids_and_permissions(
     load_eval_suite(eval_dir)
 
 
+def test_noop_write_keeps_canonical_case_yaml_unchanged(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "assembly.yaml"
+    repository = ReviewRepository(eval_dir)
+    document = repository.case_document("assembly.yaml")
+    original = path.read_bytes()
+    request = ReplaceSamplesRequest(
+        targets={
+            target.id: TargetReplacement(points=target.points)
+            for target in document.targets
+        }
+    )
+
+    repository.replace_samples("assembly.yaml", request)
+
+    assert path.read_bytes() == original
+
+
 def test_invalid_candidate_leaves_original_bytes_untouched(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"

@@ -1,38 +1,38 @@
-video: "../../../videos/offset-start-64x64.mp4"
-description: "Inspect numeric and textual expectations"
+video: ../../../videos/offset-start-64x64.mp4
+description: Inspect numeric and textual expectations
 sampling:
   every_s: 0.5
 workflow:
   targets:
-    - id: confidence
-      label: "Confidence"
-      unit: ratio
-    - id: instruction
-      label: "Instruction text"
+  - id: confidence
+    label: Confidence
+    unit: ratio
+  - id: instruction
+    label: Instruction text
 targets:
   confidence:
     samples:
-      - at: 0.0
-        field: confidence
-        expect: 0.25
-        compare:
-          mode: numeric
-          tolerance: 0.05
-        comment: "Low confidence at the start."
-      - range: [0.5, 1.5]
-        field: confidence
-        expect: 0.95
-        compare:
-          mode: numeric
-          tolerance: 0.01
-        comment: "Confidence stabilizes after the transition."
+    - at: 0.0
+      field: confidence
+      expect: 0.25
+      compare:
+        mode: numeric
+        tolerance: 0.05
+      comment: Low confidence at the start.
+    - range: [0.5, 1.5]
+      field: confidence
+      expect: 0.95
+      compare:
+        mode: numeric
+        tolerance: 0.01
+      comment: Confidence stabilizes after the transition.
   instruction:
     config:
       preserve_case: true
     samples:
-      - at: [0.25, 1.0]
-        field: instruction
-        expect: "Align the bracket"
-        comment: "Text remains visible across the transition."
+    - at: [0.25, 1.0]
+      field: instruction
+      expect: Align the bracket
+      comment: Text remains visible across the transition.
 thresholds:
   max_failures: 1
