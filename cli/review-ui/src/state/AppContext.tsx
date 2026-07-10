@@ -82,6 +82,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const saveGenerations = useRef(new Map<string, number>())
   const liveFormErrors = useRef(new Map<string, Set<string>>())
 
+  useEffect(
+    () => () => {
+      for (const controller of caseLoads.current.values()) controller.abort()
+      caseLoads.current.clear()
+      for (const timer of saveTimers.current.values()) window.clearTimeout(timer)
+      saveTimers.current.clear()
+      for (const caseId of inFlight.current.keys()) {
+        saveGenerations.current.set(
+          caseId,
+          (saveGenerations.current.get(caseId) ?? 0) + 1,
+        )
+      }
+    },
+    [],
+  )
+
   useEffect(() => {
     const controller = new AbortController()
     fetchSuite(controller.signal)
@@ -460,7 +476,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       !targetId ||
       !workspace ||
       !target ||
-      !workspace.document.editing_enabled
+      !workspace.document.editing_enabled ||
+      Object.keys(workspace.formErrors).length > 0 ||
+      (liveFormErrors.current.get(caseId)?.size ?? 0) > 0
     ) return null
     const created = createPointAt(target, current.video.currentTime, uuid())
     if (created.duplicate) {
@@ -518,6 +536,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!caseId || !workspace || !target) return
       const index = target.points.findIndex((point) => point.id === pointId)
       const points = target.points.filter((point) => point.id !== pointId)
+      const errorPrefix = `${targetId}:${pointId}:`
+      const errorKeys = new Set(
+        Object.keys(workspace.formErrors).filter((key) =>
+          key.startsWith(errorPrefix),
+        ),
+      )
+      const liveErrors = liveFormErrors.current.get(caseId)
+      if (liveErrors) {
+        for (const key of liveErrors) {
+          if (key.startsWith(errorPrefix)) errorKeys.add(key)
+        }
+        for (const key of errorKeys) liveErrors.delete(key)
+        if (liveErrors.size === 0) liveFormErrors.current.delete(caseId)
+      }
+      if (errorKeys.size > 0) {
+        dispatch({
+          type: 'CLEAR_FORM_ERRORS',
+          caseId,
+          keys: [...errorKeys],
+        })
+      }
       const acceptedTarget = workspace.acceptedDocument.targets.find(
         (item) => item.id === targetId,
       )
@@ -533,10 +572,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         immediate: true,
       })
       const next = points[index] ?? points[index - 1]
-      if (next) void selectPoint(targetId, next.id)
+      if (next) {
+        dispatch({
+          type: 'SELECT_POINT',
+          targetId,
+          pointId: next.id,
+          timestamp: next.timestamp_s,
+        })
+      }
       else dispatch({ type: 'SELECT_TARGET', targetId })
     },
-    [canDeletePoint, selectPoint],
+    [canDeletePoint],
   )
 
   const seek = useCallback((time: number, sampleTime?: number | null) => {

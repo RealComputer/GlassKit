@@ -78,7 +78,7 @@ function Harness() {
 }
 
 function renderHarness() {
-  render(
+  return render(
     <AppProvider>
       <Harness />
     </AppProvider>,
@@ -211,5 +211,41 @@ describe('case save queue', () => {
     await waitFor(() => expect(screen.getByTestId('flushed').textContent).toBe('true'))
     expect(screen.getByTestId('time').textContent).toBe('3')
     expect(screen.getByTestId('phase').textContent).toBe('saved')
+  })
+
+  it('does not continue an in-flight save queue after unmount', async () => {
+    const original = caseDocument([target('target_a')])
+    const first = deferred<Response>()
+    let putCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url === '/api/suite') return Promise.resolve(response(suite()))
+        if (init?.method === 'PUT') {
+          putCount += 1
+          return first.promise
+        }
+        if (url.includes('/api/cases/')) return Promise.resolve(response(original))
+        throw new Error(`Unexpected request: ${url}`)
+      }),
+    )
+    const { unmount } = renderHarness()
+    await screen.findByText('video: fixture.mp4')
+    fireEvent.click(screen.getByText('Edit two'))
+    await waitFor(() => expect(putCount).toBe(1))
+    fireEvent.click(screen.getByText('Edit three'))
+
+    unmount()
+    first.resolve(
+      response({
+        ...original,
+        revision: 'accepted-two',
+        targets: [target('target_a', [point('target_a-point', 2)])],
+      }),
+    )
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(putCount).toBe(1)
   })
 })

@@ -90,7 +90,10 @@ export function SamplesTable() {
             type="button"
             className="button primary-button"
             onClick={addPoint}
-            disabled={!workspace?.document.editing_enabled}
+            disabled={
+              !workspace?.document.editing_enabled ||
+              Object.keys(workspace.formErrors).length > 0
+            }
           >
             Add first sample
           </button>

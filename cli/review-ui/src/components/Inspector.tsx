@@ -6,6 +6,7 @@ import type {
   ReviewPoint,
 } from '../api/types.ts'
 import { useApp } from '../state/AppContext.tsx'
+import { SAMPLE_DURATION_TOLERANCE_S } from '../state/reducer.ts'
 import { formatSeconds } from '../utils/format.ts'
 
 const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
@@ -155,7 +156,10 @@ export function Inspector() {
     let error: string | null = null
     if (!value.trim() || !Number.isFinite(parsed)) error = 'Enter a finite time.'
     else if (parsed < 0) error = 'Time cannot be negative.'
-    else if (duration !== null && parsed > duration + 1e-9) {
+    else if (
+      duration !== null &&
+      parsed > duration + SAMPLE_DURATION_TOLERANCE_S
+    ) {
       error = `Time must not exceed ${duration.toFixed(3)} seconds.`
     } else if (
       target?.points.some(
@@ -287,7 +291,11 @@ export function Inspector() {
               className="mono"
               type="number"
               min="0"
-              max={duration ?? undefined}
+              max={
+                duration === null
+                  ? undefined
+                  : duration + SAMPLE_DURATION_TOLERANCE_S
+              }
               step="0.001"
               value={timestamp}
               aria-invalid={Boolean(errors.timestamp)}
@@ -539,8 +547,9 @@ export function Inspector() {
           </div>
         )}
 
-        {workspace.saveDetails.length > 0 && (
+        {(workspace.saveError || workspace.saveDetails.length > 0) && (
           <div className="backend-errors" role="alert">
+            {workspace.saveError && <p>{workspace.saveError}</p>}
             {workspace.saveDetails.map((detail, index) => (
               <p key={`${detail.path ?? 'error'}-${index}`}>
                 {detail.path && <code>{detail.path}</code>} {detail.message}

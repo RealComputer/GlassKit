@@ -29,6 +29,7 @@ export interface CaseWorkspace {
 export interface VideoState {
   currentTime: number
   duration: number | null
+  mediaGeneration: number
   paused: boolean
   playbackRate: number
   seekRequest: { generation: number; time: number; sampleTime: number | null }
@@ -79,6 +80,7 @@ export const initialState: AppState = {
   video: {
     currentTime: 0,
     duration: null,
+    mediaGeneration: 0,
     paused: true,
     playbackRate: 1,
     seekRequest: { generation: 0, time: 0, sampleTime: null },
@@ -115,6 +117,7 @@ export type AppAction =
       immediate: boolean
     }
   | { type: 'SET_FORM_ERROR'; key: string; message: string | null }
+  | { type: 'CLEAR_FORM_ERRORS'; caseId: string; keys: string[] }
   | {
       type: 'SAVE_START'
       caseId: string
@@ -192,6 +195,15 @@ function videoAtPoint(video: VideoState, point: ReviewPoint | undefined): VideoS
     shownFrameTime: null,
     previewMessage: null,
   }
+}
+
+function phaseAfterFormErrors(
+  workspace: CaseWorkspace,
+  formErrors: Record<string, string>,
+): SavePhase {
+  if (Object.keys(formErrors).length > 0) return 'invalid'
+  if (workspace.saveError) return 'failed'
+  return workspace.dirtyTargetIds.length > 0 ? 'unsaved' : 'saved'
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -421,19 +433,32 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const formErrors = { ...workspace.formErrors }
       if (action.message) formErrors[action.key] = action.message
       else delete formErrors[action.key]
-      const savePhase =
-        Object.keys(formErrors).length > 0
-          ? 'invalid'
-          : workspace.saveError
-            ? 'failed'
-          : workspace.dirtyTargetIds.length > 0
-            ? 'unsaved'
-            : 'saved'
       return {
         ...state,
         documents: {
           ...state.documents,
-          [state.selectedCaseId]: { ...workspace, formErrors, savePhase },
+          [state.selectedCaseId]: {
+            ...workspace,
+            formErrors,
+            savePhase: phaseAfterFormErrors(workspace, formErrors),
+          },
+        },
+      }
+    }
+    case 'CLEAR_FORM_ERRORS': {
+      const workspace = state.documents[action.caseId]
+      if (!workspace || action.keys.length === 0) return state
+      const formErrors = { ...workspace.formErrors }
+      for (const key of action.keys) delete formErrors[key]
+      return {
+        ...state,
+        documents: {
+          ...state.documents,
+          [action.caseId]: {
+            ...workspace,
+            formErrors,
+            savePhase: phaseAfterFormErrors(workspace, formErrors),
+          },
         },
       }
     }
@@ -559,6 +584,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         target?.points.some((point) => point.id === state.selectedPointId)
           ? state.selectedPointId
           : firstPointId(action.document, targetId)
+      const selectedPoint = target?.points.find(
+        (point) => point.id === selectedPointId,
+      )
+      const video = videoAtPoint(
+        {
+          ...initialState.video,
+          duration: action.document.video?.duration_s ?? null,
+          mediaGeneration: state.video.mediaGeneration + 1,
+        },
+        selectedPoint,
+      )
       return {
         ...state,
         documents: {
@@ -576,10 +612,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,
-        video: {
-          ...initialState.video,
-          duration: action.document.video?.duration_s ?? null,
-        },
+        video,
       }
     }
     case 'SET_CASE_FILTER':

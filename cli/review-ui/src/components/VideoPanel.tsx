@@ -32,6 +32,9 @@ export function VideoPanel() {
   const target = document?.targets.find(
     (item) => item.id === state.selectedTargetId,
   )
+  const hasFormErrors = Boolean(
+    workspace && Object.keys(workspace.formErrors).length > 0,
+  )
   const points = useMemo(
     () => [...(target?.points ?? [])].sort((a, b) => a.timestamp_s - b.timestamp_s),
     [target?.points],
@@ -61,7 +64,7 @@ export function VideoPanel() {
       seeker.cancel()
       seekerRef.current = null
     }
-  }, [dispatch, document?.video?.url])
+  }, [dispatch, document?.video?.url, state.video.mediaGeneration])
 
   useEffect(() => {
     if (state.video.seekRequest.generation === 0) return
@@ -82,6 +85,7 @@ export function VideoPanel() {
   }, [
     dispatch,
     document?.video?.url,
+    state.video.mediaGeneration,
     state.video.seekRequest.generation,
     state.video.seekRequest.time,
   ])
@@ -165,7 +169,7 @@ export function VideoPanel() {
       <div className="video-stage">
         {document?.video?.url ? (
           <video
-            key={document.id}
+            key={`${document.id}:${state.video.mediaGeneration}`}
             ref={videoRef}
             src={document.video.url}
             controls
@@ -334,7 +338,7 @@ export function VideoPanel() {
           type="button"
           className="button add-button"
           onClick={addPoint}
-          disabled={!document?.editing_enabled || !target}
+          disabled={!document?.editing_enabled || !target || hasFormErrors}
           title="Add point at playhead (A)"
         >
           <CirclePlus size={16} /> Add point <kbd>A</kbd>

@@ -47,6 +47,38 @@ describe('appReducer save ordering', () => {
     })
   })
 
+  it('reloads retained selection at its point and refreshes the media element', () => {
+    const original = document([
+      target('target_a', [point('first', 1), point('retained', 7)]),
+    ])
+    let state = appReducer(
+      { ...initialState, selectedCaseId: original.id },
+      { type: 'CASE_LOADED', document: original },
+    )
+    state = appReducer(state, {
+      type: 'SELECT_POINT',
+      targetId: 'target_a',
+      pointId: 'retained',
+      timestamp: 7,
+    })
+    const mediaGeneration = state.video.mediaGeneration
+    const reloaded = {
+      ...original,
+      revision: 'reloaded',
+      video: original.video
+        ? { ...original.video, display_path: 'replacement.mp4' }
+        : null,
+    }
+
+    state = appReducer(state, { type: 'DISCARD_AND_LOAD', document: reloaded })
+
+    expect(state.selectedPointId).toBe('retained')
+    expect(state.video.currentTime).toBe(7)
+    expect(state.video.seekRequest.time).toBe(7)
+    expect(state.video.seekRequest.sampleTime).toBe(7)
+    expect(state.video.mediaGeneration).toBe(mediaGeneration + 1)
+  })
+
   it('keeps a newer local edit when an older response arrives', () => {
     let state = loadedState()
     const caseId = 'case-001.yaml'
