@@ -335,6 +335,32 @@ def test_at_rejects_near_duplicates_after_timestamp_normalization(
         load_eval_suite(eval_dir)
 
 
+def test_target_rejects_cross_block_near_duplicates_after_normalization(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, 1.0000000012]
+                every_s: 1.0
+                expect: false
+              - range: [1.0000000012, 1.5000000012]
+                every_s: 0.5
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError,
+        match=r"target 'step_1' timestamps.*within 1e-9 seconds",
+    ):
+        load_eval_suite(eval_dir)
+
+
 def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

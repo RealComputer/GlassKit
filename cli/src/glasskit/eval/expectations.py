@@ -31,6 +31,7 @@ YAML_SUFFIXES = (".yaml", ".yml")
 EVAL_CONFIG_NAMES = ("config.yaml", "config.yml")
 CASES_DIR_NAME = "cases"
 MAX_EXPANDED_POINTS_PER_CASE = 10_000
+_NANOSECONDS_PER_SECOND = 1_000_000_000
 _EPSILON = 1e-9
 
 
@@ -256,6 +257,11 @@ def load_case(
             samples.extend(block_samples)
             next_sample_index += len(block_samples)
 
+        _validate_target_normalized_timestamps(
+            samples,
+            case_path=case_path,
+            target_id=target_id,
+        )
         if not allow_empty and not samples:
             raise EvalConfigError(f"{case_path}: target {target_id!r} has no samples")
         targets.append(
@@ -506,10 +512,30 @@ def _validate_normalized_timestamps(
     block_index: int,
 ) -> None:
     for previous, timestamp in zip(timestamps, timestamps[1:], strict=False):
-        if abs(timestamp - previous) <= _EPSILON:
+        if _timestamp_tick(timestamp) - _timestamp_tick(previous) <= 1:
             raise EvalConfigError(
                 f"{case_path}: target {target_id!r} sample {block_index} "
                 f"timestamp {timestamp:g} duplicates timestamp {previous:g} "
+                "after nine-decimal normalization"
+            )
+
+
+def _validate_target_normalized_timestamps(
+    samples: list[SampleExpectation],
+    *,
+    case_path: Path,
+    target_id: str,
+) -> None:
+    ordered = sorted(
+        (_timestamp_tick(sample.timestamp_s), sample.timestamp_s) for sample in samples
+    )
+    for (previous_tick, previous), (tick, timestamp) in zip(
+        ordered, ordered[1:], strict=False
+    ):
+        if tick - previous_tick <= 1:
+            raise EvalConfigError(
+                f"{case_path}: target {target_id!r} timestamps "
+                f"{previous:.9f} and {timestamp:.9f} are within 1e-9 seconds "
                 "after nine-decimal normalization"
             )
 
@@ -581,3 +607,7 @@ def _optional_string(value: Any) -> str | None:
 
 def _round_timestamp(value: float) -> float:
     return round(value, 9)
+
+
+def _timestamp_tick(value: float) -> int:
+    return round(value * _NANOSECONDS_PER_SECOND)
