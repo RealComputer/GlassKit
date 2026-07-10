@@ -938,6 +938,20 @@ tbody tr.selected {
   font-size: 12px;
 }
 
+.field-group > input:disabled,
+.field-group > select:disabled,
+.field-group > textarea:disabled,
+.timestamp-editor > input:disabled {
+  color: var(--text-muted);
+  background: var(--surface-disabled);
+  opacity: 1;
+}
+
+.field-group:has(> input:disabled, > select:disabled, > textarea:disabled) > label,
+.inspector fieldset:disabled .field-group > label {
+  color: var(--text-muted);
+}
+
 .field-group textarea {
   display: block;
   resize: vertical;
