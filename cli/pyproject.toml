@@ -42,17 +42,23 @@ glasskit = "glasskit.cli:app"
 
 [dependency-groups]
 dev = [
+    "hatchling>=1.27,<2",
     "pytest",
     "ruff",
     "ty",
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.0,<0.12.0"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-module-name = "glasskit"
+[tool.hatch.build.hooks.custom]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glasskit"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/glasskit"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -24,9 +24,7 @@ Run the local checks from this directory before tagging. The local Python versio
 cd review-ui
 npm ci
 npm run check
-npm run build
 cd ..
-test -z "$(git status --porcelain -- src/glasskit/eval/review/static)"
 uv sync --locked --dev
 uv run python -c "import sys; assert sys.version_info[:2] == (3, 13), sys.version"
 uv run ty check
@@ -53,6 +51,8 @@ git tag -a "pypi-glasskit-ai-v${VERSION}" -m "pypi-glasskit-ai-v${VERSION}"
 git push --atomic origin main "pypi-glasskit-ai-v${VERSION}"
 ```
 
-Pushing the `pypi-glasskit-ai-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow installs Node 24, checks and rebuilds the review UI, rejects generated-asset drift, checks that the tag matches `pyproject.toml`, runs Python type checks, tests, lint, formatting checks, and source CLI help checks, builds wheel and sdist artifacts, smoke-tests both artifacts and their packaged review UI, publishes to PyPI with `uv publish --trusted-publishing always`, and creates a package-scoped GitHub Release with the built artifacts attached.
+Pushing the `pypi-glasskit-ai-vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow installs Node 24, checks the review UI, checks that the tag matches `pyproject.toml`, runs Python type checks, tests, lint, formatting checks, and source CLI help checks, then invokes `uv build`. The Hatchling hook rebuilds the review UI from the locked frontend workspace and embeds it in the wheel and sdist. The workflow smoke-tests both artifacts and their packaged review UI, publishes to PyPI with `uv publish --trusted-publishing always`, and creates a package-scoped GitHub Release with the built artifacts attached.
+
+Generated files under `src/glasskit/eval/review/static/` are ignored and must not be committed. A source-checkout build requires Node.js and npm; when `review-ui/node_modules/` is absent, the build hook runs `npm ci` before Vite. The resulting sdist contains the built UI but excludes the frontend workspace, so installing or rebuilding that sdist does not require Node.js.
 
 After pushing the release tag, open the GitHub Actions release run and approve the `pypi` deployment when GitHub asks for review.

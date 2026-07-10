@@ -52,19 +52,6 @@ jobs:
         working-directory: cli/review-ui
         run: npm run check
 
-      - name: Build packaged review UI
-        working-directory: cli/review-ui
-        run: npm run build
-
-      - name: Verify generated review UI assets are committed
-        shell: bash
-        run: |
-          if [[ -n "$(git status --porcelain -- src/glasskit/eval/review/static)" ]]; then
-            git status --short -- src/glasskit/eval/review/static
-            echo "::error::Review UI build output is not up to date."
-            exit 1
-          fi
-
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -109,7 +96,7 @@ jobs:
           uv run glasskit --help
           uv run glasskit eval --help
 
-      - name: Build distributions
+      - name: Build distributions and review UI
         run: uv build --no-sources --clear
 
       - name: Smoke test wheel

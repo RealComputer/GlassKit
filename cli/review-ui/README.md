@@ -1,6 +1,6 @@
 # GlassKit Eval Review UI
 
-This Vite workspace builds the browser application embedded in the GlassKit Python package. The generated files are written to `../src/glasskit/eval/review/static/` and are committed so runtime users do not need Node.js.
+This Vite workspace builds the browser application embedded in the GlassKit Python package. Generated files are written to `../src/glasskit/eval/review/static/`, ignored by Git, and produced automatically by the Python package build hook. Published wheels and source distributions still contain the complete UI, so runtime users do not need Node.js.
 
 Start the local Python review server first:
 
@@ -16,4 +16,4 @@ npm ci
 GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev
 ```
 
-Use `npm run check` for lint, type checking, and unit tests. Use `npm run build` to type-check and replace the packaged static output. The browser preview is intentionally best effort; eval decoding still uses PyAV and may select an adjacent frame.
+Use `npm run check` for lint, type checking, and unit tests. Use `npm run build` when you want to exercise the packaged static output directly; `uv build` also runs this build automatically. The browser preview is intentionally best effort; eval decoding still uses PyAV and may select an adjacent frame.
