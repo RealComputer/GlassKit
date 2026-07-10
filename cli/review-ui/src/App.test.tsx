@@ -15,6 +15,24 @@ afterEach(() => {
 });
 
 describe("review application navigation and drafts", () => {
+  it("keeps native video controls from covering the review frame", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    await screen.findByLabelText("Review transport");
+
+    expect(document.querySelector("video")?.controls).toBe(false);
+  });
+
   it("gives form fields unique identifiers and points labels at form controls", async () => {
     const doc = caseDocument();
     vi.stubGlobal(

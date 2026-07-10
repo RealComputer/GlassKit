@@ -154,7 +154,6 @@ export function VideoPanel() {
             key={`${document.id}:${state.video.mediaGeneration}`}
             ref={videoRef}
             src={document.video.url}
-            controls
             preload="metadata"
             onLoadedMetadata={(event) =>
               dispatch({
