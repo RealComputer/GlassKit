@@ -2,17 +2,23 @@
 
 This Vite workspace builds the browser application embedded in the GlassKit Python package. Generated files are written to `../src/glasskit/eval/review/static/`, ignored by Git, and produced automatically by the Python package build hook. Published wheels and source distributions still contain the complete UI, so runtime users do not need Node.js.
 
-Start the local Python review server first:
+Editable installs intentionally skip the frontend build, so a clean source checkout does not initially contain the ignored static bundle required by the Python server. Install the frontend dependencies and generate that bundle once:
+
+```bash
+npm ci
+npm run build
+```
+
+Then start the local Python review server:
 
 ```bash
 cd ..
 uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review --port 8765 --no-open
 ```
 
-Then start Vite in another shell. `/api` is proxied to the Python server:
+Start Vite in another shell. `/api` is proxied to the Python server:
 
 ```bash
-npm ci
 GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev
 ```
 

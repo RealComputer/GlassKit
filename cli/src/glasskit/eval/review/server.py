@@ -648,7 +648,10 @@ def create_review_server(
         root = importlib.resources.files("glasskit.eval.review").joinpath("static")
     assets = _load_static_assets(root)
     if "/index.html" not in assets:
-        raise EvalConfigError("packaged review UI is missing static/index.html")
+        raise EvalConfigError(
+            "review UI static/index.html is missing; from the CLI source directory, "
+            "run `cd review-ui && npm ci && npm run build`"
+        )
     resolved_repository = repository or ReviewRepository(eval_dir)
     return ReviewServer(
         ("127.0.0.1", port),
@@ -664,7 +667,10 @@ def _load_static_assets(root: Any) -> dict[str, StaticAsset]:
     except (AttributeError, OSError):
         root_is_dir = False
     if not root_is_dir:
-        raise EvalConfigError("packaged review UI static assets are missing")
+        raise EvalConfigError(
+            "review UI static assets are missing; from the CLI source directory, "
+            "run `cd review-ui && npm ci && npm run build`"
+        )
 
     assets: dict[str, StaticAsset] = {}
 

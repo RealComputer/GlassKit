@@ -16,9 +16,17 @@ from urllib.parse import quote
 import pytest
 
 import glasskit.eval.review.server as review_server_module
+from glasskit.eval.models import EvalConfigError
 from glasskit.eval.review.server import ReviewServer, create_review_server
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
+
+
+def test_missing_static_assets_explain_source_checkout_build(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+
+    with pytest.raises(EvalConfigError, match=r"npm ci && npm run build"):
+        create_review_server(eval_dir, static_dir=tmp_path / "missing-static")
 
 
 def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
