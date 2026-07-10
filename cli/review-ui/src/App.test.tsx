@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe("review application navigation and drafts", () => {
-  it("keeps native video controls from covering the review frame", async () => {
+  it("uses the unobstructed video surface to toggle playback", async () => {
     const doc = caseDocument();
     vi.stubGlobal(
       "fetch",
@@ -29,8 +29,20 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     await screen.findByLabelText("Review transport");
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video?.controls).toBe(false);
 
-    expect(document.querySelector("video")?.controls).toBe(false);
+    const play = vi.spyOn(video!, "play").mockResolvedValue();
+    const pause = vi.spyOn(video!, "pause").mockImplementation(() => undefined);
+    Object.defineProperty(video, "paused", { configurable: true, value: true });
+    fireEvent.click(video!);
+    expect(play).toHaveBeenCalledOnce();
+
+    Object.defineProperty(video, "paused", { configurable: true, value: false });
+    pause.mockClear();
+    fireEvent.click(video!);
+    expect(pause).toHaveBeenCalledOnce();
   });
 
   it("gives form fields unique identifiers and points labels at form controls", async () => {

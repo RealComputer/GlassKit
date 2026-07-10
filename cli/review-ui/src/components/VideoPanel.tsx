@@ -155,6 +155,7 @@ export function VideoPanel() {
             ref={videoRef}
             src={document.video.url}
             preload="metadata"
+            onClick={togglePlay}
             onLoadedMetadata={(event) =>
               dispatch({
                 type: "VIDEO_PATCH",
