@@ -270,6 +270,26 @@ def test_range_expansion_budget_is_checked_before_materialization(
         load_eval_suite(eval_dir)
 
 
+def test_range_at_budget_uses_repeated_addition_count(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, 1000.000000001001]
+                every_s: 0.1
+                expect: true
+        """,
+    )
+
+    suite = load_eval_suite(eval_dir)
+
+    assert len(suite.cases[0].samples) == MAX_EXPANDED_POINTS_PER_CASE
+    assert suite.cases[0].samples[-1].timestamp_s == 999.9
+
+
 def test_sub_nanosecond_cadence_hits_budget_before_expansion(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

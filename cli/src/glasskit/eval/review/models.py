@@ -207,6 +207,11 @@ class VideoDocument(TransportModel):
     height: int | None = None
     frame_count: int | None = None
 
+    @field_validator("display_path")
+    @classmethod
+    def _validate_display_path(cls, value: str) -> str:
+        return _validate_unicode_scalar(value)
+
 
 class CaseDocument(TransportModel):
     id: str

@@ -76,6 +76,29 @@ def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
         assert json.loads(body)["error"]["code"] == "invalid_host"
 
 
+def test_unsafe_partial_video_path_stays_isolated_in_blocked_document(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    (eval_dir / "cases" / "unsafe-video.yaml").write_text(
+        'video: "\\uD800"\ntargets: {}\n',
+        encoding="utf-8",
+    )
+
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        status, _headers, body = _request(
+            server,
+            "GET",
+            "/api/cases/unsafe-video.yaml",
+        )
+
+    document = json.loads(body)
+    assert status == 200
+    assert document["status"] == "blocked"
+    assert document["video"] is None
+    assert document["load_error"]["code"] == "invalid_case"
+
+
 def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:

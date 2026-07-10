@@ -466,17 +466,14 @@ def _sample_block_point_count(
 
     start, end = raw_block.range_
     every_s = raw_block.every_s if raw_block.every_s is not None else default_every_s
-    prospective_count = _prospective_range_point_count(start, end, every_s)
-    if prospective_count > MAX_EXPANDED_POINTS_PER_CASE:
-        return prospective_count
-
     current = start
     threshold = end - _EPSILON
     for count in range(MAX_EXPANDED_POINTS_PER_CASE + 1):
         if not current < threshold:
             return count
         current += every_s
-    return MAX_EXPANDED_POINTS_PER_CASE + 1
+    prospective_count = _prospective_range_point_count(start, end, every_s)
+    return max(prospective_count, MAX_EXPANDED_POINTS_PER_CASE + 1)
 
 
 def _prospective_range_point_count(start: float, end: float, every_s: float) -> int:

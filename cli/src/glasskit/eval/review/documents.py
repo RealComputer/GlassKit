@@ -563,7 +563,10 @@ def _partial_video_from_unparsed_source(source: str) -> VideoDocument | None:
     except yaml.YAMLError:
         return None
     if isinstance(value, Mapping) and isinstance(value.get("video"), str):
-        return VideoDocument(display_path=value["video"])
+        try:
+            return VideoDocument(display_path=value["video"])
+        except ValueError:
+            return None
     return None
 
 
