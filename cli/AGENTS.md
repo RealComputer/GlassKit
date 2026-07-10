@@ -22,7 +22,7 @@ This package provides the `glasskit` command. Its current command group is recor
 - `src/glasskit/eval/adapters.py`: adapter target loading and normalization for simple functions, factories, and evaluator objects.
 - `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.
-- `review-ui/`: React, TypeScript, Vite, Vitest, and Oxlint contributor workspace for the review application.
+- `review-ui/`: React, TypeScript, Vite, and Vitest contributor workspace for the review application.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.
 - `tests/fixtures/`: reproducible videos and sample eval directories used by default tests.
 - `PUBLISHING.md`: release runbook for the `glasskit.ai` PyPI package and tag-triggered Trusted Publishing flow.
