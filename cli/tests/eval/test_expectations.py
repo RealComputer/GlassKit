@@ -4,8 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from glasskit.eval.expectations import load_eval_suite
+from glasskit.eval.expectations import (
+    MAX_EXPANDED_POINTS_PER_CASE,
+    discover_case_paths,
+    load_case,
+    load_eval_suite,
+    load_yaml_mapping,
+)
 from glasskit.eval.models import EvalConfigError
+from glasskit.eval.schemas import parse_case_yaml
 
 
 def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
@@ -56,6 +63,53 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
         3.0,
         4.0,
     ]
+
+
+def test_sample_comment_is_trimmed_and_expands_to_every_point(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, 1.0]
+                expect: true
+                comment: |-
+                  First line.
+                  Second line.
+              - at: 2.0
+                expect: false
+        """,
+    )
+
+    samples = load_eval_suite(eval_dir).cases[0].samples
+
+    assert [sample.comment for sample in samples] == [
+        "First line.\nSecond line.",
+        "First line.\nSecond line.",
+        None,
+    ]
+
+
+def test_blank_sample_comment_is_invalid(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+                comment: "   "
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError, match=r"samples\.0\.comment.*must not be empty"
+    ):
+        load_eval_suite(eval_dir)
 
 
 def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
@@ -169,6 +223,118 @@ def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -
         load_eval_suite(eval_dir)
 
 
+def test_range_expansion_budget_is_checked_before_materialization(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        f"""
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, {MAX_EXPANDED_POINTS_PER_CASE + 1}.0]
+                every_s: 1.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError,
+        match=(
+            rf"target 'step_1' sample 1 would expand the case to "
+            rf"{MAX_EXPANDED_POINTS_PER_CASE + 1} points; limit is "
+            rf"{MAX_EXPANDED_POINTS_PER_CASE}"
+        ),
+    ):
+        load_eval_suite(eval_dir)
+
+
+def test_sub_nanosecond_cadence_hits_budget_before_expansion(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, 0.00001]
+                every_s: 0.0000000001
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match=r"would expand.*limit is 10000"):
+        load_eval_suite(eval_dir)
+
+
+def test_expansion_budget_is_shared_across_targets(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          first:
+            samples:
+              - range: [0.0, 6000.0]
+                every_s: 1.0
+                expect: true
+          second:
+            samples:
+              - range: [0.0, 4001.0]
+                every_s: 1.0
+                expect: false
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError,
+        match=r"target 'second' sample 1.*case to 10001 points.*limit is 10000",
+    ):
+        load_eval_suite(eval_dir)
+
+
+def test_range_rejects_duplicates_after_timestamp_normalization(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - range: [0.0, 0.000001]
+                every_s: 0.0000000005
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError, match="duplicates timestamp.*nine-decimal normalization"
+    ):
+        load_eval_suite(eval_dir)
+
+
+def test_at_rejects_near_duplicates_after_timestamp_normalization(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 0.000000001]
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="duplicates timestamp"):
+        load_eval_suite(eval_dir)
+
+
 def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
@@ -238,6 +404,36 @@ def test_yml_case_files_are_discovered(tmp_path: Path) -> None:
     suite = load_eval_suite(eval_dir)
 
     assert [case.name for case in suite.cases] == ["case-001"]
+
+
+def test_public_case_helpers_support_review_loading_without_a_video(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: missing.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 1.0]
+                expect: true
+                comment: Reviewable without preview.
+        """,
+    )
+    case_path = discover_case_paths(eval_dir)[0]
+    raw_case = parse_case_yaml(load_yaml_mapping(case_path), label=str(case_path))
+
+    case = load_case(case_path, raw_case=raw_case, resolve_video=False)
+
+    assert case.video_path == (case_path.parent / "missing.mp4").resolve()
+    assert [sample.timestamp_s for sample in case.samples] == [0.0, 1.0]
+    assert [sample.comment for sample in case.samples] == [
+        "Reviewable without preview.",
+        "Reviewable without preview.",
+    ]
+    with pytest.raises(EvalConfigError, match="video file does not exist"):
+        load_case(case_path, raw_case=raw_case)
 
 
 def test_case_filter_matches_yml_case_file(tmp_path: Path) -> None:

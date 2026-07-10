@@ -70,6 +70,7 @@ class RawSampleBlock(_SchemaModel):
     every_s: float | None = None
     field: str | None = None
     compare: RawCompare | None = None
+    comment: str | None = None
 
     @field_validator("expect")
     @classmethod
@@ -112,6 +113,16 @@ class RawSampleBlock(_SchemaModel):
     @field_validator("field")
     @classmethod
     def _strip_field(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        return stripped
+
+    @field_validator("comment")
+    @classmethod
+    def _strip_comment(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
