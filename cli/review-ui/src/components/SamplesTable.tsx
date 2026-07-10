@@ -26,7 +26,6 @@ export function SamplesTable() {
                 <th>Compare</th>
                 <th>Tolerance</th>
                 <th aria-label="Comment">Note</th>
-                <th>Source</th>
               </tr>
             </thead>
             <tbody>
@@ -63,7 +62,6 @@ export function SamplesTable() {
                       "—"
                     )}
                   </td>
-                  <td>{point.origin?.kind ?? "new"}</td>
                 </tr>
               ))}
             </tbody>
