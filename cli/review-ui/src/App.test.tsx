@@ -45,6 +45,32 @@ describe("review application navigation and drafts", () => {
     expect(pause).toHaveBeenCalledOnce();
   });
 
+  it("keeps the fit timeline's final label inside its viewport", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const fit = await screen.findByRole("button", { name: "Fit" });
+    const scroll = document.querySelector(".timeline-scroll");
+    const finalTick = document.querySelector<HTMLElement>(".ruler-tick:last-child");
+
+    expect(scroll?.classList.contains("fit")).toBe(true);
+    expect(finalTick?.style.right).toBe("0px");
+    expect(finalTick?.style.left).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "2×" }));
+    expect(fit.classList.contains("selected")).toBe(false);
+    expect(scroll?.classList.contains("fit")).toBe(false);
+  });
+
   it("gives form fields unique identifiers and points labels at form controls", async () => {
     const doc = caseDocument();
     vi.stubGlobal(

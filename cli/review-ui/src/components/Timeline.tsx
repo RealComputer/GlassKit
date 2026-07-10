@@ -127,20 +127,29 @@ export function Timeline() {
           <Layers3 size={15} /> Selected only
         </label>
       </div>
-      <div className="timeline-scroll" ref={scrollRef} style={rootStyle}>
+      <div
+        className={`timeline-scroll${state.zoom === 1 ? " fit" : ""}`}
+        ref={scrollRef}
+        style={rootStyle}
+      >
         <div className="timeline-content">
           <div className="time-ruler">
             <div className="lane-label ruler-label">Target / time</div>
             <div className="ruler-track">
-              {ticks.map((tick) => (
-                <span
-                  key={tick}
-                  className="ruler-tick mono"
-                  style={{ left: `${timeToPosition(tick, duration) * 100}%` }}
-                >
-                  {formatSeconds(tick)}
-                </span>
-              ))}
+              {ticks.map((tick, index) => {
+                const isEnd = index > 0 && index === ticks.length - 1;
+                return (
+                  <span
+                    key={tick}
+                    className={`ruler-tick mono${isEnd ? " end" : ""}`}
+                    style={
+                      isEnd ? { right: 0 } : { left: `${timeToPosition(tick, duration) * 100}%` }
+                    }
+                  >
+                    {formatSeconds(tick)}
+                  </span>
+                );
+              })}
             </div>
           </div>
           <div className="playhead" style={playheadStyle} aria-hidden="true" />

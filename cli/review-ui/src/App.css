@@ -566,6 +566,10 @@ kbd {
   scrollbar-gutter: stable;
 }
 
+.timeline-scroll.fit {
+  overflow-x: hidden;
+}
+
 .timeline-content {
   position: relative;
   width: calc(148px + var(--track-width));
@@ -642,6 +646,12 @@ kbd {
   font-size: 9px;
   white-space: nowrap;
   transform: translateX(-1px);
+}
+
+.ruler-tick.end {
+  padding-right: 4px;
+  padding-left: 0;
+  transform: none;
 }
 
 .timeline-lane {
