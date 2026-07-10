@@ -240,7 +240,7 @@ You can also keep videos next to the case YAML and reference them with a local f
 
 The `video:` path in the case YAML is resolved relative to the case YAML file.
 
-`config.yaml` is optional and supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` or `.yml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip.
+`config.yaml` is optional and supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip.
 
 ## Case YAML Reference
 
@@ -324,7 +324,7 @@ Sample block fields:
 | `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
-| `comment` | No | Human-readable note retained with the expectation. Surrounding whitespace is trimmed, blank values are rejected, and multiline content is preserved. It does not affect adapter calls or comparison. |
+| `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 points across all targets in one case; pathological ranges are rejected before their points are materialized.
 
