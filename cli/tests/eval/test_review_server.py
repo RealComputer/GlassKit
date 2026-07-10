@@ -174,6 +174,8 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
         assert status == 200
         assert body == expected
         assert headers["accept-ranges"] == "bytes"
+        assert headers["etag"].startswith('"')
+        assert headers["last-modified"].endswith(" GMT")
         assert int(headers["content-length"]) == len(expected)
 
         status, headers, body = _request(server, "HEAD", route)
@@ -184,9 +186,10 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
         status, headers, body = _request(
             server, "HEAD", route, headers={"Range": "bytes=0-9"}
         )
-        assert status == 206
+        assert status == 200
         assert body == b""
-        assert headers["content-length"] == "10"
+        assert int(headers["content-length"]) == len(expected)
+        assert "content-range" not in headers
 
         for value, selected in (
             ("bytes=0-9", expected[:10]),
@@ -213,6 +216,146 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
             assert status == 416
             assert body == b""
             assert headers["content-range"] == f"bytes */{len(expected)}"
+
+
+def test_video_conditional_cache_requests(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    expected = (tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4").read_bytes()
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        route = "/api/cases/assembly.yaml/video"
+        status, headers, body = _request(server, "GET", route)
+        assert status == 200
+        assert body == expected
+        etag = headers["etag"]
+        last_modified = headers["last-modified"]
+
+        for method, conditional_headers in (
+            ("GET", {"If-None-Match": etag}),
+            ("GET", {"If-None-Match": f'"stale", W/{etag}'}),
+            ("GET", {"If-None-Match": "*"}),
+            ("GET", {"If-None-Match": etag, "Range": "bytes=0-9"}),
+            ("GET", {"If-Modified-Since": last_modified}),
+            ("HEAD", {"If-None-Match": etag}),
+            ("HEAD", {"If-Modified-Since": last_modified}),
+        ):
+            status, response_headers, body = _request(
+                server, method, route, headers=conditional_headers
+            )
+            assert status == 304
+            assert body == b""
+            assert response_headers["etag"] == etag
+            assert response_headers["last-modified"] == last_modified
+            assert response_headers["cache-control"] == "private, max-age=0"
+            assert "content-length" not in response_headers
+
+        status, _headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={
+                "If-None-Match": '"stale"',
+                "If-Modified-Since": last_modified,
+            },
+        )
+        assert status == 200
+        assert body == expected
+
+        for conditional_headers in (
+            {"If-Modified-Since": "not-a-date"},
+            {"If-Modified-Since": "Thu, 01 Jan 1970 00:00:00 GMT"},
+        ):
+            status, _headers, body = _request(
+                server, "GET", route, headers=conditional_headers
+            )
+            assert status == 200
+            assert body == expected
+
+
+def test_video_precondition_precedence(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    expected = (tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4").read_bytes()
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        route = "/api/cases/assembly.yaml/video"
+        _status, headers, _body = _request(server, "GET", route)
+        etag = headers["etag"]
+
+        for conditional_headers in (
+            {"If-Match": '"stale"'},
+            {"If-Match": f"W/{etag}"},
+            {"If-Unmodified-Since": "Thu, 01 Jan 1970 00:00:00 GMT"},
+        ):
+            status, response_headers, body = _request(
+                server, "GET", route, headers=conditional_headers
+            )
+            assert status == 412
+            assert body == b""
+            assert response_headers["etag"] == etag
+            assert response_headers["content-length"] == "0"
+
+        for conditional_headers in (
+            {"If-Match": etag},
+            {"If-Match": "*"},
+            {
+                "If-Match": etag,
+                "If-Unmodified-Since": "Thu, 01 Jan 1970 00:00:00 GMT",
+            },
+        ):
+            status, _headers, body = _request(
+                server, "GET", route, headers=conditional_headers
+            )
+            assert status == 200
+            assert body == expected
+
+
+def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    video_path = tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4"
+    expected = video_path.read_bytes()
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        route = "/api/cases/assembly.yaml/video"
+        _status, headers, _body = _request(server, "GET", route)
+        etag = headers["etag"]
+        last_modified = headers["last-modified"]
+
+        status, response_headers, body = _request(
+            server,
+            "GET",
+            route,
+            headers={"Range": "bytes=0-9", "If-Range": etag},
+        )
+        assert status == 206
+        assert body == expected[:10]
+        assert response_headers["content-range"].startswith("bytes 0-9/")
+
+        for validator in (
+            '"stale"',
+            f"W/{etag}",
+            last_modified,
+            "not-a-validator",
+        ):
+            status, response_headers, body = _request(
+                server,
+                "GET",
+                route,
+                headers={"Range": "bytes=0-9", "If-Range": validator},
+            )
+            assert status == 200
+            assert body == expected
+            assert "content-range" not in response_headers
+
+        replacement = b"replacement video bytes"
+        video_path.write_bytes(replacement)
+        for validator in (etag, last_modified):
+            status, response_headers, body = _request(
+                server,
+                "GET",
+                route,
+                headers={"Range": "bytes=0-9", "If-Range": validator},
+            )
+            assert status == 200
+            assert body == replacement
+            assert response_headers["etag"] != etag
+            assert "content-range" not in response_headers
 
 
 def test_structured_put_success_and_request_validation(tmp_path: Path) -> None:

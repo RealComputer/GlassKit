@@ -340,15 +340,59 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
         size = stat_result.st_size
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         etag = f'"{stat_result.st_mtime_ns:x}-{size:x}"'
+        last_modified_seconds = int(stat_result.st_mtime)
+        last_modified = email.utils.formatdate(last_modified_seconds, usegmt=True)
         common_headers = {
             "Accept-Ranges": "bytes",
             "ETag": etag,
-            "Last-Modified": email.utils.formatdate(stat_result.st_mtime, usegmt=True),
+            "Last-Modified": last_modified,
             "Cache-Control": "private, max-age=0",
         }
 
-        range_header = self.headers.get("Range")
-        if range_header is None:
+        if_match_values = self.headers.get_all("If-Match") or []
+        if if_match_values:
+            if not _etag_list_matches(", ".join(if_match_values), etag, weak=False):
+                self._send_video_precondition_response(412, common_headers)
+                return
+        else:
+            unmodified_since_values = self.headers.get_all("If-Unmodified-Since") or []
+            if len(unmodified_since_values) == 1:
+                unmodified_since = _parse_http_date(unmodified_since_values[0])
+                if (
+                    unmodified_since is not None
+                    and last_modified_seconds > unmodified_since
+                ):
+                    self._send_video_precondition_response(412, common_headers)
+                    return
+
+        if_none_match_values = self.headers.get_all("If-None-Match") or []
+        if if_none_match_values:
+            if _etag_list_matches(", ".join(if_none_match_values), etag, weak=True):
+                self._send_video_precondition_response(304, common_headers)
+                return
+        else:
+            modified_since_values = self.headers.get_all("If-Modified-Since") or []
+            if len(modified_since_values) == 1:
+                modified_since = _parse_http_date(modified_since_values[0])
+                if (
+                    modified_since is not None
+                    and last_modified_seconds <= modified_since
+                ):
+                    self._send_video_precondition_response(304, common_headers)
+                    return
+
+        range_values = self.headers.get_all("Range") or []
+        range_header = (
+            ", ".join(range_values) if self.command == "GET" and range_values else None
+        )
+        if_range_values = self.headers.get_all("If-Range") or []
+        if range_header is None or (
+            if_range_values
+            and (
+                len(if_range_values) != 1
+                or not _if_range_matches(if_range_values[0], etag=etag)
+            )
+        ):
             self._send_file_range(
                 path,
                 status=200,
@@ -386,6 +430,17 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
             headers=headers,
             send_body=send_body,
         )
+
+    def _send_video_precondition_response(
+        self, status: int, headers: dict[str, str]
+    ) -> None:
+        self.send_response(status)
+        if status != 304:
+            self.send_header("Content-Length", "0")
+        for key in ("ETag", "Last-Modified", "Cache-Control"):
+            self.send_header(key, headers[key])
+        self._send_security_headers()
+        self.end_headers()
 
     def _send_file_range(
         self,
@@ -617,6 +672,35 @@ def _parse_byte_range(value: str, size: int) -> tuple[int, int] | None:
             return None
         return start, min(end, size - 1)
     except ValueError:
+        return None
+
+
+def _etag_list_matches(value: str, current: str, *, weak: bool) -> bool:
+    if value.strip() == "*":
+        return True
+    current_value = current.removeprefix("W/") if weak else current
+    for raw_candidate in value.split(","):
+        candidate = raw_candidate.strip()
+        if weak:
+            candidate = candidate.removeprefix("W/")
+        elif candidate.startswith("W/"):
+            continue
+        if candidate == current_value:
+            return True
+    return False
+
+
+def _if_range_matches(value: str, *, etag: str) -> bool:
+    # HTTP dates have only one-second resolution, so the file's Last-Modified
+    # value cannot prove byte-for-byte identity across rapid replacements.
+    return value.strip() == etag
+
+
+def _parse_http_date(value: str) -> int | None:
+    try:
+        parsed = email.utils.parsedate_tz(value)
+        return int(email.utils.mktime_tz(parsed)) if parsed is not None else None
+    except (OverflowError, TypeError, ValueError):
         return None
 
 

@@ -23,12 +23,6 @@ The review UI should keep the video, expanded sample schedule, expected values, 
 
 ## Remaining Work
 
-### Unfinished Original Scope
-
-These behaviors were part of the original review UI plan but are not fully implemented in the current source.
-
-- Complete conditional video request handling for the emitted `ETag` and `Last-Modified` validators, including correct `If-Range` behavior when the underlying video changes.
-
 ### Deferred Capabilities
 
 The following capabilities remain deferred unless user feedback, representative recordings, or measured performance makes them worth prioritizing.
