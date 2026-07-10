@@ -15,6 +15,36 @@ afterEach(() => {
 });
 
 describe("review application navigation and drafts", () => {
+  it("gives form fields unique identifiers and points labels at form controls", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    await screen.findByRole("group", { name: "Expected value" });
+    const fields = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        "input, select, textarea",
+      ),
+    );
+    const ids = fields.map((field) => field.id).filter(Boolean);
+
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.every((field) => Boolean(field.id || field.name))).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const label of document.querySelectorAll<HTMLLabelElement>("label[for]")) {
+      const control = document.getElementById(label.htmlFor);
+      expect(control?.matches("input, select, textarea")).toBe(true);
+    }
+  });
+
   it("keeps an invalid partial expectation selected during blur and point navigation", async () => {
     const doc = caseDocument([
       target("numeric_target", [point("first", 1, "1"), point("second", 2, "2")]),

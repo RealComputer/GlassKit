@@ -35,10 +35,11 @@ export function Sidebar() {
           <h2>Cases</h2>
           <span>{state.suite?.cases.length ?? 0}</span>
         </div>
-        <label className="filter-input">
+        <label className="filter-input" htmlFor="case-filter">
           <Search size={14} aria-hidden="true" />
           <span className="sr-only">Filter cases</span>
           <input
+            id="case-filter"
             type="search"
             value={state.caseFilter}
             placeholder="Filter cases"
@@ -85,10 +86,11 @@ export function Sidebar() {
           <h2>Targets</h2>
           <span>{workspace?.document.targets.length ?? 0}</span>
         </div>
-        <label className="filter-input">
+        <label className="filter-input" htmlFor="target-filter">
           <Search size={14} aria-hidden="true" />
           <span className="sr-only">Filter targets</span>
           <input
+            id="target-filter"
             type="search"
             value={state.targetFilter}
             placeholder="Filter targets"

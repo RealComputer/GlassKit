@@ -911,7 +911,8 @@ tbody tr.selected {
   margin-bottom: 13px;
 }
 
-.field-group > label {
+.field-group > label,
+.field-group > .field-label {
   display: block;
   margin-bottom: 5px;
   color: var(--text);

@@ -112,8 +112,9 @@ export function Timeline() {
             </button>
           ))}
         </div>
-        <label className="toggle-control">
+        <label className="toggle-control" htmlFor="selected-lane-only">
           <input
+            id="selected-lane-only"
             type="checkbox"
             checked={state.selectedLaneOnly}
             onChange={(event) =>

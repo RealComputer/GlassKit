@@ -294,11 +294,23 @@ export function Inspector() {
         </div>
 
         <div className="field-group">
-          <label htmlFor="expect-value">Expected value</label>
+          {point.expect_type === "null" || point.expect_type === "boolean" ? (
+            <span className="field-label" id="expect-value-label">
+              Expected value
+            </span>
+          ) : (
+            <label htmlFor="expect-value">Expected value</label>
+          )}
           {point.expect_type === "null" ? (
-            <div className="null-value mono">null</div>
+            <div className="null-value mono" aria-labelledby="expect-value-label">
+              null
+            </div>
           ) : point.expect_type === "boolean" ? (
-            <div className="segmented boolean-control" id="expect-value">
+            <div
+              className="segmented boolean-control"
+              role="group"
+              aria-labelledby="expect-value-label"
+            >
               <button
                 type="button"
                 ref={expectationRef as RefObject<HTMLButtonElement>}

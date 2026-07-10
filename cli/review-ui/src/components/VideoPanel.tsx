@@ -258,9 +258,10 @@ export function VideoPanel() {
         >
           <StepForward size={16} />
         </button>
-        <label className="time-control">
+        <label className="time-control" htmlFor="video-time">
           <span>Time</span>
           <input
+            id="video-time"
             className="mono"
             ref={timeInputRef}
             type="number"
@@ -290,9 +291,10 @@ export function VideoPanel() {
             }}
           />
         </label>
-        <label className="rate-control">
+        <label className="rate-control" htmlFor="playback-rate">
           <span className="sr-only">Playback rate</span>
           <select
+            id="playback-rate"
             value={state.video.playbackRate}
             onChange={(event) => {
               const rate = Number(event.target.value);
