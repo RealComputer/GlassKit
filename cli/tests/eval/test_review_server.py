@@ -29,6 +29,60 @@ def test_missing_static_assets_explain_source_checkout_build(tmp_path: Path) -> 
         create_review_server(eval_dir, static_dir=tmp_path / "missing-static")
 
 
+@pytest.mark.parametrize(
+    "disconnect_error",
+    [BrokenPipeError(), ConnectionAbortedError(), ConnectionResetError()],
+)
+def test_client_disconnects_do_not_emit_server_tracebacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    disconnect_error: OSError,
+) -> None:
+    server = create_review_server(
+        _copy_fixtures(tmp_path),
+        static_dir=_static_dir(tmp_path),
+        write_token="write-secret",
+    )
+
+    def raise_disconnect(*_args: object) -> None:
+        raise disconnect_error
+
+    monkeypatch.setattr(server, "finish_request", raise_disconnect)
+    monkeypatch.setattr(server, "shutdown_request", lambda _request: None)
+    try:
+        server.process_request_thread(server.socket, ("127.0.0.1", 12345))
+    finally:
+        server.server_close()
+
+    assert capsys.readouterr().err == ""
+
+
+def test_unexpected_request_errors_still_emit_server_tracebacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    server = create_review_server(
+        _copy_fixtures(tmp_path),
+        static_dir=_static_dir(tmp_path),
+        write_token="write-secret",
+    )
+
+    def raise_unexpected(*_args: object) -> None:
+        raise RuntimeError("unexpected request failure")
+
+    monkeypatch.setattr(server, "finish_request", raise_unexpected)
+    monkeypatch.setattr(server, "shutdown_request", lambda _request: None)
+    try:
+        server.process_request_thread(server.socket, ("127.0.0.1", 12345))
+    finally:
+        server.server_close()
+
+    stderr = capsys.readouterr().err
+    assert "RuntimeError: unexpected request failure" in stderr
+
+
 def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     (eval_dir / "cases" / "invalid-encoding.yaml").write_bytes(b"video: \xff\n")

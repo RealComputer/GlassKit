@@ -10,6 +10,7 @@ import mimetypes
 import os
 import re
 import secrets
+import sys
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -97,6 +98,17 @@ class ReviewServer(http.server.ThreadingHTTPServer):
     @property
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/"
+
+    def handle_error(
+        self,
+        request: Any,
+        client_address: tuple[str, int],
+    ) -> None:
+        """Keep routine browser disconnects from polluting the CLI output."""
+
+        if isinstance(sys.exception(), ConnectionError):
+            return
+        super().handle_error(request, client_address)
 
     def video_metadata(
         self, path: Path, *, response_time: int
