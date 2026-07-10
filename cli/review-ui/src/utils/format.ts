@@ -2,9 +2,9 @@ import type { ReviewPoint } from "../api/types.ts";
 
 export function formatTime(seconds: number, includeUnit = false): string {
   if (!Number.isFinite(seconds)) return "--:--.---";
-  const safe = Math.max(0, seconds);
-  const minutes = Math.floor(safe / 60);
-  const remainder = safe - minutes * 60;
+  const totalMilliseconds = Math.round(Math.max(0, seconds) * 1000);
+  const minutes = Math.floor(totalMilliseconds / 60_000);
+  const remainder = (totalMilliseconds % 60_000) / 1000;
   const formatted = `${String(minutes).padStart(2, "0")}:${remainder.toFixed(3).padStart(6, "0")}`;
   return includeUnit ? `${formatted}s` : formatted;
 }
