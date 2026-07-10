@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from rich.text import Text
 from typer.testing import CliRunner
 
 import glasskit.cli as cli_module
@@ -30,11 +31,12 @@ class FakeServer:
 
 def test_review_help_lists_context_and_lifecycle_options() -> None:
     result = CliRunner().invoke(app, ["eval", "review", "--help"])
+    output = Text.from_ansi(result.output).plain
 
     assert result.exit_code == 0
     for option in ("--eval-dir", "--case", "--target", "--time", "--port", "--no-open"):
-        assert option in result.output
-    assert "Initially open this case" in result.output
+        assert option in output
+    assert "Initially open this case" in output
 
 
 def test_review_rejects_dependent_and_non_finite_options() -> None:
@@ -45,11 +47,11 @@ def test_review_rejects_dependent_and_non_finite_options() -> None:
     nan = runner.invoke(app, ["eval", "review", "--case", "assembly", "--time", "nan"])
 
     assert target.exit_code == 2
-    assert "--target requires --case" in target.output
+    assert "--target requires --case" in Text.from_ansi(target.output).plain
     assert time.exit_code == 2
-    assert "--time requires --case" in time.output
+    assert "--time requires --case" in Text.from_ansi(time.output).plain
     assert nan.exit_code == 2
-    assert "finite, nonnegative" in nan.output
+    assert "finite, nonnegative" in Text.from_ansi(nan.output).plain
 
 
 def test_review_resolves_initial_context_and_no_open(
