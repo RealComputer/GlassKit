@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from .json_values import json_value_error
+from .json_values import json_value_error, unicode_scalar_error
 from .models import SUPPORTED_COMPARE_MODES, EvalConfigError
 
 DEFAULT_EVERY_S = 0.5
@@ -39,6 +39,7 @@ class RawCompare(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         if stripped not in SUPPORTED_COMPARE_MODES:
             supported = ", ".join(sorted(SUPPORTED_COMPARE_MODES))
             raise ValueError(
@@ -118,6 +119,7 @@ class RawSampleBlock(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         return stripped
 
     @field_validator("comment")
@@ -128,6 +130,7 @@ class RawSampleBlock(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         return stripped
 
     @model_validator(mode="after")
@@ -150,6 +153,7 @@ class RawTarget(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         return stripped
 
 
@@ -171,6 +175,7 @@ class RawWorkflowTarget(BaseModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         return stripped
 
 
@@ -237,6 +242,7 @@ class RawCaseYaml(_SchemaModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
         return stripped
 
     @field_validator("targets")
@@ -277,6 +283,12 @@ def _validate_mapping_keys(value: Mapping[str, Any], *, label: str) -> None:
             raise ValueError(f"{label} keys must not be empty")
         if key != key.strip():
             raise ValueError(f"{label} keys must not have surrounding whitespace")
+        _validate_unicode_scalar(key)
+
+
+def _validate_unicode_scalar(value: str) -> None:
+    if error := unicode_scalar_error(value):
+        raise ValueError(error)
 
 
 def _parse_model[T: BaseModel](model_type: type[T], raw: Any, *, label: str) -> T:

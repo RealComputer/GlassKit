@@ -8,9 +8,19 @@ def json_value_error(value: Any, *, label: str = "value") -> str | None:
     return _json_value_error(value, path=label, seen=set())
 
 
+def unicode_scalar_error(value: str, *, label: str = "value") -> str | None:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return f"{label} must contain valid Unicode scalar values"
+    return None
+
+
 def _json_value_error(value: Any, *, path: str, seen: set[int]) -> str | None:
-    if value is None or isinstance(value, bool | str):
+    if value is None or isinstance(value, bool):
         return None
+    if isinstance(value, str):
+        return unicode_scalar_error(value, label=path)
     if isinstance(value, int) and not isinstance(value, bool):
         return None
     if isinstance(value, float):
@@ -35,6 +45,8 @@ def _json_value_error(value: Any, *, path: str, seen: set[int]) -> str | None:
         for key, item in value.items():
             if not isinstance(key, str):
                 return f"{path} keys must be strings"
+            if error := unicode_scalar_error(key, label=f"{path} key"):
+                return error
             if error := _json_value_error(item, path=_child_path(path, key), seen=seen):
                 return error
         seen.remove(value_id)

@@ -16,12 +16,18 @@ FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
+    (eval_dir / "cases" / "invalid-encoding.yaml").write_bytes(b"video: \xff\n")
     static_dir = _static_dir(tmp_path)
     with _running_server(eval_dir, static_dir) as server:
         status, headers, body = _request(server, "GET", "/api/suite")
         suite = json.loads(body)
         assert status == 200
         assert suite["write_token"] == "write-secret"
+        invalid = next(
+            case for case in suite["cases"] if case["id"] == "invalid-encoding.yaml"
+        )
+        assert invalid["status"] == "blocked"
+        assert invalid["error"]["code"] == "invalid_encoding"
         assert server.port > 0
         assert headers["cache-control"] == "no-store"
         assert headers["content-security-policy"].startswith("default-src 'self'")
@@ -115,6 +121,26 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
         assert status == 413
         assert json.loads(body)["error"]["code"] == "request_too_large"
 
+        status, headers, body = _request(server, "TRACE", "/api/suite")
+        assert status == 405
+        assert headers["content-type"].startswith("application/json")
+        assert "content-security-policy" in headers
+        assert json.loads(body)["error"]["code"] == "method_not_allowed"
+
+        nested_json = (b"[" * 10_000) + b"0" + (b"]" * 10_000)
+        status, _headers, body = _request(
+            server,
+            "PUT",
+            "/api/cases/assembly.yaml/samples",
+            body=nested_json,
+            headers={
+                "Content-Type": "application/json",
+                "X-GlassKit-Write-Token": "write-secret",
+            },
+        )
+        assert status == 400
+        assert json.loads(body)["error"]["code"] == "malformed_json"
+
 
 def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
@@ -151,7 +177,13 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
             assert body == selected
             assert headers["content-range"].startswith("bytes ")
 
-        for value in ("bytes=999999999-", "bytes=0-1,3-4", "items=0-2"):
+        for value in (
+            "bytes=999999999-",
+            "bytes=0-1,3-4",
+            "bytes=+1-2",
+            "bytes=1-+2",
+            "items=0-2",
+        ):
             status, headers, body = _request(
                 server, "GET", route, headers={"Range": value}
             )

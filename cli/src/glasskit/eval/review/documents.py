@@ -81,6 +81,12 @@ class ReviewRepository:
         with self._lock_for(path):
             try:
                 source = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError as error:
+                raise ReviewAPIError(
+                    409,
+                    "case_structure_changed",
+                    "The case is no longer valid UTF-8; reload it after repair.",
+                ) from error
             except OSError as error:
                 raise ReviewAPIError(
                     500,
@@ -196,6 +202,17 @@ class ReviewRepository:
             description = raw.description
             loaded = load_case(
                 path, allow_empty=True, raw_case=raw, resolve_video=False
+            )
+        except UnicodeDecodeError as error:
+            return CaseSummary(
+                id=path.name,
+                name=path.stem,
+                file_name=path.name,
+                description=None,
+                target_count=None,
+                point_count=None,
+                status="blocked",
+                error=_load_error("invalid_encoding", str(error)),
             )
         except (OSError, EvalConfigError) as error:
             return CaseSummary(

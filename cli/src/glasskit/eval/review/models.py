@@ -18,6 +18,14 @@ type SummaryStatus = Literal["ready", "blocked"]
 type IssueSeverity = Literal["error", "warning"]
 
 
+def _validate_unicode_scalar(value: str) -> str:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ValueError("must contain valid Unicode scalar values") from error
+    return value
+
+
 class ReviewAPIError(Exception):
     """An expected operation failure that maps to a structured HTTP response."""
 
@@ -82,7 +90,7 @@ class PointCompare(TransportModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("must not be blank")
-        return normalized
+        return _validate_unicode_scalar(normalized)
 
     @field_validator("tolerance")
     @classmethod
@@ -132,7 +140,7 @@ class ReviewPoint(TransportModel):
     def _validate_id(cls, value: str) -> str:
         if not value:
             raise ValueError("must not be empty")
-        return value
+        return _validate_unicode_scalar(value)
 
     @field_validator("timestamp_s")
     @classmethod
@@ -146,7 +154,7 @@ class ReviewPoint(TransportModel):
     def _validate_expect_json(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must contain one JSON value")
-        return value
+        return _validate_unicode_scalar(value)
 
     @field_validator("field", "comment")
     @classmethod
@@ -156,7 +164,7 @@ class ReviewPoint(TransportModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("must not be blank; use null to omit it")
-        return normalized
+        return _validate_unicode_scalar(normalized)
 
 
 class DisplayGroup(TransportModel):
@@ -248,4 +256,6 @@ class ReplaceSamplesRequest(TransportModel):
             raise ValueError("must contain at least one target")
         if any(not target_id for target_id in value):
             raise ValueError("target ids must not be empty")
+        for target_id in value:
+            _validate_unicode_scalar(target_id)
         return value

@@ -96,14 +96,22 @@ def strict_json_value(text: str, *, path: str) -> Any:
             parse_constant=reject_constant,
             object_pairs_hook=object_from_pairs,
         )
-    except (json.JSONDecodeError, ValueError) as error:
+    except (json.JSONDecodeError, ValueError, RecursionError) as error:
         raise ReviewAPIError(
             422,
             "invalid_samples",
             "Target samples are invalid.",
             [ErrorDetail(path=path, message=f"must contain valid JSON: {error}")],
         ) from error
-    issue = _json_value_issue(value)
+    try:
+        issue = _json_value_issue(value)
+    except RecursionError as error:
+        raise ReviewAPIError(
+            422,
+            "invalid_samples",
+            "Target samples are invalid.",
+            [ErrorDetail(path=path, message="JSON value is nested too deeply")],
+        ) from error
     if issue is not None:
         raise ReviewAPIError(
             422,
@@ -638,7 +646,7 @@ def _range_expands_with_every(
             target_id="<target>",
             block_index=1,
         )
-    except (EvalConfigError, ValueError):
+    except (EvalConfigError, ValueError, OverflowError):
         return False
     return [canonical_timestamp(value)[1] for value in expanded] == [
         point.tick for point in points

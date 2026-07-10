@@ -53,6 +53,9 @@ def test_strict_json_rejects_non_finite_values_and_duplicate_keys() -> None:
     with pytest.raises(ReviewAPIError) as surrogate:
         strict_json_value(r'"\ud800"', path="expect_json")
     assert "Unicode scalar" in surrogate.value.details[0].message
+    with pytest.raises(ReviewAPIError) as deeply_nested:
+        strict_json_value("[" * 1_100 + "0" + "]" * 1_100, path="expect_json")
+    assert deeply_nested.value.status == 422
 
 
 def test_reconstruction_emits_default_and_custom_ranges_with_exact_groups() -> None:
@@ -91,6 +94,22 @@ def test_reconstruction_keeps_sparse_pair_at_but_retains_source_range_pair() -> 
     assert sparse.blocks[0]["at"] == [0.0, 4.0]
     assert source_range.blocks[0]["range"] == [0.0, 8.0]
     assert source_range.blocks[0]["every_s"] == 4.0
+
+
+def test_nonrepresentable_derived_range_end_safely_falls_back_to_at() -> None:
+    origin = PointOrigin(block_index=1, kind="range", every_s=6e307)
+
+    reconstructed = reconstruct_target(
+        "state",
+        [
+            _point("a", 1e308, origin=origin),
+            _point("b", 1.6e308, origin=origin),
+        ],
+        default_every_s=6e307,
+    )
+
+    assert reconstructed.blocks[0]["at"] == [1e308, 1.6e308]
+    assert reconstructed.groups[0].kind == "at"
 
 
 def test_range_end_clips_before_next_different_payload() -> None:

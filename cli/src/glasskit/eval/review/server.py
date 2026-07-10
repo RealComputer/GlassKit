@@ -9,6 +9,7 @@ import mimetypes
 import re
 import secrets
 from dataclasses import dataclass
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -99,6 +100,32 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self._unsupported_method()
+
+    def do_TRACE(self) -> None:  # noqa: N802
+        self._unsupported_method()
+
+    def do_CONNECT(self) -> None:  # noqa: N802
+        self._unsupported_method()
+
+    def send_error(
+        self,
+        code: int,
+        message: str | None = None,
+        explain: str | None = None,
+    ) -> None:
+        """Keep stdlib-generated protocol errors in the API error envelope."""
+
+        self.close_connection = True
+        try:
+            phrase = HTTPStatus(code).phrase
+        except ValueError:
+            phrase = "HTTP error"
+        self._send_error(
+            code,
+            "http_error",
+            message or phrase,
+            send_body=getattr(self, "command", None) != "HEAD",
+        )
 
     def log_message(self, format: str, *args: object) -> None:
         # The CLI prints one stable launch URL; routine browser traffic stays quiet.
@@ -232,7 +259,12 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
                 body.decode("utf-8"),
                 parse_constant=lambda value: _reject_json_constant(value),
             )
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            ValueError,
+            RecursionError,
+        ) as error:
             self._send_error(
                 400,
                 "malformed_json",
@@ -276,6 +308,7 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
         self._send_model(200, document)
 
     def _unsupported_method(self) -> None:
+        self.close_connection = True
         if not self._host_is_valid():
             self._send_error(
                 400,
@@ -473,7 +506,7 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
             return False
         if (
             host is None
-            or port != self.server.port
+            or (port if port is not None else 80) != self.server.port
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path
@@ -563,22 +596,32 @@ def _parse_byte_range(value: str, size: int) -> tuple[int, int] | None:
     start_text, end_text = (part.strip() for part in spec.split("-", 1))
     try:
         if not start_text:
+            if not _is_ascii_digits(end_text):
+                return None
             suffix_length = int(end_text)
             if suffix_length <= 0:
                 return None
             start = max(0, size - suffix_length)
             return start, size - 1
+        if not _is_ascii_digits(start_text):
+            return None
         start = int(start_text)
         if start < 0 or start >= size:
             return None
         if not end_text:
             return start, size - 1
+        if not _is_ascii_digits(end_text):
+            return None
         end = int(end_text)
         if end < start:
             return None
         return start, min(end, size - 1)
     except ValueError:
         return None
+
+
+def _is_ascii_digits(value: str) -> bool:
+    return bool(value) and all("0" <= character <= "9" for character in value)
 
 
 def _reject_json_constant(value: str) -> None:

@@ -27,6 +27,8 @@ def test_suite_index_is_case_local_and_document_contains_lossless_points(
     eval_dir = _copy_fixtures(tmp_path)
     malformed = eval_dir / "cases" / "malformed.yaml"
     malformed.write_text("targets: [\n", encoding="utf-8")
+    invalid_encoding = eval_dir / "cases" / "invalid-encoding.yaml"
+    invalid_encoding.write_bytes(b"video: \xff\n")
     repository = ReviewRepository(eval_dir)
 
     suite = repository.suite_document(write_token="secret")
@@ -36,8 +38,12 @@ def test_suite_index_is_case_local_and_document_contains_lossless_points(
     assert [case.id for case in suite.cases] == [
         "assembly.yaml",
         "inspection.yml",
+        "invalid-encoding.yaml",
         "malformed.yaml",
     ]
+    assert suite.cases[-2].status == "blocked"
+    assert suite.cases[-2].error is not None
+    assert suite.cases[-2].error.code == "invalid_encoding"
     assert suite.cases[-1].status == "blocked"
     assert suite.cases[-1].point_count is None
     assert assembly.status == "ready"
@@ -71,6 +77,34 @@ def test_video_probe_failure_retains_normalized_targets(tmp_path: Path) -> None:
     assert document.video.duration_s is None
 
 
+def test_surrogate_source_text_is_isolated_as_a_blocked_case(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "surrogate.yaml"
+    path.write_text(
+        """video: ../../../videos/two-state-64x64.mp4
+description: "\\uD800"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        expect: "\\uD800"
+""",
+        encoding="utf-8",
+    )
+    repository = ReviewRepository(eval_dir)
+
+    suite = repository.suite_document(write_token="secret")
+    summary = next(case for case in suite.cases if case.id == "surrogate.yaml")
+    document = repository.case_document("surrogate.yaml")
+
+    assert summary.status == "blocked"
+    assert summary.error is not None
+    assert "Unicode scalar" in summary.error.message
+    assert document.status == "blocked"
+    assert document.load_error is not None
+    assert "Unicode scalar" in document.load_error.message
+
+
 def test_empty_and_over_duration_targets_are_repairable(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"
@@ -86,6 +120,37 @@ def test_empty_and_over_duration_targets_are_repairable(tmp_path: Path) -> None:
     assert {issue.code for issue in document.validation_issues} == {
         "empty_target",
         "timestamp_after_video",
+    }
+
+
+def test_huge_finite_points_are_repairable_without_range_overflow(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "huge.yaml"
+    path.write_text(
+        """video: ../../../videos/two-state-64x64.mp4
+sampling:
+  every_s: 6.0e+307
+targets:
+  state:
+    samples:
+      - at: [1.0e+308, 1.6e+308]
+        expect: true
+""",
+        encoding="utf-8",
+    )
+
+    document = ReviewRepository(eval_dir).case_document("huge.yaml")
+
+    assert document.status == "repairable"
+    assert [point.timestamp_s for point in document.targets[0].points] == [
+        1e308,
+        1.6e308,
+    ]
+    assert document.targets[0].display_groups[0].kind == "at"
+    assert {issue.code for issue in document.validation_issues} == {
+        "timestamp_after_video"
     }
 
 
@@ -142,6 +207,27 @@ def test_invalid_candidate_leaves_original_bytes_untouched(tmp_path: Path) -> No
 
     assert raised.value.status == 422
     assert path.read_bytes() == original
+
+
+def test_put_after_case_becomes_non_utf8_is_a_conflict(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "assembly.yaml"
+    repository = ReviewRepository(eval_dir)
+    document = repository.case_document("assembly.yaml")
+    request = ReplaceSamplesRequest(
+        targets={
+            document.targets[0].id: TargetReplacement(points=document.targets[0].points)
+        }
+    )
+    invalid_bytes = b"video: \xff\n"
+    path.write_bytes(invalid_bytes)
+
+    with pytest.raises(ReviewAPIError) as raised:
+        repository.replace_samples("assembly.yaml", request)
+
+    assert raised.value.status == 409
+    assert raised.value.code == "case_structure_changed"
+    assert path.read_bytes() == invalid_bytes
 
 
 def test_one_batch_repairs_two_empty_targets(tmp_path: Path) -> None:
