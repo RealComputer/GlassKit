@@ -23,7 +23,19 @@ The review UI should keep the video, expanded sample schedule, expected values, 
 
 ## Remaining Work
 
-The following capabilities are not implemented. They remain deferred unless user feedback, representative recordings, or measured performance makes them worth prioritizing.
+### Unfinished Original Scope
+
+These behaviors were part of the original review UI plan but are not fully implemented in the current source.
+
+- Flush an existing valid inspector edit as soon as its text-backed input blurs. Valid changes currently update the draft while typing, but an unchanged blur leaves the request on the 400 ms debounce instead of saving immediately.
+- Update the URL's `time` parameter after a deliberate seek through the native video scrubber without updating it continuously during playback. Custom transport, timeline, and sample seeks already update the deep link.
+- Provide an explicit refresh action for a clean workspace that reloads the suite and selected case from disk, and use the returned revision to make external changes visible. Reloading is currently exposed only while handling a failed, invalid, or incomplete repair draft.
+- Map structured backend validation details to the matching inspector field when a specific path is available. They currently appear only in the shared inspector error block.
+- Complete conditional video request handling for the emitted `ETag` and `Last-Modified` validators, including correct `If-Range` behavior when the underlying video changes.
+
+### Deferred Capabilities
+
+The following capabilities remain deferred unless user feedback, representative recordings, or measured performance makes them worth prioritizing.
 
 - Add an optional PyAV-backed still preview and frame-step controls for cases where browser and eval frame selection differ materially.
 - Add browser-compatible transcoding or proxy playback for source videos whose container or codec the browser cannot play.
