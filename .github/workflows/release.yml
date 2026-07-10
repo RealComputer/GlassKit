@@ -44,14 +44,6 @@ jobs:
           cache: npm
           cache-dependency-path: cli/review-ui/package-lock.json
 
-      - name: Install review UI dependencies
-        working-directory: cli/review-ui
-        run: npm ci
-
-      - name: Check review UI
-        working-directory: cli/review-ui
-        run: npm run check
-
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -98,6 +90,10 @@ jobs:
 
       - name: Build distributions and review UI
         run: uv build --no-sources --clear
+
+      - name: Check review UI
+        working-directory: cli/review-ui
+        run: npm run check
 
       - name: Smoke test wheel
         run: uv run --isolated --no-project --with dist/*.whl glasskit --help
