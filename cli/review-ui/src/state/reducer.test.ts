@@ -34,6 +34,40 @@ describe("appReducer save ordering", () => {
     expect(state.video.currentTime).toBe(4);
   });
 
+  it("caches a late discard reload without stealing active selection or video state", () => {
+    const active = {
+      ...document([target("active_target", [point("active-point", 4)])]),
+      id: "active.yaml",
+      name: "active",
+    };
+    const late = {
+      ...document([target("late_target", [point("late-point", 8)])]),
+      id: "late.yaml",
+      name: "late",
+    };
+    let state = appReducer(
+      { ...initialState, selectedCaseId: active.id },
+      { type: "CASE_LOADED", document: active },
+    );
+    const activeVideo = state.video;
+    state = appReducer(
+      {
+        ...state,
+        loadingCases: { ...state.loadingCases, [late.id]: true },
+        caseLoadErrors: { ...state.caseLoadErrors, [late.id]: "Previous failure" },
+      },
+      { type: "DISCARD_AND_LOAD", document: late },
+    );
+
+    expect(state.documents[late.id].document).toBe(late);
+    expect(state.loadingCases[late.id]).toBe(false);
+    expect(state.caseLoadErrors).not.toHaveProperty(late.id);
+    expect(state.selectedCaseId).toBe(active.id);
+    expect(state.selectedTargetId).toBe("active_target");
+    expect(state.selectedPointId).toBe("active-point");
+    expect(state.video).toBe(activeVideo);
+  });
+
   it("selects and seeks the first point when a target receives focus", () => {
     let state = loadedState();
     const generation = state.video.seekRequest.generation;

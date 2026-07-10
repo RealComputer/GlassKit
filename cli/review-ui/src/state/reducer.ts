@@ -537,6 +537,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "DISCARD_AND_LOAD": {
+      const cachedState: AppState = {
+        ...state,
+        documents: {
+          ...state.documents,
+          [action.document.id]: workspaceFor(action.document),
+        },
+        loadingCases: { ...state.loadingCases, [action.document.id]: false },
+        caseLoadErrors: Object.fromEntries(
+          Object.entries(state.caseLoadErrors).filter(([caseId]) => caseId !== action.document.id),
+        ),
+      };
+      if (state.selectedCaseId !== action.document.id) return cachedState;
       const targetId =
         state.selectedTargetId &&
         action.document.targets.some((target) => target.id === state.selectedTargetId)
@@ -557,15 +569,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedPoint,
       );
       return {
-        ...state,
-        documents: {
-          ...state.documents,
-          [action.document.id]: workspaceFor(action.document),
-        },
-        loadingCases: { ...state.loadingCases, [action.document.id]: false },
-        caseLoadErrors: Object.fromEntries(
-          Object.entries(state.caseLoadErrors).filter(([caseId]) => caseId !== action.document.id),
-        ),
+        ...cachedState,
         selectedTargetId: targetId,
         selectedPointId,
         lastTargetByCase: targetId
