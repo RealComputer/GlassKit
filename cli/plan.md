@@ -6,17 +6,17 @@ This document specifies a local browser UI for reviewing and fixing `glasskit ev
 
 Build a case-first review tool. The user opens one case at a time, sees the case video, selects or focuses targets, reviews sample timestamps on a timeline, and edits timed expectations directly from the UI. The UI treats ranges as a convenience representation for consecutive point samples: the editing model is point-based, while the save model reconstructs compact YAML using ranges when adjacent samples have the same value and regular spacing.
 
-Use HTML5 video playback for v1. Browser video gives native playback controls, fast seeking, simple packaging, and good enough review ergonomics for most timestamp/expectation fixes. It is not guaranteed to be frame-exact across codecs and browsers, while PyAV-based frame-accurate preview would match eval decoding more exactly but adds backend decode latency, cache design, image transport, and a less natural playback experience. The v1 UI should clearly show the numeric sample timestamp, provide small timestamp nudges, and leave a later extension point for a PyAV-backed exact-frame preview endpoint when users prove they need it.
+Use HTML5 video playback. Browser video gives native playback controls, fast seeking, simple packaging, and good enough review ergonomics for most timestamp/expectation fixes. It is not guaranteed to be frame-exact across codecs and browsers, while PyAV-based frame-accurate preview would match eval decoding more exactly but adds backend decode latency, cache design, image transport, and a less natural playback experience. The UI should clearly show the numeric sample timestamp, provide small timestamp nudges, and leave a later extension point for a PyAV-backed exact-frame preview endpoint when users prove they need it.
 
 Use a Vite + React + TypeScript frontend for the interactive UI, but ship only built static files in the Python package. Runtime users should not need Node. During development, contributors can run the Vite dev server against the local Python API, and release builds should include the compiled assets.
 
-Use Python's `http.server.ThreadingHTTPServer` with a custom handler for v1 unless the implementation becomes awkward. The API surface is small, local-only, and package dependency weight matters for a CLI tool. The one nontrivial requirement is HTTP Range support for video seeking, so the server should implement Range responses deliberately for the case video endpoint. If routing, streaming, or development ergonomics become a real cost, revisit adding Starlette/Uvicorn as runtime dependencies.
+Use Python's `http.server.ThreadingHTTPServer` with a custom handler unless the implementation becomes awkward. The API surface is small, local-only, and package dependency weight matters for a CLI tool. The one nontrivial requirement is HTTP Range support for video seeking, so the server should implement Range responses deliberately for the case video endpoint. If routing, streaming, or development ergonomics become a real cost, revisit adding Starlette/Uvicorn as runtime dependencies.
 
 ## Product Scope
 
-The v1 command is for manual review and YAML repair only. It does not run adapters, compare observations, display pass/fail results, or replace `glasskit eval run`. Users can still use eval output to identify failed timestamps, then open the same case in the review UI and fix expectations or timestamps.
+The command is for manual review and YAML repair only. It does not run adapters, compare observations, display pass/fail results, or replace `glasskit eval run`. Users can still use eval output to identify failed timestamps, then open the same case in the review UI and fix expectations or timestamps.
 
-The v1 UI supports selecting a case, selecting or focusing a target, playing and seeking the case video, seeing all expanded samples, creating sample points, editing sample timestamps and expected values, editing optional sample `field` and `compare` settings, editing optional sample comments, editing group/range boundaries through the point model, and deleting samples. Target IDs, labels, target config, workflow metadata, case thresholds, and video path should be visible but read-only.
+The UI supports selecting a case, selecting or focusing a target, playing and seeking the case video, seeing all expanded samples, creating sample points, editing sample timestamps and expected values, editing optional sample `field` and `compare` settings, editing optional sample comments, editing group/range boundaries through the point model, and deleting samples. Target IDs, labels, target config, workflow metadata, case thresholds, and video path should be visible but read-only.
 
 The UI should autosave edits. Autosave should be optimistic but validated by the backend, with a visible saved/saving/error state. There is no backup-file workflow and no conflict resolution for external edits; the latest UI save can overwrite the case YAML because git is the expected history mechanism.
 
@@ -44,7 +44,7 @@ The editing model is a normalized point list per target. Each point has `timesta
 
 Saving reconstructs YAML target samples from the normalized point list. Sort points by timestamp. Group adjacent points only when `expect`, `field`, `compare`, `comment`, and spacing are equal within a small epsilon. A group with two or more regularly spaced points writes as `range: [start, end]`, where `end` is `last_timestamp + every_s` because eval ranges are half-open. Include `every_s` when the group spacing differs from the case default. Single points write as `at: timestamp`. Noncontiguous points with the same value can remain separate `at` blocks; compacting them into `at: [...]` can be added later if it proves useful.
 
-Add an optional `comment` field to sample blocks. This is not a YAML syntax comment; it is explicit eval data that survives parse/write cycles. Comments are visible and editable in the UI. Comments are not passed to adapters in v1 unless the existing sample model is deliberately extended later.
+Add an optional `comment` field to sample blocks. This is not a YAML syntax comment; it is explicit eval data that survives parse/write cycles. Comments are visible and editable in the UI. Comments are not passed to adapters unless the existing sample model is deliberately extended later.
 
 The writer may canonicalize case YAML and does not need to preserve original comments, quotes, key ordering beyond the canonical order, or hand formatting. Canonical top-level order should be `video`, `description`, `sampling`, `workflow`, `targets`, `thresholds` when fields are present. Target order should preserve the existing target order. Read-only target config and workflow metadata should be preserved exactly as loaded by YAML, subject to normal PyYAML serialization.
 
@@ -76,7 +76,7 @@ Reuse `load_eval_suite`, schema validation, video probing, and sample expansion 
 
 Add optional `comment` to `RawSampleBlock` in `schemas.py`. Decide whether to add `comment` to `SampleExpectation`; if comments are only for review, the review loader can read raw YAML directly and avoid passing comments to adapters. The important part is that normal eval validation accepts sample comments so the UI can write them.
 
-Implement canonical YAML rendering with `yaml.safe_dump(sort_keys=False, allow_unicode=True)`, after constructing ordered plain dictionaries. Keep emitted prose and scalar values readable, but do not spend v1 effort preserving stylistic details from the original YAML.
+Implement canonical YAML rendering with `yaml.safe_dump(sort_keys=False, allow_unicode=True)`, after constructing ordered plain dictionaries. Keep emitted prose and scalar values readable, but do not spend effort preserving stylistic details from the original YAML.
 
 Implement local-only safety checks. The server should bind to localhost by default, reject path traversal, serve only package static files and videos referenced by loaded cases, and avoid exposing arbitrary filesystem reads.
 
@@ -126,6 +126,6 @@ Phase 5 is timeline polish. Add grouped range bands, multi-target context lanes,
 
 Phase 6 is packaging, docs, and release readiness. Include built assets, document development commands, update README and AGENTS, and verify package installation from a built wheel.
 
-## Out Of Scope For V1
+## Out Of Scope For Now
 
 Running adapters from the UI, showing observed values, importing eval result JSON, editing target metadata/config/workflow sections, preserving YAML syntax comments or original formatting, multi-user or remote server use, backup/history management, and guaranteed frame-exact video review are out of scope for the first implementation.
