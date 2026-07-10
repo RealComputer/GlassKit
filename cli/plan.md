@@ -128,7 +128,7 @@ Target sample lists are allowed by the Pydantic shape to be empty, but normal ev
 | Timeline | DOM and CSS, one lane per target, derived range bands, and point markers |
 | Editing model | Normalized point samples; ranges are derived display and storage groups |
 | Saving | Validated autosave, serialized per case, with visible state |
-| Write API | Replace all normalized points for one existing target |
+| Write API | Atomically replace all normalized points for one or more existing targets |
 | YAML formatting | Semantic preservation of read-only values; normal PyYAML formatting after an edit |
 | History | No backup, confirmation dialog, or undo stack; rely on Git |
 | Browser support | Current desktop Chromium, Firefox, and Safari where the source codec is natively playable |
@@ -153,19 +153,20 @@ The command also supports:
 --eval-dir PATH   Eval directory; default: eval
 --case TEXT       Initially open this case by filename or stem
 --target TEXT     Initially focus this target; requires --case
+--time FLOAT      Initially seek to this nonnegative time; requires --case
 --port INTEGER    Local port; default: 0, meaning choose an available port
 --no-open         Print the URL without opening a browser
 ```
 
-`--case` and `--target` choose the initial UI selection; they do not hide other cases or targets. Invalid selectors are CLI errors before the browser opens. State this distinction in `--help`.
+`--case`, `--target`, and `--time` choose the initial UI context; they do not hide other cases, targets, or samples. `--time` is a finite, nonnegative number of seconds and provides a direct jump from a timestamp printed by `glasskit eval run`. Invalid selectors and option combinations are CLI errors before the browser opens. State this distinction in `--help`.
 
-Transfer the initial selection in the opened URL as percent-encoded `case` and `target` query parameters. The frontend updates those parameters with `history.replaceState` when selection changes, so reload preserves context without adding a routing dependency.
+Transfer the initial context in the opened URL as percent-encoded `case`, `target`, and `time` query parameters. The frontend updates `case` and `target` when selection changes and updates `time` after deliberate seeks or sample selection, but not continuously during playback. Use `history.replaceState` so reload preserves useful context without adding a routing dependency.
 
 There is no `--host` option because remote serving is outside the product scope. There is no `--allow-empty` option because review loading always tolerates existing empty sample lists for the purpose of adding the first point, while write validation still protects normal eval validity.
 
 ### Primary Workflow
 
-1. Launch the review command, optionally selecting the failed case and target reported by a separate eval run.
+1. Launch the review command, optionally selecting the failed case, target, and timestamp reported by a separate eval run.
 2. Select a case from the left sidebar and a target from that case.
 3. Play or seek the video. Click a point marker or table row to select the sample and seek to its timestamp.
 4. Inspect the expected value and optional field, comparison, tolerance, and comment in the right inspector.
@@ -212,6 +213,7 @@ Save states are:
 - `Saved`: no local changes are pending.
 - `Saving`: a valid change is queued or in flight.
 - `Unsaved`: local input is valid but waiting for the debounce timer.
+- `Complete repairs`: edited fields are locally valid, but other known repairable issues in the case must be fixed before the backend can accept one valid atomic candidate.
 - `Fix errors`: local form input is invalid and has not been sent.
 - `Save failed`: the backend rejected or could not persist the change. The draft remains visible, with `Retry` and `Reload from disk` actions.
 
@@ -225,7 +227,7 @@ Selecting a case loads its document and video metadata, chooses the first target
 
 The target list preserves YAML mapping order. It has a compact ID/label filter for suites with many targets. Each row shows label when present, target ID, and point count. The focused target controls the inspector, sample table, previous/next navigation, add action, and the emphasized timeline lane.
 
-A case that cannot be parsed into normalized points remains visible with its error and source text, but its editor is disabled. A case with normalized points but repairable sample issues, specifically an empty target or a timestamp beyond the video duration, remains editable so the user can fix it; the backend accepts only a candidate that resolves all such issues. This prevents one broken case from hiding every other case while keeping structural YAML repair in a text editor.
+A case that cannot be parsed into normalized points remains visible with its error and source text, but its editor is disabled. A case with normalized points but repairable sample issues, specifically an empty target or a timestamp beyond the video duration, remains editable so the user can fix it. When repairable issues span multiple targets, edits remain in the case draft until every known issue is resolved, then the frontend submits all changed targets in one atomic request. This prevents one broken case from hiding every other case, makes multi-target repair possible without persisting an invalid intermediate file, and keeps structural YAML repair in a text editor.
 
 The sidebar also contains collapsible read-only sections for case details and eval config. The complete current case source is available in a `Case YAML` drawer, and the complete `config.yaml` source is available when that file exists. This guarantees that all YAML values remain inspectable even when they do not have a dedicated control.
 
@@ -248,11 +250,13 @@ Seeking clamps to `[0, duration]`. Creating a point rounds the browser playhead 
 
 Previous and next operate relative to the selected point when one exists, otherwise relative to the playhead. They do not wrap at the ends; the unavailable direction is disabled.
 
-Clicking a point pauses playback and assigns its timestamp to `video.currentTime`; do not use `fastSeek()`. Increment a monotonically increasing seek generation and mark the preview as seeking until the current generation receives `seeked`. When `HTMLVideoElement.requestVideoFrameCallback()` is available, request a callback as part of the same seek cycle and prefer to keep the preview in the seeking state until a callback for the current generation supplies `metadata.mediaTime`. Ignore a callback observed before that generation's `seeked`, request another, and fall back to ready without a shown-frame value when no post-seek callback arrives within `500 ms` of `seeked`. Cancel prior callback handles and ignore every listener, callback, and timeout whose generation is stale.
+Clicking a point pauses playback and assigns its timestamp to `video.currentTime`; do not use `fastSeek()`. Increment a monotonically increasing seek generation, cancel the previous generation's listeners, frame callback, and timers, clear the old shown-frame value, and mark the preview as seeking. If metadata is not loaded yet, retain the requested time and perform the assignment after `loadedmetadata`. A generation becomes seek-complete only after a `seeked` event for which it is still current, `video.seeking` is false, and `video.currentTime` is within `0.05` seconds of the clamped requested time. If assigning the current position produces no active seek, treat it as seek-complete without waiting for an event.
 
-The transport shows the authoritative eval sample time and, when available, the browser-presented frame PTS, for example `Sample 03.500s | Shown 03.467s`. The shown time is diagnostic only: do not rewrite the sample timestamp, perform a corrective second seek, or claim that the browser frame is the frame selected by PyAV. When `requestVideoFrameCallback()` is unavailable, complete the preview after `seeked` and omit the shown-frame value.
+After a qualifying `seeked`, request one `HTMLVideoElement.requestVideoFrameCallback()` callback when available and use its `metadata.mediaTime` only if the generation is still current. Fall back to ready without a shown-frame value when no callback arrives within `500 ms`. Also start a separate `5 s` overall timeout when the seek is requested so missing metadata, an empty seekable range, or a browser that never emits `seeked` cannot leave the preview stuck indefinitely. An `error` or `emptied` event terminates the current generation with a preview-unavailable state. Every event, callback, and timeout checks the current generation before changing state; media events themselves do not carry application generation IDs.
 
-When the browser reports that the media cannot play, show the video path, container, and a clear browser-codec error. The user may still inspect source data, but editing is disabled when video duration cannot be established because timestamp bounds cannot be validated. Do not add transcoding in this version.
+The transport shows the authoritative eval sample time and, when available, the browser-presented frame PTS, for example `Sample 03.500s | Shown 03.467s`. The shown time is diagnostic only: do not rewrite the sample timestamp, perform a corrective second seek, or claim that the browser frame is the frame selected by PyAV. When `requestVideoFrameCallback()` is unavailable, complete the preview after qualifying seek completion and omit the shown-frame value.
+
+When the browser reports that the media cannot play, show the video path, container, and a clear browser-codec error. If the backend successfully probed duration, source inspection and editing remain available with an explicit preview-unavailable warning because bounds are still authoritative on the server. Editing is disabled only when backend video resolution or probing cannot establish the duration needed for candidate validation. Do not add transcoding in this version.
 
 ### Frame Accuracy Decision
 
@@ -266,7 +270,7 @@ Keep an exact PyAV still preview as deferred work only. Add it later if represen
 
 ### Timeline
 
-Use an accessible DOM/CSS timeline, not canvas. Each target has one horizontal lane, so samples from different targets at the same timestamp naturally stack downward without colliding. Duplicate timestamps inside one target are invalid and therefore do not require same-lane stacking.
+Use an accessible DOM/CSS timeline, not canvas. Each target has one horizontal lane, so samples from different targets at the same timestamp naturally stack downward. Duplicate timestamps inside one target are invalid, but nearby points can still overlap visually at low zoom. Keep every point as a focusable DOM button, raise the selected or focused marker above neighbors, and preserve table and previous/next navigation as reliable ways to reach dense points. Sophisticated marker clustering is deferred until representative suites show that it is needed.
 
 The timeline has a sticky time ruler, a moving playhead, sticky target labels, one marker per normalized point, and translucent bands for point groups that the writer will serialize as ranges. A marker is a real button with an accessible label containing target, timestamp, and a compact expectation summary. The visible hit area must remain usable even when the marker line is narrow.
 
@@ -298,7 +302,7 @@ The inspector edits exactly one normalized point. It contains:
 - Read-only derived group information when the point belongs to a serialized range.
 - Delete action, disabled when deletion would leave a previously valid target empty.
 
-Boolean uses a toggle. Number uses a finite numeric input and must distinguish numbers from booleans. String uses a three-row textarea so long expected text remains editable without changing control type. Null has no value input. Arrays and objects use a plain JSON textarea with parse errors shown inline; do not add Monaco or another large editor dependency.
+Boolean uses a toggle. Number uses a text-backed JSON-number input rather than coercing through a JavaScript `number`; validate its syntax and finiteness while retaining the exact numeric text. String uses a three-row textarea so long expected text remains editable without changing control type. Null has no value input. Arrays and objects use a plain JSON textarea with parse errors shown inline; retain the original JSON text and never parse then `JSON.stringify` it merely to send an unchanged value. This preserves integers outside JavaScript's safe range and the distinction between integer and floating representations. Do not add Monaco or another large editor dependency.
 
 The mode menu should guide new edits without rejecting legacy files accepted by the existing schema:
 
@@ -308,7 +312,7 @@ The mode menu should guide new edits without rejecting legacy files accepted by 
 - Set modes are offered for arrays.
 - Tolerance is enabled for a numeric expectation when mode is `Auto` or `numeric`.
 
-If the user changes expectation type and the current explicit mode no longer makes sense, switch the mode to `Auto`, clear an inapplicable tolerance, and show one concise toast. Existing unusual mode/value combinations loaded from disk remain visible and can be preserved until the user changes them.
+If the user changes expectation type and the current explicit mode no longer makes sense, switch the mode to `Auto`, clear an inapplicable tolerance, and show one concise toast. Existing unusual mode/value combinations loaded from disk remain visible and can be preserved until the user changes them; when the ordinary option list would omit the current supported mode, insert a temporary `Current: <mode>` option so a native select never hides or silently resets it.
 
 Blank field and comment inputs serialize as absent fields, not empty strings.
 
@@ -327,7 +331,7 @@ Shortcuts are conveniences, not hidden requirements. Put the shortcut next to th
 | `Shift+Right` | Nudge playhead forward `1.0` second |
 | `A` | Add a point at the playhead for the focused target |
 
-Global handlers must ignore these shortcuts while the user is typing in an input, textarea, select, or content-editable element. Do not assign a destructive delete shortcut in this version.
+Global handlers must ignore these shortcuts while the event target is an input, textarea, select, content-editable element, button, link, native video, or another interactive control. They also ignore composing events, repeated keydown events, events with unrelated modifier keys, and events already handled through `defaultPrevented`. This prevents Space or arrow keys from activating both a focused native control and the global transport. Do not assign a destructive delete shortcut in this version.
 
 ### Loading, Empty, And Error States
 
@@ -335,7 +339,9 @@ Use skeletons or stable placeholders while case metadata loads so the layout doe
 
 Local validation errors stay next to their field and block autosave. Backend errors appear both in the persistent save status and near the relevant control when a path is available. Network or disk failures retain the user's draft in memory.
 
-Switching cases or reloading the page while a save is queued first flushes the latest valid draft. If the active control contains an invalid partial value, keep the user on the case and require them to fix or reset that field instead of silently discarding it. If a save fails, keep the user on the current case and offer `Retry` or `Reload from disk`. Install `beforeunload` only while a valid change is pending, invalid dirty input exists, or a failed draft is unsaved; normal saved use must not produce a leave-page warning.
+Every in-app action that changes the selected point, target, or case first commits a valid field draft into the normalized case model. When the resulting candidate is sendable, navigation waits for any required save. An incomplete multi-target repair is retained in per-target case drafts and may navigate among points and targets in the same case so the remaining issues can be fixed, but it cannot leave the case until the repair is completed or explicitly discarded. If the active control contains an invalid partial value, keep the current selection and require the user to fix or explicitly reset that field instead of silently discarding it. If a save fails, keep the user on the current case and offer `Retry` or `Reload from disk`.
+
+A browser reload, tab close, or external navigation cannot reliably wait for an asynchronous PUT. Install `beforeunload` only while a valid change is queued or in flight, a multi-target repair draft is incomplete, invalid dirty input exists, or a failed draft is unsaved. The warning gives the user a chance to remain on the page; it does not promise that proceeding will flush changes. Normal saved use must not produce a leave-page warning.
 
 ## Editing Model
 
@@ -347,7 +353,8 @@ The browser and review backend work with expanded points rather than source samp
 {
   "id": "block-1-point-0",
   "timestamp_s": 1.5,
-  "expect": true,
+  "expect_type": "boolean",
+  "expect_json": "true",
   "field": "result.matches",
   "compare": {
     "mode": null,
@@ -364,9 +371,13 @@ The browser and review backend work with expanded points rather than source samp
 
 `id` is an opaque UI identity and is never written to YAML. Loaded IDs are deterministic within one document load, using source block and expanded point position. New points use `crypto.randomUUID()`. A successful PUT echoes request IDs so selection remains stable. Reloading from disk may assign different IDs.
 
+Point IDs are scoped to a target, not globally unique across the case. Frontend keys and selections use `(target_id, point_id)` whenever points from multiple targets share one collection.
+
 `origin` is a read-only compaction hint. It records whether loaded points came from the same original block and its effective cadence. It is never eval data and is not written. The writer uses it only for the two-point range rule defined below. New points have `origin: null`. After a successful save, the server recomputes origin from the blocks it actually emitted while preserving point IDs; this keeps a newly emitted custom range stable during later edits in the same browser session.
 
-`compare.mode: null` means automatic mode inference. `compare` is always an object over the wire, with nullable `mode` and `tolerance`; the writer omits YAML `compare` when both are null. Expected objects are compared structurally for grouping, with mapping key order ignored and JSON types respected.
+`expect_json` is lossless JSON text for exactly one expectation value. `expect_type` is the backend-derived top-level type: `null`, `boolean`, `number`, `string`, `array`, or `object`. Requests include both fields and the backend rejects a mismatch. The browser may parse the text to validate syntax or inspect its top-level type, but it retains and resubmits the original text rather than serializing the JavaScript value. The backend parses it with Python's strict JSON decoder, rejects non-finite values, and emits deterministic compact JSON text with `ensure_ascii=False`, `allow_nan=False`, no key sorting, and compact separators in successful responses. This preserves arbitrary-size integers, integer-versus-floating representation, negative zero where Python retains it, nested numeric values, and source mapping order across unrelated edits.
+
+`compare.mode: null` means automatic mode inference. `compare` is always an object over the wire, with nullable `mode` and `tolerance`; the writer omits YAML `compare` when both are null. Parsed expected objects are compared structurally for grouping, with mapping key order ignored and JSON types respected. Booleans are distinct from numbers, and integer and floating representations are distinct even when Python would otherwise consider their numeric values equal.
 
 `display_groups` describes the blocks produced by reconstruction and is server-owned:
 
@@ -388,11 +399,11 @@ Return one display group for every emitted `range` or `at` block, in block order
 
 Add creates a point at the current playhead rounded to three decimal places. If the focused target already has a point at that time within `1e-9`, select the existing point and do not create a duplicate.
 
-The new point copies `expect`, `field`, and `compare` from the closest existing point in the focused target, preferring the earlier point on a tie. It does not copy the comment or origin. If the target has no points, default to `expect: false`, automatic comparison, no field, and no comment. Focus the expectation editor after creation.
+The new point copies `expect_type`, `expect_json`, `field`, and `compare` from the closest existing point in the focused target, preferring the earlier point on a tie. It does not copy the comment or origin. If the target has no points, default to boolean `false`, automatic comparison, no field, and no comment. Focus the expectation editor after creation.
 
 ### Edit
 
-Timestamp edits clamp through controls but are rejected by the backend if negative, non-finite, duplicate within the target, or beyond video duration using the existing `validate_sample_times` tolerance. The inspector should prevent ordinary out-of-range input before a request is sent.
+Timestamp edits clamp through controls. The backend rounds every submitted timestamp to nine decimal places before duplicate detection and echoes the accepted canonical value. It rejects negative or non-finite values, timestamps that become duplicate or fall within `1e-9` of another canonical timestamp in the target, and timestamps beyond video duration using the existing `validate_sample_times` tolerance. The inspector should prevent ordinary out-of-range input before a request is sent.
 
 Expectation, field, compare, tolerance, and comment edits affect only the selected point. Editing one point from a derived range may split that range into smaller groups on the next save. This is expected and should update the bands after the server response.
 
@@ -402,21 +413,21 @@ There are no direct range start, range end, or cadence editors. A range is the d
 
 Delete removes the selected point and autosaves immediately. There is no confirmation dialog or undo history. After deletion, select the next point by time, or the previous one when no next point exists.
 
-Disable deletion when it would remove the final point from a nonempty target. Existing empty targets are allowed only as a repair state and can receive their first point.
+Disable deletion when it would remove the final point from a target whose accepted on-disk state is valid and nonempty. Existing empty targets are allowed only as a repair state and can receive their first point. If that first point is still only part of an unsaved repair draft, deleting it is allowed as a local cancellation that restores the original empty repair state and sends no PUT; once the first point is accepted on disk, final-point deletion is disabled normally.
 
 ## Autosave And Concurrency
 
-The frontend keeps a draft point list for the focused case. Discrete operations such as toggles, create, delete, and mode selection enqueue a save immediately. Text, JSON, comment, and numeric typing save after `400 ms` of idle time or on blur, whichever comes first. Invalid partial input does not alter the last valid point model and does not call the API.
+The frontend keeps draft point lists for every target in the focused case. Discrete operations such as toggles, create, delete, and mode selection enqueue a save immediately. Text, JSON, comment, and numeric typing save after `400 ms` of idle time or on blur, whichever comes first. Invalid partial input does not alter the last valid point model and does not call the API.
 
-All writes are serialized per case, not per target. Two target-level writes based on the same case file can otherwise overwrite one another. The queue coalesces pending updates for the same target to the newest valid point list but never allows more than one write for a case in flight.
+All writes are serialized per case, not per target. Two writes based on the same case file can otherwise overwrite one another. The queue coalesces pending updates for each target to its newest valid point list and may send several changed targets in one request, but never allows more than one write for a case in flight. A normally valid case usually sends one target per request. A repairable case with issues across several targets holds locally valid changes until every known case issue is fixed, then sends all changed targets as one atomic candidate.
 
-Assign a monotonically increasing local edit version to each target. A queued request records the sent target version. When its full-case response arrives, update accepted disk metadata and revision, but replace a target's local points only when that target has not changed since the request snapshot. In particular, a response for target A must never overwrite unsent edits to target B, and a response for an older version of target A must not replace its newer draft. The `source_yaml` drawer represents the last accepted on-disk source and may temporarily lag valid queued drafts.
+Assign a monotonically increasing local edit version to each target. A queued request records every submitted target version. When its full-case response arrives, update accepted disk metadata and revision, but replace a target's local points only when that target has not changed since the request snapshot. In particular, a response containing target A must never overwrite unsent edits to target B, and a response for an older version of target A must not replace its newer draft. The `source_yaml` drawer represents the last accepted on-disk source and may temporarily lag valid queued drafts.
 
-The server also holds one lock per case path. Under the lock it rereads the latest file, replaces only the requested target's `samples`, validates the candidate, and atomically writes it. This preserves external edits to other case sections and prevents requests from different browser threads from losing changes.
+The server also holds one lock per case path. Under the lock it rereads the latest file, replaces only the submitted targets' `samples`, validates the complete candidate, and atomically writes it. This preserves external edits to other targets and case sections and prevents requests from different browser threads from losing changes.
 
 External changes to the same target are intentionally last-writer-wins. There is no merge or conflict dialog. A revision hash returned by the API is informational and helps the UI detect that a refresh changed the file, but a mismatch does not reject a save. Multi-tab editing is unsupported.
 
-On save failure, keep the valid local draft and stop dequeuing later case navigation. `Retry` resends the newest draft. `Reload from disk` explicitly discards it and fetches the current case.
+On save failure, keep every valid local target draft and stop dequeuing later case navigation. `Retry` rebuilds one request from the newest affected drafts. `Reload from disk` aborts or invalidates pending response generations, explicitly discards local drafts, and fetches the current case so a late response cannot restore discarded state.
 
 ## YAML Read And Write Contract
 
@@ -430,32 +441,39 @@ Comments do not affect adapter calls, comparisons, reports, or sample identity. 
 
 Review loading parses the raw mapping with the existing schema, resolves the video, and expands blocks with the same timestamp and overlap logic used by `load_eval_suite`. It additionally retains source block index, source kind, effective cadence, explicit compare settings, comment, and raw source text.
 
-Refactor the existing private case-loading logic into reusable internal functions rather than copying expansion rules into the review package. Runner behavior and current error text should remain stable unless a test demonstrates that a deliberate change is needed.
+Refactor the existing private case-loading logic into reusable internal functions rather than copying expansion rules into the review package. Runner behavior and current error text should remain stable except for the deliberate expansion-budget and duplicate-hardening changes below, or unless another test demonstrates that a deliberate change is needed.
 
 The review suite index should discover files first and load each case independently. A malformed case becomes an error summary instead of aborting all valid cases. Duplicate case stems and invalid eval-level config remain suite-level startup errors because they make case identity or shared configuration ambiguous.
 
+### Expansion Budget
+
+Range expansion must be bounded before entering an iterative loop. Add a shared `MAX_EXPANDED_POINTS_PER_CASE = 10_000` limit covering the sum of all targets and blocks in one case. Compute each range's prospective point count with overflow-safe arithmetic, accumulate it with explicit `at` points, and raise a normal `EvalConfigError` with case, target, block, calculated count, and limit before materializing a case that exceeds the budget. Apply the same limit to normal eval loading, review indexing, and candidate validation so no path has an unbounded interpretation of the YAML. Document the limit in README.
+
+After nine-decimal timestamp normalization, reject duplicate expanded timestamps within `1e-9` even when they originated inside one range block. This closes the current gap where a cadence at or below timestamp precision can materialize repeated points without passing through cross-block interval checks. These are intentional safety validation changes for pathological configurations, not silent normalization.
+
 ### Reconstruction Rules
 
-The serializer receives the complete normalized point list for one target and produces that target's complete `samples` list. Its output must expand back to exactly the submitted timestamps and payloads under existing eval rules.
+The serializer receives the complete normalized point list for one target and produces that target's complete `samples` list. Submitted timestamps are first canonicalized to nine decimal places. Its output must expand back to exactly those canonical timestamps and payloads under existing eval rules.
 
-Define a point payload as `expect`, normalized `field`, explicit `compare` configuration, and normalized `comment`. Origin and UI ID are not payload.
+Define a point payload as the Python value parsed losslessly from `expect_json`, normalized `field`, explicit `compare` configuration, and normalized `comment`. Origin, `expect_type`, and UI ID are not payload. Structural payload equality distinguishes booleans, integers, and floating values before recursively comparing arrays and objects; object key order is ignored.
 
 Use this deterministic algorithm:
 
-1. Validate every point and sort by `timestamp_s`, using ID only as a stable error-reporting tie breaker.
-2. Reject timestamps that differ by at most `1e-9` within the target.
+1. Validate every point, canonicalize `timestamp_s` to nine decimal places, derive an exact integer nanosecond tick from the canonical decimal representation, and sort by tick, using ID only as a stable error-reporting tie breaker.
+2. Reject timestamps whose ticks differ by at most one nanosecond within the target.
 3. Partition the sorted list into maximal runs of adjacent points with structurally equal payloads. A point with a different payload always ends the run, even if the earlier payload appears again later.
-4. Scan each payload run greedily from left to right. At the current point, use the gap to the next point as a candidate cadence and extend through every following point whose gap matches within `1e-9`.
+4. Scan each payload run greedily from left to right. At the current point, use the exact tick gap to the next point as a candidate cadence and extend through every following point whose tick gap is exactly equal.
 5. Emit that candidate as a range when it contains at least three points, then advance past all of them.
-6. Emit a two-point candidate as a range only when its cadence matches the case default `sampling.every_s`, or both points have the same original range block and their gap matches that origin's effective cadence. This prevents two sparse equal points from becoming a misleading giant range merely because any pair is mathematically regular.
+6. Emit a two-point candidate as a range only when re-expansion with the case default `sampling.every_s` produces those exact ticks, or both points have the same original range block and re-expansion with that origin's effective cadence produces those exact ticks. This prevents two sparse equal points from becoming a misleading giant range merely because any pair is mathematically regular.
 7. When a candidate is not range-eligible, add only its first point to a pending `at` group and advance one point. If the current point has no successor, add that final point too. This lets a later three-point cadence be discovered instead of prematurely consuming its first point. Flush the pending `at` group before an emitted range or at the end of the payload run.
-8. Before emitting a range, choose `end = min(last + cadence, next_target_timestamp)` when a later target point occurs before `last + cadence`; otherwise use `last + cadence`. Because ranges are half-open, clipping the end to the next point preserves the expanded range while preventing a source-interval overlap with that next point.
-9. Round calculated cadence and end values to nine decimal places, matching existing expansion precision.
-10. Omit `every_s` when cadence equals the case default within `1e-9`; otherwise include it.
+8. Before emitting a range, choose the end tick as `min(last + cadence, next_target_timestamp)` when a later target point occurs before `last + cadence`; otherwise use `last + cadence`. Because ranges are half-open, clipping the end to the next point preserves the expanded range while preventing a source-interval overlap with that next point.
+9. Convert calculated cadence and end ticks to seconds with at most nine decimal places.
+10. Tentatively omit `every_s` only when the shared expansion function using the actual case default produces the exact candidate ticks; otherwise include the calculated cadence.
 11. Serialize a pending `at` group as `at: [timestamps]`; use scalar `at` for a singleton.
 12. Emit blocks ordered by their first timestamp.
+13. Re-expand every tentative output block through the shared expansion function and compare the exact canonical timestamp and payload sequence with its input points. If a tentative range does not match, serialize those points as `at` instead. Reject the reconstruction if the complete target still fails this invariant; never rely on floating tolerance to justify a semantically different range.
 
-The backend returns derived display groups from this exact result. Only emitted range blocks become timeline bands.
+The backend returns derived display groups from this exact verified result. Only emitted range blocks become timeline bands.
 
 Example input points:
 
@@ -513,7 +531,7 @@ Inside `compare`, write `mode` before `tolerance`. Omit absent optional fields. 
 
 ### Preserving Read-Only Data
 
-On every write, reread the latest YAML as an ordered Python mapping and replace only `targets.<target_id>.samples`. Preserve all other semantic values and existing mapping order, including absent optional sections and extra workflow-target metadata. Do not rebuild the whole case from Pydantic defaults because that would insert omitted defaults and create unnecessary diffs.
+On every write, reread the latest YAML as an ordered Python mapping and replace only `targets.<submitted_target_id>.samples` for the targets present in the batch. Preserve all other semantic values and existing mapping order, including absent optional sections and extra workflow-target metadata. Do not rebuild the whole case from Pydantic defaults because that would insert omitted defaults and create unnecessary diffs.
 
 Serialize with a small `yaml.SafeDumper` subclass using `sort_keys=False` and `allow_unicode=True`. Add a dedicated wrapper/representer that emits only `range` and multi-value `at` timestamp lists in compact flow style, such as `[0.0, 1.0]`; do not force flow style on expected arrays or arbitrary metadata. The first edit may still change comments, quotes, anchors, other scalar style, and whitespace across the file; this is an accepted tradeoff. The UI must make this behavior clear in README documentation.
 
@@ -528,8 +546,8 @@ Do not validate by calling `load_eval_suite` while the original file is still in
 The write sequence under the per-case lock is:
 
 1. Read the current case text and parse it as a mapping.
-2. Confirm the requested target still exists.
-3. Reconstruct and replace only that target's sample blocks.
+2. Confirm every submitted target still exists and that the request contains at least one target.
+3. Reconstruct and replace only the submitted targets' sample blocks.
 4. Render candidate YAML in memory.
 5. Parse the candidate bytes through `parse_case_yaml`.
 6. Expand and validate the candidate through a refactored case loader that accepts a raw mapping or candidate path while retaining the original logical case path for relative video resolution.
@@ -540,7 +558,7 @@ The write sequence under the per-case lock is:
 11. Replace the original with `os.replace`.
 12. Clean up the temporary file on every failure path and return the accepted document with a new SHA-256 revision.
 
-If any step before `os.replace` fails, the original file remains unchanged. There are no backup files. On POSIX, open and `fsync` the containing directory after replacement; skip this step on platforms that do not expose a supported directory descriptor. Report a file-write failure, but do not fail an already completed replacement solely because this final durability sync is unsupported.
+If any step before `os.replace` fails, the original file remains unchanged. There are no backup files. On POSIX, open and `fsync` the containing directory after replacement; skip this step on platforms that do not expose a supported directory descriptor. An unsupported directory sync is not an error. If a supported directory `fsync` fails after replacement, return the accepted document with a response-only `directory_sync_failed` warning issue rather than claiming that the already completed replacement failed; this avoids prompting a misleading retry after disk content has changed.
 
 ## Technical Architecture
 
@@ -596,9 +614,9 @@ Expected existing-file changes are:
 - `src/glasskit/cli.py`: add the `review` Typer command and lifecycle/error handling.
 - `src/glasskit/eval/schemas.py`: add explicit sample comments.
 - `src/glasskit/eval/models.py`: retain comments on expanded sample expectations without exposing them to adapters.
-- `src/glasskit/eval/expectations.py`: expose reusable case discovery/loading/expansion helpers without changing eval behavior.
+- `src/glasskit/eval/expectations.py`: expose reusable case discovery/loading/expansion helpers and apply the deliberate shared expansion-budget and duplicate hardening rules.
 - `pyproject.toml`: ensure static assets are packaged.
-- `README.md`: document command, workflow, comment field, autosave rewrite behavior, and frame caveat.
+- `README.md`: document command and initial-time jump, workflow, comment field, expansion budget, autosave and unload behavior, YAML rewrite behavior, and frame caveat.
 - `AGENTS.md`: add frontend development and verification commands.
 - Root CLI CI and release workflows: build and verify frontend assets before Python packaging.
 
@@ -631,7 +649,7 @@ Use React context plus `useReducer` for selected case, selected target, video st
 
 Vite development uses a proxy for `/api` and case video requests to a separately running Python review server. Production uses the packaged same-origin assets. No CORS support is needed.
 
-`npm run build` outputs directly to `src/glasskit/eval/review/static/`. Built assets are committed so source distributions and release jobs can build Python packages without fetching npm dependencies. The build must be deterministic enough for CI to rebuild and fail on a dirty static directory.
+`npm run build` outputs directly to `src/glasskit/eval/review/static/`. Because that directory is outside the Vite workspace root, set `build.emptyOutDir: true` explicitly so obsolete hashed assets cannot accumulate. The static directory contains generated output only. Built assets are committed so source distributions and release jobs can build Python packages without fetching npm dependencies. The build must be deterministic enough for CI to rebuild and fail when either tracked differences or untracked static files remain.
 
 ### Why The Standard Library Server Is Sufficient
 
@@ -681,7 +699,7 @@ Errors have one shape:
     "message": "Target samples are invalid.",
     "details": [
       {
-        "path": "points.3.timestamp_s",
+        "path": "targets.bracket_seated.points.3.timestamp_s",
         "message": "duplicates the point at 1.5 seconds"
       }
     ]
@@ -689,7 +707,7 @@ Errors have one shape:
 }
 ```
 
-Use appropriate status codes: `400` malformed input, `403` missing or invalid write token, `404` unknown case/target, `409` when current disk structure makes the requested target replacement impossible, `413` oversized body, `415` wrong content type, `422` valid JSON that fails eval validation, and `500` unexpected local I/O failures. User-facing messages must include enough path context to act on without exposing arbitrary files outside the eval suite.
+Use appropriate status codes: `400` malformed input, `403` missing or invalid write token, `404` unknown case, `409` when current disk structure or an unknown submitted target makes replacement impossible, `413` oversized body, `415` wrong content type, `422` valid JSON that fails eval validation, and `500` unexpected local I/O failures. User-facing messages must include enough path context to act on without exposing arbitrary files outside the eval suite.
 
 Validation issues in successful case documents use `{ "code": str, "message": str, "path": str | null, "severity": "error" | "warning", "repairable": bool }`. `load_error` uses the same `code`, `message`, and optional `details` shape as an API error, without the outer `error` key.
 
@@ -717,11 +735,11 @@ Returns bootstrap state and refreshes case summaries from disk without probing e
 }
 ```
 
-The case ID is the exact filename including `.yaml` or `.yml`; clients percent-encode it in route segments. The server looks it up in its discovered case map and never joins an untrusted route value into a path.
+The case ID is the exact filename including `.yaml` or `.yml`; clients percent-encode it in route segments. Split the raw URL path into route segments before percent-decoding each segment, then look up the decoded ID in the discovered case map. Never decode the full path before routing or join an untrusted route value into a filesystem path.
 
-Target IDs and filenames may contain characters that need URL encoding, including a slash in a target ID. Split the raw URL path into route segments before percent-decoding each segment, then perform an exact map lookup. Never decode the full path before routing.
+Target IDs may contain characters such as `/`, so the write API carries them as JSON object keys rather than URL path segments.
 
-Point counts require schema parsing and expansion but not video probing, video decoding, or adapter loading. `status` is `ready` when points can be normalized and `blocked` when YAML, schema, or overlap errors prevent normalization. A blocked summary includes its error and leaves unavailable counts null.
+Point counts require schema parsing and bounded expansion but not video probing, video decoding, or adapter loading. `status` is `ready` when points can be normalized and `blocked` when YAML, schema, overlap, duplicate, or expansion-budget errors prevent normalization. A blocked summary includes its error and leaves unavailable counts null. A missing or unprobeable video may therefore appear `ready` in this inexpensive summary and become `blocked` when its full document is requested.
 
 ### `GET /api/cases/{case_id}`
 
@@ -740,6 +758,7 @@ Reloads the case, probes its video, and returns the review document:
   "video": {
     "url": "/api/cases/case-001.yaml/video",
     "display_path": "../../../recordings/task-01.mp4",
+    "content_type": "video/mp4",
     "duration_s": 18.2,
     "width": 1920,
     "height": 1080,
@@ -760,48 +779,51 @@ Reloads the case, probes its video, and returns the review document:
 
 `details_yaml` contains read-only target metadata without samples. `source_yaml` is authoritative for showing everything else. Do not try to JSON-encode arbitrary adapter config values that PyYAML may have constructed as non-JSON Python types.
 
-For a known, readable case, this endpoint always returns a document with HTTP `200`, including when review is blocked. `status` is `ready` for a normally valid case, `repairable` when normalized points exist but one or more targets are empty or timestamps exceed duration, and `blocked` when YAML/schema/overlap errors prevent normalization or the video cannot be resolved and probed. `editing_enabled` is true for `ready` and `repairable`, and false for `blocked`. A blocked document keeps `source_yaml`, sets unavailable structured fields to null or empty arrays, and supplies `load_error` plus `validation_issues`. Unknown IDs return `404`; an operating-system failure that prevents reading a discovered file returns `500`.
+For a known, readable case, this endpoint always returns a document with HTTP `200`, including when review is blocked. `status` is `ready` for a normally valid case, `repairable` when normalized points exist but one or more targets are empty or timestamps exceed duration, and `blocked` when YAML/schema/overlap/expansion errors prevent normalization or the video cannot be resolved and probed. `editing_enabled` is true for `ready` and `repairable`, and false for `blocked`. Unknown IDs return `404`; an operating-system failure that prevents reading a discovered file returns `500`.
 
-The document builder must separate schema/point normalization from video resolution enough to return source and normalized targets when video probing fails. A repairable PUT is accepted only when the candidate resolves every case validation issue, after which the returned status is `ready`.
+The partial blocked-document shape is explicit. `source_yaml` is present whenever the file was readable. When schema or point normalization fails, `targets` is empty and `video` is null unless its safe display path was already available. When point normalization succeeds but video resolution or probing fails, normalized `targets` and their points remain present; `video.display_path` is present, while `url`, `content_type`, `duration_s`, dimensions, and frame count are null when unavailable. `load_error` and `validation_issues` explain the blocking stage. The document builder must therefore separate schema/point normalization from video resolution and probing.
+
+A repairable PUT is accepted only when the complete candidate resolves every case validation issue, after which the returned status is `ready`. Because one request may contain several target replacements, a case with issues in multiple targets can reach a valid candidate without writing an invalid intermediate file.
 
 ### `GET|HEAD /api/cases/{case_id}/video`
 
 Streams the resolved video as described under "Video Streaming". It has no general path parameter beyond the known case ID.
 
-### `PUT /api/cases/{case_id}/targets/{target_id}/samples`
+### `PUT /api/cases/{case_id}/samples`
 
-Replaces all points for one existing target:
+Atomically replaces all points for one or more existing targets:
 
 ```json
 {
-  "points": [
-    {
-      "id": "client-opaque-id",
-      "timestamp_s": 1.5,
-      "expect": true,
-      "field": null,
-      "compare": {
-        "mode": null,
-        "tolerance": null
-      },
-      "comment": null,
-      "origin": null
+  "targets": {
+    "bracket_seated": {
+      "points": [
+        {
+          "id": "client-opaque-id",
+          "timestamp_s": 1.5,
+          "expect_type": "boolean",
+          "expect_json": "true",
+          "field": null,
+          "compare": {
+            "mode": null,
+            "tolerance": null
+          },
+          "comment": null,
+          "origin": null
+        }
+      ]
     }
-  ]
+  }
 }
 ```
 
-Validate request IDs for uniqueness within the request but do not persist them. Validate all JSON-like values recursively and reject non-finite numbers. The route target is authoritative; a point has no target field.
+Require at least one target entry, reject unknown target IDs, and validate point IDs for uniqueness within each target while treating IDs as target-scoped and nonpersistent. Parse each `expect_json` with a strict Python JSON decoder, recursively validate the resulting JSON-like value, reject non-finite numbers, derive its top-level type, and reject an inconsistent `expect_type`. A point has no target field because the containing mapping key is authoritative.
 
-Under the case lock, reload the latest source, replace the requested target, validate and write atomically, then return the same case-document shape as `GET`, preserving request point IDs and recomputing their origins from the accepted blocks. Returning the complete accepted document keeps range bands, YAML source, counts, video metadata, and revision synchronized.
+Under the case lock, reload the latest source, replace only the submitted targets, validate and write the complete candidate atomically, then return the same case-document shape as `GET`. Preserve request point IDs for submitted targets and recompute their origins from the accepted blocks. Returning the complete accepted document keeps range bands, YAML source, counts, video metadata, and revision synchronized.
 
-The server must not accept an empty list when it would make the candidate invalid for normal eval loading.
+The server must not accept a target's empty point list when it would make the candidate invalid for normal eval loading. A repair batch must include every changed target needed to make the complete case valid.
 
-### `POST /api/cases/{case_id}/validate`
-
-Reloads and validates the current on-disk case without writing. It returns revision and validation issues. The UI uses it for an explicit refresh/validate action and after detecting an external revision change.
-
-This endpoint requires the write token because it is a non-idempotent HTTP method even though it does not mutate disk. It does not load an adapter or run evaluation.
+An explicit refresh or validation action uses `GET /api/cases/{case_id}`, which already reloads and validates the complete on-disk document. Flush or resolve local drafts before refreshing. Do not add a duplicate validation endpoint.
 
 ### Static Routes
 
@@ -814,16 +836,16 @@ Frontend validation is for immediate feedback; backend validation is authoritati
 The backend checks:
 
 - JSON request shape and body limits.
-- Unique UI IDs.
-- Finite, nonnegative timestamps.
-- Unique timestamps per target within `1e-9`.
-- JSON-like, finite expected values.
+- At least one submitted target and unique target-scoped UI IDs.
+- Finite, nonnegative timestamps canonicalized to nine decimal places.
+- Unique canonical timestamps per target with more than `1e-9` separation.
+- Strict, lossless `expect_json`, matching `expect_type`, and recursively JSON-like finite expected values.
 - Nonblank optional field and comment values after normalization.
 - Supported comparison mode and nonnegative finite tolerance.
 - Existing target and case identity.
 - At least one sample in every target after the edit.
 - Existing schema rules.
-- Expansion and source-overlap rules.
+- Expansion budget, duplicate, reconstruction round-trip, and source-overlap rules.
 - Video existence, type, probe success, and sample duration bounds.
 
 Do not add stricter mode-to-expectation schema validation globally in this feature because existing accepted evals may rely on the current permissive schema. The type-aware UI guides new values while the core comparison behavior remains backward compatible.
@@ -839,7 +861,7 @@ Do not add stricter mode-to-expectation schema validation globally in this featu
 - Compact controls have at least a practical 32 px pointer target, while narrow timeline markers use an invisible larger hit area.
 - Long target IDs, paths, expected strings, and JSON wrap or truncate with a tooltip without changing fixed lane and toolbar dimensions.
 - Reduced-motion preference disables nonessential transitions.
-- No UI element overlaps another at supported desktop sizes.
+- Layout controls and text do not unintentionally overlap at supported desktop sizes; dense timeline markers follow the explicit overlap behavior described under "Timeline."
 
 ## Packaging And Development Workflow
 
@@ -889,7 +911,9 @@ Runtime users must not need npm, Node.js, a network connection, a system `ffmpeg
 
 ### CI And Release
 
-Extend the CLI CI and release jobs to install Node 24, run `npm ci`, run `npm run check`, run `npm run build`, and fail if committed static output changes. Run this before `uv build`.
+Add one dedicated review-UI CI job using Node 24 rather than repeating frontend work in every Python matrix entry. It runs `npm ci`, `npm run check`, and `npm run build` from `cli/review-ui`, then runs `git status --porcelain -- src/glasskit/eval/review/static` from `cli/` and fails for tracked differences or untracked stale assets. The existing Python jobs consume the committed assets without installing Node.
+
+The PyPI release job installs Node 24, runs the same frontend checks and clean-output assertion, and does so before `uv build`. This independently verifies the exact tagged assets that enter the distributions.
 
 Keep the existing Python matrix, offline pytest requirement, type checking, Ruff checks, and CLI help smoke tests. Add a wheel/sdist smoke check that imports the review static resource or starts the server in a controlled test and fetches `/`.
 
@@ -906,7 +930,9 @@ Add focused tests for:
 - Parsing and normalizing scalar `at`, list `at`, and `range` blocks.
 - Explicit sample comments, including expansion and blank rejection/omission.
 - Deterministic point IDs and origin metadata.
-- Structural payload equality, including object key order and boolean-versus-number distinctions.
+- Target-scoped point IDs when deterministic IDs repeat across targets.
+- Lossless expectation transport for nested integers beyond JavaScript's safe range, integer versus floating representations, negative zero, booleans, and object key order.
+- Structural payload equality, including object key order, boolean-versus-number distinctions, and integer-versus-floating distinctions.
 - Default-cadence range reconstruction.
 - Custom-cadence range reconstruction.
 - Two-point default and source-origin range rules.
@@ -914,31 +940,37 @@ Add focused tests for:
 - Irregular points becoming an `at` list.
 - Range end clipping at the next differently labeled point.
 - Group splits for expectation, field, compare, tolerance, and comment changes.
-- Nine-decimal arithmetic normalization.
+- Nine-decimal timestamp canonicalization, post-canonicalization duplicates, and near-default cadences that must retain `every_s`.
+- Seeded generated point schedules proving that reconstruction followed by shared expansion returns the exact canonical points and payloads, with automatic fallback from unsafe ranges to `at`.
+- Prospective range and total-case expansion-budget rejection before materialization, including cadences at or below timestamp precision.
 - Duplicate, negative, non-finite, empty-target, overlap, and over-duration rejection.
 - Semantic preservation of video, description, sampling, workflow, target order, config, and thresholds.
 - Omitted Pydantic defaults remaining omitted.
 - Failed candidate validation leaving original bytes untouched.
 - Atomic replacement preserving file permission bits.
-- Concurrent writes to two targets preserving both accepted changes.
+- Post-replacement directory-sync failure returning accepted content with a warning instead of a false failed-save response.
+- One atomic request repairing issues across two targets.
+- Concurrent single-target batches preserving both accepted changes.
 
 ### Server And CLI Tests
 
 Use stdlib HTTP clients and Typer's test runner. Cover:
 
 - `review` appears in `glasskit eval --help` with the specified options.
-- Initial case and target validation.
+- Initial case, target, and time validation.
 - Available-port binding and `--no-open`.
 - Suite bootstrap with valid and invalid case summaries.
-- Case document JSON and read-only YAML text.
+- Ready, repairable, and partially blocked case-document JSON, including normalized points retained after video probe failure, plus read-only YAML text.
 - Unknown and path-like case IDs returning `404`.
+- Missing, non-loopback, and wrong-port `Host` headers being rejected.
 - Missing or incorrect write token returning `403`.
-- Target replacement success and structured validation failure.
+- Single-target and multi-target batch replacement success, multi-target repair, unknown target handling, and structured validation failure.
 - Oversized and wrong-content-type requests.
 - Full video GET and HEAD.
 - Prefix, open-ended, and suffix byte ranges.
 - Invalid, unsatisfiable, and multiple ranges.
 - Static index and hashed asset serving with correct cache and security headers.
+- A browser-open failure printing the URL and continuing to serve.
 - Clean server shutdown.
 
 Tests must remain offline and use temporary copies of committed synthetic fixtures. Ordinary pytest must not require a system `ffmpeg` command.
@@ -951,17 +983,20 @@ Use Vitest and React Testing Library for behavior with meaningful regression ris
 - Timeline point positioning and displayed range bands from backend groups.
 - Zoom calculations and scroll anchoring helpers.
 - Marker/table/inspector selection synchronization.
-- Seek readiness waits for the current `seeked` event and, when supported, prefers the current `requestVideoFrameCallback()` generation without hanging past the `500 ms` fallback.
-- Rapid consecutive seeks cancel or ignore stale events, callbacks, and timeouts, while browsers without `requestVideoFrameCallback()` fall back to `seeked`.
+- Seek readiness qualifies the current `seeked` event and, when supported, waits for the current `requestVideoFrameCallback()` generation without hanging past the `500 ms` post-seek fallback.
+- Same-position seeks, missing metadata, an empty seekable range, media errors, and a seek that never emits `seeked` all reach an explicit terminal state through the `5 s` overall timeout or error path.
+- Rapid consecutive seeks cancel or ignore stale events, callbacks, and timeouts, while browsers without `requestVideoFrameCallback()` fall back after a qualifying `seeked`.
 - Presented-frame `mediaTime` is displayed diagnostically and never mutates the sample timestamp.
 - New-point defaults and duplicate-time selection.
-- Type-aware expectation controls.
+- Type-aware expectation controls and preservation of raw lossless JSON across an unrelated edit and save.
 - Comparison reset after incompatible type change.
 - JSON draft parsing and inline errors.
-- Shortcut handling and input-focus exclusion.
-- Per-case save serialization, coalescing, and stale-response ordering.
+- Shortcut handling, interactive-element exclusion, composition, repeat, and `defaultPrevented` behavior.
+- Per-case save serialization, per-target coalescing, multi-target repair batching, and stale-response ordering.
+- Point, target, and case navigation flushing sendable drafts, retaining incomplete repair drafts across within-case target navigation, and blocking invalid partial input until fixed or reset.
+- `beforeunload` installation only for dirty states without claiming that browser reload can await a PUT.
 - Failed-save draft retention and retry/reload behavior.
-- Last-sample delete protection.
+- Last-sample delete protection plus local cancellation of an unsaved first point in an originally empty repair target.
 
 Do not duplicate backend compaction logic in frontend tests. The frontend renders `display_groups` supplied by the backend.
 
@@ -969,18 +1004,20 @@ Do not duplicate backend compaction logic in frontend tests. The frontend render
 
 Use a copied fixture so the repository fixture is not modified:
 
-1. Launch the packaged UI and confirm the browser opens at the printed loopback URL.
+1. Launch the packaged UI with `--case`, `--target`, and `--time` and confirm the browser opens at the printed loopback URL and seeks to the requested context.
 2. Play, pause, seek, change playback rate, and use every visible shortcut.
 3. Click markers rapidly across multiple target lanes and confirm target focus, video time, table row, inspector, and preview-ready state stay synchronized without a stale frame winning.
 4. Create a point, edit each expectation type, edit field/compare/tolerance/comment, move its timestamp, and delete another point.
 5. Confirm save state transitions and inspect the rewritten YAML.
 6. Confirm range bands match emitted range blocks.
 7. Run `glasskit eval validate` and `glasskit eval list-samples` on the edited copy.
-8. Trigger invalid JSON, a duplicate timestamp, a simulated write failure, and a browser refresh with unsaved data.
+8. Trigger invalid JSON, a duplicate timestamp, a simulated write failure, invalid input followed by point/target navigation, and a browser refresh with unsaved data.
 9. Test Fit, 2x, 4x, and 8x timeline modes at desktop widths near 1024, 1280, and 1600 px.
 10. In a browser with `requestVideoFrameCallback()`, confirm the shown-frame PTS appears after seeking and does not alter the sample time; feature-disable it in developer tools or a test build and confirm the `seeked` fallback.
 11. Review the nonzero-PTS `offset-start-64x64.mp4` fixture and confirm sample-time seeking remains usable while any browser timeline difference is reported honestly.
-12. Build wheel and sdist, install each in isolation, launch review with `--no-open`, and fetch the packaged index.
+12. Repair a copied case containing invalid samples in two targets and confirm one atomic batch makes the case valid without an invalid intermediate write.
+13. Load expectations containing nested integers above JavaScript's safe range and integer/floating variants, edit only a timestamp, and confirm the expectation values remain exact after save and reload.
+14. Build wheel and sdist, install each in isolation, launch review with `--no-open`, and fetch the packaged index.
 
 After code changes, run the repository-required Python checks:
 
@@ -1000,11 +1037,11 @@ Also run the frontend `npm run check` and `npm run build`.
 ### Phase 1: Shared Document And Serialization Core
 
 - Add the explicit sample comment schema and tests.
-- Refactor case loading so review and normal eval share parsing, expansion, overlap, and video-path rules.
-- Implement review transport models, point normalization, compaction, candidate validation, and atomic target replacement.
+- Refactor case loading so review and normal eval share parsing, bounded expansion, duplicate, overlap, and video-path rules.
+- Implement lossless expectation transport, point normalization, exact compaction with round-trip fallback, candidate validation, and atomic batched target replacement.
 - Add complete writer unit tests before building HTTP behavior.
 
-Exit gate: a pure Python test can load a fixture target into points, edit those points, write a temporary case, reload it through normal eval loading, and prove point-level equivalence.
+Exit gate: pure Python invariant tests can load fixture and generated targets into points, edit them, write a temporary case, reload it through normal eval loading, and prove exact canonical point-level equivalence without unsafe numeric coercion or unbounded expansion.
 
 ### Phase 2: Local Server And CLI
 
@@ -1013,7 +1050,7 @@ Exit gate: a pure Python test can load a fixture target into points, edit those 
 - Add `glasskit eval review` with exact launch and shutdown behavior.
 - Serve a minimal checked-in placeholder index until the React build lands.
 
-Exit gate: server and CLI tests pass, a browser can seek the fixture video, and a direct API target replacement atomically changes a copied YAML.
+Exit gate: server and CLI tests pass, a browser can seek the fixture video, and direct API single-target and multi-target batches atomically change copied YAML files.
 
 ### Phase 3: Read-Only React Review Experience
 
@@ -1026,7 +1063,7 @@ Exit gate: a user can review every fixture point, click through targets, and ins
 ### Phase 4: Editing And Autosave
 
 - Implement create, type-aware expectation editing, timestamp editing, field/compare/tolerance/comment editing, and delete.
-- Implement local validation, per-case save queue, coalescing, status display, retry, reload, navigation flush, and unload protection.
+- Implement local validation, per-case save queue, per-target coalescing, multi-target repair batches, status display, retry, reload, controlled navigation flush, and honest unload protection.
 - Render backend-derived groups after every accepted save.
 - Add failure and concurrency tests.
 
@@ -1045,25 +1082,30 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 ## Definition Of Done
 
 - `glasskit eval review` is documented and present in CLI help.
+- `--case`, `--target`, and `--time` can open the context of a separately reported failure without filtering the suite.
 - The command binds only to loopback, opens after listening, prints its URL, and shuts down cleanly.
 - Cases and targets are navigable, filterable, and shown in source order.
 - The original video seeks through a byte-range endpoint.
-- Point selection uses `currentTime`, waits for the current seek to present, and cannot be completed by stale events from an earlier selection.
+- Point selection uses `currentTime`, reaches a terminal state for completed, same-position, failed, and timed-out seeks, and cannot be completed by stale events from an earlier selection.
 - The transport distinguishes authoritative sample time from browser-presented frame PTS when the browser exposes it.
 - The UI and documentation describe video as a best-effort browser preview and never promise the same frame chosen by PyAV.
 - Every expanded point is visible in a target lane and table.
 - Point selection synchronizes video, timeline, table, and inspector.
-- All agreed keyboard shortcuts are visible and work outside form controls.
+- All agreed keyboard shortcuts are visible and work outside interactive controls without double-activating native controls.
 - Users can create, edit, move, and delete points with type-aware validation.
 - Existing empty targets can receive a first point, and the UI cannot save a newly empty valid target.
-- Autosave is serialized per case, survives rapid edits without stale overwrites, and has clear saved, pending, invalid, and failed states.
-- YAML writes replace only one target's samples semantically, validate the candidate rather than the old file, and are atomic.
-- Reconstructed ranges expand to exactly the submitted points and never overlap a following point.
+- Autosave is serialized per case, can batch multi-target repairs, survives rapid edits without stale overwrites, and has clear saved, pending, incomplete-repair, invalid, and failed states.
+- Controlled in-app navigation flushes sendable drafts, retains incomplete repairs while moving within their case, and never silently discards invalid partial input; browser unload warnings do not claim a guaranteed asynchronous flush.
+- YAML writes replace only submitted targets' samples semantically, validate the complete candidate rather than the old file, and are atomic.
+- Arbitrary-size integers and integer/floating expectation representations survive browser load, unrelated edit, save, and reload without JavaScript numeric coercion.
+- Timestamps are canonicalized to nine decimals, and reconstructed ranges expand to exactly the canonical submitted points without overlapping a following point.
+- Range expansion has a shared tested per-case budget and cannot enter an unbounded materialization loop.
 - Optional explicit comments survive load, edit, save, and reload.
 - All read-only case and eval YAML is visible.
 - Existing valid files are untouched until an edit.
 - Cases written by the UI pass normal eval loading and video timestamp validation.
 - Static assets are present in wheel and sdist, and runtime use requires no Node installation.
+- Frontend builds clean the external Vite output directory and CI rejects tracked or untracked generated-asset drift.
 - Default Python tests remain offline and do not require a system `ffmpeg`.
 - README explains autosave, formatting loss, local-only behavior, video codec support, and the browser-versus-PyAV frame caveat.
 
@@ -1072,10 +1114,14 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 | Risk | Mitigation |
 | --- | --- |
 | Browser frame differs from eval frame | Show sample time and browser-presented PTS separately, wait for the completed presentation, and document the accepted best-effort limitation |
-| Browser cannot play a CLI-supported container or codec | Show a specific disabled-video error; do not silently transcode |
-| Rapid autosaves lose edits across targets | Serialize writes per case in frontend and server; reread under lock |
+| Browser cannot play a CLI-supported container or codec | Show a specific preview-unavailable error, keep editing only when backend duration validation remains available, and do not silently transcode |
+| Repairable issues span several targets | Keep locally valid drafts and submit all changed targets as one atomic valid candidate |
+| Rapid autosaves lose edits across targets | Serialize writes per case, batch target replacements, version drafts per target, and reread under lock |
+| JavaScript numbers corrupt valid expectations | Transport expectations as lossless JSON text and retain raw structured JSON until the Python backend parses it |
+| Tiny cadence or huge range exhausts memory | Preflight a shared per-case expansion budget and reject before materialization |
+| Browser reload loses a queued draft | Warn only while dirty, flush controlled in-app navigation, and do not promise asynchronous work during unload |
 | YAML rewrite creates a large diff | Replace only sample data semantically, preserve mapping order and omissions, document PyYAML formatting behavior |
-| Automatic ranges change sample meaning | Share expansion rules, use conservative deterministic grouping, clip range end, and assert round-trip point equivalence |
+| Automatic ranges change sample meaning | Use canonical integer ticks, share expansion rules, verify every tentative range, and fall back to `at` unless exact |
 | Invalid request corrupts a case | Validate candidate bytes before same-directory atomic replacement |
 | Malicious page targets localhost | Loopback-only bind, no CORS, Host validation, random write token, JSON PUT, CSP |
 | Frontend assets missing from package | Commit build output and verify wheel/sdist contents in CI and release |
@@ -1092,4 +1138,5 @@ Exit gate: an isolated install can launch the review UI without Node, all Python
 - Multi-tab conflict detection or optimistic concurrency rejection.
 - Persistent undo, backups, or Git integration.
 - Timeline virtualization based on measured large-suite performance.
+- Dense-marker clustering beyond the v1 focus/table/previous-next accessibility behavior.
 - Remote serving or collaborative review.
