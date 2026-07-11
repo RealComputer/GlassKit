@@ -109,6 +109,12 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     expect(await screen.findByText("fixture.mp4")).toBeTruthy();
+    const sidebar = screen.getByLabelText("Eval navigation");
+    expect(
+      within(sidebar)
+        .getAllByRole("heading")
+        .map((heading) => heading.textContent),
+    ).toEqual(["Cases", "Targets", "Sources"]);
     expect(screen.queryByText("Case details")).toBeNull();
     expect(screen.getAllByText("A fixture case")).toHaveLength(1);
   });

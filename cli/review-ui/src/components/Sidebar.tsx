@@ -126,7 +126,10 @@ export function Sidebar() {
         </div>
       </section>
 
-      <div className="sidebar-footer">
+      <section className="sidebar-footer" aria-labelledby="sources-heading">
+        <div className="section-heading sources-heading">
+          <h2 id="sources-heading">Sources</h2>
+        </div>
         {workspace && (
           <div className="sidebar-video-path">
             <span>Video</span>
@@ -154,7 +157,7 @@ export function Sidebar() {
         >
           <SlidersHorizontal size={15} /> Eval config
         </button>
-      </div>
+      </section>
     </aside>
   );
 }

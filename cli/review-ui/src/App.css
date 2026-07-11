@@ -283,10 +283,14 @@
   padding: 8px 10px 10px;
 }
 
+.sources-heading {
+  margin-bottom: 2px;
+}
+
 .sidebar-video-path {
   display: grid;
   gap: 2px;
-  padding: 6px 4px 9px;
+  padding: 4px 4px 9px;
   font-size: 11px;
 }
 
