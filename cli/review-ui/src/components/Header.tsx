@@ -13,7 +13,7 @@ const labels = {
 
 export function Header() {
   const { state, dispatch, retrySave, reloadFromDisk } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const currentCase = workspace?.document;
   const phase = workspace?.savePhase ?? "saved";
   return (
@@ -66,7 +66,7 @@ export function Header() {
                 type="button"
                 className="text-button"
                 onClick={() => void reloadFromDisk()}
-                aria-label="Reload case from disk and discard drafts"
+                aria-label="Reload case file from disk and discard drafts"
                 title="Reload from disk"
               >
                 <RotateCcw size={13} /> Reload
@@ -78,7 +78,7 @@ export function Header() {
               type="button"
               className="text-button discard-button"
               onClick={() => void reloadFromDisk()}
-              aria-label="Discard local drafts and reload this case from disk"
+              aria-label="Discard local drafts and reload this case file from disk"
               title="Discard drafts and reload from disk"
             >
               <RotateCcw size={13} /> Discard drafts

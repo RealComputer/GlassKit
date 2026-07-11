@@ -777,7 +777,7 @@ kbd {
   border-color: #54aeff;
 }
 
-.point-marker {
+.sample-marker {
   position: absolute;
   top: 50%;
   left: var(--position);
@@ -790,7 +790,7 @@ kbd {
   transform: translate(-50%, -50%);
 }
 
-.point-marker::before {
+.sample-marker::before {
   position: absolute;
   top: 4px;
   bottom: 4px;
@@ -801,7 +801,7 @@ kbd {
   border-radius: 1px;
 }
 
-.point-marker::after {
+.sample-marker::after {
   position: absolute;
   top: 3px;
   left: 4px;
@@ -813,18 +813,18 @@ kbd {
   border-radius: 50%;
 }
 
-.point-marker:hover,
-.point-marker:focus-visible,
-.point-marker.selected {
+.sample-marker:hover,
+.sample-marker:focus-visible,
+.sample-marker.selected {
   z-index: 9;
 }
 
-.point-marker.selected::before {
+.sample-marker.selected::before {
   width: 3px;
   background: var(--accent);
 }
 
-.point-marker.selected::after {
+.sample-marker.selected::after {
   background: var(--accent);
   border-color: #ffffff;
   box-shadow: 0 0 0 2px var(--accent);

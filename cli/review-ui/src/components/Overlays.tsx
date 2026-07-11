@@ -4,14 +4,14 @@ import { useApp } from "../state/AppContext.tsx";
 
 export function Overlays() {
   const { state, dispatch } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const drawerText =
-    state.sourceDrawer === "case"
-      ? workspace?.acceptedDocument.source_yaml
-      : state.sourceDrawer === "config"
-        ? state.suite?.config_source_yaml
+    state.sourceDrawer === "case_file"
+      ? workspace?.acceptedCaseFile.case_file_source
+      : state.sourceDrawer === "eval_config_file"
+        ? state.evalDirectory?.eval_config_source
         : null;
-  const sourceTitle = state.sourceDrawer === "case" ? "Case file" : "Eval config file";
+  const sourceTitle = state.sourceDrawer === "case_file" ? "Case file" : "Eval config file";
   const sourceRef = useRef<HTMLElement>(null);
   const helpRef = useRef<HTMLElement>(null);
   const overlayOpen = Boolean(state.sourceDrawer || state.helpOpen);
@@ -81,7 +81,7 @@ export function Overlays() {
             <div className="drawer-heading">
               <div>
                 <h2 id="source-drawer-title">{sourceTitle}</h2>
-                {state.sourceDrawer === "case" && workspace?.dirtyTargetIds.length ? (
+                {state.sourceDrawer === "case_file" && workspace?.dirtyTargetIds.length ? (
                   <span>Last accepted source; local drafts are not shown yet.</span>
                 ) : null}
               </div>

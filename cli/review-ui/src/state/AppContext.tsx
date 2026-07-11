@@ -9,8 +9,13 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import { fetchCase, fetchSuite, replaceTargetSamples, ReviewApiError } from "../api/client.ts";
-import type { ReviewPoint } from "../api/types.ts";
+import {
+  fetchCaseFile,
+  fetchEvalDirectory,
+  replaceTargetSamples,
+  ReviewApiError,
+} from "../api/client.ts";
+import type { ReviewSample } from "../api/types.ts";
 import {
   appReducer,
   hasUnsavedWork,
@@ -19,23 +24,23 @@ import {
   type AppAction,
   type AppState,
 } from "./reducer.ts";
-import { canDeleteFromTarget, createPointAt } from "./editing.ts";
+import { canDeleteFromTarget, createSampleAt } from "./editing.ts";
 
 interface AppContextValue {
   state: AppState;
   dispatch: Dispatch<AppAction>;
   selectCase: (caseId: string) => Promise<void>;
   selectTarget: (targetId: string) => Promise<void>;
-  selectPoint: (targetId: string, pointId: string) => Promise<void>;
-  updatePoint: (
+  selectSample: (targetId: string, sampleId: string) => Promise<void>;
+  updateSample: (
     targetId: string,
-    pointId: string,
-    update: Partial<ReviewPoint>,
+    sampleId: string,
+    update: Partial<ReviewSample>,
     immediate?: boolean,
   ) => void;
-  addPoint: () => ReviewPoint | null;
-  deletePoint: (targetId: string, pointId: string) => void;
-  canDeletePoint: (targetId: string, pointId: string) => boolean;
+  addSample: () => ReviewSample | null;
+  deleteSample: (targetId: string, sampleId: string) => void;
+  canDeleteSample: (targetId: string, sampleId: string) => boolean;
   setFormError: (key: string, message: string | null) => void;
   seek: (time: number) => void;
   flushCurrentCase: () => Promise<boolean>;
@@ -59,7 +64,7 @@ function initialQuery() {
 function uuid(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
-    `point-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    `sample-${Date.now()}-${Math.random().toString(16).slice(2)}`
   );
 }
 
@@ -70,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const queryRef = useRef(initialQuery());
   const initialSeekDone = useRef(false);
   const initialTargetUsed = useRef(false);
-  const caseLoads = useRef(new Map<string, AbortController>());
+  const caseFileLoads = useRef(new Map<string, AbortController>());
   const saveTimers = useRef(new Map<string, number>());
   const inFlight = useRef(new Map<string, Promise<boolean>>());
   const saveGenerations = useRef(new Map<string, number>());
@@ -79,7 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const providerGeneration = useRef(0);
 
   useEffect(() => {
-    const loads = caseLoads.current;
+    const loads = caseFileLoads.current;
     const timers = saveTimers.current;
     const saves = inFlight.current;
     const generations = saveGenerations.current;
@@ -100,22 +105,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchSuite(controller.signal)
-      .then((suite) => {
+    fetchEvalDirectory(controller.signal)
+      .then((evalDirectory) => {
         const selector = queryRef.current.caseSelector;
         const matchingCase = selector
-          ? suite.cases.find((item) => item.id === selector || item.name === selector)
+          ? evalDirectory.cases.find((item) => item.id === selector || item.name === selector)
           : null;
         dispatch({
-          type: "SUITE_LOADED",
-          suite,
+          type: "EVAL_DIRECTORY_LOADED",
+          evalDirectory,
           initialCaseId: matchingCase?.id ?? null,
         });
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           dispatch({
-            type: "SUITE_FAILED",
+            type: "EVAL_DIRECTORY_FAILED",
             message: error instanceof Error ? error.message : "Could not load the eval directory.",
           });
         }
@@ -123,13 +128,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, []);
 
-  const loadCase = useCallback(async (caseId: string, discard = false) => {
-    caseLoads.current.get(caseId)?.abort();
+  const loadCaseFile = useCallback(async (caseId: string, discard = false) => {
+    caseFileLoads.current.get(caseId)?.abort();
     const controller = new AbortController();
-    caseLoads.current.set(caseId, controller);
-    dispatch({ type: "CASE_LOADING", caseId });
+    caseFileLoads.current.set(caseId, controller);
+    dispatch({ type: "CASE_FILE_LOADING", caseId });
     try {
-      const document = await fetchCase(caseId, controller.signal);
+      const document = await fetchCaseFile(caseId, controller.signal);
       liveFormErrors.current.delete(caseId);
       if (discard) {
         dispatch({ type: "DISCARD_AND_LOAD", document });
@@ -137,7 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const preferredTargetId = initialTargetUsed.current ? null : queryRef.current.targetId;
         initialTargetUsed.current = true;
         dispatch({
-          type: "CASE_LOADED",
+          type: "CASE_FILE_LOADED",
           document,
           preferredTargetId,
         });
@@ -145,33 +150,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (!controller.signal.aborted) {
         dispatch({
-          type: "CASE_LOAD_FAILED",
+          type: "CASE_FILE_LOAD_FAILED",
           caseId,
-          message: error instanceof Error ? error.message : "Could not load the case.",
+          message: error instanceof Error ? error.message : "Could not load the case file.",
         });
       }
     } finally {
-      if (caseLoads.current.get(caseId) === controller) {
-        caseLoads.current.delete(caseId);
+      if (caseFileLoads.current.get(caseId) === controller) {
+        caseFileLoads.current.delete(caseId);
       }
     }
   }, []);
 
   useEffect(() => {
     const caseId = state.selectedCaseId;
-    if (caseId && !state.documents[caseId] && !state.loadingCases[caseId]) {
-      void loadCase(caseId);
+    if (caseId && !state.caseFileWorkspaces[caseId] && !state.loadingCaseFiles[caseId]) {
+      void loadCaseFile(caseId);
     }
-  }, [loadCase, state.documents, state.loadingCases, state.selectedCaseId]);
+  }, [loadCaseFile, state.caseFileWorkspaces, state.loadingCaseFiles, state.selectedCaseId]);
 
   useEffect(() => {
-    if (!initialSeekDone.current && state.selectedCaseId && state.documents[state.selectedCaseId]) {
+    if (
+      !initialSeekDone.current &&
+      state.selectedCaseId &&
+      state.caseFileWorkspaces[state.selectedCaseId]
+    ) {
       initialSeekDone.current = true;
       if (queryRef.current.time !== null) {
         dispatch({ type: "REQUEST_SEEK", time: queryRef.current.time });
       }
     }
-  }, [state.documents, state.selectedCaseId]);
+  }, [state.caseFileWorkspaces, state.selectedCaseId]);
 
   const performSave = useCallback(async (caseId: string, retryFailed = false): Promise<boolean> => {
     const lifecycleGeneration = providerGeneration.current;
@@ -186,9 +195,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!providerIsLive() || !completed) return false;
       return performSave(caseId, retryFailed);
     }
-    const snapshot = stateRef.current.documents[caseId];
-    const suite = stateRef.current.suite;
-    if (!snapshot || !suite || snapshot.dirtyTargetIds.length === 0) {
+    const snapshot = stateRef.current.caseFileWorkspaces[caseId];
+    const evalDirectory = stateRef.current.evalDirectory;
+    if (!snapshot || !evalDirectory || snapshot.dirtyTargetIds.length === 0) {
       return true;
     }
     if (
@@ -207,11 +216,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const targets = Object.fromEntries(
       snapshot.document.targets
         .filter((target) => snapshot.dirtyTargetIds.includes(target.id))
-        .map((target) => [target.id, { points: target.points }]),
+        .map((target) => [target.id, { samples: target.samples }]),
     );
     dispatch({ type: "SAVE_START", caseId });
     const requestGeneration = saveGenerations.current.get(caseId) ?? 0;
-    const promise = replaceTargetSamples(caseId, suite.write_token, { targets })
+    const promise = replaceTargetSamples(caseId, evalDirectory.write_token, { targets })
       .then((document) => {
         if (!providerIsLive() || (saveGenerations.current.get(caseId) ?? 0) !== requestGeneration) {
           return false;
@@ -246,7 +255,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!providerIsLive()) return false;
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
     if (!providerIsLive() || !completed) return false;
-    const latest = stateRef.current.documents[caseId];
+    const latest = stateRef.current.caseFileWorkspaces[caseId];
     if (latest?.dirtyTargetIds.length) {
       return performSave(caseId, retryFailed);
     }
@@ -255,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const timers = saveTimers.current;
-    for (const [caseId, workspace] of Object.entries(state.documents)) {
+    for (const [caseId, workspace] of Object.entries(state.caseFileWorkspaces)) {
       const oldTimer = timers.get(caseId);
       if (
         workspace.dirtyTargetIds.length === 0 ||
@@ -279,10 +288,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       for (const timer of timers.values()) window.clearTimeout(timer);
       timers.clear();
     };
-  }, [performSave, state.documents]);
+  }, [performSave, state.caseFileWorkspaces]);
 
   useEffect(() => {
-    const hasDirty = Object.values(state.documents).some(hasUnsavedWork);
+    const hasDirty = Object.values(state.caseFileWorkspaces).some(hasUnsavedWork);
     if (!hasDirty) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -290,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [state.documents]);
+  }, [state.caseFileWorkspaces]);
 
   useEffect(() => {
     if (!state.toast) return;
@@ -329,7 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (caseId: string) => {
       if (caseId === stateRef.current.selectedCaseId) return;
       const currentId = stateRef.current.selectedCaseId;
-      const current = currentId ? stateRef.current.documents[currentId] : null;
+      const current = currentId ? stateRef.current.caseFileWorkspaces[currentId] : null;
       if (
         current &&
         (Object.keys(current.formErrors).length > 0 ||
@@ -341,15 +350,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!saved) return;
       }
       dispatch({ type: "SELECT_CASE", caseId });
-      void loadCase(caseId);
+      void loadCaseFile(caseId);
     },
-    [flushCurrentCase, loadCase],
+    [flushCurrentCase, loadCaseFile],
   );
 
   const selectTarget = useCallback(
     async (targetId: string) => {
       const caseId = stateRef.current.selectedCaseId;
-      const workspace = caseId ? stateRef.current.documents[caseId] : null;
+      const workspace = caseId ? stateRef.current.caseFileWorkspaces[caseId] : null;
       if (
         !workspace ||
         Object.keys(workspace.formErrors).length > 0 ||
@@ -365,10 +374,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [performSave],
   );
 
-  const selectPoint = useCallback(
-    async (targetId: string, pointId: string) => {
+  const selectSample = useCallback(
+    async (targetId: string, sampleId: string) => {
       const caseId = stateRef.current.selectedCaseId;
-      const workspace = caseId ? stateRef.current.documents[caseId] : null;
+      const workspace = caseId ? stateRef.current.caseFileWorkspaces[caseId] : null;
       if (
         !workspace ||
         Object.keys(workspace.formErrors).length > 0 ||
@@ -380,51 +389,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!saved) return;
       }
       const target = workspace.document.targets.find((item) => item.id === targetId);
-      const point = target?.points.find((item) => item.id === pointId);
-      if (!point) return;
+      const sample = target?.samples.find((item) => item.id === sampleId);
+      if (!sample) return;
       dispatch({
-        type: "SELECT_POINT",
+        type: "SELECT_SAMPLE",
         targetId,
-        pointId,
-        timestamp: point.timestamp_s,
+        sampleId,
+        timestamp: sample.timestamp_s,
       });
     },
     [performSave],
   );
 
-  const updatePoint = useCallback(
-    (targetId: string, pointId: string, update: Partial<ReviewPoint>, immediate = false) => {
+  const updateSample = useCallback(
+    (targetId: string, sampleId: string, update: Partial<ReviewSample>, immediate = false) => {
       const caseId = stateRef.current.selectedCaseId;
-      const workspace = caseId ? stateRef.current.documents[caseId] : null;
+      const workspace = caseId ? stateRef.current.caseFileWorkspaces[caseId] : null;
       const target = workspace?.document.targets.find((item) => item.id === targetId);
       if (!caseId || !workspace || !target) return;
-      const currentPoint = target.points.find((point) => point.id === pointId);
-      if (!currentPoint) return;
-      const normalizedUpdate: Partial<ReviewPoint> = { ...update };
+      const currentSample = target.samples.find((sample) => sample.id === sampleId);
+      if (!currentSample) return;
+      const normalizedUpdate: Partial<ReviewSample> = { ...update };
       if ("field" in update) {
         normalizedUpdate.field = update.field?.trim() || null;
       }
       if ("comment" in update) {
         normalizedUpdate.comment = update.comment?.trim() || null;
       }
-      const nextPoint = { ...currentPoint, ...normalizedUpdate };
+      const nextSample = { ...currentSample, ...normalizedUpdate };
       const unchanged =
-        nextPoint.timestamp_s === currentPoint.timestamp_s &&
-        nextPoint.expect_type === currentPoint.expect_type &&
-        nextPoint.expect_json === currentPoint.expect_json &&
-        nextPoint.field === currentPoint.field &&
-        nextPoint.comment === currentPoint.comment &&
-        nextPoint.compare.mode === currentPoint.compare.mode &&
-        nextPoint.compare.tolerance === currentPoint.compare.tolerance;
+        nextSample.timestamp_s === currentSample.timestamp_s &&
+        nextSample.expect_type === currentSample.expect_type &&
+        nextSample.expect_json === currentSample.expect_json &&
+        nextSample.field === currentSample.field &&
+        nextSample.comment === currentSample.comment &&
+        nextSample.compare.mode === currentSample.compare.mode &&
+        nextSample.compare.tolerance === currentSample.compare.tolerance;
       if (unchanged) return;
-      const points = target.points
-        .map((point) => (point.id === pointId ? nextPoint : point))
+      const samples = target.samples
+        .map((sample) => (sample.id === sampleId ? nextSample : sample))
         .sort((left, right) => left.timestamp_s - right.timestamp_s);
       dispatch({
-        type: "REPLACE_TARGET_POINTS",
+        type: "REPLACE_TARGET_SAMPLES",
         caseId,
         targetId,
-        points,
+        samples,
         immediate,
       });
       if (normalizedUpdate.timestamp_s !== undefined) {
@@ -437,11 +446,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const addPoint = useCallback((): ReviewPoint | null => {
+  const addSample = useCallback((): ReviewSample | null => {
     const current = stateRef.current;
     const caseId = current.selectedCaseId;
     const targetId = current.selectedTargetId;
-    const workspace = caseId ? current.documents[caseId] : null;
+    const workspace = caseId ? current.caseFileWorkspaces[caseId] : null;
     const target = workspace?.document.targets.find((item) => item.id === targetId);
     if (
       !caseId ||
@@ -453,50 +462,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (liveFormErrors.current.get(caseId)?.size ?? 0) > 0
     )
       return null;
-    const created = createPointAt(target, current.video.currentTime, uuid());
+    const created = createSampleAt(target, current.video.currentTime, uuid());
     if (created.duplicate) {
-      void selectPoint(targetId, created.point.id);
-      return created.point;
+      void selectSample(targetId, created.sample.id);
+      return created.sample;
     }
-    const point = created.point;
+    const sample = created.sample;
     dispatch({
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId,
-      points: [...target.points, point].sort((left, right) => left.timestamp_s - right.timestamp_s),
+      samples: [...target.samples, sample].sort(
+        (left, right) => left.timestamp_s - right.timestamp_s,
+      ),
       immediate: true,
     });
     dispatch({
-      type: "SELECT_POINT",
+      type: "SELECT_SAMPLE",
       targetId,
-      pointId: point.id,
-      timestamp: point.timestamp_s,
+      sampleId: sample.id,
+      timestamp: sample.timestamp_s,
     });
-    return point;
-  }, [selectPoint]);
+    return sample;
+  }, [selectSample]);
 
-  const canDeletePoint = useCallback((targetId: string, pointId: string) => {
+  const canDeleteSample = useCallback((targetId: string, sampleId: string) => {
     const current = stateRef.current;
     const caseId = current.selectedCaseId;
-    const workspace = caseId ? current.documents[caseId] : null;
+    const workspace = caseId ? current.caseFileWorkspaces[caseId] : null;
     const target = workspace?.document.targets.find((item) => item.id === targetId);
-    const acceptedTarget = workspace?.acceptedDocument.targets.find((item) => item.id === targetId);
+    const acceptedTarget = workspace?.acceptedCaseFile.targets.find((item) => item.id === targetId);
     return workspace && target
-      ? canDeleteFromTarget(target, acceptedTarget, pointId, inFlight.current.has(caseId!))
+      ? canDeleteFromTarget(target, acceptedTarget, sampleId, inFlight.current.has(caseId!))
       : false;
   }, []);
 
-  const deletePoint = useCallback(
-    (targetId: string, pointId: string) => {
-      if (!canDeletePoint(targetId, pointId)) return;
+  const deleteSample = useCallback(
+    (targetId: string, sampleId: string) => {
+      if (!canDeleteSample(targetId, sampleId)) return;
       const current = stateRef.current;
       const caseId = current.selectedCaseId;
-      const workspace = caseId ? current.documents[caseId] : null;
+      const workspace = caseId ? current.caseFileWorkspaces[caseId] : null;
       const target = workspace?.document.targets.find((item) => item.id === targetId);
       if (!caseId || !workspace || !target) return;
-      const index = target.points.findIndex((point) => point.id === pointId);
-      const points = target.points.filter((point) => point.id !== pointId);
-      const errorPrefix = `${targetId}:${pointId}:`;
+      const index = target.samples.findIndex((sample) => sample.id === sampleId);
+      const samples = target.samples.filter((sample) => sample.id !== sampleId);
+      const errorPrefix = `${targetId}:${sampleId}:`;
       const errorKeys = new Set(
         Object.keys(workspace.formErrors).filter((key) => key.startsWith(errorPrefix)),
       );
@@ -515,31 +526,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
           keys: [...errorKeys],
         });
       }
-      const acceptedTarget = workspace.acceptedDocument.targets.find(
+      const acceptedTarget = workspace.acceptedCaseFile.targets.find(
         (item) => item.id === targetId,
       );
-      if (points.length === 0 && acceptedTarget?.points.length === 0) {
+      if (samples.length === 0 && acceptedTarget?.samples.length === 0) {
         dispatch({ type: "CANCEL_TARGET_DRAFT", caseId, targetId });
         return;
       }
       dispatch({
-        type: "REPLACE_TARGET_POINTS",
+        type: "REPLACE_TARGET_SAMPLES",
         caseId,
         targetId,
-        points,
+        samples,
         immediate: true,
       });
-      const next = points[index] ?? points[index - 1];
+      const next = samples[index] ?? samples[index - 1];
       if (next) {
         dispatch({
-          type: "SELECT_POINT",
+          type: "SELECT_SAMPLE",
           targetId,
-          pointId: next.id,
+          sampleId: next.id,
           timestamp: next.timestamp_s,
         });
       } else dispatch({ type: "SELECT_TARGET", targetId });
     },
-    [canDeletePoint],
+    [canDeleteSample],
   );
 
   const seek = useCallback((time: number) => {
@@ -576,8 +587,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await running.catch(() => false);
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
     }
-    await loadCase(caseId, true);
-  }, [loadCase]);
+    await loadCaseFile(caseId, true);
+  }, [loadCaseFile]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -585,11 +596,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch,
       selectCase,
       selectTarget,
-      selectPoint,
-      updatePoint,
-      addPoint,
-      deletePoint,
-      canDeletePoint,
+      selectSample,
+      updateSample,
+      addSample,
+      deleteSample,
+      canDeleteSample,
       setFormError,
       seek,
       flushCurrentCase,
@@ -600,11 +611,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       selectCase,
       selectTarget,
-      selectPoint,
-      updatePoint,
-      addPoint,
-      deletePoint,
-      canDeletePoint,
+      selectSample,
+      updateSample,
+      addSample,
+      deleteSample,
+      canDeleteSample,
       setFormError,
       seek,
       flushCurrentCase,

@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CaseDocument } from "../api/types.ts";
-import { document as caseDocument, point, suite, target } from "../test/fixtures.ts";
+import type { CaseFileDocument } from "../api/types.ts";
+import { caseFile, sample, evalDirectory, target } from "../test/fixtures.ts";
 import { AppProvider, useApp } from "./AppContext.tsx";
 
 function response(body: unknown): Response {
@@ -20,14 +20,14 @@ function deferred<T>() {
 }
 
 function Harness() {
-  const { state, updatePoint, reloadFromDisk, flushCurrentCase, selectCase } = useApp();
+  const { state, updateSample, reloadFromDisk, flushCurrentCase, selectCase } = useApp();
   const [flushed, setFlushed] = useState("idle");
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
-  const currentPoint = workspace?.document.targets[0]?.points[0];
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
+  const currentSample = workspace?.document.targets[0]?.samples[0];
   return (
     <div>
-      <output data-testid="source">{workspace?.document.source_yaml}</output>
-      <output data-testid="time">{currentPoint?.timestamp_s}</output>
+      <output data-testid="source">{workspace?.document.case_file_source}</output>
+      <output data-testid="time">{currentSample?.timestamp_s}</output>
       <output data-testid="phase">{workspace?.savePhase}</output>
       <output data-testid="flushed">{flushed}</output>
       <output data-testid="selected-case">{state.selectedCaseId}</output>
@@ -36,7 +36,7 @@ function Harness() {
       <button
         type="button"
         onClick={() =>
-          currentPoint && updatePoint("target_a", currentPoint.id, { timestamp_s: 2 }, true)
+          currentSample && updateSample("target_a", currentSample.id, { timestamp_s: 2 }, true)
         }
       >
         Edit two
@@ -44,7 +44,7 @@ function Harness() {
       <button
         type="button"
         onClick={() =>
-          currentPoint && updatePoint("target_a", currentPoint.id, { timestamp_s: 3 }, true)
+          currentSample && updateSample("target_a", currentSample.id, { timestamp_s: 3 }, true)
         }
       >
         Edit three
@@ -58,7 +58,7 @@ function Harness() {
       >
         Flush
       </button>
-      <button type="button" onClick={() => void selectCase("case-002.yml")}>
+      <button type="button" onClick={() => void selectCase("case-002.yaml")}>
         Switch case
       </button>
     </div>
@@ -82,22 +82,22 @@ describe("case save queue", () => {
     const first = deferred<Response>();
     const second = deferred<Response>();
     const firstDocument = {
-      ...caseDocument([target("first_target", [point("first-point", 2)])]),
+      ...caseFile([target("first_target", [sample("first-sample", 2)])]),
       id: "case-001.yaml",
       name: "case-001",
     };
     const secondDocument = {
-      ...caseDocument([target("second_target", [point("second-point", 7)])]),
-      id: "case-002.yml",
+      ...caseFile([target("second_target", [sample("second-sample", 7)])]),
+      id: "case-002.yaml",
       name: "case-002",
     };
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (url.includes("case-001.yaml")) return first.promise;
-        if (url.includes("case-002.yml")) return second.promise;
+        if (url.includes("case-002.yaml")) return second.promise;
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -109,21 +109,21 @@ describe("case save queue", () => {
     first.resolve(response(firstDocument));
     await new Promise((resolve) => window.setTimeout(resolve, 10));
 
-    expect(screen.getByTestId("selected-case").textContent).toBe("case-002.yml");
+    expect(screen.getByTestId("selected-case").textContent).toBe("case-002.yaml");
     expect(screen.getByTestId("selected-target").textContent).toBe("second_target");
     expect(screen.getByTestId("video-time").textContent).toBe("7");
   });
 
   it("invalidates a late PUT response after reload from disk", async () => {
-    const original = { ...caseDocument([target("target_a")]), source_yaml: "original" };
+    const original = { ...caseFile([target("target_a")]), case_file_source: "original" };
     const reloaded = {
-      ...caseDocument([target("target_a", [point("target_a-point", 1, "true")])]),
-      source_yaml: "reloaded",
+      ...caseFile([target("target_a", [sample("target_a-sample", 1, "true")])]),
+      case_file_source: "reloaded",
       revision: "reload-revision",
     };
     const late = {
-      ...caseDocument([target("target_a", [point("target_a-point", 2)])]),
-      source_yaml: "late response",
+      ...caseFile([target("target_a", [sample("target_a-sample", 2)])]),
+      case_file_source: "late response",
       revision: "late-revision",
     };
     const put = deferred<Response>();
@@ -132,9 +132,9 @@ describe("case save queue", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") return put.promise;
-        if (url.includes("/api/cases/")) {
+        if (url.includes("/api/case-files/")) {
           caseGets += 1;
           return Promise.resolve(response(caseGets === 1 ? original : reloaded));
         }
@@ -155,7 +155,7 @@ describe("case save queue", () => {
   });
 
   it("flushes a newer version after an older in-flight save before resolving", async () => {
-    const original = caseDocument([target("target_a")]);
+    const original = caseFile([target("target_a")]);
     const first = deferred<Response>();
     const second = deferred<Response>();
     const putBodies: unknown[] = [];
@@ -163,12 +163,12 @@ describe("case save queue", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putBodies.push(JSON.parse(String(init.body)) as unknown);
           return putBodies.length === 1 ? first.promise : second.promise;
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(original));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(original));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -179,19 +179,19 @@ describe("case save queue", () => {
     fireEvent.click(screen.getByText("Edit three"));
     fireEvent.click(screen.getByText("Flush"));
 
-    const acceptedTwo: CaseDocument = {
+    const acceptedTwo: CaseFileDocument = {
       ...original,
-      targets: [target("target_a", [point("target_a-point", 2)])],
+      targets: [target("target_a", [sample("target_a-sample", 2)])],
       revision: "accepted-two",
     };
     first.resolve(response(acceptedTwo));
     await waitFor(() => expect(putBodies).toHaveLength(2));
     expect(putBodies[1]).toMatchObject({
-      targets: { target_a: { points: [{ timestamp_s: 3 }] } },
+      targets: { target_a: { samples: [{ timestamp_s: 3 }] } },
     });
-    const acceptedThree: CaseDocument = {
+    const acceptedThree: CaseFileDocument = {
       ...original,
-      targets: [target("target_a", [point("target_a-point", 3)])],
+      targets: [target("target_a", [sample("target_a-sample", 3)])],
       revision: "accepted-three",
     };
     second.resolve(response(acceptedThree));
@@ -202,19 +202,19 @@ describe("case save queue", () => {
   });
 
   it("does not continue an in-flight save queue after unmount", async () => {
-    const original = caseDocument([target("target_a")]);
+    const original = caseFile([target("target_a")]);
     const first = deferred<Response>();
     let putCount = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putCount += 1;
           return first.promise;
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(original));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(original));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -229,7 +229,7 @@ describe("case save queue", () => {
       response({
         ...original,
         revision: "accepted-two",
-        targets: [target("target_a", [point("target_a-point", 2)])],
+        targets: [target("target_a", [sample("target_a-sample", 2)])],
       }),
     );
     await new Promise((resolve) => window.setTimeout(resolve, 10));
@@ -238,7 +238,7 @@ describe("case save queue", () => {
   });
 
   it("does not resume a settled save continuation after unmount", async () => {
-    const original = caseDocument([target("target_a")]);
+    const original = caseFile([target("target_a")]);
     const first = deferred<Response>();
     const later = deferred<Response>();
     let putCount = 0;
@@ -246,12 +246,12 @@ describe("case save queue", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putCount += 1;
           return putCount === 1 ? first.promise : later.promise;
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(original));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(original));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -267,7 +267,7 @@ describe("case save queue", () => {
       response({
         ...original,
         revision: "accepted-two",
-        targets: [target("target_a", [point("target_a-point", 2)])],
+        targets: [target("target_a", [sample("target_a-sample", 2)])],
       }),
     );
     await new Promise<void>((resolve) => realSetTimeout(resolve, 0));

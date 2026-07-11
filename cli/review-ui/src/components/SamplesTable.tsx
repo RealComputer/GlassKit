@@ -3,10 +3,10 @@ import { useApp } from "../state/AppContext.tsx";
 import { effectiveCompare, expectationSummary, formatSeconds } from "../utils/format.ts";
 
 export function SamplesTable() {
-  const { state, selectPoint, addPoint } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const { state, selectSample, addSample } = useApp();
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const target = workspace?.document.targets.find((item) => item.id === state.selectedTargetId);
-  const points = [...(target?.points ?? [])].sort(
+  const samples = [...(target?.samples ?? [])].sort(
     (left, right) => left.timestamp_s - right.timestamp_s,
   );
   return (
@@ -15,7 +15,7 @@ export function SamplesTable() {
         <h2>Samples</h2>
         <span>{target?.label ?? target?.id ?? "Select a target"}</span>
       </div>
-      {points.length ? (
+      {samples.length ? (
         <div className="table-scroll">
           <table>
             <thead>
@@ -29,35 +29,35 @@ export function SamplesTable() {
               </tr>
             </thead>
             <tbody>
-              {points.map((point) => (
+              {samples.map((sample) => (
                 <tr
-                  key={point.id}
-                  className={point.id === state.selectedPointId ? "selected" : undefined}
+                  key={sample.id}
+                  className={sample.id === state.selectedSampleId ? "selected" : undefined}
                   onClick={() => {
-                    if (target) void selectPoint(target.id, point.id);
+                    if (target) void selectSample(target.id, sample.id);
                   }}
                   onKeyDown={(event) => {
                     if ((event.key === "Enter" || event.key === " ") && target) {
                       event.preventDefault();
-                      void selectPoint(target.id, point.id);
+                      void selectSample(target.id, sample.id);
                     }
                   }}
                   tabIndex={0}
-                  aria-selected={point.id === state.selectedPointId}
+                  aria-selected={sample.id === state.selectedSampleId}
                 >
-                  <td className="mono">{formatSeconds(point.timestamp_s)}</td>
-                  <td className="expect-cell" title={point.expect_json}>
-                    <span className="type-chip">{point.expect_type}</span>
-                    {expectationSummary(point)}
+                  <td className="mono">{formatSeconds(sample.timestamp_s)}</td>
+                  <td className="expect-cell" title={sample.expect_json}>
+                    <span className="type-chip">{sample.expect_type}</span>
+                    {expectationSummary(sample)}
                   </td>
-                  <td className="mono truncate-cell" title={point.field ?? ""}>
-                    {point.field ?? "—"}
+                  <td className="mono truncate-cell" title={sample.field ?? ""}>
+                    {sample.field ?? "—"}
                   </td>
-                  <td>{effectiveCompare(point)}</td>
-                  <td className="mono">{point.compare.tolerance ?? "—"}</td>
+                  <td>{effectiveCompare(sample)}</td>
+                  <td className="mono">{sample.compare.tolerance ?? "—"}</td>
                   <td>
-                    {point.comment ? (
-                      <MessageSquareText size={15} aria-label={`Comment: ${point.comment}`} />
+                    {sample.comment ? (
+                      <MessageSquareText size={15} aria-label={`Comment: ${sample.comment}`} />
                     ) : (
                       "—"
                     )}
@@ -74,7 +74,7 @@ export function SamplesTable() {
           <button
             type="button"
             className="button primary-button"
-            onClick={addPoint}
+            onClick={addSample}
             disabled={
               !workspace?.document.editing_enabled || Object.keys(workspace.formErrors).length > 0
             }

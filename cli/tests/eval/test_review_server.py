@@ -83,17 +83,19 @@ def test_unexpected_request_errors_still_emit_server_tracebacks(
     assert "RuntimeError: unexpected request failure" in stderr
 
 
-def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
+def test_eval_directory_static_security_and_host_validation(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     (eval_dir / "cases" / "invalid-encoding.yaml").write_bytes(b"video: \xff\n")
     static_dir = _static_dir(tmp_path)
     with _running_server(eval_dir, static_dir) as server:
-        status, headers, body = _request(server, "GET", "/api/suite")
-        suite = json.loads(body)
+        status, headers, body = _request(server, "GET", "/api/eval-directory")
+        eval_directory = json.loads(body)
         assert status == 200
-        assert suite["write_token"] == "write-secret"
+        assert eval_directory["write_token"] == "write-secret"
         invalid = next(
-            case for case in suite["cases"] if case["id"] == "invalid-encoding.yaml"
+            case
+            for case in eval_directory["cases"]
+            if case["id"] == "invalid-encoding.yaml"
         )
         assert invalid["status"] == "blocked"
         assert invalid["error"]["code"] == "invalid_encoding"
@@ -118,7 +120,7 @@ def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
         status, _headers, body = _request(
             server,
             "GET",
-            "/api/suite",
+            "/api/eval-directory",
             headers={"Host": f"example.com:{server.port}"},
             skip_host=True,
         )
@@ -128,7 +130,7 @@ def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
         status, _headers, body = _request(
             server,
             "GET",
-            "/api/suite",
+            "/api/eval-directory",
             headers={"Host": f"127.0.0.1:{server.port + 1}"},
             skip_host=True,
         )
@@ -138,7 +140,7 @@ def test_suite_static_security_and_host_validation(tmp_path: Path) -> None:
         status, _headers, body = _request(
             server,
             "GET",
-            "/api/suite",
+            "/api/eval-directory",
             skip_host=True,
         )
         assert status == 400
@@ -158,7 +160,7 @@ def test_unsafe_partial_video_path_stays_isolated_in_blocked_document(
         status, _headers, body = _request(
             server,
             "GET",
-            "/api/cases/unsafe-video.yaml",
+            "/api/case-files/unsafe-video.yaml",
         )
 
     document = json.loads(body)
@@ -172,15 +174,15 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
     eval_dir = _copy_fixtures(tmp_path)
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
         encoded = quote("../assembly.yaml", safe="")
-        status, _headers, body = _request(server, "GET", f"/api/cases/{encoded}")
+        status, _headers, body = _request(server, "GET", f"/api/case-files/{encoded}")
         assert status == 404
-        assert json.loads(body)["error"]["code"] == "case_not_found"
+        assert json.loads(body)["error"]["code"] == "case_file_not_found"
 
         payload = json.dumps({"targets": {}}).encode()
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=payload,
             headers={"Content-Type": "application/json"},
         )
@@ -190,7 +192,7 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
         status, _headers, _body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=payload,
             headers={
                 "Content-Type": "text/plain",
@@ -202,7 +204,7 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=b"",
             headers={
                 "Content-Type": "application/json",
@@ -213,7 +215,7 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
         assert status == 413
         assert json.loads(body)["error"]["code"] == "request_too_large"
 
-        status, headers, body = _request(server, "TRACE", "/api/suite")
+        status, headers, body = _request(server, "TRACE", "/api/eval-directory")
         assert status == 405
         assert headers["content-type"].startswith("application/json")
         assert "content-security-policy" in headers
@@ -223,7 +225,7 @@ def test_unknown_path_like_case_and_write_token_rejections(tmp_path: Path) -> No
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=nested_json,
             headers={
                 "Content-Type": "application/json",
@@ -238,7 +240,7 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     expected = (tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4").read_bytes()
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        route = "/api/cases/assembly.yaml/video"
+        route = "/api/case-files/assembly.yaml/video"
         status, headers, body = _request(server, "GET", route)
         assert status == 200
         assert body == expected
@@ -291,7 +293,7 @@ def test_video_conditional_cache_requests(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     expected = (tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4").read_bytes()
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        route = "/api/cases/assembly.yaml/video"
+        route = "/api/case-files/assembly.yaml/video"
         status, headers, body = _request(server, "GET", route)
         assert status == 200
         assert body == expected
@@ -344,7 +346,7 @@ def test_video_precondition_precedence(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     expected = (tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4").read_bytes()
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        route = "/api/cases/assembly.yaml/video"
+        route = "/api/case-files/assembly.yaml/video"
         _status, headers, _body = _request(server, "GET", route)
         etag = headers["etag"]
 
@@ -381,7 +383,7 @@ def test_video_if_range_protects_replaced_content(tmp_path: Path) -> None:
     video_path = tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4"
     expected = video_path.read_bytes()
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        route = "/api/cases/assembly.yaml/video"
+        route = "/api/case-files/assembly.yaml/video"
         _status, headers, _body = _request(server, "GET", route)
         etag = headers["etag"]
         last_modified = headers["last-modified"]
@@ -460,7 +462,7 @@ def test_video_future_last_modified_is_clamped_and_stable(
     os.utime(video_path, (future, future))
 
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        route = "/api/cases/assembly.yaml/video"
+        route = "/api/case-files/assembly.yaml/video"
         status, headers, _body = _request(
             server,
             "GET",
@@ -515,18 +517,20 @@ def test_video_future_last_modified_is_clamped_and_stable(
 def test_structured_put_success_and_request_validation(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     with _running_server(eval_dir, _static_dir(tmp_path)) as server:
-        status, _headers, body = _request(server, "GET", "/api/cases/assembly.yaml")
+        status, _headers, body = _request(
+            server, "GET", "/api/case-files/assembly.yaml"
+        )
         assert status == 200
         document = json.loads(body)
         target = document["targets"][0]
-        target["points"][0]["timestamp_s"] = 0.1
+        target["samples"][0]["timestamp_s"] = 0.1
         payload = json.dumps(
-            {"targets": {target["id"]: {"points": target["points"]}}}
+            {"targets": {target["id"]: {"samples": target["samples"]}}}
         ).encode()
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=payload,
             headers={
                 "Content-Type": "application/json; charset=utf-8",
@@ -535,12 +539,12 @@ def test_structured_put_success_and_request_validation(tmp_path: Path) -> None:
         )
         accepted = json.loads(body)
         assert status == 200
-        assert accepted["targets"][0]["points"][0]["timestamp_s"] == 0.1
+        assert accepted["targets"][0]["samples"][0]["timestamp_s"] == 0.1
 
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=b'{"targets":',
             headers={
                 "Content-Type": "application/json",
@@ -553,7 +557,7 @@ def test_structured_put_success_and_request_validation(tmp_path: Path) -> None:
         status, _headers, body = _request(
             server,
             "PUT",
-            "/api/cases/assembly.yaml/samples",
+            "/api/case-files/assembly.yaml/samples",
             body=b'{"targets":{}}',
             headers={
                 "Content-Type": "application/json",
@@ -614,7 +618,7 @@ def _request(
 def _copy_fixtures(tmp_path: Path) -> Path:
     destination = tmp_path / "fixtures"
     shutil.copytree(FIXTURES, destination)
-    return destination / "eval_suites" / "review"
+    return destination / "eval_directories" / "review"
 
 
 def _static_dir(tmp_path: Path) -> Path:

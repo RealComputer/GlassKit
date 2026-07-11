@@ -20,8 +20,8 @@ type TimelineStyle = CSSProperties & {
 };
 
 export function Timeline() {
-  const { state, dispatch, selectPoint, selectTarget, seek } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const { state, dispatch, selectSample, selectTarget, seek } = useApp();
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
   const duration = state.video.duration ?? document?.video?.duration_s ?? 0;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -49,12 +49,12 @@ export function Timeline() {
   }, []);
 
   useEffect(() => {
-    if (!state.selectedTargetId || !state.selectedPointId || !scrollRef.current) return;
+    if (!state.selectedTargetId || !state.selectedSampleId || !scrollRef.current) return;
     const marker = scrollRef.current.querySelector<HTMLElement>(
-      markerSelector(state.selectedTargetId, state.selectedPointId),
+      markerSelector(state.selectedTargetId, state.selectedSampleId),
     );
     marker?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [state.selectedPointId, state.selectedTargetId]);
+  }, [state.selectedSampleId, state.selectedTargetId]);
 
   useEffect(
     () => () => {
@@ -69,7 +69,7 @@ export function Timeline() {
     const anchorTime =
       document?.targets
         .find((target) => target.id === state.selectedTargetId)
-        ?.points.find((point) => point.id === state.selectedPointId)?.timestamp_s ??
+        ?.samples.find((sample) => sample.id === state.selectedSampleId)?.timestamp_s ??
       state.video.currentTime;
     const anchorRatio = timeToPosition(anchorTime, duration);
     const oldWidth = trackWidth;
@@ -164,7 +164,9 @@ export function Timeline() {
       <div className="timeline-toolbar">
         <div className="section-title">
           <h2>Timeline</h2>
-          <span>{document?.targets.reduce((sum, t) => sum + t.points.length, 0) ?? 0} samples</span>
+          <span>
+            {document?.targets.reduce((sum, t) => sum + t.samples.length, 0) ?? 0} samples
+          </span>
         </div>
         <div className="toolbar-spacer" />
         <ZoomIn size={15} aria-hidden="true" />
@@ -245,7 +247,7 @@ export function Timeline() {
                     onClick={() => void selectTarget(target.id)}
                   >
                     <span>{target.label ?? target.id}</span>
-                    <small>{target.points.length}</small>
+                    <small>{target.samples.length}</small>
                   </button>
                   <div className="lane-track" {...scrubHandlers}>
                     {target.display_groups
@@ -260,7 +262,7 @@ export function Timeline() {
                           "--band-start": `${start * 100}%`,
                           "--band-width": `${Math.max(0, end - start) * 100}%`,
                         };
-                        const first = group.point_ids[0];
+                        const first = group.sample_ids[0];
                         return (
                           <button
                             key={group.id}
@@ -268,7 +270,7 @@ export function Timeline() {
                             className="range-band"
                             style={groupStyle}
                             onClick={() => {
-                              if (first) void selectPoint(target.id, first);
+                              if (first) void selectSample(target.id, first);
                             }}
                             aria-label={`${target.label ?? target.id} range from ${formatSeconds(
                               group.start_s!,
@@ -279,27 +281,28 @@ export function Timeline() {
                           />
                         );
                       })}
-                    {target.points.map((point) => {
+                    {target.samples.map((sample) => {
                       const markerStyle: TimelineStyle = {
-                        "--position": `${timeToPosition(point.timestamp_s, duration) * 100}%`,
+                        "--position": `${timeToPosition(sample.timestamp_s, duration) * 100}%`,
                       };
                       const selected =
-                        target.id === state.selectedTargetId && point.id === state.selectedPointId;
+                        target.id === state.selectedTargetId &&
+                        sample.id === state.selectedSampleId;
                       return (
                         <button
-                          key={point.id}
+                          key={sample.id}
                           type="button"
-                          className={`point-marker ${selected ? "selected" : ""}`}
+                          className={`sample-marker ${selected ? "selected" : ""}`}
                           style={markerStyle}
-                          data-point-id={point.id}
+                          data-sample-id={sample.id}
                           data-target-id={target.id}
-                          onClick={() => void selectPoint(target.id, point.id)}
+                          onClick={() => void selectSample(target.id, sample.id)}
                           onPointerUp={(event) => event.currentTarget.blur()}
                           aria-pressed={selected}
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
-                            point.timestamp_s,
-                          )}, expected ${expectationSummary(point)}`}
-                          title={`${formatSeconds(point.timestamp_s)} · ${expectationSummary(point)}`}
+                            sample.timestamp_s,
+                          )}, expected ${expectationSummary(sample)}`}
+                          title={`${formatSeconds(sample.timestamp_s)} · ${expectationSummary(sample)}`}
                         />
                       );
                     })}

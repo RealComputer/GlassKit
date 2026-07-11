@@ -141,7 +141,7 @@ class EvalCase:
 
 
 @dataclass(frozen=True)
-class EvalSuite:
+class EvalDirectory:
     path: Path
     cases: list[EvalCase]
     thresholds: Thresholds = dc_field(default_factory=Thresholds)
@@ -169,7 +169,7 @@ class ValidationIssue:
 
 @dataclass(frozen=True)
 class ValidationReport:
-    suite: EvalSuite | None
+    eval_directory: EvalDirectory | None
     issues: list[ValidationIssue]
 
     @property

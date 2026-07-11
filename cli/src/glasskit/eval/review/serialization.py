@@ -17,16 +17,16 @@ import yaml
 
 from ..expectations import expand_sample_timestamps
 from ..models import SUPPORTED_COMPARE_MODES, EvalConfigError
-from ..schemas import RawCaseYaml, RawSampleBlock
+from ..schemas import RawCaseFile, RawSampleBlock
 from .models import (
     DisplayGroup,
     ErrorDetail,
     ExpectType,
     GroupKind,
-    PointOrigin,
     ReplaceSamplesRequest,
     ReviewAPIError,
-    ReviewPoint,
+    ReviewSample,
+    SampleOrigin,
 )
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
@@ -36,21 +36,21 @@ class FlowSequence(list[Any]):
     """Marker for timestamp sequences that should use YAML flow style."""
 
 
-class CaseDumper(yaml.SafeDumper):
+class CaseFileDumper(yaml.SafeDumper):
     """Safe dumper with narrowly scoped compact timestamp sequences."""
 
 
 def _represent_flow_sequence(
-    dumper: CaseDumper, value: FlowSequence
+    dumper: CaseFileDumper, value: FlowSequence
 ) -> yaml.SequenceNode:
     return dumper.represent_sequence("tag:yaml.org,2002:seq", value, flow_style=True)
 
 
-CaseDumper.add_representer(FlowSequence, _represent_flow_sequence)
+CaseFileDumper.add_representer(FlowSequence, _represent_flow_sequence)
 
 
 @dataclass(frozen=True)
-class ParsedPoint:
+class ParsedSample:
     id: str
     tick: int
     timestamp_s: float
@@ -60,20 +60,20 @@ class ParsedPoint:
     mode: str | None
     tolerance: float | None
     comment: str | None
-    origin: PointOrigin | None
+    origin: SampleOrigin | None
 
 
 @dataclass(frozen=True)
 class ReconstructedTarget:
     blocks: list[dict[str, Any]]
     groups: list[DisplayGroup]
-    points: list[ParsedPoint]
+    samples: list[ParsedSample]
 
 
 @dataclass(frozen=True)
-class CandidateCase:
-    source_yaml: str
-    point_ids_by_target_tick: dict[str, dict[int, str]]
+class CandidateCaseFile:
+    case_file_source: str
+    sample_ids_by_target_tick: dict[str, dict[int, str]]
 
 
 def strict_json_value(text: str, *, path: str) -> Any:
@@ -179,12 +179,14 @@ def canonical_timestamp(value: float) -> tuple[float, int]:
     return tick / NANOSECONDS_PER_SECOND, tick
 
 
-def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPoint]:
-    parsed: list[ParsedPoint] = []
+def parse_samples(
+    target_id: str, samples: Sequence[ReviewSample]
+) -> list[ParsedSample]:
+    parsed: list[ParsedSample] = []
     seen_ids: set[str] = set()
-    for index, point in enumerate(points):
+    for index, sample in enumerate(samples):
         path = f"targets.{target_id}.samples.{index}"
-        if point.id in seen_ids:
+        if sample.id in seen_ids:
             raise ReviewAPIError(
                 422,
                 "invalid_samples",
@@ -192,14 +194,14 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                 [
                     ErrorDetail(
                         path=f"{path}.id",
-                        message=f"duplicates sample id {point.id!r} in this target",
+                        message=f"duplicates sample id {sample.id!r} in this target",
                     )
                 ],
             )
-        seen_ids.add(point.id)
-        expected = strict_json_value(point.expect_json, path=f"{path}.expect_json")
+        seen_ids.add(sample.id)
+        expected = strict_json_value(sample.expect_json, path=f"{path}.expect_json")
         actual_type = expectation_type(expected)
-        if actual_type != point.expect_type:
+        if actual_type != sample.expect_type:
             raise ReviewAPIError(
                 422,
                 "invalid_samples",
@@ -208,13 +210,14 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                     ErrorDetail(
                         path=f"{path}.expect_type",
                         message=(
-                            f"declares {point.expect_type!r}, but expect_json contains "
+                            f"declares {sample.expect_type!r}, but expect_json "
+                            "contains "
                             f"a {actual_type} value"
                         ),
                     )
                 ],
             )
-        if point.compare.mode not in SUPPORTED_COMPARE_MODES | {None}:
+        if sample.compare.mode not in SUPPORTED_COMPARE_MODES | {None}:
             supported = ", ".join(sorted(SUPPORTED_COMPARE_MODES))
             raise ReviewAPIError(
                 422,
@@ -227,25 +230,25 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                     )
                 ],
             )
-        timestamp_s, tick = canonical_timestamp(point.timestamp_s)
+        timestamp_s, tick = canonical_timestamp(sample.timestamp_s)
         parsed.append(
-            ParsedPoint(
-                id=point.id,
+            ParsedSample(
+                id=sample.id,
                 tick=tick,
                 timestamp_s=timestamp_s,
                 expect_type=actual_type,
                 expected=expected,
-                field=point.field,
-                mode=point.compare.mode,
-                tolerance=point.compare.tolerance,
-                comment=point.comment,
-                origin=point.origin,
+                field=sample.field,
+                mode=sample.compare.mode,
+                tolerance=sample.compare.tolerance,
+                comment=sample.comment,
+                origin=sample.origin,
             )
         )
-    parsed.sort(key=lambda point: (point.tick, point.id))
-    for index, point in enumerate(parsed[1:], start=1):
+    parsed.sort(key=lambda sample: (sample.tick, sample.id))
+    for index, sample in enumerate(parsed[1:], start=1):
         previous = parsed[index - 1]
-        if point.tick - previous.tick <= 1:
+        if sample.tick - previous.tick <= 1:
             raise ReviewAPIError(
                 422,
                 "invalid_samples",
@@ -254,7 +257,8 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                     ErrorDetail(
                         path=f"targets.{target_id}.samples",
                         message=(
-                            f"sample {point.id!r} at {point.timestamp_s:g} seconds is "
+                            f"sample {sample.id!r} at {sample.timestamp_s:g} seconds "
+                            "is "
                             f"within 1e-9 seconds of sample {previous.id!r} at "
                             f"{previous.timestamp_s:g} seconds"
                         ),
@@ -266,16 +270,16 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
 
 def reconstruct_target(
     target_id: str,
-    points: Sequence[ReviewPoint],
+    samples: Sequence[ReviewSample],
     *,
     default_every_s: float,
 ) -> ReconstructedTarget:
-    parsed = parse_points(target_id, points)
+    parsed = parse_samples(target_id, samples)
     if not parsed:
-        return ReconstructedTarget(blocks=[], groups=[], points=[])
+        return ReconstructedTarget(blocks=[], groups=[], samples=[])
 
     blocks: list[dict[str, Any]] = []
-    grouped_points: list[list[ParsedPoint]] = []
+    grouped_samples: list[list[ParsedSample]] = []
     group_specs: list[tuple[GroupKind, int | None, int | None]] = []
 
     run_start = 0
@@ -291,46 +295,47 @@ def reconstruct_target(
             run_end,
             default_every_s=default_every_s,
             blocks=blocks,
-            grouped_points=grouped_points,
+            grouped_samples=grouped_samples,
             group_specs=group_specs,
         )
         run_start = run_end
 
     groups: list[DisplayGroup] = []
-    for index, (block_points, spec) in enumerate(
-        zip(grouped_points, group_specs, strict=True)
+    for index, (block_samples, spec) in enumerate(
+        zip(grouped_samples, group_specs, strict=True)
     ):
         kind, end_tick, cadence_tick = spec
         groups.append(
             DisplayGroup(
                 id=f"group-{index}",
                 kind=kind,
-                point_ids=[point.id for point in block_points],
-                start_s=(block_points[0].timestamp_s if kind == "range" else None),
+                sample_ids=[sample.id for sample in block_samples],
+                start_s=(block_samples[0].timestamp_s if kind == "range" else None),
                 end_s=(_seconds_from_tick(end_tick) if end_tick is not None else None),
                 every_s=(
                     _seconds_from_tick(cadence_tick)
                     if cadence_tick is not None
                     else None
                 ),
-                timestamps_s=[point.timestamp_s for point in block_points],
+                timestamps_s=[sample.timestamp_s for sample in block_samples],
             )
         )
 
-    return ReconstructedTarget(blocks=blocks, groups=groups, points=parsed)
+    return ReconstructedTarget(blocks=blocks, groups=groups, samples=parsed)
 
 
-def build_candidate_case(
+def build_candidate_case_file(
     raw_mapping: Mapping[str, Any],
-    raw_case: RawCaseYaml,
+    raw_case: RawCaseFile,
     request: ReplaceSamplesRequest,
-) -> CandidateCase:
+) -> CandidateCaseFile:
     targets_value = raw_mapping.get("targets")
     if not isinstance(targets_value, Mapping):
         raise ReviewAPIError(
             409,
-            "case_structure_changed",
-            "The case target structure changed on disk; reload it and try again.",
+            "case_file_structure_changed",
+            "The case file's target structure changed on disk; reload it and try "
+            "again.",
         )
     unknown = [
         target_id for target_id in request.targets if target_id not in targets_value
@@ -339,7 +344,7 @@ def build_candidate_case(
         raise ReviewAPIError(
             409,
             "unknown_target",
-            "One or more submitted targets no longer exist in the case.",
+            "One or more submitted targets no longer exist in the case file.",
             [
                 ErrorDetail(
                     path=f"targets.{target_id}", message="target does not exist"
@@ -352,14 +357,15 @@ def build_candidate_case(
     candidate = dict(raw_mapping)
     candidate_targets = dict(targets_value)
     candidate["targets"] = candidate_targets
-    point_ids_by_target_tick: dict[str, dict[int, str]] = {}
+    sample_ids_by_target_tick: dict[str, dict[int, str]] = {}
     for target_id, replacement in request.targets.items():
         raw_target = candidate_targets[target_id]
         if not isinstance(raw_target, Mapping):
             raise ReviewAPIError(
                 409,
-                "case_structure_changed",
-                "The case target structure changed on disk; reload it and try again.",
+                "case_file_structure_changed",
+                "The case file's target structure changed on disk; reload it and "
+                "try again.",
                 [
                     ErrorDetail(
                         path=f"targets.{target_id}", message="must be a YAML object"
@@ -368,23 +374,23 @@ def build_candidate_case(
             )
         reconstructed = reconstruct_target(
             target_id,
-            replacement.points,
+            replacement.samples,
             default_every_s=raw_case.sampling.every_s,
         )
         replacement_target = dict(raw_target)
         replacement_target["samples"] = reconstructed.blocks
         candidate_targets[target_id] = replacement_target
-        point_ids_by_target_tick[target_id] = {
-            point.tick: point.id for point in reconstructed.points
+        sample_ids_by_target_tick[target_id] = {
+            sample.tick: sample.id for sample in reconstructed.samples
         }
 
-    return CandidateCase(
-        source_yaml=dump_case_yaml(candidate),
-        point_ids_by_target_tick=point_ids_by_target_tick,
+    return CandidateCaseFile(
+        case_file_source=dump_case_file(candidate),
+        sample_ids_by_target_tick=sample_ids_by_target_tick,
     )
 
 
-def dump_case_yaml(value: Mapping[str, Any]) -> str:
+def dump_case_file(value: Mapping[str, Any]) -> str:
     styled = copy.deepcopy(value)
     targets = styled.get("targets") if isinstance(styled, Mapping) else None
     if isinstance(targets, Mapping):
@@ -403,18 +409,18 @@ def dump_case_yaml(value: Mapping[str, Any]) -> str:
                     block["at"] = FlowSequence(block["at"])
     return yaml.dump(
         styled,
-        Dumper=CaseDumper,
+        Dumper=CaseFileDumper,
         sort_keys=False,
         allow_unicode=True,
         default_flow_style=False,
     )
 
 
-def atomic_replace_text(path: Path, source_yaml: str) -> bool:
+def atomic_replace_text(path: Path, case_file_source: str) -> bool:
     """Replace ``path`` atomically; return whether directory fsync failed."""
 
     original_mode = stat.S_IMODE(path.stat().st_mode)
-    encoded = source_yaml.encode("utf-8")
+    encoded = case_file_source.encode("utf-8")
     temporary_path: Path | None = None
     try:
         descriptor, name = tempfile.mkstemp(
@@ -476,44 +482,46 @@ def _sync_directory(directory: Path) -> bool:
 
 
 def _reconstruct_payload_run(
-    all_points: list[ParsedPoint],
+    all_samples: list[ParsedSample],
     start: int,
     end: int,
     *,
     default_every_s: float,
     blocks: list[dict[str, Any]],
-    grouped_points: list[list[ParsedPoint]],
+    grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
 ) -> None:
-    pending_at: list[ParsedPoint] = []
+    pending_at: list[ParsedSample] = []
     index = start
     while index < end:
         if index + 1 >= end:
-            pending_at.append(all_points[index])
+            pending_at.append(all_samples[index])
             index += 1
             continue
 
-        cadence_tick = all_points[index + 1].tick - all_points[index].tick
+        cadence_tick = all_samples[index + 1].tick - all_samples[index].tick
         candidate_end = index + 2
         while (
             candidate_end < end
-            and all_points[candidate_end].tick - all_points[candidate_end - 1].tick
+            and all_samples[candidate_end].tick - all_samples[candidate_end - 1].tick
             == cadence_tick
         ):
             candidate_end += 1
-        candidate = all_points[index:candidate_end]
+        candidate = all_samples[index:candidate_end]
         range_eligible = len(candidate) >= 3 or (
             len(candidate) == 2
-            and _two_point_range_eligible(candidate, cadence_tick, default_every_s)
+            and _two_sample_range_eligible(candidate, cadence_tick, default_every_s)
         )
         if not range_eligible:
-            pending_at.append(all_points[index])
+            pending_at.append(all_samples[index])
             index += 1
             continue
 
         natural_end_tick = candidate[-1].tick + cadence_tick
         next_tick = (
-            all_points[candidate_end].tick if candidate_end < len(all_points) else None
+            all_samples[candidate_end].tick
+            if candidate_end < len(all_samples)
+            else None
         )
         end_tick = (
             min(natural_end_tick, next_tick)
@@ -527,7 +535,7 @@ def _reconstruct_payload_run(
             index = candidate_end
             continue
 
-        _flush_at(pending_at, blocks, grouped_points, group_specs)
+        _flush_at(pending_at, blocks, grouped_samples, group_specs)
         pending_at = []
         block = _payload_block(candidate[0])
         block_with_location: dict[str, Any] = {
@@ -539,51 +547,51 @@ def _reconstruct_payload_run(
             block_with_location["every_s"] = _seconds_from_tick(cadence_tick)
         block_with_location.update(block)
         blocks.append(block_with_location)
-        grouped_points.append(candidate)
+        grouped_samples.append(candidate)
         group_specs.append(("range", end_tick, cadence_tick))
         index = candidate_end
 
-    _flush_at(pending_at, blocks, grouped_points, group_specs)
+    _flush_at(pending_at, blocks, grouped_samples, group_specs)
 
 
 def _flush_at(
-    points: list[ParsedPoint],
+    samples: list[ParsedSample],
     blocks: list[dict[str, Any]],
-    grouped_points: list[list[ParsedPoint]],
+    grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
 ) -> None:
-    if not points:
+    if not samples:
         return
     location: float | FlowSequence
-    if len(points) == 1:
-        location = points[0].timestamp_s
+    if len(samples) == 1:
+        location = samples[0].timestamp_s
     else:
-        location = FlowSequence([point.timestamp_s for point in points])
+        location = FlowSequence([sample.timestamp_s for sample in samples])
     block: dict[str, Any] = {"at": location}
-    block.update(_payload_block(points[0]))
+    block.update(_payload_block(samples[0]))
     blocks.append(block)
-    grouped_points.append(list(points))
+    grouped_samples.append(list(samples))
     group_specs.append(("at", None, None))
 
 
-def _payload_block(point: ParsedPoint) -> dict[str, Any]:
+def _payload_block(sample: ParsedSample) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    if point.field is not None:
-        result["field"] = point.field
-    result["expect"] = point.expected
-    if point.mode is not None or point.tolerance is not None:
+    if sample.field is not None:
+        result["field"] = sample.field
+    result["expect"] = sample.expected
+    if sample.mode is not None or sample.tolerance is not None:
         compare: dict[str, Any] = {}
-        if point.mode is not None:
-            compare["mode"] = point.mode
-        if point.tolerance is not None:
-            compare["tolerance"] = point.tolerance
+        if sample.mode is not None:
+            compare["mode"] = sample.mode
+        if sample.tolerance is not None:
+            compare["tolerance"] = sample.tolerance
         result["compare"] = compare
-    if point.comment is not None:
-        result["comment"] = point.comment
+    if sample.comment is not None:
+        result["comment"] = sample.comment
     return result
 
 
-def _same_payload(left: ParsedPoint, right: ParsedPoint) -> bool:
+def _same_payload(left: ParsedSample, right: ParsedSample) -> bool:
     return (
         structurally_equal(left.expected, right.expected)
         and left.field == right.field
@@ -599,14 +607,14 @@ def _same_optional_number(left: float | None, right: float | None) -> bool:
     return type(left) is type(right) and left == right
 
 
-def _two_point_range_eligible(
-    points: list[ParsedPoint], cadence_tick: int, default_every_s: float
+def _two_sample_range_eligible(
+    samples: list[ParsedSample], cadence_tick: int, default_every_s: float
 ) -> bool:
-    natural_end_tick = points[-1].tick + cadence_tick
-    if _range_expands_with_every(points, natural_end_tick, default_every_s):
+    natural_end_tick = samples[-1].tick + cadence_tick
+    if _range_expands_with_every(samples, natural_end_tick, default_every_s):
         return True
-    first_origin = points[0].origin
-    second_origin = points[1].origin
+    first_origin = samples[0].origin
+    second_origin = samples[1].origin
     if (
         first_origin is None
         or second_origin is None
@@ -619,12 +627,12 @@ def _two_point_range_eligible(
         return False
     origin_tick = canonical_timestamp(first_origin.every_s)[1]
     return origin_tick == canonical_timestamp(second_origin.every_s)[1] and (
-        _range_expands_with_every(points, natural_end_tick, first_origin.every_s)
+        _range_expands_with_every(samples, natural_end_tick, first_origin.every_s)
     )
 
 
 def _range_expands_with_every(
-    points: list[ParsedPoint], end_tick: int, every_s: float
+    samples: list[ParsedSample], end_tick: int, every_s: float
 ) -> bool:
     if every_s <= 0 or not math.isfinite(every_s):
         return False
@@ -632,7 +640,7 @@ def _range_expands_with_every(
         raw_block = RawSampleBlock.model_validate(
             {
                 "range": [
-                    _seconds_from_tick(points[0].tick),
+                    _seconds_from_tick(samples[0].tick),
                     _seconds_from_tick(end_tick),
                 ],
                 "every_s": every_s,
@@ -649,7 +657,7 @@ def _range_expands_with_every(
     except (EvalConfigError, ValueError, OverflowError):
         return False
     return [canonical_timestamp(value)[1] for value in expanded] == [
-        point.tick for point in points
+        sample.tick for sample in samples
     ]
 
 

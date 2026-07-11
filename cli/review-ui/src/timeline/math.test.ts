@@ -31,12 +31,12 @@ describe("timeline math", () => {
     expect(ticks.length).toBeGreaterThan(4);
   });
 
-  it("scopes repeated point IDs to their target lane", () => {
+  it("scopes repeated sample IDs to their target lane", () => {
     document.body.innerHTML = `
-      <button data-target-id="first" data-point-id="block-0-point-0"></button>
-      <button data-target-id="second" data-point-id="block-0-point-0"></button>
+      <button data-target-id="first" data-sample-id="block-0-sample-0"></button>
+      <button data-target-id="second" data-sample-id="block-0-sample-0"></button>
     `;
-    const selected = document.querySelector(markerSelector("second", "block-0-point-0"));
+    const selected = document.querySelector(markerSelector("second", "block-0-sample-0"));
     expect(selected?.getAttribute("data-target-id")).toBe("second");
   });
 });

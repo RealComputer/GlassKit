@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from glasskit.eval.expectations import load_eval_suite
+from glasskit.eval.expectations import load_eval_directory
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def test_review_fixture_loads_through_normal_eval_pipeline() -> None:
-    suite = load_eval_suite(FIXTURES / "eval_suites" / "review")
+    eval_directory = load_eval_directory(FIXTURES / "eval_directories" / "review")
 
-    assert [case.name for case in suite.cases] == ["assembly", "inspection"]
-    assert sum(len(case.samples) for case in suite.cases) == 14
+    assert [case.name for case in eval_directory.cases] == ["assembly", "inspection"]
+    assert sum(len(case.samples) for case in eval_directory.cases) == 14
 
-    assembly = suite.cases[0]
+    assembly = eval_directory.cases[0]
     bracket = next(
         target for target in assembly.targets if target.id == "bracket_seated"
     )

@@ -11,7 +11,7 @@ from urllib.parse import quote
 import yaml
 
 from ..expectations import (
-    EVAL_CONFIG_NAMES,
+    EVAL_CONFIG_FILE_NAMES,
     discover_case_paths,
     expand_sample_timestamps,
     load_case,
@@ -21,26 +21,26 @@ from ..expectations import (
     resolve_video_path,
 )
 from ..models import EvalCase, EvalConfigError, TargetSpec
-from ..schemas import RawCaseYaml, parse_case_yaml, parse_eval_config_yaml
+from ..schemas import RawCaseFile, parse_case_file, parse_eval_config_file
 from ..video import probe_video, validate_sample_times
 from .models import (
-    CaseDocument,
-    CaseSummary,
+    CaseFileDocument,
+    CaseFileSummary,
     ErrorDetail,
+    EvalDirectoryDocument,
     LoadError,
-    PointCompare,
-    PointOrigin,
     ReplaceSamplesRequest,
     ReviewAPIError,
-    ReviewPoint,
-    SuiteDocument,
+    ReviewSample,
+    SampleCompare,
+    SampleOrigin,
     TargetDocument,
     ValidationIssue,
     VideoDocument,
 )
 from .serialization import (
     atomic_replace_text,
-    build_candidate_case,
+    build_candidate_case_file,
     canonical_timestamp,
     compact_json,
     expectation_type,
@@ -49,34 +49,34 @@ from .serialization import (
 
 
 class ReviewRepository:
-    """Disk-backed source of review documents and atomic case edits."""
+    """Disk-backed source of review documents and atomic case file edits."""
 
     def __init__(self, eval_dir: Path) -> None:
         self.eval_dir = eval_dir.expanduser().resolve()
         # Discovery validates the eval and cases directory while intentionally
         # leaving malformed individual cases for per-case summaries.
         discover_case_paths(self.eval_dir)
-        self._read_config_source(validate=True)
+        self._read_eval_config_file_source(validate=True)
         self._locks_guard = threading.Lock()
         self._case_locks: dict[Path, threading.RLock] = {}
 
-    def suite_document(self, *, write_token: str) -> SuiteDocument:
+    def eval_directory_document(self, *, write_token: str) -> EvalDirectoryDocument:
         paths = discover_case_paths(self.eval_dir)
-        return SuiteDocument(
+        return EvalDirectoryDocument(
             eval_dir=str(self.eval_dir),
             write_token=write_token,
-            config_source_yaml=self._read_config_source(validate=True),
-            cases=[self._case_summary(path) for path in paths],
+            eval_config_source=self._read_eval_config_file_source(validate=True),
+            cases=[self._case_file_summary(path) for path in paths],
         )
 
-    def case_document(self, case_id: str) -> CaseDocument:
+    def case_file_document(self, case_id: str) -> CaseFileDocument:
         path = self._path_for_id(case_id)
         with self._lock_for(path):
-            return self._case_document_unlocked(path)
+            return self._case_file_document_unlocked(path)
 
     def replace_samples(
         self, case_id: str, request: ReplaceSamplesRequest
-    ) -> CaseDocument:
+    ) -> CaseFileDocument:
         path = self._path_for_id(case_id)
         with self._lock_for(path):
             try:
@@ -84,28 +84,28 @@ class ReviewRepository:
             except UnicodeDecodeError as error:
                 raise ReviewAPIError(
                     409,
-                    "case_structure_changed",
-                    "The case is no longer valid UTF-8; reload it after repair.",
+                    "case_file_structure_changed",
+                    "The case file is no longer valid UTF-8; reload it after repair.",
                 ) from error
             except OSError as error:
                 raise ReviewAPIError(
                     500,
-                    "case_read_failed",
-                    f"Could not read case {path.name!r}: {error}",
+                    "case_file_read_failed",
+                    f"Could not read case file {path.name!r}: {error}",
                 ) from error
             try:
-                raw_mapping, raw_case = _parse_case_source(source, path)
+                raw_mapping, raw_case = _parse_case_file_source(source, path)
             except EvalConfigError as error:
                 raise ReviewAPIError(
                     409,
-                    "case_structure_changed",
-                    "The case is no longer structurally editable; reload it.",
+                    "case_file_structure_changed",
+                    "The case file is no longer structurally editable; reload it.",
                 ) from error
 
-            candidate = build_candidate_case(raw_mapping, raw_case, request)
+            candidate = build_candidate_case_file(raw_mapping, raw_case, request)
             try:
-                _candidate_mapping, candidate_raw = _parse_case_source(
-                    candidate.source_yaml, path
+                _candidate_mapping, candidate_raw = _parse_case_file_source(
+                    candidate.case_file_source, path
                 )
                 loaded = load_case(
                     path,
@@ -121,7 +121,7 @@ class ReviewRepository:
                 raise ReviewAPIError(
                     422,
                     "invalid_samples",
-                    "The edited case is not valid for normal eval loading.",
+                    "The edited case file is not valid for normal eval loading.",
                     [
                         # Existing eval errors already carry the target/sample context.
                         # Keep the transport path at the batch root when no narrower
@@ -131,12 +131,14 @@ class ReviewRepository:
                 ) from error
 
             try:
-                directory_sync_failed = atomic_replace_text(path, candidate.source_yaml)
+                directory_sync_failed = atomic_replace_text(
+                    path, candidate.case_file_source
+                )
             except OSError as error:
                 raise ReviewAPIError(
                     500,
                     "write_failed",
-                    f"Could not persist case {path.name!r}: {error}",
+                    f"Could not persist case file {path.name!r}: {error}",
                 ) from error
 
             warnings: list[ValidationIssue] = []
@@ -145,16 +147,17 @@ class ReviewRepository:
                     ValidationIssue(
                         code="directory_sync_failed",
                         message=(
-                            "The case was replaced, but syncing its directory failed. "
+                            "The case file was replaced, but syncing its directory "
+                            "failed. "
                             "The accepted content is shown below."
                         ),
                         severity="warning",
                         repairable=False,
                     )
                 )
-            return self._case_document_unlocked(
+            return self._case_file_document_unlocked(
                 path,
-                point_ids_by_target_tick=candidate.point_ids_by_target_tick,
+                sample_ids_by_target_tick=candidate.sample_ids_by_target_tick,
                 response_issues=warnings,
             )
 
@@ -172,7 +175,7 @@ class ReviewRepository:
         target_id = normalize_target_filter(selector)
         path = self._path_for_id(case_id)
         try:
-            raw = parse_case_yaml(load_yaml_mapping(path), label=str(path))
+            raw = parse_case_file(load_yaml_mapping(path), label=str(path))
         except EvalConfigError:
             raise
         if target_id not in raw.targets:
@@ -185,7 +188,7 @@ class ReviewRepository:
         path = self._path_for_id(case_id)
         with self._lock_for(path):
             try:
-                raw = parse_case_yaml(load_yaml_mapping(path), label=str(path))
+                raw = parse_case_file(load_yaml_mapping(path), label=str(path))
                 return resolve_video_path(path, raw.video)
             except EvalConfigError as error:
                 raise ReviewAPIError(
@@ -194,62 +197,62 @@ class ReviewRepository:
                     f"Video for case {path.name!r} is unavailable.",
                 ) from error
 
-    def _case_summary(self, path: Path) -> CaseSummary:
+    def _case_file_summary(self, path: Path) -> CaseFileSummary:
         description: str | None = None
         try:
             source = path.read_text(encoding="utf-8")
-            _mapping, raw = _parse_case_source(source, path)
+            _mapping, raw = _parse_case_file_source(source, path)
             description = raw.description
             loaded = load_case(
                 path, allow_empty=True, raw_case=raw, resolve_video=False
             )
         except UnicodeDecodeError as error:
-            return CaseSummary(
+            return CaseFileSummary(
                 id=path.name,
                 name=path.stem,
                 file_name=path.name,
                 description=None,
                 target_count=None,
-                point_count=None,
+                sample_count=None,
                 status="blocked",
                 error=_load_error("invalid_encoding", str(error)),
             )
         except (OSError, EvalConfigError) as error:
-            return CaseSummary(
+            return CaseFileSummary(
                 id=path.name,
                 name=path.stem,
                 file_name=path.name,
                 description=description,
                 target_count=None,
-                point_count=None,
+                sample_count=None,
                 status="blocked",
                 error=_load_error("invalid_case", str(error)),
             )
-        return CaseSummary(
+        return CaseFileSummary(
             id=path.name,
             name=path.stem,
             file_name=path.name,
             description=raw.description,
             target_count=len(loaded.targets),
-            point_count=len(loaded.samples),
+            sample_count=len(loaded.samples),
             status="ready",
             error=None,
         )
 
-    def _case_document_unlocked(
+    def _case_file_document_unlocked(
         self,
         path: Path,
         *,
-        point_ids_by_target_tick: dict[str, dict[int, str]] | None = None,
+        sample_ids_by_target_tick: dict[str, dict[int, str]] | None = None,
         response_issues: list[ValidationIssue] | None = None,
-    ) -> CaseDocument:
+    ) -> CaseFileDocument:
         try:
             source_bytes = path.read_bytes()
         except OSError as error:
             raise ReviewAPIError(
                 500,
-                "case_read_failed",
-                f"Could not read case {path.name!r}: {error}",
+                "case_file_read_failed",
+                f"Could not read case file {path.name!r}: {error}",
             ) from error
         try:
             source = source_bytes.decode("utf-8")
@@ -264,7 +267,7 @@ class ReviewRepository:
 
         revision = hashlib.sha256(source_bytes).hexdigest()
         try:
-            raw_mapping, raw_case = _parse_case_source(source, path)
+            raw_mapping, raw_case = _parse_case_file_source(source, path)
         except EvalConfigError as error:
             return _blocked_document(
                 path,
@@ -287,7 +290,7 @@ class ReviewRepository:
                 raw_mapping,
                 raw_case,
                 loaded,
-                point_ids_by_target_tick=point_ids_by_target_tick or {},
+                sample_ids_by_target_tick=sample_ids_by_target_tick or {},
             )
         except (EvalConfigError, ReviewAPIError, ValueError, TypeError) as error:
             message = error.message if isinstance(error, ReviewAPIError) else str(error)
@@ -304,7 +307,7 @@ class ReviewRepository:
             video_path = resolve_video_path(path, raw_case.video)
             metadata = probe_video(video_path)
         except EvalConfigError as error:
-            return CaseDocument(
+            return CaseFileDocument(
                 id=path.name,
                 name=path.stem,
                 revision=revision,
@@ -312,16 +315,16 @@ class ReviewRepository:
                 editing_enabled=False,
                 load_error=_load_error("video_unavailable", str(error)),
                 description=raw_case.description,
-                source_yaml=source,
+                case_file_source=source,
                 video=partial_video,
                 targets=targets,
                 validation_issues=response_issues or [],
             )
 
         issues = list(response_issues or [])
-        target_points = {target.id: target.points for target in targets}
+        target_samples = {target.id: target.samples for target in targets}
         for target in targets:
-            if not target.points:
+            if not target.samples:
                 issues.append(
                     ValidationIssue(
                         code="empty_target",
@@ -331,18 +334,18 @@ class ReviewRepository:
                         repairable=True,
                     )
                 )
-        for target_id, points in target_points.items():
-            for point in points:
-                if point.timestamp_s > metadata.duration_s + 0.05:
+        for target_id, samples in target_samples.items():
+            for sample in samples:
+                if sample.timestamp_s > metadata.duration_s + 0.05:
                     issues.append(
                         ValidationIssue(
                             code="timestamp_after_video",
                             message=(
-                                f"Sample at {point.timestamp_s:g} seconds exceeds "
+                                f"Sample at {sample.timestamp_s:g} seconds exceeds "
                                 "video "
                                 f"duration {metadata.duration_s:g} seconds."
                             ),
-                            path=f"targets.{target_id}.samples.{point.id}.timestamp_s",
+                            path=f"targets.{target_id}.samples.{sample.id}.timestamp_s",
                             severity="error",
                             repairable=True,
                         )
@@ -351,7 +354,7 @@ class ReviewRepository:
         repairable = any(
             issue.severity == "error" and issue.repairable for issue in issues
         )
-        return CaseDocument(
+        return CaseFileDocument(
             id=path.name,
             name=path.stem,
             revision=revision,
@@ -359,9 +362,9 @@ class ReviewRepository:
             editing_enabled=True,
             load_error=None,
             description=raw_case.description,
-            source_yaml=source,
+            case_file_source=source,
             video=VideoDocument(
-                url=f"/api/cases/{quote(path.name, safe='')}/video",
+                url=f"/api/case-files/{quote(path.name, safe='')}/video",
                 display_path=raw_case.video,
                 content_type=mimetypes.guess_type(video_path.name)[0]
                 or "application/octet-stream",
@@ -374,11 +377,11 @@ class ReviewRepository:
             validation_issues=issues,
         )
 
-    def _read_config_source(self, *, validate: bool) -> str | None:
+    def _read_eval_config_file_source(self, *, validate: bool) -> str | None:
         paths = [
             child
             for child in self.eval_dir.iterdir()
-            if child.is_file() and child.name in EVAL_CONFIG_NAMES
+            if child.is_file() and child.name in EVAL_CONFIG_FILE_NAMES
         ]
         if not paths:
             return None
@@ -390,7 +393,7 @@ class ReviewRepository:
         path = paths[0]
         source = path.read_text(encoding="utf-8")
         if validate:
-            parse_eval_config_yaml(load_yaml_mapping(path), label=str(path))
+            parse_eval_config_file(load_yaml_mapping(path), label=str(path))
         return source
 
     def _path_for_id(self, case_id: str) -> Path:
@@ -398,7 +401,7 @@ class ReviewRepository:
         path = paths.get(case_id)
         if path is None:
             raise ReviewAPIError(
-                404, "case_not_found", f"No review case has id {case_id!r}."
+                404, "case_file_not_found", f"No case file has id {case_id!r}."
             )
         return path
 
@@ -410,10 +413,10 @@ class ReviewRepository:
 def _target_documents(
     case_path: Path,
     raw_mapping: Mapping[str, Any],
-    raw_case: RawCaseYaml,
+    raw_case: RawCaseFile,
     loaded: EvalCase,
     *,
-    point_ids_by_target_tick: dict[str, dict[int, str]],
+    sample_ids_by_target_tick: dict[str, dict[int, str]],
 ) -> list[TargetDocument]:
     raw_targets = raw_mapping["targets"]
     assert isinstance(raw_targets, Mapping)
@@ -421,19 +424,19 @@ def _target_documents(
     documents: list[TargetDocument] = []
     for target_id, raw_target in raw_case.targets.items():
         loaded_target = loaded_by_id[target_id]
-        points = _points_for_target(
+        samples = _samples_for_target(
             case_path,
             target_id,
             raw_target.samples,
             loaded_target,
             default_every_s=raw_case.sampling.every_s,
-            id_overrides=point_ids_by_target_tick.get(target_id, {}),
+            id_overrides=sample_ids_by_target_tick.get(target_id, {}),
         )
         reconstructed = reconstruct_target(
-            target_id, points, default_every_s=raw_case.sampling.every_s
+            target_id, samples, default_every_s=raw_case.sampling.every_s
         )
-        points_by_id = {point.id: point for point in points}
-        sorted_points = [points_by_id[point.id] for point in reconstructed.points]
+        samples_by_id = {sample.id: sample for sample in samples}
+        sorted_samples = [samples_by_id[sample.id] for sample in reconstructed.samples]
         raw_target_mapping = raw_targets[target_id]
         details = (
             {
@@ -452,14 +455,14 @@ def _target_documents(
                 id=target_id,
                 label=loaded_target.label,
                 details_yaml=details_yaml,
-                points=sorted_points,
+                samples=sorted_samples,
                 display_groups=reconstructed.groups,
             )
         )
     return documents
 
 
-def _points_for_target(
+def _samples_for_target(
     case_path: Path,
     target_id: str,
     raw_blocks: list[Any],
@@ -467,8 +470,8 @@ def _points_for_target(
     *,
     default_every_s: float,
     id_overrides: dict[int, str],
-) -> list[ReviewPoint]:
-    points: list[ReviewPoint] = []
+) -> list[ReviewSample]:
+    samples: list[ReviewSample] = []
     sample_offset = 0
     for block_index, raw_block in enumerate(raw_blocks, start=1):
         timestamps = expand_sample_timestamps(
@@ -490,24 +493,24 @@ def _points_for_target(
         effective_every = (
             raw_block.every_s if raw_block.every_s is not None else default_every_s
         )
-        for point_index, sample in enumerate(block_samples):
+        for sample_index, sample in enumerate(block_samples):
             _canonical, tick = canonical_timestamp(sample.timestamp_s)
-            point_id = id_overrides.get(
-                tick, f"block-{block_index}-point-{point_index}"
+            sample_id = id_overrides.get(
+                tick, f"block-{block_index}-sample-{sample_index}"
             )
-            points.append(
-                ReviewPoint(
-                    id=point_id,
+            samples.append(
+                ReviewSample(
+                    id=sample_id,
                     timestamp_s=sample.timestamp_s,
                     expect_type=expectation_type(sample.expected),
                     expect_json=compact_json(sample.expected),
                     field=sample.field,
-                    compare=PointCompare(
+                    compare=SampleCompare(
                         mode=sample.compare.mode,
                         tolerance=sample.compare.tolerance,
                     ),
                     comment=sample.comment,
-                    origin=PointOrigin(
+                    origin=SampleOrigin(
                         block_index=block_index,
                         kind=kind,
                         every_s=effective_every if kind == "range" else None,
@@ -519,10 +522,12 @@ def _points_for_target(
         raise EvalConfigError(
             f"{case_path}: target {target_id!r} sample expansion changed unexpectedly"
         )
-    return points
+    return samples
 
 
-def _parse_case_source(source: str, path: Path) -> tuple[dict[str, Any], RawCaseYaml]:
+def _parse_case_file_source(
+    source: str, path: Path
+) -> tuple[dict[str, Any], RawCaseFile]:
     try:
         value = yaml.safe_load(source)
     except (yaml.YAMLError, RecursionError) as error:
@@ -531,7 +536,7 @@ def _parse_case_source(source: str, path: Path) -> tuple[dict[str, Any], RawCase
         value = {}
     if not isinstance(value, dict):
         raise EvalConfigError(f"{path}: expected a YAML object")
-    return value, parse_case_yaml(value, label=str(path))
+    return value, parse_case_file(value, label=str(path))
 
 
 def _blocked_document(
@@ -542,8 +547,8 @@ def _blocked_document(
     load_error: LoadError,
     description: str | None = None,
     video: VideoDocument | None = None,
-) -> CaseDocument:
-    return CaseDocument(
+) -> CaseFileDocument:
+    return CaseFileDocument(
         id=path.name,
         name=path.stem,
         revision=hashlib.sha256(source_bytes).hexdigest(),
@@ -551,7 +556,7 @@ def _blocked_document(
         editing_enabled=False,
         load_error=load_error,
         description=description,
-        source_yaml=source,
+        case_file_source=source,
         video=video,
         targets=[],
         validation_issues=[],

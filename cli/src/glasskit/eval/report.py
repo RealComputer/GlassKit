@@ -9,7 +9,13 @@ from rich.table import Table
 from rich.text import Text
 
 from .expectations import format_sample_schedule
-from .models import EvalCase, EvalRunReport, EvalSuite, SampleResult, ValidationReport
+from .models import (
+    EvalCase,
+    EvalDirectory,
+    EvalRunReport,
+    SampleResult,
+    ValidationReport,
+)
 
 
 class ConsoleReporter:
@@ -56,10 +62,19 @@ def print_validation_report(
 ) -> None:
     console = console or Console()
     if report.ok:
-        suite_name = str(report.suite.path) if report.suite is not None else "<none>"
-        sample_count = len(report.suite.samples) if report.suite is not None else 0
+        eval_directory_name = (
+            str(report.eval_directory.path)
+            if report.eval_directory is not None
+            else "<none>"
+        )
+        sample_count = (
+            len(report.eval_directory.samples)
+            if report.eval_directory is not None
+            else 0
+        )
         console.print(
-            f"[green]Validation passed[/green]: {suite_name} ({sample_count} samples)",
+            f"[green]Validation passed[/green]: {eval_directory_name} "
+            f"({sample_count} samples)",
             highlight=False,
         )
         return
@@ -69,12 +84,14 @@ def print_validation_report(
         console.print(f"- {location}{issue.message}", highlight=False)
 
 
-def print_sample_schedule(suite: EvalSuite, console: Console | None = None) -> None:
+def print_sample_schedule(
+    eval_directory: EvalDirectory, console: Console | None = None
+) -> None:
     console = console or Console()
-    table = Table(title=f"Samples: {suite.path}")
+    table = Table(title=f"Samples: {eval_directory.path}")
     for column in ("Case", "Target", "Time", "Expected", "Mode", "Field", "Source"):
         table.add_column(column)
-    for row in format_sample_schedule(suite):
+    for row in format_sample_schedule(eval_directory):
         table.add_row(
             str(row["case"]),
             _format_target_text(str(row["target"]), row.get("target_label")),

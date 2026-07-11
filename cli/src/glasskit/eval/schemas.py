@@ -226,7 +226,7 @@ class RawThresholds(_SchemaModel):
         return value
 
 
-class RawCaseYaml(_SchemaModel):
+class RawCaseFile(_SchemaModel):
     video: str
     description: str | None = None
     sampling: RawSampling = Field(default_factory=RawSampling)
@@ -254,16 +254,16 @@ class RawCaseYaml(_SchemaModel):
         return value
 
 
-class RawEvalConfigYaml(_SchemaModel):
+class RawEvalConfigFile(_SchemaModel):
     thresholds: RawThresholds = Field(default_factory=RawThresholds)
 
 
-def parse_case_yaml(raw: Any, *, label: str) -> RawCaseYaml:
-    return _parse_model(RawCaseYaml, raw, label=label)
+def parse_case_file(raw: Any, *, label: str) -> RawCaseFile:
+    return _parse_model(RawCaseFile, raw, label=label)
 
 
-def parse_eval_config_yaml(raw: Any, *, label: str) -> RawEvalConfigYaml:
-    return _parse_model(RawEvalConfigYaml, raw, label=label)
+def parse_eval_config_file(raw: Any, *, label: str) -> RawEvalConfigFile:
+    return _parse_model(RawEvalConfigFile, raw, label=label)
 
 
 def workflow_target_metadata(target: RawWorkflowTarget) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { CompareMode, ExpectType, ReviewPoint } from "../api/types.ts";
+import type { CompareMode, ExpectType, ReviewSample } from "../api/types.ts";
 import { useApp } from "../state/AppContext.tsx";
 import { SAMPLE_DURATION_TOLERANCE_S } from "../state/reducer.ts";
 import { formatSeconds } from "../utils/format.ts";
@@ -35,12 +35,12 @@ function defaultJson(type: ExpectType): string {
   }[type];
 }
 
-function editorText(point: ReviewPoint): string {
-  if (point.expect_type !== "string") return point.expect_json;
+function editorText(sample: ReviewSample): string {
+  if (sample.expect_type !== "string") return sample.expect_json;
   try {
-    return JSON.parse(point.expect_json) as string;
+    return JSON.parse(sample.expect_json) as string;
   } catch {
-    return point.expect_json;
+    return sample.expect_json;
   }
 }
 
@@ -58,15 +58,15 @@ function validateStructured(text: string, type: "array" | "object"): string | nu
 }
 
 export function Inspector() {
-  const { state, dispatch, updatePoint, deletePoint, canDeletePoint, setFormError } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const { state, dispatch, updateSample, deleteSample, canDeleteSample, setFormError } = useApp();
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const target = workspace?.document.targets.find((item) => item.id === state.selectedTargetId);
-  const point = target?.points.find((item) => item.id === state.selectedPointId);
-  const pointRef = useRef(point);
-  pointRef.current = point;
+  const sample = target?.samples.find((item) => item.id === state.selectedSampleId);
+  const sampleRef = useRef(sample);
+  sampleRef.current = sample;
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
-  const selectionKey = target && point ? `${target.id}:${point.id}` : null;
+  const selectionKey = target && sample ? `${target.id}:${sample.id}` : null;
   const [timestamp, setTimestamp] = useState("");
   const [expectText, setExpectText] = useState("");
   const [field, setField] = useState("");
@@ -76,7 +76,7 @@ export function Inspector() {
   const expectationRef = useRef<HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement>(null);
 
   useEffect(() => {
-    const selected = pointRef.current;
+    const selected = sampleRef.current;
     if (!selected) return;
     setTimestamp(String(selected.timestamp_s));
     setExpectText(editorText(selected));
@@ -87,7 +87,7 @@ export function Inspector() {
   }, [selectionKey]);
 
   useEffect(() => {
-    const selected = pointRef.current;
+    const selected = sampleRef.current;
     const currentWorkspace = workspaceRef.current;
     if (!selected || !selectionKey || !currentWorkspace) return;
     const hasError = (name: string) =>
@@ -100,15 +100,15 @@ export function Inspector() {
     }
     setComment(selected.comment ?? "");
     if (!["timestamp", "expect", "tolerance"].some(hasError)) setErrors({});
-  }, [selectionKey, workspace?.acceptedDocument]);
+  }, [selectionKey, workspace?.acceptedCaseFile]);
 
   useEffect(() => {
-    if (point?.origin === null) {
+    if (sample?.origin === null) {
       requestAnimationFrame(() => expectationRef.current?.focus());
     }
-  }, [point?.id, point?.origin]);
+  }, [sample?.id, sample?.origin]);
 
-  const errorKey = (name: string) => `${target?.id}:${point?.id}:${name}`;
+  const errorKey = (name: string) => `${target?.id}:${sample?.id}:${name}`;
   const setError = (name: string, message: string | null) => {
     setErrors((current) => {
       const next = { ...current };
@@ -128,8 +128,8 @@ export function Inspector() {
     else if (duration !== null && parsed > duration + SAMPLE_DURATION_TOLERANCE_S) {
       error = `Time must not exceed ${duration.toFixed(3)} seconds.`;
     } else if (
-      target?.points.some(
-        (item) => item.id !== point?.id && Math.abs(item.timestamp_s - parsed) <= 1e-9,
+      target?.samples.some(
+        (item) => item.id !== sample?.id && Math.abs(item.timestamp_s - parsed) <= 1e-9,
       )
     ) {
       error = "Another sample already uses this time.";
@@ -141,41 +141,41 @@ export function Inspector() {
   const changeTimestamp = (value: string, immediate = false) => {
     setTimestamp(value);
     const parsed = validateTimestamp(value);
-    if (parsed !== null && point && target) {
-      updatePoint(target.id, point.id, { timestamp_s: parsed }, immediate);
+    if (parsed !== null && sample && target) {
+      updateSample(target.id, sample.id, { timestamp_s: parsed }, immediate);
     }
   };
 
   const changeExpect = (value: string, immediate = false) => {
-    if (!point || !target) return;
+    if (!sample || !target) return;
     setExpectText(value);
     let error: string | null = null;
     let expectJson = value;
-    if (point.expect_type === "number") {
+    if (sample.expect_type === "number") {
       if (!JSON_NUMBER.test(value)) error = "Enter a valid JSON number.";
       else if ((value.includes(".") || /[eE]/.test(value)) && !Number.isFinite(Number(value))) {
         error = "Enter a finite JSON number.";
       }
-    } else if (point.expect_type === "string") {
+    } else if (sample.expect_type === "string") {
       expectJson = JSON.stringify(value);
-    } else if (point.expect_type === "array" || point.expect_type === "object") {
-      error = validateStructured(value, point.expect_type);
+    } else if (sample.expect_type === "array" || sample.expect_type === "object") {
+      error = validateStructured(value, sample.expect_type);
     }
     setError("expect", error);
     if (!error) {
-      updatePoint(target.id, point.id, { expect_json: expectJson }, immediate);
+      updateSample(target.id, sample.id, { expect_json: expectJson }, immediate);
     }
   };
 
   const changeType = (type: ExpectType) => {
-    if (!point || !target) return;
+    if (!sample || !target) return;
     const allowed = allowedModes(type);
-    const modeCompatible = point.compare.mode === null || allowed.includes(point.compare.mode);
+    const modeCompatible = sample.compare.mode === null || allowed.includes(sample.compare.mode);
     const compare = {
-      mode: modeCompatible ? point.compare.mode : null,
+      mode: modeCompatible ? sample.compare.mode : null,
       tolerance:
-        type === "number" && (modeCompatible ? point.compare.mode : null) !== "exact"
-          ? point.compare.tolerance
+        type === "number" && (modeCompatible ? sample.compare.mode : null) !== "exact"
+          ? sample.compare.tolerance
           : null,
     };
     const expect_json = defaultJson(type);
@@ -183,8 +183,8 @@ export function Inspector() {
     setTolerance(compare.tolerance === null ? "" : String(compare.tolerance));
     setError("expect", null);
     setError("tolerance", null);
-    updatePoint(target.id, point.id, { expect_type: type, expect_json, compare }, true);
-    if (!modeCompatible || point.compare.tolerance !== compare.tolerance) {
+    updateSample(target.id, sample.id, { expect_type: type, expect_json, compare }, true);
+    if (!modeCompatible || sample.compare.tolerance !== compare.tolerance) {
       dispatch({
         type: "SET_TOAST",
         value: "Comparison settings were reset for the new expectation type.",
@@ -194,24 +194,24 @@ export function Inspector() {
   };
 
   const comparisonOptions = (() => {
-    if (!point) return [];
-    const allowed = allowedModes(point.expect_type);
+    if (!sample) return [];
+    const allowed = allowedModes(sample.expect_type);
     const options = allModes.filter((item) => allowed.includes(item.value));
-    if (point.compare.mode && !options.some((item) => item.value === point.compare.mode)) {
+    if (sample.compare.mode && !options.some((item) => item.value === sample.compare.mode)) {
       options.unshift({
-        value: point.compare.mode,
-        label: `Current: ${point.compare.mode}`,
+        value: sample.compare.mode,
+        label: `Current: ${sample.compare.mode}`,
       });
     }
     return options;
   })();
 
   const group = target?.display_groups.find((item) =>
-    point ? item.point_ids.includes(point.id) : false,
+    sample ? item.sample_ids.includes(sample.id) : false,
   );
   const editingDisabled = !workspace?.document.editing_enabled;
 
-  if (!point || !target || !workspace) {
+  if (!sample || !target || !workspace) {
     return (
       <aside className="inspector">
         <div className="inspector-heading">
@@ -223,17 +223,17 @@ export function Inspector() {
   }
 
   const numericTolerance =
-    point.expect_type === "number" &&
-    (point.compare.mode === null || point.compare.mode === "numeric");
+    sample.expect_type === "number" &&
+    (sample.compare.mode === null || sample.compare.mode === "numeric");
 
   return (
     <aside className="inspector" aria-label="Sample inspector">
       <div className="inspector-heading">
         <div>
           <h2>Inspector</h2>
-          <span className="mono muted">{formatSeconds(point.timestamp_s)}</span>
+          <span className="mono muted">{formatSeconds(sample.timestamp_s)}</span>
         </div>
-        <span className="type-chip">{point.expect_type}</span>
+        <span className="type-chip">{sample.expect_type}</span>
       </div>
       <fieldset disabled={editingDisabled}>
         <div className="field-group">
@@ -261,7 +261,7 @@ export function Inspector() {
                     String(
                       Math.min(
                         duration ?? Number.POSITIVE_INFINITY,
-                        Math.max(0, point.timestamp_s + delta),
+                        Math.max(0, sample.timestamp_s + delta),
                       ),
                     ),
                     true,
@@ -281,7 +281,7 @@ export function Inspector() {
           <label htmlFor="expect-type">Expectation type</label>
           <select
             id="expect-type"
-            value={point.expect_type}
+            value={sample.expect_type}
             onChange={(event) => changeType(event.target.value as ExpectType)}
           >
             <option value="null">Null</option>
@@ -294,18 +294,18 @@ export function Inspector() {
         </div>
 
         <div className="field-group">
-          {point.expect_type === "null" || point.expect_type === "boolean" ? (
+          {sample.expect_type === "null" || sample.expect_type === "boolean" ? (
             <span className="field-label" id="expect-value-label">
               Expected value
             </span>
           ) : (
             <label htmlFor="expect-value">Expected value</label>
           )}
-          {point.expect_type === "null" ? (
+          {sample.expect_type === "null" ? (
             <div className="null-value mono" aria-labelledby="expect-value-label">
               null
             </div>
-          ) : point.expect_type === "boolean" ? (
+          ) : sample.expect_type === "boolean" ? (
             <div
               className="segmented boolean-control"
               role="group"
@@ -314,22 +314,22 @@ export function Inspector() {
               <button
                 type="button"
                 ref={expectationRef as RefObject<HTMLButtonElement>}
-                className={point.expect_json === "true" ? "selected" : ""}
-                aria-pressed={point.expect_json === "true"}
-                onClick={() => updatePoint(target.id, point.id, { expect_json: "true" }, true)}
+                className={sample.expect_json === "true" ? "selected" : ""}
+                aria-pressed={sample.expect_json === "true"}
+                onClick={() => updateSample(target.id, sample.id, { expect_json: "true" }, true)}
               >
                 True
               </button>
               <button
                 type="button"
-                className={point.expect_json === "false" ? "selected" : ""}
-                aria-pressed={point.expect_json === "false"}
-                onClick={() => updatePoint(target.id, point.id, { expect_json: "false" }, true)}
+                className={sample.expect_json === "false" ? "selected" : ""}
+                aria-pressed={sample.expect_json === "false"}
+                onClick={() => updateSample(target.id, sample.id, { expect_json: "false" }, true)}
               >
                 False
               </button>
             </div>
-          ) : point.expect_type === "string" ? (
+          ) : sample.expect_type === "string" ? (
             <textarea
               id="expect-value"
               ref={expectationRef as RefObject<HTMLTextAreaElement>}
@@ -338,7 +338,7 @@ export function Inspector() {
               onChange={(event) => changeExpect(event.target.value)}
               onBlur={(event) => changeExpect(event.target.value, true)}
             />
-          ) : point.expect_type === "array" || point.expect_type === "object" ? (
+          ) : sample.expect_type === "array" || sample.expect_type === "object" ? (
             <textarea
               id="expect-value"
               ref={expectationRef as RefObject<HTMLTextAreaElement>}
@@ -378,14 +378,14 @@ export function Inspector() {
             onChange={(event) => {
               const value = event.target.value;
               setField(value);
-              updatePoint(target.id, point.id, {
+              updateSample(target.id, sample.id, {
                 field: value.trim() ? value : null,
               });
             }}
             onBlur={() => {
               const value = field.trim();
               setField(value);
-              updatePoint(target.id, point.id, { field: value || null }, true);
+              updateSample(target.id, sample.id, { field: value || null }, true);
             }}
           />
         </div>
@@ -395,17 +395,17 @@ export function Inspector() {
             <label htmlFor="compare-mode">Comparison</label>
             <select
               id="compare-mode"
-              value={point.compare.mode ?? ""}
+              value={sample.compare.mode ?? ""}
               onChange={(event) => {
                 const mode = (event.target.value || null) as CompareMode | null;
                 const nextTolerance =
-                  point.expect_type === "number" && (mode === null || mode === "numeric")
-                    ? point.compare.tolerance
+                  sample.expect_type === "number" && (mode === null || mode === "numeric")
+                    ? sample.compare.tolerance
                     : null;
                 if (nextTolerance === null) setTolerance("");
-                updatePoint(
+                updateSample(
                   target.id,
-                  point.id,
+                  sample.id,
                   { compare: { mode, tolerance: nextTolerance } },
                   true,
                 );
@@ -440,9 +440,9 @@ export function Inspector() {
                     : null;
                 setError("tolerance", error);
                 if (!error) {
-                  updatePoint(target.id, point.id, {
+                  updateSample(target.id, sample.id, {
                     compare: {
-                      ...point.compare,
+                      ...sample.compare,
                       tolerance: value ? parsed : null,
                     },
                   });
@@ -452,12 +452,12 @@ export function Inspector() {
                 const value = event.target.value;
                 const parsed = Number(value);
                 if (!value || (Number.isFinite(parsed) && parsed >= 0)) {
-                  updatePoint(
+                  updateSample(
                     target.id,
-                    point.id,
+                    sample.id,
                     {
                       compare: {
-                        ...point.compare,
+                        ...sample.compare,
                         tolerance: value ? parsed : null,
                       },
                     },
@@ -481,14 +481,14 @@ export function Inspector() {
             onChange={(event) => {
               const value = event.target.value;
               setComment(value);
-              updatePoint(target.id, point.id, {
+              updateSample(target.id, sample.id, {
                 comment: value.trim() ? value : null,
               });
             }}
             onBlur={() => {
               const value = comment.trim();
               setComment(value);
-              updatePoint(target.id, point.id, { comment: value || null }, true);
+              updateSample(target.id, sample.id, { comment: value || null }, true);
             }}
           />
         </div>
@@ -501,7 +501,7 @@ export function Inspector() {
               <strong>Part of a range</strong>
               <small>
                 {formatSeconds(group.start_s)}–{formatSeconds(group.end_s)} · every {group.every_s}s
-                · {group.point_ids.length} sample{group.point_ids.length === 1 ? "" : "s"}
+                · {group.sample_ids.length} sample{group.sample_ids.length === 1 ? "" : "s"}
               </small>
             </div>
           )}
@@ -520,10 +520,10 @@ export function Inspector() {
         <button
           type="button"
           className="button danger-button delete-button"
-          disabled={!canDeletePoint(target.id, point.id) || editingDisabled}
-          onClick={() => deletePoint(target.id, point.id)}
+          disabled={!canDeleteSample(target.id, sample.id) || editingDisabled}
+          onClick={() => deleteSample(target.id, sample.id)}
           title={
-            canDeletePoint(target.id, point.id)
+            canDeleteSample(target.id, sample.id)
               ? "Delete this sample"
               : "A valid target must keep at least one sample"
           }

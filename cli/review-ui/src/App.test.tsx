@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
-import { document as caseDocument, point, suite, target } from "./test/fixtures.ts";
+import { caseFile, sample, evalDirectory, target } from "./test/fixtures.ts";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -16,13 +16,13 @@ afterEach(() => {
 
 describe("review application navigation and drafts", () => {
   it("uses the unobstructed video surface to toggle playback", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -47,13 +47,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("gives transport actions visible labels and shortcut hints", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -97,13 +97,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("shows the selected case video path without a details disclosure", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -123,13 +123,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("opens purpose-named source drawers without a redundant read-only subtitle", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -147,13 +147,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("disables adding a sample when the video time already has one", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -170,25 +170,25 @@ describe("review application navigation and drafts", () => {
   });
 
   it("describes reconstructed ranges with user-facing terminology", async () => {
-    const rangedTarget = target("status", [point("first", 1), point("second", 1.5)]);
+    const rangedTarget = target("status", [sample("first", 1), sample("second", 1.5)]);
     rangedTarget.display_groups = [
       {
         id: "range-group",
         kind: "range",
-        point_ids: ["first", "second"],
+        sample_ids: ["first", "second"],
         start_s: 1,
         end_s: 2,
         every_s: 0.5,
         timestamps_s: [1, 1.5],
       },
     ];
-    const doc = caseDocument([rangedTarget]);
+    const doc = caseFile([rangedTarget]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -205,13 +205,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("omits range context for an individual sample", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -223,13 +223,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("scrubs the video by dragging across the timeline", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -256,16 +256,14 @@ describe("review application navigation and drafts", () => {
     expect(playhead.getAttribute("aria-valuenow")).toBe("7");
   });
 
-  it("keeps navigation shortcuts available after a timeline point receives focus", async () => {
-    const doc = caseDocument([
-      target("target_a", [point("first", 1, "1"), point("second", 2, "2")]),
-    ]);
+  it("keeps navigation shortcuts available after a timeline sample receives focus", async () => {
+    const doc = caseFile([target("target_a", [sample("first", 1, "1"), sample("second", 2, "2")])]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -287,13 +285,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("keeps the fit timeline's final label inside its viewport", async () => {
-    const doc = caseDocument();
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -312,14 +310,14 @@ describe("review application navigation and drafts", () => {
     expect(scroll?.classList.contains("fit")).toBe(false);
   });
 
-  it("gives form fields unique identifiers and points labels at form controls", async () => {
-    const doc = caseDocument();
+  it("gives form fields unique identifiers and associates labels with controls", async () => {
+    const doc = caseFile();
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -342,16 +340,16 @@ describe("review application navigation and drafts", () => {
     }
   });
 
-  it("keeps an invalid partial expectation selected during blur and point navigation", async () => {
-    const doc = caseDocument([
-      target("numeric_target", [point("first", 1, "1"), point("second", 2, "2")]),
+  it("keeps an invalid partial expectation selected during blur and sample navigation", async () => {
+    const doc = caseFile([
+      target("numeric_target", [sample("first", 1, "1"), sample("second", 2, "2")]),
     ]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -374,13 +372,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("keeps a backend-tolerated near-end timestamp valid on blur", async () => {
-    const doc = caseDocument([target("near_end", [point("end", 10.01, "1")])]);
+    const doc = caseFile([target("near_end", [sample("end", 10.01, "1")])]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -395,14 +393,14 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByText("Fix errors")).toBeNull();
   });
 
-  it("blocks adding a point while the selected field draft is invalid", async () => {
-    const doc = caseDocument([target("numeric_target", [point("first", 1, "1")])]);
+  it("blocks adding a sample while the selected field draft is invalid", async () => {
+    const doc = caseFile([target("numeric_target", [sample("first", 1, "1")])]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -426,28 +424,28 @@ describe("review application navigation and drafts", () => {
     expect(screen.getByText("Enter a valid JSON number.")).toBeTruthy();
   });
 
-  it("clears a deleted point draft error before selecting its neighbor", async () => {
-    const doc = caseDocument([
-      target("numeric_target", [point("first", 1, "1"), point("second", 2, "2")]),
+  it("clears a deleted sample draft error before selecting its neighbor", async () => {
+    const doc = caseFile([
+      target("numeric_target", [sample("first", 1, "1"), sample("second", 2, "2")]),
     ]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           const payload = JSON.parse(String(init.body)) as {
-            targets: { numeric_target: { points: ReturnType<typeof point>[] } };
+            targets: { numeric_target: { samples: ReturnType<typeof sample>[] } };
           };
           return Promise.resolve(
             response({
               ...doc,
               revision: "deleted-first",
-              targets: [target("numeric_target", payload.targets.numeric_target.points)],
+              targets: [target("numeric_target", payload.targets.numeric_target.samples)],
             }),
           );
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -467,18 +465,18 @@ describe("review application navigation and drafts", () => {
   });
 
   it("treats a whitespace-only optional field as an unchanged null value", async () => {
-    const doc = caseDocument([target("target_a", [point("first", 1, "true")])]);
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     let putCount = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putCount += 1;
           return Promise.resolve(response(doc));
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -493,13 +491,13 @@ describe("review application navigation and drafts", () => {
   });
 
   it("commits human-entered transport time only on Enter", async () => {
-    const doc = caseDocument([target("target_a", [point("first", 1, "true")])]);
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -514,18 +512,18 @@ describe("review application navigation and drafts", () => {
   });
 
   it("suppresses shortcuts inside overlays, traps focus, and restores the opener", async () => {
-    const doc = caseDocument([target("target_a", [point("first", 1, "true")])]);
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     let putCount = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putCount += 1;
           return Promise.resolve(response(doc));
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -559,24 +557,24 @@ describe("review application navigation and drafts", () => {
   });
 
   it("does not dirty unchanged inspector fields on blur", async () => {
-    const unchangedPoint = {
-      ...point("first", 1, "1"),
+    const unchangedSample = {
+      ...sample("first", 1, "1"),
       field: "confidence",
       comment: "No change",
       compare: { mode: "numeric" as const, tolerance: 0.1 },
     };
-    const doc = caseDocument([target("numeric_target", [unchangedPoint])]);
+    const doc = caseFile([target("numeric_target", [unchangedSample])]);
     let putCount = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putCount += 1;
           return Promise.resolve(response(doc));
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -599,7 +597,7 @@ describe("review application navigation and drafts", () => {
   });
 
   it("keeps an invalid expectation draft visible across an older PUT response", async () => {
-    const doc = caseDocument([target("numeric_target", [point("first", 1, "1")])]);
+    const doc = caseFile([target("numeric_target", [sample("first", 1, "1")])]);
     let resolvePut!: (response: Response) => void;
     const put = new Promise<Response>((resolve) => {
       resolvePut = resolve;
@@ -609,12 +607,12 @@ describe("review application navigation and drafts", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           putStarted = true;
           return put;
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
@@ -629,7 +627,7 @@ describe("review application navigation and drafts", () => {
       ...doc,
       revision: "accepted-comment",
       targets: [
-        target("numeric_target", [{ ...point("first", 1, "1"), comment: "Save this first" }]),
+        target("numeric_target", [{ ...sample("first", 1, "1"), comment: "Save this first" }]),
       ],
     };
     resolvePut(response(accepted));
@@ -640,14 +638,14 @@ describe("review application navigation and drafts", () => {
   });
 
   it("offers an explicit discard path for an invalid draft", async () => {
-    const doc = caseDocument([target("numeric_target", [point("first", 1, "1")])]);
+    const doc = caseFile([target("numeric_target", [sample("first", 1, "1")])]);
     let gets = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) {
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) {
           gets += 1;
           return Promise.resolve(response({ ...doc }));
         }
@@ -666,7 +664,7 @@ describe("review application navigation and drafts", () => {
   });
 
   it("recreates the media element when a disk reload keeps the same video URL", async () => {
-    const original = caseDocument([target("numeric_target", [point("first", 1, "1")])]);
+    const original = caseFile([target("numeric_target", [sample("first", 1, "1")])]);
     const reloaded = {
       ...original,
       revision: "replacement-video",
@@ -677,8 +675,8 @@ describe("review application navigation and drafts", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
-        if (url.includes("/api/cases/")) {
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) {
           gets += 1;
           return Promise.resolve(response(gets === 1 ? original : reloaded));
         }
@@ -699,12 +697,12 @@ describe("review application navigation and drafts", () => {
   });
 
   it("shows a save failure message when the backend returns no details", async () => {
-    const doc = caseDocument([target("target_a", [point("first", 1, "true")])]);
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
         if (init?.method === "PUT") {
           return Promise.resolve(
             response(
@@ -719,7 +717,7 @@ describe("review application navigation and drafts", () => {
             ),
           );
         }
-        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
     );

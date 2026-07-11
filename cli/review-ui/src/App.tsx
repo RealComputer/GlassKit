@@ -11,30 +11,32 @@ import { shouldHandleShortcut } from "./utils/shortcuts.ts";
 import "./App.css";
 
 function ReviewApp() {
-  const { state, selectPoint, addPoint, seek, reloadFromDisk } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const { state, selectSample, addSample, seek, reloadFromDisk } = useApp();
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const target = workspace?.document.targets.find((item) => item.id === state.selectedTargetId);
-  const caseLoadError = state.selectedCaseId ? state.caseLoadErrors[state.selectedCaseId] : null;
+  const caseLoadError = state.selectedCaseId
+    ? state.caseFileLoadErrors[state.selectedCaseId]
+    : null;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (state.helpOpen || state.sourceDrawer) return;
       if (!shouldHandleShortcut(event)) return;
-      const points = [...(target?.points ?? [])].sort(
+      const samples = [...(target?.samples ?? [])].sort(
         (left, right) => left.timestamp_s - right.timestamp_s,
       );
-      const selectedIndex = points.findIndex((point) => point.id === state.selectedPointId);
+      const selectedIndex = samples.findIndex((sample) => sample.id === state.selectedSampleId);
       const selectRelative = (direction: -1 | 1) => {
-        let point = selectedIndex >= 0 ? points[selectedIndex + direction] : undefined;
-        if (!point) {
-          point =
+        let sample = selectedIndex >= 0 ? samples[selectedIndex + direction] : undefined;
+        if (!sample) {
+          sample =
             direction < 0
-              ? [...points]
+              ? [...samples]
                   .reverse()
                   .find((item) => item.timestamp_s < state.video.currentTime - 1e-9)
-              : points.find((item) => item.timestamp_s > state.video.currentTime + 1e-9);
+              : samples.find((item) => item.timestamp_s > state.video.currentTime + 1e-9);
         }
-        if (point && target) void selectPoint(target.id, point.id);
+        if (sample && target) void selectSample(target.id, sample.id);
       };
       switch (event.key) {
         case " ":
@@ -72,7 +74,7 @@ function ReviewApp() {
         case "A":
           if (!event.shiftKey) {
             event.preventDefault();
-            addPoint();
+            addSample();
           }
           break;
       }
@@ -80,10 +82,10 @@ function ReviewApp() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    addPoint,
+    addSample,
     seek,
-    selectPoint,
-    state.selectedPointId,
+    selectSample,
+    state.selectedSampleId,
     state.helpOpen,
     state.sourceDrawer,
     state.video.currentTime,
@@ -91,7 +93,7 @@ function ReviewApp() {
     target,
   ]);
 
-  if (state.suiteLoading) {
+  if (state.evalDirectoryLoading) {
     return (
       <div className="loading-screen" role="status">
         <div className="loading-mark" />
@@ -100,11 +102,11 @@ function ReviewApp() {
     );
   }
 
-  if (state.suiteError && !state.suite) {
+  if (state.evalDirectoryError && !state.evalDirectory) {
     return (
       <div className="fatal-screen" role="alert">
         <h1>Could not load the review UI</h1>
-        <p>{state.suiteError}</p>
+        <p>{state.evalDirectoryError}</p>
         <button type="button" className="button" onClick={() => location.reload()}>
           Reload
         </button>

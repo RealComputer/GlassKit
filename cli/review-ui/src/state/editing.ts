@@ -1,35 +1,35 @@
-import type { ReviewPoint, ReviewTarget } from "../api/types.ts";
+import type { ReviewSample, ReviewTarget } from "../api/types.ts";
 
-function closestPoint(target: ReviewTarget, timestamp: number) {
-  return target.points.reduce<ReviewPoint | null>((best, point) => {
-    if (!best) return point;
-    const distance = Math.abs(point.timestamp_s - timestamp);
+function closestSample(target: ReviewTarget, timestamp: number) {
+  return target.samples.reduce<ReviewSample | null>((best, sample) => {
+    if (!best) return sample;
+    const distance = Math.abs(sample.timestamp_s - timestamp);
     const bestDistance = Math.abs(best.timestamp_s - timestamp);
-    if (distance < bestDistance) return point;
-    if (distance === bestDistance && point.timestamp_s < best.timestamp_s) {
-      return point;
+    if (distance < bestDistance) return sample;
+    if (distance === bestDistance && sample.timestamp_s < best.timestamp_s) {
+      return sample;
     }
     return best;
   }, null);
 }
 
-export function findPointAt(target: ReviewTarget, playheadTime: number): ReviewPoint | undefined {
+export function findSampleAt(target: ReviewTarget, playheadTime: number): ReviewSample | undefined {
   const timestamp = Math.round(playheadTime * 1000) / 1000;
-  return target.points.find((point) => Math.abs(point.timestamp_s - timestamp) <= 1e-9);
+  return target.samples.find((sample) => Math.abs(sample.timestamp_s - timestamp) <= 1e-9);
 }
 
-export function createPointAt(
+export function createSampleAt(
   target: ReviewTarget,
   playheadTime: number,
   id: string,
-): { point: ReviewPoint; duplicate: boolean } {
+): { sample: ReviewSample; duplicate: boolean } {
   const timestamp = Math.round(playheadTime * 1000) / 1000;
-  const duplicate = findPointAt(target, playheadTime);
-  if (duplicate) return { point: duplicate, duplicate: true };
-  const source = closestPoint(target, timestamp);
+  const duplicate = findSampleAt(target, playheadTime);
+  if (duplicate) return { sample: duplicate, duplicate: true };
+  const source = closestSample(target, timestamp);
   return {
     duplicate: false,
-    point: {
+    sample: {
       id,
       timestamp_s: timestamp,
       expect_type: source?.expect_type ?? "boolean",
@@ -45,11 +45,11 @@ export function createPointAt(
 export function canDeleteFromTarget(
   draftTarget: ReviewTarget,
   acceptedTarget: ReviewTarget | undefined,
-  pointId: string,
+  sampleId: string,
   saveInFlight = false,
 ): boolean {
-  if (!draftTarget.points.some((point) => point.id === pointId)) return false;
-  if (draftTarget.points.length > 1) return true;
+  if (!draftTarget.samples.some((sample) => sample.id === sampleId)) return false;
+  if (draftTarget.samples.length > 1) return true;
   if (saveInFlight) return false;
-  return (acceptedTarget?.points.length ?? 0) === 0;
+  return (acceptedTarget?.samples.length ?? 0) === 0;
 }

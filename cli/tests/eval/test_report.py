@@ -7,8 +7,8 @@ from rich.console import Console
 
 from glasskit.eval.models import (
     EvalCase,
+    EvalDirectory,
     EvalRunReport,
-    EvalSuite,
     SampleExpectation,
     SampleResult,
     TargetSpec,
@@ -56,7 +56,7 @@ def test_print_sample_schedule_uses_target_label_with_id() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
 
-    print_sample_schedule(_suite(), console=console)
+    print_sample_schedule(_eval_directory(), console=console)
 
     assert "Step 1 (step_1)" in buffer.getvalue()
 
@@ -101,7 +101,9 @@ def test_table_reports_render_markup_like_target_labels_literally() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
 
-    print_sample_schedule(_suite(target_label="Segment [draft]"), console=console)
+    print_sample_schedule(
+        _eval_directory(target_label="Segment [draft]"), console=console
+    )
     print_run_summary(
         _report(target_label="Segment [draft]"),
         console=console,
@@ -111,8 +113,8 @@ def test_table_reports_render_markup_like_target_labels_literally() -> None:
     assert "Segment [draft] (step_1)" in output
 
 
-def _suite(*, target_label: str = "Step 1") -> EvalSuite:
-    return EvalSuite(path=Path("eval"), cases=[_case(target_label=target_label)])
+def _eval_directory(*, target_label: str = "Step 1") -> EvalDirectory:
+    return EvalDirectory(path=Path("eval"), cases=[_case(target_label=target_label)])
 
 
 def _case(*, target_label: str = "Step 1") -> EvalCase:

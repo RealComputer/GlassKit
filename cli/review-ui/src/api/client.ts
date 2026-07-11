@@ -1,8 +1,8 @@
 import type {
   ApiErrorEnvelope,
-  CaseDocument,
+  CaseFileDocument,
   ReplaceTargetsRequest,
-  SuiteBootstrap,
+  EvalDirectoryDocument,
 } from "./types.ts";
 
 export class ReviewApiError extends Error {
@@ -45,18 +45,21 @@ async function readJson<T>(response: Response): Promise<T> {
   return body as T;
 }
 
-export async function fetchSuite(signal?: AbortSignal): Promise<SuiteBootstrap> {
+export async function fetchEvalDirectory(signal?: AbortSignal): Promise<EvalDirectoryDocument> {
   return readJson(
-    await fetch("/api/suite", {
+    await fetch("/api/eval-directory", {
       headers: { Accept: "application/json" },
       signal,
     }),
   );
 }
 
-export async function fetchCase(caseId: string, signal?: AbortSignal): Promise<CaseDocument> {
+export async function fetchCaseFile(
+  caseId: string,
+  signal?: AbortSignal,
+): Promise<CaseFileDocument> {
   return readJson(
-    await fetch(`/api/cases/${encodeURIComponent(caseId)}`, {
+    await fetch(`/api/case-files/${encodeURIComponent(caseId)}`, {
       headers: { Accept: "application/json" },
       signal,
     }),
@@ -68,9 +71,9 @@ export async function replaceTargetSamples(
   writeToken: string,
   request: ReplaceTargetsRequest,
   signal?: AbortSignal,
-): Promise<CaseDocument> {
+): Promise<CaseFileDocument> {
   return readJson(
-    await fetch(`/api/cases/${encodeURIComponent(caseId)}/samples`, {
+    await fetch(`/api/case-files/${encodeURIComponent(caseId)}/samples`, {
       method: "PUT",
       headers: {
         Accept: "application/json",

@@ -9,15 +9,15 @@ from typing import Any, Protocol
 
 from .adapters import load_evaluator
 from .compare import compare_observation
-from .expectations import load_eval_suite
+from .expectations import load_eval_directory
 from .json_values import json_value_error
 from .models import (
     AdapterConfig,
     AdapterRuntimeError,
     EvalCase,
     EvalConfigError,
+    EvalDirectory,
     EvalRunReport,
-    EvalSuite,
     GateResult,
     RunOptions,
     SampleExpectation,
@@ -40,11 +40,11 @@ class RunCallbacks(Protocol):
     def on_result(self, result: SampleResult) -> None: ...
 
 
-async def validate_eval_suite(options: RunOptions) -> ValidationReport:
+async def validate_eval_directory(options: RunOptions) -> ValidationReport:
     issues: list[ValidationIssue] = []
-    suite: EvalSuite | None = None
+    eval_directory: EvalDirectory | None = None
     try:
-        suite = load_eval_suite(
+        eval_directory = load_eval_directory(
             options.eval_dir,
             case_filter=options.case_filter,
             target_filter=options.target_filter,
@@ -52,17 +52,17 @@ async def validate_eval_suite(options: RunOptions) -> ValidationReport:
         )
     except EvalConfigError as error:
         return ValidationReport(
-            suite=None,
+            eval_directory=None,
             issues=[ValidationIssue(message=str(error), path=options.eval_dir)],
         )
 
-    issues.extend(_validate_videos(suite))
+    issues.extend(_validate_videos(eval_directory))
     if options.adapter is not None:
         try:
             evaluator = await load_evaluator(
                 options.adapter,
                 AdapterConfig(
-                    eval_dir=suite.path,
+                    eval_dir=eval_directory.path,
                     config=options.adapter_config,
                     artifacts_dir=options.artifacts_dir,
                     verbose=options.verbose,
@@ -73,7 +73,7 @@ async def validate_eval_suite(options: RunOptions) -> ValidationReport:
             issues.append(
                 ValidationIssue(message=f"adapter validation failed: {error}")
             )
-    return ValidationReport(suite=suite, issues=issues)
+    return ValidationReport(eval_directory=eval_directory, issues=issues)
 
 
 async def run_eval(
@@ -82,13 +82,13 @@ async def run_eval(
     if options.adapter is None:
         raise EvalConfigError("glasskit eval run requires --adapter")
     started_at = perf_counter()
-    suite = load_eval_suite(
+    eval_directory = load_eval_directory(
         options.eval_dir,
         case_filter=options.case_filter,
         target_filter=options.target_filter,
         allow_empty=options.allow_empty,
     )
-    validation_issues = _validate_videos(suite)
+    validation_issues = _validate_videos(eval_directory)
     error_messages = [
         issue.message for issue in validation_issues if issue.severity == "error"
     ]
@@ -98,7 +98,7 @@ async def run_eval(
     evaluator = await load_evaluator(
         options.adapter,
         AdapterConfig(
-            eval_dir=suite.path,
+            eval_dir=eval_directory.path,
             config=options.adapter_config,
             artifacts_dir=options.artifacts_dir,
             verbose=options.verbose,
@@ -107,7 +107,7 @@ async def run_eval(
 
     results: list[SampleResult] = []
     try:
-        for case in suite.cases:
+        for case in eval_directory.cases:
             case_samples = case.samples
             if callbacks is not None:
                 callbacks.on_case_start(case, len(case_samples))
@@ -148,7 +148,7 @@ async def run_eval(
                                 result,
                                 frame.image,
                                 options=options,
-                                eval_dir=suite.path,
+                                eval_dir=eval_directory.path,
                             )
                     results.append(result)
                     if callbacks is not None:
@@ -156,10 +156,10 @@ async def run_eval(
     finally:
         await _close_evaluator(evaluator)
 
-    gate_results = _apply_quality_gates(suite, results, options)
+    gate_results = _apply_quality_gates(eval_directory, results, options)
     report = EvalRunReport(
-        eval_dir=suite.path,
-        case_names=[case.name for case in suite.cases],
+        eval_dir=eval_directory.path,
+        case_names=[case.name for case in eval_directory.cases],
         results=results,
         gate_results=gate_results,
         duration_s=max(0.0, perf_counter() - started_at),
@@ -178,9 +178,9 @@ def write_json_report(report: EvalRunReport, path: Path) -> None:
     )
 
 
-def _validate_videos(suite: EvalSuite) -> list[ValidationIssue]:
+def _validate_videos(eval_directory: EvalDirectory) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    for case in suite.cases:
+    for case in eval_directory.cases:
         try:
             metadata = probe_video(case.video_path)
         except EvalConfigError as error:
@@ -363,7 +363,7 @@ def _save_failure_artifacts(
 
 
 def _apply_quality_gates(
-    suite: EvalSuite, results: list[SampleResult], options: RunOptions
+    eval_directory: EvalDirectory, results: list[SampleResult], options: RunOptions
 ) -> list[GateResult]:
     gates: list[GateResult] = []
     error_count = sum(1 for result in results if result.status == "error")
@@ -379,7 +379,7 @@ def _apply_quality_gates(
         )
     )
 
-    global_thresholds = suite.thresholds
+    global_thresholds = eval_directory.thresholds
     min_pass_rate = _coalesce(options.min_pass_rate, global_thresholds.min_pass_rate)
     max_failures = _coalesce(options.max_failures, global_thresholds.max_failures)
     min_target_pass_rate = options.min_target_pass_rate
@@ -412,7 +412,7 @@ def _apply_quality_gates(
             )
         )
 
-    for case in suite.cases:
+    for case in eval_directory.cases:
         case_results = [result for result in results if result.case_name == case.name]
         gates.extend(_case_gates(case.name, case.thresholds, case_results, options))
     return gates

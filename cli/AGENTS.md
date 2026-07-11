@@ -33,8 +33,8 @@ This package provides the `glasskit` command. Its current command group is recor
 - `uv run ty check && uv run pytest && uv run ruff check --fix && uv run ruff format`: run after Python, packaging, or backend test-fixture changes.
 - `cd review-ui && npm run fix && npm run check`: run after review UI changes. Run `npm install` first in a clean checkout or after dependency changes. `uv build --no-sources --clear` rebuilds and embeds its production assets automatically.
 - `uv run glasskit --help` and `uv run glasskit eval --help`: smoke-check the console entry point.
-- `uv build --no-sources --clear`, followed by `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review`: build and launch the packaged review UI against the committed synthetic fixture.
-- In a clean source checkout, run `(cd review-ui && npm install && npm run build)` once to generate the ignored static bundle before starting the Python backend with `uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review --port 8765 --no-open`. Then run `cd review-ui && GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` in another shell to use the frontend development server.
+- `uv build --no-sources --clear`, followed by `uv run glasskit eval review --eval-dir tests/fixtures/eval_directories/review`: build and launch the packaged review UI against the committed synthetic fixture.
+- In a clean source checkout, run `(cd review-ui && npm install && npm run build)` once to generate the ignored static bundle before starting the Python backend with `uv run glasskit eval review --eval-dir tests/fixtures/eval_directories/review --port 8765 --no-open`. Then run `cd review-ui && GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` in another shell to use the frontend development server.
 - For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run`.
 
 ## Notes

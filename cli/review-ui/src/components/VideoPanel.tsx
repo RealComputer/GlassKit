@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
-import { findPointAt } from "../state/editing.ts";
+import { findSampleAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
@@ -26,21 +26,21 @@ export function DelayedSeekingStatus() {
 }
 
 export function VideoPanel() {
-  const { state, dispatch, selectPoint, addPoint, seek } = useApp();
+  const { state, dispatch, selectSample, addSample, seek } = useApp();
   const videoRef = useRef<HTMLVideoElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const seekerRef = useRef<PreciseVideoSeeker | null>(null);
   const skipNextTimeBlur = useRef(false);
   const [timeDraft, setTimeDraft] = useState("0.000");
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
   const target = document?.targets.find((item) => item.id === state.selectedTargetId);
   const hasFormErrors = Boolean(workspace && Object.keys(workspace.formErrors).length > 0);
-  const points = useMemo(
-    () => [...(target?.points ?? [])].sort((a, b) => a.timestamp_s - b.timestamp_s),
-    [target?.points],
+  const samples = useMemo(
+    () => [...(target?.samples ?? [])].sort((a, b) => a.timestamp_s - b.timestamp_s),
+    [target?.samples],
   );
-  const hasSampleAtVideoTime = Boolean(target && findPointAt(target, state.video.currentTime));
+  const hasSampleAtVideoTime = Boolean(target && findSampleAt(target, state.video.currentTime));
 
   useEffect(() => {
     if (globalThis.document.activeElement !== timeInputRef.current) {
@@ -77,7 +77,7 @@ export function VideoPanel() {
         patch: {
           previewStatus: "unavailable",
           shownFrameTime: null,
-          previewMessage: "No browser-playable video is available for this case.",
+          previewMessage: "No browser-playable video is available for this case file.",
         },
       });
       return;
@@ -93,39 +93,39 @@ export function VideoPanel() {
   ]);
 
   const relativeIndex = () => {
-    if (state.selectedPointId) {
-      const index = points.findIndex((point) => point.id === state.selectedPointId);
+    if (state.selectedSampleId) {
+      const index = samples.findIndex((sample) => sample.id === state.selectedSampleId);
       if (index >= 0) return index;
     }
-    return points.findIndex((point) => point.timestamp_s >= state.video.currentTime);
+    return samples.findIndex((sample) => sample.timestamp_s >= state.video.currentTime);
   };
 
   const previous = () => {
-    const selectedIndex = state.selectedPointId
-      ? points.findIndex((point) => point.id === state.selectedPointId)
+    const selectedIndex = state.selectedSampleId
+      ? samples.findIndex((sample) => sample.id === state.selectedSampleId)
       : -1;
-    const point =
+    const sample =
       selectedIndex >= 0
-        ? points[selectedIndex - 1]
-        : [...points].reverse().find((item) => item.timestamp_s < state.video.currentTime - 1e-9);
-    if (point && target) void selectPoint(target.id, point.id);
+        ? samples[selectedIndex - 1]
+        : [...samples].reverse().find((item) => item.timestamp_s < state.video.currentTime - 1e-9);
+    if (sample && target) void selectSample(target.id, sample.id);
   };
   const next = () => {
     const index = relativeIndex();
-    const point = state.selectedPointId
-      ? points[index + 1]
-      : points.find((item) => item.timestamp_s > state.video.currentTime + 1e-9);
-    if (point && target) void selectPoint(target.id, point.id);
+    const sample = state.selectedSampleId
+      ? samples[index + 1]
+      : samples.find((item) => item.timestamp_s > state.video.currentTime + 1e-9);
+    if (sample && target) void selectSample(target.id, sample.id);
   };
-  const hasPrevious = state.selectedPointId
-    ? points.findIndex((point) => point.id === state.selectedPointId) > 0
-    : points.some((point) => point.timestamp_s < state.video.currentTime - 1e-9);
-  const selectedIndex = state.selectedPointId
-    ? points.findIndex((point) => point.id === state.selectedPointId)
+  const hasPrevious = state.selectedSampleId
+    ? samples.findIndex((sample) => sample.id === state.selectedSampleId) > 0
+    : samples.some((sample) => sample.timestamp_s < state.video.currentTime - 1e-9);
+  const selectedIndex = state.selectedSampleId
+    ? samples.findIndex((sample) => sample.id === state.selectedSampleId)
     : -1;
-  const hasNext = state.selectedPointId
-    ? selectedIndex >= 0 && selectedIndex < points.length - 1
-    : points.some((point) => point.timestamp_s > state.video.currentTime + 1e-9);
+  const hasNext = state.selectedSampleId
+    ? selectedIndex >= 0 && selectedIndex < samples.length - 1
+    : samples.some((sample) => sample.timestamp_s > state.video.currentTime + 1e-9);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -346,7 +346,7 @@ export function VideoPanel() {
             <button
               type="button"
               className="button add-button"
-              onClick={addPoint}
+              onClick={addSample}
               disabled={
                 !document?.editing_enabled || !target || hasFormErrors || hasSampleAtVideoTime
               }

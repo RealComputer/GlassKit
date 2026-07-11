@@ -8,20 +8,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-from glasskit.eval.expectations import load_eval_suite
+from glasskit.eval.expectations import load_eval_directory
 from glasskit.eval.review.documents import ReviewRepository
 from glasskit.eval.review.models import (
-    PointCompare,
     ReplaceSamplesRequest,
     ReviewAPIError,
-    ReviewPoint,
+    ReviewSample,
+    SampleCompare,
     TargetReplacement,
 )
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
-def test_suite_index_is_case_local_and_document_contains_lossless_points(
+def test_eval_directory_index_is_case_local_and_document_contains_lossless_samples(
     tmp_path: Path,
 ) -> None:
     eval_dir = _copy_fixtures(tmp_path)
@@ -31,29 +31,29 @@ def test_suite_index_is_case_local_and_document_contains_lossless_points(
     invalid_encoding.write_bytes(b"video: \xff\n")
     repository = ReviewRepository(eval_dir)
 
-    suite = repository.suite_document(write_token="secret")
-    assembly = repository.case_document("assembly.yaml")
+    eval_directory = repository.eval_directory_document(write_token="secret")
+    assembly = repository.case_file_document("assembly.yaml")
 
-    assert suite.write_token == "secret"
-    assert [case.id for case in suite.cases] == [
+    assert eval_directory.write_token == "secret"
+    assert [case.id for case in eval_directory.cases] == [
         "assembly.yaml",
-        "inspection.yml",
+        "inspection.yaml",
         "invalid-encoding.yaml",
         "malformed.yaml",
     ]
-    assert suite.cases[-2].status == "blocked"
-    assert suite.cases[-2].error is not None
-    assert suite.cases[-2].error.code == "invalid_encoding"
-    assert suite.cases[-1].status == "blocked"
-    assert suite.cases[-1].point_count is None
+    assert eval_directory.cases[-2].status == "blocked"
+    assert eval_directory.cases[-2].error is not None
+    assert eval_directory.cases[-2].error.code == "invalid_encoding"
+    assert eval_directory.cases[-1].status == "blocked"
+    assert eval_directory.cases[-1].sample_count is None
     assert assembly.status == "ready"
     assert assembly.editing_enabled
-    assert assembly.source_yaml.startswith("video:")
+    assert assembly.case_file_source.startswith("video:")
     assert assembly.video is not None
-    assert assembly.video.url == "/api/cases/assembly.yaml/video"
+    assert assembly.video.url == "/api/case-files/assembly.yaml/video"
     assert assembly.targets[0].details_yaml == "config:\n  confidence_floor: 0.75\n"
-    assert assembly.targets[0].points[0].expect_json == "false"
-    assert assembly.targets[0].points[0].origin is not None
+    assert assembly.targets[0].samples[0].expect_json == "false"
+    assert assembly.targets[0].samples[0].origin is not None
     assert assembly.targets[0].display_groups[0].kind == "range"
 
 
@@ -65,13 +65,13 @@ def test_video_probe_failure_retains_normalized_targets(tmp_path: Path) -> None:
     )
     path.write_text(source, encoding="utf-8")
 
-    document = ReviewRepository(eval_dir).case_document("assembly.yaml")
+    document = ReviewRepository(eval_dir).case_file_document("assembly.yaml")
 
     assert document.status == "blocked"
     assert not document.editing_enabled
     assert document.load_error is not None
     assert document.load_error.code == "video_unavailable"
-    assert [len(target.points) for target in document.targets] == [4, 5]
+    assert [len(target.samples) for target in document.targets] == [4, 5]
     assert document.video is not None
     assert document.video.display_path == "missing.mp4"
     assert document.video.duration_s is None
@@ -93,9 +93,9 @@ targets:
     )
     repository = ReviewRepository(eval_dir)
 
-    suite = repository.suite_document(write_token="secret")
-    summary = next(case for case in suite.cases if case.id == "surrogate.yaml")
-    document = repository.case_document("surrogate.yaml")
+    eval_directory = repository.eval_directory_document(write_token="secret")
+    summary = next(case for case in eval_directory.cases if case.id == "surrogate.yaml")
+    document = repository.case_file_document("surrogate.yaml")
 
     assert summary.status == "blocked"
     assert summary.error is not None
@@ -114,11 +114,13 @@ def test_recursive_yaml_is_isolated_as_a_blocked_case(tmp_path: Path) -> None:
     )
     repository = ReviewRepository(eval_dir)
 
-    suite = repository.suite_document(write_token="secret")
-    summary = next(case for case in suite.cases if case.id == "recursive.yaml")
-    document = repository.case_document("recursive.yaml")
+    eval_directory = repository.eval_directory_document(write_token="secret")
+    summary = next(case for case in eval_directory.cases if case.id == "recursive.yaml")
+    document = repository.case_file_document("recursive.yaml")
 
-    valid_summary = next(case for case in suite.cases if case.id == "assembly.yaml")
+    valid_summary = next(
+        case for case in eval_directory.cases if case.id == "assembly.yaml"
+    )
 
     assert valid_summary.status == "ready"
     assert summary.status == "blocked"
@@ -137,7 +139,7 @@ def test_empty_and_over_duration_targets_are_repairable(tmp_path: Path) -> None:
     raw["targets"]["evidence"]["samples"][0]["range"] = [2.1, 2.6]
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
 
-    document = ReviewRepository(eval_dir).case_document("assembly.yaml")
+    document = ReviewRepository(eval_dir).case_file_document("assembly.yaml")
 
     assert document.status == "repairable"
     assert document.editing_enabled
@@ -147,7 +149,7 @@ def test_empty_and_over_duration_targets_are_repairable(tmp_path: Path) -> None:
     }
 
 
-def test_huge_finite_points_are_repairable_without_range_overflow(
+def test_huge_finite_samples_are_repairable_without_range_overflow(
     tmp_path: Path,
 ) -> None:
     eval_dir = _copy_fixtures(tmp_path)
@@ -165,10 +167,10 @@ targets:
         encoding="utf-8",
     )
 
-    document = ReviewRepository(eval_dir).case_document("huge.yaml")
+    document = ReviewRepository(eval_dir).case_file_document("huge.yaml")
 
     assert document.status == "repairable"
-    assert [point.timestamp_s for point in document.targets[0].points] == [
+    assert [sample.timestamp_s for sample in document.targets[0].samples] == [
         1e308,
         1.6e308,
     ]
@@ -185,46 +187,46 @@ def test_atomic_multi_target_write_preserves_metadata_ids_and_permissions(
     path = eval_dir / "cases" / "assembly.yaml"
     path.chmod(0o640)
     repository = ReviewRepository(eval_dir)
-    before = repository.case_document("assembly.yaml")
+    before = repository.case_file_document("assembly.yaml")
     bracket = before.targets[0]
     evidence = before.targets[1]
-    bracket_points = list(bracket.points)
-    evidence_points = list(evidence.points)
-    bracket_points[0] = bracket_points[0].model_copy(update={"timestamp_s": 0.1})
-    evidence_points[-1] = evidence_points[-1].model_copy(
+    bracket_samples = list(bracket.samples)
+    evidence_samples = list(evidence.samples)
+    bracket_samples[0] = bracket_samples[0].model_copy(update={"timestamp_s": 0.1})
+    evidence_samples[-1] = evidence_samples[-1].model_copy(
         update={"comment": "Updated evidence comment."}
     )
     request = ReplaceSamplesRequest(
         targets={
-            bracket.id: TargetReplacement(points=bracket_points),
-            evidence.id: TargetReplacement(points=evidence_points),
+            bracket.id: TargetReplacement(samples=bracket_samples),
+            evidence.id: TargetReplacement(samples=evidence_samples),
         }
     )
 
     accepted = repository.replace_samples("assembly.yaml", request)
 
     assert accepted.status == "ready"
-    assert accepted.targets[0].points[0].timestamp_s == 0.1
-    assert accepted.targets[0].points[0].id == bracket.points[0].id
-    assert accepted.targets[1].points[-1].comment == "Updated evidence comment."
+    assert accepted.targets[0].samples[0].timestamp_s == 0.1
+    assert accepted.targets[0].samples[0].id == bracket.samples[0].id
+    assert accepted.targets[1].samples[-1].comment == "Updated evidence comment."
     assert stat.S_IMODE(path.stat().st_mode) == 0o640
     rendered = path.read_text(encoding="utf-8")
     assert "review_hint: Look for the green second state." in rendered
     assert "range: [" in rendered
     assert "at: [" in rendered
     # The normal eval loader is the final semantic compatibility check.
-    load_eval_suite(eval_dir)
+    load_eval_directory(eval_dir)
 
 
-def test_noop_write_keeps_canonical_case_yaml_unchanged(tmp_path: Path) -> None:
+def test_noop_write_keeps_canonical_case_file_unchanged(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
+    document = repository.case_file_document("assembly.yaml")
     original = path.read_bytes()
     request = ReplaceSamplesRequest(
         targets={
-            target.id: TargetReplacement(points=target.points)
+            target.id: TargetReplacement(samples=target.samples)
             for target in document.targets
         }
     )
@@ -238,10 +240,10 @@ def test_invalid_candidate_leaves_original_bytes_untouched(tmp_path: Path) -> No
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
+    document = repository.case_file_document("assembly.yaml")
     original = path.read_bytes()
     request = ReplaceSamplesRequest(
-        targets={document.targets[0].id: TargetReplacement(points=[])}
+        targets={document.targets[0].id: TargetReplacement(samples=[])}
     )
 
     with pytest.raises(ReviewAPIError) as raised:
@@ -255,10 +257,12 @@ def test_put_after_case_becomes_non_utf8_is_a_conflict(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "assembly.yaml"
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
+    document = repository.case_file_document("assembly.yaml")
     request = ReplaceSamplesRequest(
         targets={
-            document.targets[0].id: TargetReplacement(points=document.targets[0].points)
+            document.targets[0].id: TargetReplacement(
+                samples=document.targets[0].samples
+            )
         }
     )
     invalid_bytes = b"video: \xff\n"
@@ -268,7 +272,7 @@ def test_put_after_case_becomes_non_utf8_is_a_conflict(tmp_path: Path) -> None:
         repository.replace_samples("assembly.yaml", request)
 
     assert raised.value.status == 409
-    assert raised.value.code == "case_structure_changed"
+    assert raised.value.code == "case_file_structure_changed"
     assert path.read_bytes() == invalid_bytes
 
 
@@ -280,23 +284,23 @@ def test_one_batch_repairs_two_empty_targets(tmp_path: Path) -> None:
         target["samples"] = []
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     repository = ReviewRepository(eval_dir)
-    assert repository.case_document("assembly.yaml").status == "repairable"
+    assert repository.case_file_document("assembly.yaml").status == "repairable"
 
     request = ReplaceSamplesRequest(
         targets={
             "bracket_seated": TargetReplacement(
-                points=[_new_point("shared-id", 0.0, "false", "boolean")]
+                samples=[_new_sample("shared-id", 0.0, "false", "boolean")]
             ),
             "evidence": TargetReplacement(
-                points=[_new_point("shared-id", 0.0, '{"count":1}', "object")]
+                samples=[_new_sample("shared-id", 0.0, '{"count":1}', "object")]
             ),
         }
     )
     accepted = repository.replace_samples("assembly.yaml", request)
 
     assert accepted.status == "ready"
-    assert [len(target.points) for target in accepted.targets] == [1, 1]
-    load_eval_suite(eval_dir)
+    assert [len(target.samples) for target in accepted.targets] == [1, 1]
+    load_eval_directory(eval_dir)
 
 
 def test_unknown_case_and_target_have_distinct_conflict_statuses(
@@ -306,13 +310,13 @@ def test_unknown_case_and_target_have_distinct_conflict_statuses(
     repository = ReviewRepository(eval_dir)
 
     with pytest.raises(ReviewAPIError) as missing_case:
-        repository.case_document("../assembly.yaml")
+        repository.case_file_document("../assembly.yaml")
     assert missing_case.value.status == 404
 
     request = ReplaceSamplesRequest(
         targets={
             "not-present": TargetReplacement(
-                points=[_new_point("point", 0.0, "true", "boolean")]
+                samples=[_new_sample("sample", 0.0, "true", "boolean")]
             )
         }
     )
@@ -326,21 +330,21 @@ def test_concurrent_target_batches_preserve_both_accepted_changes(
 ) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
-    bracket_points = list(document.targets[0].points)
-    evidence_points = list(document.targets[1].points)
-    bracket_points[0] = bracket_points[0].model_copy(
+    document = repository.case_file_document("assembly.yaml")
+    bracket_samples = list(document.targets[0].samples)
+    evidence_samples = list(document.targets[1].samples)
+    bracket_samples[0] = bracket_samples[0].model_copy(
         update={"comment": "Concurrent bracket edit."}
     )
-    evidence_points[0] = evidence_points[0].model_copy(
+    evidence_samples[0] = evidence_samples[0].model_copy(
         update={"comment": "Concurrent evidence edit."}
     )
     requests = [
         ReplaceSamplesRequest(
-            targets={"bracket_seated": TargetReplacement(points=bracket_points)}
+            targets={"bracket_seated": TargetReplacement(samples=bracket_samples)}
         ),
         ReplaceSamplesRequest(
-            targets={"evidence": TargetReplacement(points=evidence_points)}
+            targets={"evidence": TargetReplacement(samples=evidence_samples)}
         ),
     ]
 
@@ -353,9 +357,9 @@ def test_concurrent_target_batches_preserve_both_accepted_changes(
         )
 
     assert all(document.status == "ready" for document in accepted)
-    current = repository.case_document("assembly.yaml")
-    assert current.targets[0].points[0].comment == "Concurrent bracket edit."
-    assert current.targets[1].points[0].comment == "Concurrent evidence edit."
+    current = repository.case_file_document("assembly.yaml")
+    assert current.targets[0].samples[0].comment == "Concurrent bracket edit."
+    assert current.targets[1].samples[0].comment == "Concurrent evidence edit."
 
 
 def test_directory_sync_failure_returns_accepted_document_warning(
@@ -363,9 +367,9 @@ def test_directory_sync_failure_returns_accepted_document_warning(
 ) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
-    points = list(document.targets[0].points)
-    points[0] = points[0].model_copy(update={"timestamp_s": 0.1})
+    document = repository.case_file_document("assembly.yaml")
+    samples = list(document.targets[0].samples)
+    samples[0] = samples[0].model_copy(update={"timestamp_s": 0.1})
     monkeypatch.setattr(
         "glasskit.eval.review.serialization._sync_directory", lambda _path: True
     )
@@ -373,12 +377,12 @@ def test_directory_sync_failure_returns_accepted_document_warning(
     accepted = repository.replace_samples(
         "assembly.yaml",
         ReplaceSamplesRequest(
-            targets={"bracket_seated": TargetReplacement(points=points)}
+            targets={"bracket_seated": TargetReplacement(samples=samples)}
         ),
     )
 
     assert accepted.status == "ready"
-    assert accepted.targets[0].points[0].timestamp_s == 0.1
+    assert accepted.targets[0].samples[0].timestamp_s == 0.1
     assert [issue.code for issue in accepted.validation_issues] == [
         "directory_sync_failed"
     ]
@@ -399,21 +403,21 @@ def test_unrelated_timestamp_edit_preserves_lossless_nested_expectation(
     raw["targets"]["evidence"]["samples"][0]["expect"] = expected
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("assembly.yaml")
+    document = repository.case_file_document("assembly.yaml")
     evidence = document.targets[1]
-    assert evidence.points[0].expect_json == (
+    assert evidence.samples[0].expect_json == (
         '{"large":900719925474099312345,"integer":1,"float":1.0,"negative_zero":-0.0}'
     )
-    points = list(evidence.points)
-    points[0] = points[0].model_copy(update={"timestamp_s": 0.05})
+    samples = list(evidence.samples)
+    samples[0] = samples[0].model_copy(update={"timestamp_s": 0.05})
 
     repository.replace_samples(
         "assembly.yaml",
-        ReplaceSamplesRequest(targets={"evidence": TargetReplacement(points=points)}),
+        ReplaceSamplesRequest(targets={"evidence": TargetReplacement(samples=samples)}),
     )
 
-    reloaded = ReviewRepository(eval_dir).case_document("assembly.yaml")
-    assert reloaded.targets[1].points[0].expect_json == (
+    reloaded = ReviewRepository(eval_dir).case_file_document("assembly.yaml")
+    assert reloaded.targets[1].samples[0].expect_json == (
         '{"large":900719925474099312345,"integer":1,"float":1.0,"negative_zero":-0.0}'
     )
 
@@ -434,13 +438,13 @@ targets:
         encoding="utf-8",
     )
     repository = ReviewRepository(eval_dir)
-    document = repository.case_document("minimal.yaml")
-    points = list(document.targets[0].points)
-    points[0] = points[0].model_copy(update={"timestamp_s": 0.1})
+    document = repository.case_file_document("minimal.yaml")
+    samples = list(document.targets[0].samples)
+    samples[0] = samples[0].model_copy(update={"timestamp_s": 0.1})
 
     repository.replace_samples(
         "minimal.yaml",
-        ReplaceSamplesRequest(targets={"state": TargetReplacement(points=points)}),
+        ReplaceSamplesRequest(targets={"state": TargetReplacement(samples=samples)}),
     )
 
     written = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -452,20 +456,20 @@ targets:
 def _copy_fixtures(tmp_path: Path) -> Path:
     destination = tmp_path / "fixtures"
     shutil.copytree(FIXTURES, destination)
-    return destination / "eval_suites" / "review"
+    return destination / "eval_directories" / "review"
 
 
-def _new_point(
-    point_id: str, timestamp_s: float, expect_json: str, expect_type: str
-) -> ReviewPoint:
-    return ReviewPoint.model_validate(
+def _new_sample(
+    sample_id: str, timestamp_s: float, expect_json: str, expect_type: str
+) -> ReviewSample:
+    return ReviewSample.model_validate(
         {
-            "id": point_id,
+            "id": sample_id,
             "timestamp_s": timestamp_s,
             "expect_type": expect_type,
             "expect_json": expect_json,
             "field": None,
-            "compare": PointCompare().model_dump(),
+            "compare": SampleCompare().model_dump(),
             "comment": None,
             "origin": None,
         }
