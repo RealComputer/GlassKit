@@ -25,31 +25,21 @@ targets:
       expect: true
   step_3:
     samples:
-    - range: [117.0, 119.5]
-      expect: false
-    - at: 119.5
+    - at: 117.0
       expect: true
-    - range: [120.0, 132.0]
+    - range: [117.5, 151.0]
       expect: false
-    - range: [132.0, 133.0]
+    - range: [151.0, 153.0]
       expect: true
-    - range: [133.0, 147.0]
+    - at: 153.0
       expect: false
-    - at: 147.0
+    - at: 153.5
       expect: true
-    - range: [147.5, 148.5]
+    - range: [154.0, 163.5]
       expect: false
-    - range: [148.5, 149.5]
+    - at: 163.5
       expect: true
-    - range: [149.5, 151.0]
-      expect: false
-    - range: [151.0, 154.0]
-      expect: true
-    - range: [154.0, 164.0]
-      expect: false
-    - at: 164.0
-      expect: true
-    - at: 164.5
+    - range: [164.0, 165.0]
       expect: false
   step_4:
     samples:
