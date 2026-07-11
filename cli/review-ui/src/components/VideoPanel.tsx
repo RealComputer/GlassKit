@@ -338,9 +338,6 @@ export function VideoPanel() {
           {state.video.seekRequest.sampleTime !== null && (
             <span>Sample {formatSeconds(state.video.seekRequest.sampleTime)}</span>
           )}
-          {state.video.shownFrameTime !== null && (
-            <span>Shown {formatSeconds(state.video.shownFrameTime)}</span>
-          )}
           {state.video.previewStatus === "seeking" && (
             <DelayedSeekingStatus key={state.video.seekRequest.generation} />
           )}
