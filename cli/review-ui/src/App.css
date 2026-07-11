@@ -793,11 +793,10 @@ kbd {
 }
 
 .sample-marker.selected::before {
-  width: 3px;
   background: var(--expect-color, #57606a);
   box-shadow:
     0 0 0 1px #ffffff,
-    0 0 0 3px var(--accent);
+    0 0 0 3px var(--text);
 }
 
 .timeline-tooltip {
