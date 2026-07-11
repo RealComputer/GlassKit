@@ -196,12 +196,59 @@ describe("review application navigation and drafts", () => {
 
     expect(await screen.findByText("Part of a range")).toBeTruthy();
     expect(screen.getByText("1.000s–2.000s · every 0.5s · 2 samples")).toBeTruthy();
-    const rangeBand = screen.getByRole("button", {
-      name: "status range from 1.000s to 2.000s",
+    const first = screen.getByRole("button", {
+      name: "status, 1.000s, expected false",
     });
-    expect(rangeBand.getAttribute("title")).toBe("Range from 1.000s to 2.000s · every 0.5s");
+    const second = screen.getByRole("button", {
+      name: "status, 1.500s, expected false",
+    });
+    expect(document.querySelector(".range-band")).toBeNull();
+    expect(first.style.getPropertyValue("--expect-color")).toBe(
+      second.style.getPropertyValue("--expect-color"),
+    );
     expect(screen.queryByText("Serialized group")).toBeNull();
     expect(screen.queryByText("Serialized range")).toBeNull();
+  });
+
+  it("shows an immediate timestamp and expectation tooltip over timeline samples", async () => {
+    const doc = caseFile([
+      target("target_a", [sample("first", 1, "false"), sample("second", 2, "true")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const first = await screen.findByRole("button", {
+      name: "target a, 1.000s, expected false",
+    });
+    expect(first.getAttribute("title")).toBeNull();
+    const lane = document.querySelector<HTMLElement>(".lane-track");
+    expect(lane).not.toBeNull();
+    vi.spyOn(lane!, "getBoundingClientRect").mockReturnValue({
+      bottom: 52,
+      height: 52,
+      left: 0,
+      right: 1000,
+      top: 0,
+      width: 1000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    fireEvent.pointerMove(lane!, { clientX: 200, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("2.000s · true");
+    fireEvent.pointerLeave(lane!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("omits range context for an individual sample", async () => {

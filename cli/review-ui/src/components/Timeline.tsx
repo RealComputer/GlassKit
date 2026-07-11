@@ -1,6 +1,8 @@
 import { Layers3, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import type { ReviewSample } from "../api/types.ts";
 import { useApp } from "../state/AppContext.tsx";
+import { expectationColor } from "../timeline/colors.ts";
 import {
   anchoredScrollLeft,
   markerSelector,
@@ -15,9 +17,29 @@ import { expectationSummary, formatSeconds } from "../utils/format.ts";
 type TimelineStyle = CSSProperties & {
   "--track-width"?: string;
   "--position"?: string;
-  "--band-start"?: string;
-  "--band-width"?: string;
+  "--expect-color"?: string;
 };
+
+interface HoveredSample {
+  sample: ReviewSample;
+  x: number;
+  y: number;
+}
+
+const SAMPLE_HOVER_RADIUS_PX = 18;
+
+function findNearestSample(samples: ReviewSample[], timestamp: number): ReviewSample | null {
+  return samples.reduce<ReviewSample | null>((nearest, sample) => {
+    if (!nearest) return sample;
+    return Math.abs(sample.timestamp_s - timestamp) < Math.abs(nearest.timestamp_s - timestamp)
+      ? sample
+      : nearest;
+  }, null);
+}
+
+function colorStyle(sample: ReviewSample): TimelineStyle {
+  return { "--expect-color": expectationColor(sample) };
+}
 
 export function Timeline() {
   const { state, dispatch, selectSample, selectTarget, seek } = useApp();
@@ -30,6 +52,7 @@ export function Timeline() {
   const lastScrubTimeRef = useRef<number | null>(null);
   const scrubFrameRef = useRef<number | null>(null);
   const [viewportWidth, setViewportWidth] = useState(800);
+  const [hoveredSample, setHoveredSample] = useState<HoveredSample | null>(null);
   const trackWidth = timelineTrackWidth(viewportWidth, state.zoom);
   const targets = useMemo(() => {
     const all = document?.targets ?? [];
@@ -151,6 +174,29 @@ export function Timeline() {
     onLostPointerCapture: cancelScrub,
   };
 
+  const updateHoveredSample = (event: PointerEvent<HTMLDivElement>, samples: ReviewSample[]) => {
+    if (activeScrubPointerRef.current !== null) {
+      setHoveredSample(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pointerX = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+    const timestamp = positionToTime(pointerX / rect.width, duration);
+    const sample = findNearestSample(samples, timestamp);
+    if (!sample) return;
+    const sampleX = timeToPosition(sample.timestamp_s, duration) * rect.width;
+    if (Math.abs(sampleX - pointerX) > SAMPLE_HOVER_RADIUS_PX) {
+      setHoveredSample(null);
+      return;
+    }
+    setHoveredSample({
+      sample,
+      x: Math.min(window.innerWidth - 60, Math.max(60, event.clientX)),
+      y: event.clientY,
+    });
+  };
+
   const ticks = rulerTicks(duration, state.zoom);
   const rootStyle: TimelineStyle = { "--track-width": `${trackWidth}px` };
   const playheadStyle: TimelineStyle = {
@@ -249,41 +295,19 @@ export function Timeline() {
                     <span>{target.label ?? target.id}</span>
                     <small>{target.samples.length}</small>
                   </button>
-                  <div className="lane-track" {...scrubHandlers}>
-                    {target.display_groups
-                      .filter(
-                        (group) =>
-                          group.kind === "range" && group.start_s !== null && group.end_s !== null,
-                      )
-                      .map((group) => {
-                        const start = timeToPosition(group.start_s!, duration);
-                        const end = timeToPosition(group.end_s!, duration);
-                        const groupStyle: TimelineStyle = {
-                          "--band-start": `${start * 100}%`,
-                          "--band-width": `${Math.max(0, end - start) * 100}%`,
-                        };
-                        const first = group.sample_ids[0];
-                        return (
-                          <button
-                            key={group.id}
-                            type="button"
-                            className="range-band"
-                            style={groupStyle}
-                            onClick={() => {
-                              if (first) void selectSample(target.id, first);
-                            }}
-                            aria-label={`${target.label ?? target.id} range from ${formatSeconds(
-                              group.start_s!,
-                            )} to ${formatSeconds(group.end_s!)}`}
-                            title={`Range from ${formatSeconds(group.start_s!)} to ${formatSeconds(
-                              group.end_s!,
-                            )} · every ${group.every_s}s`}
-                          />
-                        );
-                      })}
+                  <div
+                    className="lane-track"
+                    {...scrubHandlers}
+                    onPointerMove={(event) => {
+                      continueScrub(event);
+                      updateHoveredSample(event, target.samples);
+                    }}
+                    onPointerLeave={() => setHoveredSample(null)}
+                  >
                     {target.samples.map((sample) => {
                       const markerStyle: TimelineStyle = {
                         "--position": `${timeToPosition(sample.timestamp_s, duration) * 100}%`,
+                        ...colorStyle(sample),
                       };
                       const selected =
                         target.id === state.selectedTargetId &&
@@ -302,7 +326,6 @@ export function Timeline() {
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
                             sample.timestamp_s,
                           )}, expected ${expectationSummary(sample)}`}
-                          title={`${formatSeconds(sample.timestamp_s)} · ${expectationSummary(sample)}`}
                         />
                       );
                     })}
@@ -314,6 +337,16 @@ export function Timeline() {
           </div>
         </div>
       </div>
+      {hoveredSample && (
+        <div
+          className="timeline-tooltip mono"
+          role="tooltip"
+          style={{ left: hoveredSample.x, top: hoveredSample.y }}
+        >
+          {formatSeconds(hoveredSample.sample.timestamp_s)} ·{" "}
+          {expectationSummary(hoveredSample.sample)}
+        </div>
+      )}
     </section>
   );
 }

@@ -759,24 +759,6 @@ kbd {
   background-size: 10% 100%;
 }
 
-.range-band {
-  position: absolute;
-  top: 50%;
-  left: var(--band-start);
-  width: max(2px, var(--band-width));
-  height: 18px;
-  padding: 0;
-  background: #b6d7f5;
-  border: 1px solid #80b9e8;
-  border-radius: 3px;
-  transform: translateY(-50%);
-}
-
-.focused .range-band {
-  background: #80ccff80;
-  border-color: #54aeff;
-}
-
 .sample-marker {
   position: absolute;
   top: 50%;
@@ -797,20 +779,11 @@ kbd {
   left: 7px;
   width: 2px;
   content: "";
-  background: #59636e;
-  border-radius: 1px;
+  background: var(--expect-color, #57606a);
 }
 
 .sample-marker::after {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  width: 8px;
-  height: 8px;
-  content: "";
-  background: var(--surface);
-  border: 2px solid #59636e;
-  border-radius: 50%;
+  content: none;
 }
 
 .sample-marker:hover,
@@ -821,13 +794,28 @@ kbd {
 
 .sample-marker.selected::before {
   width: 3px;
-  background: var(--accent);
+  background: var(--expect-color, #57606a);
+  box-shadow:
+    0 0 0 1px #ffffff,
+    0 0 0 3px var(--accent);
 }
 
-.sample-marker.selected::after {
-  background: var(--accent);
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px var(--accent);
+.timeline-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 320px;
+  padding: 5px 7px;
+  overflow: hidden;
+  color: #ffffff;
+  pointer-events: none;
+  background: #24292f;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px #1f232833;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 10px));
 }
 
 .playhead {
