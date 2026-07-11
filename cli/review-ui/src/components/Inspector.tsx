@@ -495,9 +495,12 @@ export function Inspector() {
 
         {group && (
           <div className="derived-group">
-            <span>Serialized group</span>
             <strong>{group.kind === "range" ? "Range" : "Individual samples"}</strong>
             <small>
+              {group.kind === "range" &&
+                group.start_s !== null &&
+                group.end_s !== null &&
+                `${formatSeconds(group.start_s)}–${formatSeconds(group.end_s)} · `}
               {group.point_ids.length} sample{group.point_ids.length === 1 ? "" : "s"}
               {group.every_s !== null && ` · every ${group.every_s}s`}
             </small>

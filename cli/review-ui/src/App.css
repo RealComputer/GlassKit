@@ -1078,8 +1078,7 @@ textarea[aria-invalid="true"] {
 
 .derived-group {
   display: grid;
-  grid-template-columns: 1fr max-content;
-  gap: 2px 8px;
+  gap: 2px;
   padding: 8px;
   margin: 4px 0 14px;
   background: var(--surface-subtle);
@@ -1088,13 +1087,8 @@ textarea[aria-invalid="true"] {
   font-size: 11px;
 }
 
-.derived-group > span,
 .derived-group > small {
   color: var(--text-muted);
-}
-
-.derived-group small {
-  grid-column: 1 / -1;
 }
 
 .backend-errors {

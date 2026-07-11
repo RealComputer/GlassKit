@@ -118,6 +118,36 @@ describe("review application navigation and drafts", () => {
     expect(add.getAttribute("title")).toBe("Add sample at video time (A)");
   });
 
+  it("describes reconstructed ranges with user-facing terminology", async () => {
+    const rangedTarget = target("status", [point("first", 1), point("second", 1.5)]);
+    rangedTarget.display_groups = [
+      {
+        id: "range-group",
+        kind: "range",
+        point_ids: ["first", "second"],
+        start_s: 1,
+        end_s: 2,
+        every_s: 0.5,
+        timestamps_s: [1, 1.5],
+      },
+    ];
+    const doc = caseDocument([rangedTarget]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    expect(await screen.findByText("Range")).toBeTruthy();
+    expect(screen.getByText("1.000s–2.000s · 2 samples · every 0.5s")).toBeTruthy();
+    expect(screen.queryByText("Serialized group")).toBeNull();
+  });
+
   it("scrubs the video by dragging across the timeline", async () => {
     const doc = caseDocument();
     vi.stubGlobal(
