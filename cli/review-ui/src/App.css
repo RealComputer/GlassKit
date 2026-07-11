@@ -815,10 +815,6 @@ kbd {
   border-bottom: 0;
 }
 
-.timeline-lane.focused {
-  min-height: 52px;
-}
-
 .timeline-lane.focused .lane-label {
   color: var(--accent);
   background: var(--surface-selected);
