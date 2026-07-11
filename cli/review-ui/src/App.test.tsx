@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
 import { document as caseDocument, point, suite, target } from "./test/fixtures.ts";
@@ -44,6 +44,40 @@ describe("review application navigation and drafts", () => {
     pause.mockClear();
     fireEvent.click(video!);
     expect(pause).toHaveBeenCalledOnce();
+  });
+
+  it("gives transport actions visible labels and shortcut hints", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const sampleNavigation = await screen.findByRole("group", { name: "Sample navigation" });
+    const previous = within(sampleNavigation).getByRole("button", { name: "Previous sample" });
+    const next = within(sampleNavigation).getByRole("button", { name: "Next sample" });
+    expect(previous.textContent).toContain("Previous sample");
+    expect(previous.textContent).toContain("[");
+    expect(next.textContent).toContain("Next sample");
+    expect(next.textContent).toContain("]");
+
+    const timeAdjustment = screen.getByRole("group", { name: "Video time adjustment" });
+    const backward = within(timeAdjustment).getByRole("button", {
+      name: "Move video time back 0.1 seconds",
+    });
+    const forward = within(timeAdjustment).getByRole("button", {
+      name: "Move video time forward 0.1 seconds",
+    });
+    expect(backward.textContent).toContain("−0.1 s");
+    expect(backward.textContent).toContain("←");
+    expect(forward.textContent).toContain("+0.1 s");
+    expect(forward.textContent).toContain("→");
   });
 
   it("scrubs the video by dragging across the timeline", async () => {

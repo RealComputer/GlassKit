@@ -355,6 +355,8 @@
 }
 
 .transport {
+  container-name: review-transport;
+  container-type: inline-size;
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -362,6 +364,26 @@
   min-height: 46px;
   padding: 6px 10px;
   border-top: 1px solid #3d444d;
+}
+
+.transport-group {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.transport-nudge-group {
+  padding-left: 9px;
+  border-left: 1px solid var(--border);
+}
+
+.transport-action {
+  white-space: nowrap;
+}
+
+.transport-compact-icon {
+  display: none;
 }
 
 .icon-button,
@@ -423,13 +445,6 @@
   text-decoration: underline;
 }
 
-.transport-divider {
-  align-self: stretch;
-  width: 1px;
-  margin: 1px 4px;
-  background: var(--border);
-}
-
 .time-control,
 .rate-control {
   display: flex;
@@ -482,6 +497,27 @@ kbd {
   color: var(--text-muted);
   font-size: 10px;
   white-space: nowrap;
+}
+
+@container review-transport (max-width: 760px) {
+  .transport kbd {
+    display: none;
+  }
+}
+
+@container review-transport (max-width: 520px) {
+  .transport-action {
+    width: 32px;
+    padding: 5px;
+  }
+
+  .transport-action-label {
+    display: none;
+  }
+
+  .transport-compact-icon {
+    display: block;
+  }
 }
 
 .inline-warning,
