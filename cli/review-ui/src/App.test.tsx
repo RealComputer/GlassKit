@@ -78,6 +78,9 @@ describe("review application navigation and drafts", () => {
     expect(backward.textContent).toContain("←");
     expect(forward.textContent).toContain("+0.1 s");
     expect(forward.textContent).toContain("→");
+
+    const editing = screen.getByRole("group", { name: "Playback settings and sample editing" });
+    expect(within(editing).getByRole("button", { name: /Add sample/ })).toBeTruthy();
   });
 
   it("scrubs the video by dragging across the timeline", async () => {
@@ -274,7 +277,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
 
-    const add = screen.getByRole("button", { name: /Add point/ });
+    const add = screen.getByRole("button", { name: /Add sample/ });
     expect(add).toHaveProperty("disabled", true);
     fireEvent.click(add);
     fireEvent.keyDown(window, { key: "a" });
@@ -315,7 +318,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
-    fireEvent.click(screen.getByRole("button", { name: "Delete point" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete sample" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("Expected value")).toHaveProperty("value", "2"),

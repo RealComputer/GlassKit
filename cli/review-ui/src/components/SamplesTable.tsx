@@ -70,7 +70,7 @@ export function SamplesTable() {
       ) : target ? (
         <div className="empty-state compact">
           <strong>This target has no samples.</strong>
-          <span>Add its first point at the current playhead.</span>
+          <span>Add its first sample at the current video time.</span>
           <button
             type="button"
             className="button primary-button"

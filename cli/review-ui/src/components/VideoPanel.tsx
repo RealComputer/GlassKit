@@ -350,9 +350,9 @@ export function VideoPanel() {
             className="button add-button"
             onClick={addPoint}
             disabled={!document?.editing_enabled || !target || hasFormErrors}
-            title="Add point at playhead (A)"
+            title="Add sample at video time (A)"
           >
-            <CirclePlus size={16} /> Add point <kbd>A</kbd>
+            <CirclePlus size={16} /> Add sample <kbd>A</kbd>
           </button>
         </div>
         <div className="preview-diagnostic mono" role="status">

@@ -164,7 +164,7 @@ export function Timeline() {
       <div className="timeline-toolbar">
         <div className="section-title">
           <h2>Timeline</h2>
-          <span>{document?.targets.reduce((sum, t) => sum + t.points.length, 0) ?? 0} points</span>
+          <span>{document?.targets.reduce((sum, t) => sum + t.points.length, 0) ?? 0} samples</span>
         </div>
         <div className="toolbar-spacer" />
         <ZoomIn size={15} aria-hidden="true" />

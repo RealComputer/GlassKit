@@ -131,25 +131,25 @@ export function Overlays() {
                 <dt>
                   <kbd>[</kbd> / <kbd>]</kbd>
                 </dt>
-                <dd>Previous / next point</dd>
+                <dd>Previous / next sample</dd>
               </div>
               <div>
                 <dt>
                   <kbd>←</kbd> / <kbd>→</kbd>
                 </dt>
-                <dd>Nudge playhead 0.1 seconds</dd>
+                <dd>Move video time 0.1 seconds</dd>
               </div>
               <div>
                 <dt>
                   <kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd>
                 </dt>
-                <dd>Nudge playhead 1 second</dd>
+                <dd>Move video time 1 second</dd>
               </div>
               <div>
                 <dt>
                   <kbd>A</kbd>
                 </dt>
-                <dd>Add point at playhead</dd>
+                <dd>Add sample at video time</dd>
               </div>
             </dl>
           </section>

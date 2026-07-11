@@ -132,7 +132,7 @@ export function Inspector() {
         (item) => item.id !== point?.id && Math.abs(item.timestamp_s - parsed) <= 1e-9,
       )
     ) {
-      error = "Another point already uses this time.";
+      error = "Another sample already uses this time.";
     }
     setError("timestamp", error);
     return error ? null : parsed;
@@ -496,9 +496,9 @@ export function Inspector() {
         {group && (
           <div className="derived-group">
             <span>Serialized group</span>
-            <strong>{group.kind === "range" ? "Range" : "At points"}</strong>
+            <strong>{group.kind === "range" ? "Range" : "Individual samples"}</strong>
             <small>
-              {group.point_ids.length} point{group.point_ids.length === 1 ? "" : "s"}
+              {group.point_ids.length} sample{group.point_ids.length === 1 ? "" : "s"}
               {group.every_s !== null && ` · every ${group.every_s}s`}
             </small>
           </div>
@@ -522,11 +522,11 @@ export function Inspector() {
           onClick={() => deletePoint(target.id, point.id)}
           title={
             canDeletePoint(target.id, point.id)
-              ? "Delete this point"
-              : "A valid target must keep at least one point"
+              ? "Delete this sample"
+              : "A valid target must keep at least one sample"
           }
         >
-          <Trash2 size={16} /> Delete point
+          <Trash2 size={16} /> Delete sample
         </button>
       </fieldset>
       {editingDisabled && (
