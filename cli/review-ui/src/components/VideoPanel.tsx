@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
+import { findPointAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
@@ -39,6 +40,7 @@ export function VideoPanel() {
     () => [...(target?.points ?? [])].sort((a, b) => a.timestamp_s - b.timestamp_s),
     [target?.points],
   );
+  const hasSampleAtVideoTime = Boolean(target && findPointAt(target, state.video.currentTime));
 
   useEffect(() => {
     if (globalThis.document.activeElement !== timeInputRef.current) {
@@ -345,8 +347,14 @@ export function VideoPanel() {
               type="button"
               className="button add-button"
               onClick={addPoint}
-              disabled={!document?.editing_enabled || !target || hasFormErrors}
-              title="Add sample at video time (A)"
+              disabled={
+                !document?.editing_enabled || !target || hasFormErrors || hasSampleAtVideoTime
+              }
+              title={
+                hasSampleAtVideoTime
+                  ? "A sample already exists at this time"
+                  : "Add sample at video time (A)"
+              }
             >
               <CirclePlus size={16} /> Add sample <kbd>A</kbd>
             </button>

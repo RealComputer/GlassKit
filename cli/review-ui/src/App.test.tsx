@@ -95,6 +95,29 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByText("Sample 1.000s")).toBeNull();
   });
 
+  it("disables adding a sample when the video time already has one", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const add = await screen.findByRole("button", { name: /Add sample/ });
+    expect(add).toHaveProperty("disabled", true);
+    expect(add.getAttribute("title")).toBe("A sample already exists at this time");
+
+    fireEvent.click(screen.getByRole("button", { name: "Move video time forward 0.1 seconds" }));
+
+    await waitFor(() => expect(add).toHaveProperty("disabled", false));
+    expect(add.getAttribute("title")).toBe("Add sample at video time (A)");
+  });
+
   it("scrubs the video by dragging across the timeline", async () => {
     const doc = caseDocument();
     vi.stubGlobal(

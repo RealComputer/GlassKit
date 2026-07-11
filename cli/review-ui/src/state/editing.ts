@@ -13,13 +13,18 @@ function closestPoint(target: ReviewTarget, timestamp: number) {
   }, null);
 }
 
+export function findPointAt(target: ReviewTarget, playheadTime: number): ReviewPoint | undefined {
+  const timestamp = Math.round(playheadTime * 1000) / 1000;
+  return target.points.find((point) => Math.abs(point.timestamp_s - timestamp) <= 1e-9);
+}
+
 export function createPointAt(
   target: ReviewTarget,
   playheadTime: number,
   id: string,
 ): { point: ReviewPoint; duplicate: boolean } {
   const timestamp = Math.round(playheadTime * 1000) / 1000;
-  const duplicate = target.points.find((point) => Math.abs(point.timestamp_s - timestamp) <= 1e-9);
+  const duplicate = findPointAt(target, playheadTime);
   if (duplicate) return { point: duplicate, duplicate: true };
   const source = closestPoint(target, timestamp);
   return {
