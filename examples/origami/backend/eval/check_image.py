@@ -37,7 +37,10 @@ def main() -> int:
                 prompt=step.criteria,
                 log_context=str(image_path),
             )
-        print(f"{image_path}: {str(result.value).lower()} ({result.response_text!r})")
+        print(
+            f"{image_path}: {str(result.value).lower()} ({result.response_text!r})",
+            flush=True,
+        )
 
     return 0
 

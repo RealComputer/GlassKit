@@ -129,11 +129,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             concurrency=args.concurrency,
         )
     except KeyboardInterrupt:
-        print("interrupted", file=sys.stderr)
+        print("interrupted", file=sys.stderr, flush=True)
         _print_resume_cache_hint(cache_path)
         return 130
     except Exception as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(f"error: {error}", file=sys.stderr, flush=True)
         _print_resume_cache_hint(cache_path)
         return 1
     return 0
@@ -142,10 +142,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _print_resume_cache_hint(cache_path: Path) -> None:
     if not cache_path.exists():
         return
-    print(f"partial cache kept at {cache_path}", file=sys.stderr)
+    print(f"partial cache kept at {cache_path}", file=sys.stderr, flush=True)
     print(
         "rerun the same command to resume; delete this file to start over",
         file=sys.stderr,
+        flush=True,
     )
 
 
@@ -227,7 +228,10 @@ def _run_generation(
     call_text = f"{len(missing_requests)} Gemini calls"
     if missing_requests:
         call_text += f", concurrency {concurrency}"
-    print(f"labeling {len(requests)} samples ({len(results)} cached, {call_text})")
+    print(
+        f"labeling {len(requests)} samples ({len(results)} cached, {call_text})",
+        flush=True,
+    )
 
     gemini_durations: list[float] = []
     gemini_wall_s = 0.0
@@ -258,7 +262,7 @@ def _run_generation(
     )
     if cache_path.exists():
         cache_path.unlink()
-    print(f"wrote {output_path}")
+    print(f"wrote {output_path}", flush=True)
     print(
         _format_completion_summary(
             total_samples=len(requests),
@@ -266,7 +270,8 @@ def _run_generation(
             gemini_durations=gemini_durations,
             gemini_wall_s=gemini_wall_s,
             total_elapsed_s=time.monotonic() - run_start_s,
-        )
+        ),
+        flush=True,
     )
 
 
@@ -473,7 +478,8 @@ def _label_missing_requests(
                 f"[{completed}/{len(requests)}] {labeled.request.target_id} "
                 f"{_format_time(labeled.request.timestamp_s)}s -> "
                 f"{str(labeled.result.value).lower()} "
-                f"({_format_duration(labeled.elapsed_s)})"
+                f"({_format_duration(labeled.elapsed_s)})",
+                flush=True,
             )
         return first_error
 
@@ -618,6 +624,7 @@ def call_gemini(
                 f"Gemini call failed for {log_context}; retrying in {delay_s}s: "
                 f"{error}",
                 file=sys.stderr,
+                flush=True,
             )
             time.sleep(delay_s)
     raise RuntimeError(f"Gemini call failed for {log_context}: {last_error}")
