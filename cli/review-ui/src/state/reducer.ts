@@ -22,7 +22,7 @@ export interface VideoState {
   mediaGeneration: number;
   paused: boolean;
   playbackRate: number;
-  seekRequest: { generation: number; time: number; sampleTime: number | null };
+  seekRequest: { generation: number; time: number };
   previewStatus: "idle" | "seeking" | "ready" | "unavailable";
   shownFrameTime: number | null;
   previewMessage: string | null;
@@ -73,7 +73,7 @@ export const initialState: AppState = {
     mediaGeneration: 0,
     paused: true,
     playbackRate: 1,
-    seekRequest: { generation: 0, time: 0, sampleTime: null },
+    seekRequest: { generation: 0, time: 0 },
     previewStatus: "idle",
     shownFrameTime: null,
     previewMessage: null,
@@ -136,11 +136,7 @@ export type AppAction =
   | { type: "SET_SOURCE_DRAWER"; value: "case" | "config" | null }
   | { type: "SET_HELP_OPEN"; value: boolean }
   | { type: "SET_TOAST"; value: string | null }
-  | {
-      type: "REQUEST_SEEK";
-      time: number;
-      sampleTime?: number | null;
-    }
+  | { type: "REQUEST_SEEK"; time: number }
   | { type: "VIDEO_PATCH"; patch: Partial<Omit<VideoState, "seekRequest">> };
 
 function workspaceFor(document: CaseDocument): CaseWorkspace {
@@ -173,7 +169,6 @@ function videoAtPoint(video: VideoState, point: ReviewPoint | undefined): VideoS
     seekRequest: {
       generation: video.seekRequest.generation + 1,
       time: point.timestamp_s,
-      sampleTime: point.timestamp_s,
     },
     previewStatus: "seeking",
     shownFrameTime: null,
@@ -323,7 +318,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           seekRequest: {
             generation: state.video.seekRequest.generation + 1,
             time: action.timestamp,
-            sampleTime: action.timestamp,
           },
           previewStatus: "seeking",
           shownFrameTime: null,
@@ -605,7 +599,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           seekRequest: {
             generation: state.video.seekRequest.generation + 1,
             time: currentTime,
-            sampleTime: action.sampleTime ?? null,
           },
           previewStatus: "seeking",
           shownFrameTime: null,

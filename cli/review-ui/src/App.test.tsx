@@ -81,6 +81,7 @@ describe("review application navigation and drafts", () => {
 
     const editing = screen.getByRole("group", { name: "Playback settings and sample editing" });
     expect(within(editing).getByRole("button", { name: /Add sample/ })).toBeTruthy();
+    expect(screen.queryByText("Sample 1.000s")).toBeNull();
   });
 
   it("scrubs the video by dragging across the timeline", async () => {

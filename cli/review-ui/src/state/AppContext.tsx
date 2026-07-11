@@ -37,7 +37,7 @@ interface AppContextValue {
   deletePoint: (targetId: string, pointId: string) => void;
   canDeletePoint: (targetId: string, pointId: string) => boolean;
   setFormError: (key: string, message: string | null) => void;
-  seek: (time: number, sampleTime?: number | null) => void;
+  seek: (time: number) => void;
   flushCurrentCase: () => Promise<boolean>;
   retrySave: () => void;
   reloadFromDisk: () => Promise<void>;
@@ -431,7 +431,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({
           type: "REQUEST_SEEK",
           time: normalizedUpdate.timestamp_s,
-          sampleTime: normalizedUpdate.timestamp_s,
         });
       }
     },
@@ -543,8 +542,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [canDeletePoint],
   );
 
-  const seek = useCallback((time: number, sampleTime?: number | null) => {
-    dispatch({ type: "REQUEST_SEEK", time, sampleTime });
+  const seek = useCallback((time: number) => {
+    dispatch({ type: "REQUEST_SEEK", time });
   }, []);
 
   const setFormError = useCallback((key: string, message: string | null) => {

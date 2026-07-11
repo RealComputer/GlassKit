@@ -77,7 +77,6 @@ describe("appReducer save ordering", () => {
     expect(state.video.seekRequest).toEqual({
       generation: generation + 1,
       time: 1,
-      sampleTime: 1,
     });
   });
 
@@ -105,7 +104,6 @@ describe("appReducer save ordering", () => {
     expect(state.selectedPointId).toBe("retained");
     expect(state.video.currentTime).toBe(7);
     expect(state.video.seekRequest.time).toBe(7);
-    expect(state.video.seekRequest.sampleTime).toBe(7);
     expect(state.video.mediaGeneration).toBe(mediaGeneration + 1);
   });
 

@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
-import { formatSeconds } from "../utils/format.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
@@ -355,14 +354,11 @@ export function VideoPanel() {
             <CirclePlus size={16} /> Add sample <kbd>A</kbd>
           </button>
         </div>
-        <div className="preview-diagnostic mono" role="status">
-          {state.video.seekRequest.sampleTime !== null && (
-            <span>Sample {formatSeconds(state.video.seekRequest.sampleTime)}</span>
-          )}
-          {state.video.previewStatus === "seeking" && (
+        {state.video.previewStatus === "seeking" && (
+          <div className="preview-diagnostic mono" role="status">
             <DelayedSeekingStatus key={state.video.seekRequest.generation} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {state.video.previewMessage && (
         <div className="inline-warning" role="alert">
