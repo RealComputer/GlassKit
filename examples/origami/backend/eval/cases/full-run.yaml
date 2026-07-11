@@ -5,21 +5,13 @@ sampling:
 targets:
   step_1:
     samples:
-    - range: [0.0, 38.0]
+    - range: [0.0, 49.0]
       expect: false
-    - range: [38.0, 42.0]
+    - range: [49.0, 51.0]
       expect: true
-    - at: 42.0
+    - range: [51.0, 63.0]
       expect: false
-    - range: [42.5, 51.5]
-      expect: true
-    - range: [51.5, 57.0]
-      expect: false
-    - at: 57.0
-      expect: true
-    - range: [57.5, 62.5]
-      expect: false
-    - range: [62.5, 64.0]
+    - range: [63.0, 64.0]
       expect: true
   step_2:
     samples:
