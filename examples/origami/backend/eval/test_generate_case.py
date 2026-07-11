@@ -38,7 +38,7 @@ targets:
   step_2:
     label: Keep me
     samples:
-    - at: 1.0
+    - range: [1.0, 1.5]
       expect: true
 """,
                 encoding="utf-8",
@@ -58,7 +58,8 @@ targets:
                 existing_case=existing_case,
             )
 
-            written = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+            output_text = output_path.read_text(encoding="utf-8")
+            written = yaml.safe_load(output_text)
             self.assertEqual(written["description"], "Reviewed description")
             self.assertEqual(written["reviewer"], "human")
             self.assertEqual(
@@ -69,9 +70,10 @@ targets:
                 written["targets"]["step_2"],
                 {
                     "label": "Keep me",
-                    "samples": [{"at": 1.0, "expect": True}],
+                    "samples": [{"range": [1.0, 1.5], "expect": True}],
                 },
             )
+            self.assertIn("    - range: [1.0, 1.5]\n", output_text)
             self.assertEqual(output_path.stat().st_mode & 0o777, 0o640)
 
     def test_full_generation_overwrites_existing_case(self) -> None:

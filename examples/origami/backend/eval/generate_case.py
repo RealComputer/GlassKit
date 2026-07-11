@@ -795,6 +795,7 @@ def _write_case_yaml(
         raw_case = dict(existing_case.raw)
         raw_case["targets"] = merged_targets
 
+    _use_flow_style_for_sample_ranges(raw_case)
     rendered = yaml.dump(
         raw_case,
         Dumper=_CaseYamlDumper,
@@ -803,6 +804,24 @@ def _write_case_yaml(
         default_flow_style=False,
     )
     _write_text_atomically(path, rendered)
+
+
+def _use_flow_style_for_sample_ranges(raw_case: dict[str, Any]) -> None:
+    targets = raw_case.get("targets")
+    if not isinstance(targets, dict):
+        return
+    for raw_target in targets.values():
+        if not isinstance(raw_target, dict):
+            continue
+        samples = raw_target.get("samples")
+        if not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            sample_range = sample.get("range")
+            if isinstance(sample_range, list):
+                sample["range"] = _FlowList(cast("list[float]", sample_range))
 
 
 def _load_existing_case_for_target_update(
