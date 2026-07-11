@@ -7,9 +7,9 @@ targets:
     samples:
     - range: [0.0, 49.0]
       expect: false
-    - range: [49.0, 51.0]
+    - range: [49.0, 51.5]
       expect: true
-    - range: [51.0, 63.0]
+    - range: [51.5, 63.0]
       expect: false
     - range: [63.0, 64.0]
       expect: true
