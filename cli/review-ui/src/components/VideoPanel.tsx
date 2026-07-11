@@ -1,5 +1,6 @@
 import {
   CirclePlus,
+  Download,
   Pause,
   Play,
   SkipBack,
@@ -11,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
 import { findSampleAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
+import { downloadVideoFrame, frameDownloadFilename } from "../video/downloadFrame.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
 
@@ -32,6 +34,7 @@ export function VideoPanel() {
   const seekerRef = useRef<PreciseVideoSeeker | null>(null);
   const skipNextTimeBlur = useRef(false);
   const [timeDraft, setTimeDraft] = useState("0.000");
+  const [frameDownloadPending, setFrameDownloadPending] = useState(false);
   const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
   const target = document?.targets.find((item) => item.id === state.selectedTargetId);
@@ -158,6 +161,22 @@ export function VideoPanel() {
     const clamped = Math.min(state.video.duration ?? Number.POSITIVE_INFINITY, Math.max(0, parsed));
     setTimeDraft(clamped.toFixed(3));
     seek(clamped);
+  };
+  const downloadCurrentFrame = async () => {
+    const video = videoRef.current;
+    if (!video || !document) return;
+    setFrameDownloadPending(true);
+    try {
+      await downloadVideoFrame(video, frameDownloadFilename(document.name, video.currentTime));
+    } catch (error) {
+      dispatch({
+        type: "SET_TOAST",
+        value:
+          error instanceof Error ? error.message : "The current frame could not be downloaded.",
+      });
+    } finally {
+      setFrameDownloadPending(false);
+    }
   };
 
   return (
@@ -337,6 +356,20 @@ export function VideoPanel() {
                 <option value="2">2×</option>
               </select>
             </label>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => void downloadCurrentFrame()}
+              disabled={
+                !document?.video?.url ||
+                state.video.previewStatus !== "ready" ||
+                frameDownloadPending
+              }
+              title="Download current frame"
+              aria-label="Download current frame"
+            >
+              <Download size={16} />
+            </button>
           </div>
           <div
             className="transport-group transport-create-group"

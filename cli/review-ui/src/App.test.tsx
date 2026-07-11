@@ -89,6 +89,9 @@ describe("review application navigation and drafts", () => {
     expect(within(videoControls).getByRole("button", { name: "Play video" })).toBeTruthy();
     expect(within(videoControls).getByLabelText("Time")).toBeTruthy();
     expect(within(videoControls).getByLabelText("Playback rate")).toBeTruthy();
+    expect(
+      within(videoControls).getByRole("button", { name: "Download current frame" }),
+    ).toBeTruthy();
 
     const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
     expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
