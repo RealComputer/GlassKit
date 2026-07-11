@@ -195,8 +195,8 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    const timelineTab = await screen.findByRole("tab", { name: "Timeline 2" });
-    const samplesTab = screen.getByRole("tab", { name: "Samples 2" });
+    const timelineTab = await screen.findByRole("tab", { name: "Timeline" });
+    const samplesTab = screen.getByRole("tab", { name: "Samples" });
     expect(timelineTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("timeline-view-tab");
     const first = screen.getByRole("button", {
@@ -212,8 +212,12 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByText("Part of a range")).toBeNull();
 
     fireEvent.keyDown(timelineTab, { key: "ArrowRight" });
+    expect(timelineTab.getAttribute("aria-selected")).toBe("true");
+    expect(samplesTab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByLabelText("Time")).toHaveProperty("value", "1.100");
+
+    fireEvent.click(samplesTab);
     expect(samplesTab.getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByLabelText("Time")).toHaveProperty("value", "1.000");
     expect(screen.queryByLabelText("Sample timeline")).toBeNull();
     const group = screen.getByRole("button", {
       name: "Expand 1.000s–1.500s · 2 samples",
@@ -221,7 +225,8 @@ describe("review application navigation and drafts", () => {
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
 
     fireEvent.click(group);
-    expect(screen.getAllByText("Same settings as group")).toHaveLength(2);
+    expect(document.querySelectorAll(".sample-group-member")).toHaveLength(2);
+    expect(screen.queryByText("Same settings as group")).toBeNull();
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(3);
     expect(screen.queryByText("Part of a range")).toBeNull();
   });
@@ -438,7 +443,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
-    fireEvent.click(screen.getByRole("tab", { name: "Samples 2" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     const secondRow = screen
       .getAllByText("2.000s")
       .find((element) => element.tagName === "TD")
@@ -494,7 +499,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Samples 1" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
 
     const add = screen.getByRole("button", { name: /Add sample/ });
     expect(add).toHaveProperty("disabled", true);
@@ -537,7 +542,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
-    fireEvent.click(screen.getByRole("tab", { name: "Samples 2" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete sample" }));
 
     await waitFor(() =>

@@ -152,9 +152,7 @@ export function SamplesTable() {
                               </span>
                               {formatSeconds(sample.timestamp_s)}
                             </td>
-                            <td className="sample-group-inherited" colSpan={5}>
-                              Same settings as group
-                            </td>
+                            <td colSpan={5} />
                           </tr>
                         );
                       })}

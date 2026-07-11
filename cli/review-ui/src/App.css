@@ -324,7 +324,9 @@
 }
 
 .review-center {
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--app-bg);
 }
 
@@ -332,6 +334,10 @@
 .review-views {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+.video-section {
+  flex: none;
 }
 
 .video-stage {
@@ -562,6 +568,7 @@ kbd {
 }
 
 .review-view-tabs {
+  flex: none;
   display: flex;
   gap: 18px;
   align-items: stretch;
@@ -592,12 +599,6 @@ kbd {
   border-bottom-color: var(--accent);
 }
 
-.review-view-tabs button span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
-}
-
 .review-view-context {
   align-self: center;
   min-width: 0;
@@ -612,6 +613,26 @@ kbd {
 .review-view-panel .timeline-section,
 .review-view-panel .samples-section {
   border-bottom: 0;
+}
+
+.review-views,
+.review-view-panel,
+.timeline-section,
+.samples-section {
+  min-height: 0;
+}
+
+.review-views,
+.review-view-panel,
+.timeline-section,
+.samples-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.review-view-panel {
+  flex: 1;
 }
 
 .timeline-toolbar {
@@ -674,7 +695,9 @@ kbd {
 
 .timeline-scroll {
   position: relative;
-  max-height: 258px;
+  flex: 1;
+  max-height: none;
+  min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -899,11 +922,13 @@ kbd {
 }
 
 .samples-section {
-  min-height: 210px;
+  min-height: 0;
 }
 
 .table-scroll {
-  max-height: min(52vh, 560px);
+  flex: 1;
+  max-height: none;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -1017,10 +1042,6 @@ tbody tr.selected {
   width: 18px;
   padding-left: 4px;
   color: var(--border-strong);
-}
-
-.sample-group-inherited {
-  font-style: italic;
 }
 
 .expect-cell .type-chip {
@@ -1402,9 +1423,30 @@ textarea[aria-invalid="true"] {
   }
 
   .review-center {
+    display: block;
     grid-row: 1;
     grid-column: 2;
     overflow: visible;
+  }
+
+  .review-views,
+  .review-view-panel,
+  .timeline-section,
+  .samples-section {
+    display: block;
+    height: auto;
+  }
+
+  .timeline-scroll {
+    max-height: 258px;
+  }
+
+  .samples-section {
+    min-height: 210px;
+  }
+
+  .table-scroll {
+    max-height: min(52vh, 560px);
   }
 
   .inspector {
