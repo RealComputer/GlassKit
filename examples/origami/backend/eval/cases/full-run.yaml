@@ -17,11 +17,7 @@ targets:
     samples:
     - range: [64.0, 106.5]
       expect: false
-    - range: [106.5, 107.5]
-      expect: true
-    - at: 107.5
-      expect: false
-    - at: 108.0
+    - range: [106.5, 108.5]
       expect: true
     - range: [108.5, 113.5]
       expect: false
