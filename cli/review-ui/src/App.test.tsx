@@ -199,6 +199,9 @@ describe("review application navigation and drafts", () => {
     const samplesTab = screen.getByRole("tab", { name: "Samples" });
     expect(timelineTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("timeline-view-tab");
+    timelineTab.focus();
+    fireEvent.pointerUp(timelineTab);
+    expect(document.activeElement).toBe(document.body);
     const first = screen.getByRole("button", {
       name: "status, 1.000s, expected false",
     });

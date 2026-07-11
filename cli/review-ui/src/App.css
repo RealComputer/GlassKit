@@ -400,11 +400,13 @@
   gap: 5px;
   align-items: center;
   padding-left: 9px;
+  margin-left: 4px;
   border-left: 1px solid var(--border);
 }
 
 .transport-create-group {
   padding-left: 9px;
+  margin-left: 4px;
   border-left: 1px solid var(--border);
 }
 
@@ -498,10 +500,6 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-}
-
-.add-button {
-  margin-left: 2px;
 }
 
 kbd {
@@ -709,7 +707,6 @@ kbd {
 .timeline-content {
   position: relative;
   width: calc(148px + var(--track-width));
-  min-height: 100%;
 }
 
 .time-ruler,
@@ -801,6 +798,14 @@ kbd {
 .timeline-lane {
   min-height: 38px;
   border-bottom: 1px solid #eaeef2;
+}
+
+.timeline-lanes {
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-lane:last-child {
+  border-bottom: 0;
 }
 
 .timeline-lane.focused {
@@ -895,7 +900,7 @@ kbd {
 .playhead {
   position: absolute;
   top: 30px;
-  bottom: 0;
+  bottom: 1px;
   z-index: 6;
   width: 1px;
   pointer-events: none;

@@ -21,6 +21,7 @@ export function ReviewViews() {
           aria-selected={activeView === "timeline"}
           aria-controls="timeline-view-panel"
           onClick={() => setActiveView("timeline")}
+          onPointerUp={(event) => event.currentTarget.blur()}
         >
           Timeline
         </button>
@@ -31,6 +32,7 @@ export function ReviewViews() {
           aria-selected={activeView === "samples"}
           aria-controls="samples-view-panel"
           onClick={() => setActiveView("samples")}
+          onPointerUp={(event) => event.currentTarget.blur()}
         >
           Samples
         </button>
