@@ -310,8 +310,14 @@ describe("review application navigation and drafts", () => {
     expect(playhead.getAttribute("aria-valuenow")).toBe("7");
   });
 
-  it("keeps navigation shortcuts available after a timeline sample receives focus", async () => {
-    const doc = caseFile([target("target_a", [sample("first", 1, "1"), sample("second", 2, "2")])]);
+  it("keeps repeating navigation shortcuts available after a timeline sample receives focus", async () => {
+    const doc = caseFile([
+      target("target_a", [
+        sample("first", 1, "1"),
+        sample("second", 2, "2"),
+        sample("third", 3, "3"),
+      ]),
+    ]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
@@ -334,8 +340,11 @@ describe("review application navigation and drafts", () => {
     fireEvent.keyDown(first, { key: "]" });
     await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2"));
 
+    fireEvent.keyDown(first, { key: "]", repeat: true });
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "3"));
+
     fireEvent.keyDown(first, { key: "ArrowRight" });
-    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "2.100"));
+    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "3.100"));
   });
 
   it("keeps the fit timeline's final label inside its viewport", async () => {
