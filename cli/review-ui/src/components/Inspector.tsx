@@ -206,9 +206,6 @@ export function Inspector() {
     return options;
   })();
 
-  const group = target?.display_groups.find((item) =>
-    sample ? item.sample_ids.includes(sample.id) : false,
-  );
   const editingDisabled = !workspace?.document.editing_enabled;
 
   if (!sample || !target || !workspace) {
@@ -492,19 +489,6 @@ export function Inspector() {
             }}
           />
         </div>
-
-        {group?.kind === "range" &&
-          group.start_s !== null &&
-          group.end_s !== null &&
-          group.every_s !== null && (
-            <div className="derived-group">
-              <strong>Part of a range</strong>
-              <small>
-                {formatSeconds(group.start_s)}–{formatSeconds(group.end_s)} · every {group.every_s}s
-                · {group.sample_ids.length} sample{group.sample_ids.length === 1 ? "" : "s"}
-              </small>
-            </div>
-          )}
 
         {(workspace.saveError || workspace.saveDetails.length > 0) && (
           <div className="backend-errors" role="alert">

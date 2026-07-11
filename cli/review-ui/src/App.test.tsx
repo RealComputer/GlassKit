@@ -169,8 +169,9 @@ describe("review application navigation and drafts", () => {
     expect(add.getAttribute("title")).toBe("Add sample at video time (A)");
   });
 
-  it("describes reconstructed ranges with user-facing terminology", async () => {
+  it("switches between timeline and source-agnostic grouped samples", async () => {
     const rangedTarget = target("status", [sample("first", 1), sample("second", 1.5)]);
+    rangedTarget.samples[1].origin = { block_index: 1, kind: "range", every_s: 0.5 };
     rangedTarget.display_groups = [
       {
         id: "range-group",
@@ -194,8 +195,10 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    expect(await screen.findByText("Part of a range")).toBeTruthy();
-    expect(screen.getByText("1.000s–2.000s · every 0.5s · 2 samples")).toBeTruthy();
+    const timelineTab = await screen.findByRole("tab", { name: "Timeline 2" });
+    const samplesTab = screen.getByRole("tab", { name: "Samples 2" });
+    expect(timelineTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("timeline-view-tab");
     const first = screen.getByRole("button", {
       name: "status, 1.000s, expected false",
     });
@@ -206,8 +209,21 @@ describe("review application navigation and drafts", () => {
     expect(first.style.getPropertyValue("--expect-color")).toBe(
       second.style.getPropertyValue("--expect-color"),
     );
-    expect(screen.queryByText("Serialized group")).toBeNull();
-    expect(screen.queryByText("Serialized range")).toBeNull();
+    expect(screen.queryByText("Part of a range")).toBeNull();
+
+    fireEvent.keyDown(timelineTab, { key: "ArrowRight" });
+    expect(samplesTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Time")).toHaveProperty("value", "1.000");
+    expect(screen.queryByLabelText("Sample timeline")).toBeNull();
+    const group = screen.getByRole("button", {
+      name: "Expand 1.000s–1.500s · 2 samples",
+    });
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
+
+    fireEvent.click(group);
+    expect(screen.getAllByText("Same settings as group")).toHaveLength(2);
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(3);
+    expect(screen.queryByText("Part of a range")).toBeNull();
   });
 
   it("shows an immediate timestamp and expectation tooltip over timeline samples", async () => {
@@ -422,6 +438,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
+    fireEvent.click(screen.getByRole("tab", { name: "Samples 2" }));
     const secondRow = screen
       .getAllByText("2.000s")
       .find((element) => element.tagName === "TD")
@@ -477,6 +494,8 @@ describe("review application navigation and drafts", () => {
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Samples 1" }));
+
     const add = screen.getByRole("button", { name: /Add sample/ });
     expect(add).toHaveProperty("disabled", true);
     fireEvent.click(add);
@@ -518,6 +537,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
+    fireEvent.click(screen.getByRole("tab", { name: "Samples 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete sample" }));
 
     await waitFor(() =>

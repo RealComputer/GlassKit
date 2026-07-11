@@ -208,12 +208,6 @@ export function Timeline() {
   return (
     <section className="timeline-section" aria-label="Sample timeline">
       <div className="timeline-toolbar">
-        <div className="section-title">
-          <h2>Timeline</h2>
-          <span>
-            {document?.targets.reduce((sum, t) => sum + t.samples.length, 0) ?? 0} samples
-          </span>
-        </div>
         <div className="toolbar-spacer" />
         <ZoomIn size={15} aria-hidden="true" />
         <div className="segmented" aria-label="Timeline zoom">
