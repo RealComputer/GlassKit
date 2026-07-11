@@ -109,6 +109,41 @@ describe("PreciseVideoSeeker", () => {
     expect(states.filter((state) => state.status === "ready")).toHaveLength(1);
   });
 
+  it("watches for the presented frame before a paused seek completes", async () => {
+    const fake = fakeVideo();
+    fake.setSeeking(true);
+    let callback: VideoFrameRequestCallback | null = null;
+    Object.defineProperties(fake.video, {
+      requestVideoFrameCallback: {
+        configurable: true,
+        value: (next: VideoFrameRequestCallback) => {
+          callback = next;
+          return 1;
+        },
+      },
+      cancelVideoFrameCallback: {
+        configurable: true,
+        value: vi.fn(),
+      },
+    });
+    const states: PreviewState[] = [];
+    const seeker = new PreciseVideoSeeker(fake.video, (state) => states.push(state));
+
+    seeker.seek(4);
+    expect(callback).not.toBeNull();
+    callback!(0, { mediaTime: 3.967 } as VideoFrameCallbackMetadata);
+    expect(states.at(-1)?.status).toBe("seeking");
+
+    fake.setSeeking(false);
+    fake.video.dispatchEvent(new Event("seeked"));
+    await Promise.resolve();
+    expect(states.at(-1)).toEqual({
+      status: "ready",
+      shownFrameTime: 3.967,
+      message: null,
+    });
+  });
+
   it("falls back after a qualifying seek when no frame callback arrives", async () => {
     const fake = fakeVideo();
     fake.setSeeking(true);

@@ -26,6 +26,7 @@ export class PreciseVideoSeeker {
     this.cleanupCurrent?.();
     let finished = false;
     let presentationPending = false;
+    let presentedFrameTime: number | null = null;
     let frameCallbackId: number | null = null;
     const cleanups: (() => void)[] = [];
     const cleanup = () => {
@@ -78,19 +79,32 @@ export class PreciseVideoSeeker {
       if (generation !== this.generation || finished || presentationPending) return;
       presentationPending = true;
       if ("requestVideoFrameCallback" in this.video) {
+        if (presentedFrameTime !== null) {
+          finish({ status: "ready", shownFrameTime: presentedFrameTime, message: null });
+          return;
+        }
         const fallbackTimer = window.setTimeout(() => {
           finish({ status: "ready", shownFrameTime: null, message: null });
         }, FRAME_CALLBACK_TIMEOUT_MS);
         cleanups.push(() => window.clearTimeout(fallbackTimer));
-        frameCallbackId = this.video.requestVideoFrameCallback((_now, metadata) => {
-          finish({
-            status: "ready",
-            shownFrameTime: metadata.mediaTime,
-            message: null,
-          });
-        });
       } else {
         finish({ status: "ready", shownFrameTime: null, message: null });
+      }
+    };
+
+    const watchPresentation = () => {
+      if ("requestVideoFrameCallback" in this.video) {
+        frameCallbackId = this.video.requestVideoFrameCallback((_now, metadata) => {
+          frameCallbackId = null;
+          presentedFrameTime = metadata.mediaTime;
+          if (presentationPending) {
+            finish({
+              status: "ready",
+              shownFrameTime: presentedFrameTime,
+              message: null,
+            });
+          }
+        });
       }
     };
 
@@ -102,6 +116,10 @@ export class PreciseVideoSeeker {
       const target = Math.min(Math.max(0, requestedTime), duration);
       const qualifies = () =>
         !this.video.seeking && Math.abs(this.video.currentTime - target) <= SEEK_TOLERANCE_S;
+      if (qualifies()) {
+        finish({ status: "ready", shownFrameTime: null, message: null });
+        return;
+      }
       const onSeeked = () => {
         if (generation === this.generation && qualifies()) {
           completePresentation();
@@ -109,6 +127,10 @@ export class PreciseVideoSeeker {
       };
       listen("seeked", onSeeked);
       try {
+        // Register before assigning currentTime. Paused videos can present the
+        // requested frame before `seeked`; registering afterward waits for a
+        // frame that may never arrive.
+        watchPresentation();
         this.video.currentTime = target;
       } catch {
         fail();
