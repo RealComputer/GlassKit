@@ -237,16 +237,6 @@ export function VideoPanel() {
           </button>
           <button
             type="button"
-            className="icon-button primary-icon"
-            onClick={togglePlay}
-            disabled={!document?.video?.url || state.video.previewStatus === "unavailable"}
-            title="Play or pause (Space)"
-            aria-label={state.video.paused ? "Play video" : "Pause video"}
-          >
-            {state.video.paused ? <Play size={17} /> : <Pause size={17} />}
-          </button>
-          <button
-            type="button"
             className="button transport-action"
             onClick={next}
             disabled={!hasNext}
@@ -258,101 +248,109 @@ export function VideoPanel() {
             <kbd aria-hidden="true">]</kbd>
           </button>
         </div>
-        <div
-          className="transport-group transport-nudge-group"
-          role="group"
-          aria-label="Video time adjustment"
-        >
-          <button
-            type="button"
-            className="button transport-action"
-            onClick={() => nudge(-0.1)}
-            title="Back 0.1 seconds (Left Arrow)"
-            aria-label="Move video time back 0.1 seconds"
-          >
-            <StepBack size={16} className="transport-compact-icon" />
-            <span className="transport-action-label">−0.1 s</span>
-            <kbd aria-hidden="true">←</kbd>
-          </button>
-          <button
-            type="button"
-            className="button transport-action"
-            onClick={() => nudge(0.1)}
-            title="Forward 0.1 seconds (Right Arrow)"
-            aria-label="Move video time forward 0.1 seconds"
-          >
-            <StepForward size={16} className="transport-compact-icon" />
-            <span className="transport-action-label">+0.1 s</span>
-            <kbd aria-hidden="true">→</kbd>
-          </button>
-        </div>
-        <div
-          className="transport-group transport-edit-group"
-          role="group"
-          aria-label="Playback settings and sample editing"
-        >
-          <label className="time-control" htmlFor="video-time">
-            <span>Time</span>
-            <input
-              id="video-time"
-              className="mono"
-              ref={timeInputRef}
-              type="number"
-              min="0"
-              max={state.video.duration ?? undefined}
-              step="0.001"
-              value={timeDraft}
-              onChange={(event) => setTimeDraft(event.target.value)}
-              onBlur={() => {
-                if (skipNextTimeBlur.current) {
-                  skipNextTimeBlur.current = false;
-                } else {
-                  commitTimeDraft();
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  skipNextTimeBlur.current = true;
-                  commitTimeDraft();
-                  event.currentTarget.blur();
-                } else if (event.key === "Escape") {
-                  skipNextTimeBlur.current = true;
-                  setTimeDraft(state.video.currentTime.toFixed(3));
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-          </label>
-          <label className="rate-control" htmlFor="playback-rate">
-            <span className="sr-only">Playback rate</span>
-            <select
-              id="playback-rate"
-              value={state.video.playbackRate}
-              onChange={(event) => {
-                const rate = Number(event.target.value);
-                if (videoRef.current) videoRef.current.playbackRate = rate;
-                dispatch({
-                  type: "VIDEO_PATCH",
-                  patch: { playbackRate: rate },
-                });
-              }}
+        <div className="transport-stage">
+          <div className="transport-group" role="group" aria-label="Video controls">
+            <button
+              type="button"
+              className="button transport-action"
+              onClick={() => nudge(-0.1)}
+              title="Back 0.1 seconds (Left Arrow)"
+              aria-label="Move video time back 0.1 seconds"
             >
-              <option value="0.5">0.5×</option>
-              <option value="1">1×</option>
-              <option value="1.5">1.5×</option>
-              <option value="2">2×</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            className="button add-button"
-            onClick={addPoint}
-            disabled={!document?.editing_enabled || !target || hasFormErrors}
-            title="Add sample at video time (A)"
+              <StepBack size={16} className="transport-compact-icon" />
+              <span className="transport-action-label">−0.1 s</span>
+              <kbd aria-hidden="true">←</kbd>
+            </button>
+            <button
+              type="button"
+              className="icon-button primary-icon"
+              onClick={togglePlay}
+              disabled={!document?.video?.url || state.video.previewStatus === "unavailable"}
+              title="Play or pause (Space)"
+              aria-label={state.video.paused ? "Play video" : "Pause video"}
+            >
+              {state.video.paused ? <Play size={17} /> : <Pause size={17} />}
+            </button>
+            <button
+              type="button"
+              className="button transport-action"
+              onClick={() => nudge(0.1)}
+              title="Forward 0.1 seconds (Right Arrow)"
+              aria-label="Move video time forward 0.1 seconds"
+            >
+              <StepForward size={16} className="transport-compact-icon" />
+              <span className="transport-action-label">+0.1 s</span>
+              <kbd aria-hidden="true">→</kbd>
+            </button>
+            <label className="time-control" htmlFor="video-time">
+              <span>Time</span>
+              <input
+                id="video-time"
+                className="mono"
+                ref={timeInputRef}
+                type="number"
+                min="0"
+                max={state.video.duration ?? undefined}
+                step="0.001"
+                value={timeDraft}
+                onChange={(event) => setTimeDraft(event.target.value)}
+                onBlur={() => {
+                  if (skipNextTimeBlur.current) {
+                    skipNextTimeBlur.current = false;
+                  } else {
+                    commitTimeDraft();
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    skipNextTimeBlur.current = true;
+                    commitTimeDraft();
+                    event.currentTarget.blur();
+                  } else if (event.key === "Escape") {
+                    skipNextTimeBlur.current = true;
+                    setTimeDraft(state.video.currentTime.toFixed(3));
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+            <label className="rate-control" htmlFor="playback-rate">
+              <span className="sr-only">Playback rate</span>
+              <select
+                id="playback-rate"
+                value={state.video.playbackRate}
+                onChange={(event) => {
+                  const rate = Number(event.target.value);
+                  if (videoRef.current) videoRef.current.playbackRate = rate;
+                  dispatch({
+                    type: "VIDEO_PATCH",
+                    patch: { playbackRate: rate },
+                  });
+                }}
+              >
+                <option value="0.5">0.5×</option>
+                <option value="1">1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+          </div>
+          <div
+            className="transport-group transport-create-group"
+            role="group"
+            aria-label="Sample creation"
           >
-            <CirclePlus size={16} /> Add sample <kbd>A</kbd>
-          </button>
+            <button
+              type="button"
+              className="button add-button"
+              onClick={addPoint}
+              disabled={!document?.editing_enabled || !target || hasFormErrors}
+              title="Add sample at video time (A)"
+            >
+              <CirclePlus size={16} /> Add sample <kbd>A</kbd>
+            </button>
+          </div>
         </div>
         {state.video.previewStatus === "seeking" && (
           <div className="preview-diagnostic mono" role="status">

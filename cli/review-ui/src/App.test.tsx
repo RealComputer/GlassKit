@@ -59,7 +59,15 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    const sampleNavigation = await screen.findByRole("group", { name: "Sample navigation" });
+    const transport = await screen.findByLabelText("Review transport");
+    const groups = within(transport).getAllByRole("group");
+    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual([
+      "Sample navigation",
+      "Video controls",
+      "Sample creation",
+    ]);
+
+    const sampleNavigation = within(transport).getByRole("group", { name: "Sample navigation" });
     const previous = within(sampleNavigation).getByRole("button", { name: "Previous sample" });
     const next = within(sampleNavigation).getByRole("button", { name: "Next sample" });
     expect(previous.textContent).toContain("Previous sample");
@@ -67,20 +75,23 @@ describe("review application navigation and drafts", () => {
     expect(next.textContent).toContain("Next sample");
     expect(next.textContent).toContain("]");
 
-    const timeAdjustment = screen.getByRole("group", { name: "Video time adjustment" });
-    const backward = within(timeAdjustment).getByRole("button", {
+    const videoControls = within(transport).getByRole("group", { name: "Video controls" });
+    const backward = within(videoControls).getByRole("button", {
       name: "Move video time back 0.1 seconds",
     });
-    const forward = within(timeAdjustment).getByRole("button", {
+    const forward = within(videoControls).getByRole("button", {
       name: "Move video time forward 0.1 seconds",
     });
     expect(backward.textContent).toContain("−0.1 s");
     expect(backward.textContent).toContain("←");
     expect(forward.textContent).toContain("+0.1 s");
     expect(forward.textContent).toContain("→");
+    expect(within(videoControls).getByRole("button", { name: "Play video" })).toBeTruthy();
+    expect(within(videoControls).getByLabelText("Time")).toBeTruthy();
+    expect(within(videoControls).getByLabelText("Playback rate")).toBeTruthy();
 
-    const editing = screen.getByRole("group", { name: "Playback settings and sample editing" });
-    expect(within(editing).getByRole("button", { name: /Add sample/ })).toBeTruthy();
+    const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
+    expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
     expect(screen.queryByText("Sample 1.000s")).toBeNull();
   });
 

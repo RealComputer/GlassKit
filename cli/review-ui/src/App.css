@@ -373,7 +373,16 @@
   align-items: center;
 }
 
-.transport-nudge-group {
+.transport-stage {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+  padding-left: 9px;
+  border-left: 1px solid var(--border);
+}
+
+.transport-create-group {
   padding-left: 9px;
   border-left: 1px solid var(--border);
 }
