@@ -38,4 +38,16 @@ describe("sample table grouping", () => {
     ).toBeNull();
     expect(regularSampleInterval([sample("one", 0), sample("two", 0.5)])).toBeNull();
   });
+
+  it("keeps distinct integers beyond JavaScript's safe range in separate groups", () => {
+    const groups = groupConsecutiveSamples([
+      sample("first", 0, "9007199254740992"),
+      sample("second", 0.5, "9007199254740993"),
+    ]);
+
+    expect(groups.map((group) => group.samples.map((item) => item.id))).toEqual([
+      ["first"],
+      ["second"],
+    ]);
+  });
 });
