@@ -375,7 +375,6 @@ export function Inspector() {
             className="mono"
             type="text"
             value={field}
-            placeholder="result.matches"
             onChange={(event) => {
               const value = event.target.value;
               setField(value);

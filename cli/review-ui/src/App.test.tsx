@@ -278,6 +278,7 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
     const field = await screen.findByLabelText(/Field/);
+    expect(field.getAttribute("placeholder")).toBeNull();
     fireEvent.change(field, { target: { value: "   " } });
     fireEvent.blur(field);
     await new Promise((resolve) => window.setTimeout(resolve, 450));
