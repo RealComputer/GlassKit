@@ -116,7 +116,7 @@ export class PreciseVideoSeeker {
       const target = Math.min(Math.max(0, requestedTime), duration);
       const qualifies = () =>
         !this.video.seeking && Math.abs(this.video.currentTime - target) <= SEEK_TOLERANCE_S;
-      if (qualifies()) {
+      if (!this.video.seeking && this.video.currentTime === target) {
         finish({ status: "ready", shownFrameTime: null, message: null });
         return;
       }

@@ -50,6 +50,18 @@ describe("PreciseVideoSeeker", () => {
     ]);
   });
 
+  it("assigns a requested time within the completed-seek tolerance", async () => {
+    const fake = fakeVideo();
+    const states: PreviewState[] = [];
+    const seeker = new PreciseVideoSeeker(fake.video, (state) => states.push(state));
+
+    seeker.seek(0.04);
+    await Promise.resolve();
+
+    expect(fake.video.currentTime).toBe(0.04);
+    expect(states.at(-1)?.status).toBe("ready");
+  });
+
   it("cancels stale generations during rapid seeks", async () => {
     const fake = fakeVideo();
     fake.setSeeking(true);
