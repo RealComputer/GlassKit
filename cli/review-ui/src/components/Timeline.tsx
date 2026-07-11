@@ -292,6 +292,7 @@ export function Timeline() {
                           data-point-id={point.id}
                           data-target-id={target.id}
                           onClick={() => void selectPoint(target.id, point.id)}
+                          onPointerUp={(event) => event.currentTarget.blur()}
                           aria-pressed={selected}
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
                             point.timestamp_s,

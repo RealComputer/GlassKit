@@ -80,6 +80,36 @@ describe("review application navigation and drafts", () => {
     expect(playhead.getAttribute("aria-valuenow")).toBe("7");
   });
 
+  it("keeps navigation shortcuts available after a timeline point receives focus", async () => {
+    const doc = caseDocument([
+      target("target_a", [point("first", 1, "1"), point("second", 2, "2")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const first = await screen.findByRole("button", {
+      name: "target a, 1.000s, expected 1",
+    });
+    first.focus();
+    fireEvent.pointerUp(first);
+    expect(document.activeElement).toBe(document.body);
+
+    first.focus();
+    fireEvent.keyDown(first, { key: "]" });
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2"));
+
+    fireEvent.keyDown(first, { key: "ArrowRight" });
+    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "2.100"));
+  });
+
   it("keeps the fit timeline's final label inside its viewport", async () => {
     const doc = caseDocument();
     vi.stubGlobal(
