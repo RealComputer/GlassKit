@@ -9,19 +9,27 @@
 .app-header {
   z-index: 30;
   display: grid;
-  grid-template-columns: max-content minmax(140px, 1fr) max-content 34px minmax(116px, max-content);
-  gap: 16px;
+  grid-template-columns: 240px minmax(600px, 1fr) 340px;
   align-items: center;
   min-width: 0;
-  padding: 0 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
 .brand {
+  padding: 0 14px;
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+.header-center {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+  padding: 0 14px;
 }
 
 .header-context,
@@ -39,9 +47,19 @@
 }
 
 .header-time {
+  grid-column: 2;
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 0 14px;
 }
 
 .save-status {
@@ -1293,6 +1311,20 @@ textarea[aria-invalid="true"] {
 }
 
 @media (max-width: 1199px) {
+  .app-header {
+    grid-template-columns: 220px minmax(780px, 1fr);
+  }
+
+  .header-center,
+  .header-actions {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .header-actions {
+    justify-self: end;
+  }
+
   .workspace-grid {
     grid-template-columns: 220px minmax(780px, 1fr);
     grid-template-rows: max-content max-content;
