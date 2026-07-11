@@ -11,7 +11,7 @@ export function Overlays() {
       : state.sourceDrawer === "config"
         ? state.suite?.config_source_yaml
         : null;
-  const sourceTitle = state.sourceDrawer === "case" ? "Case file" : "Eval config";
+  const sourceTitle = state.sourceDrawer === "case" ? "Case file" : "Eval config file";
   const sourceRef = useRef<HTMLElement>(null);
   const helpRef = useRef<HTMLElement>(null);
   const overlayOpen = Boolean(state.sourceDrawer || state.helpOpen);

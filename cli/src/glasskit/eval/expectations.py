@@ -114,9 +114,9 @@ def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[
     eval_dir = _resolve_eval_dir(eval_dir)
     cases_dir = eval_dir / CASES_DIR_NAME
     if not cases_dir.exists():
-        raise EvalConfigError(f"eval cases directory does not exist: {cases_dir}")
+        raise EvalConfigError(f"cases directory does not exist: {cases_dir}")
     if not cases_dir.is_dir():
-        raise EvalConfigError(f"eval cases path must be a directory: {cases_dir}")
+        raise EvalConfigError(f"cases path must be a directory: {cases_dir}")
 
     discovered = sorted(
         child
@@ -130,7 +130,7 @@ def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[
         candidates = discovered
     if not candidates:
         suffix = f" matching case {case_filter!r}" if case_filter else ""
-        raise EvalConfigError(f"no eval cases found under {cases_dir}{suffix}")
+        raise EvalConfigError(f"no case files found under {cases_dir}{suffix}")
     _validate_unique_case_stems(candidates)
     return candidates
 
@@ -145,7 +145,7 @@ def _validate_unique_case_stems(case_paths: list[Path]) -> None:
             f"{stem!r}: {', '.join(path.name for path in paths)}"
             for stem, paths in sorted(duplicates.items())
         )
-        raise EvalConfigError(f"multiple eval case files share a name: {details}")
+        raise EvalConfigError(f"multiple case files share a name: {details}")
 
 
 def normalize_case_filter(case_filter: str) -> str:
@@ -167,7 +167,7 @@ def _validate_case_filter(case_filter: str) -> None:
 
 def normalize_target_filter(target_filter: str) -> str:
     if not target_filter or target_filter != target_filter.strip():
-        raise EvalConfigError("target must be a target id from case YAML")
+        raise EvalConfigError("target must be a target id from a case file")
     return target_filter
 
 
@@ -497,7 +497,7 @@ def _raise_expansion_budget_error(
 ) -> None:
     raise EvalConfigError(
         f"{case_path}: target {target_id!r} sample {block_index} would expand "
-        f"the case to {calculated_count} points; limit is "
+        f"the case to {calculated_count} samples; limit is "
         f"{MAX_EXPANDED_POINTS_PER_CASE}"
     )
 

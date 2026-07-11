@@ -263,7 +263,7 @@ def test_range_expansion_budget_is_checked_before_materialization(
         EvalConfigError,
         match=(
             rf"target 'step_1' sample 1 would expand the case to "
-            rf"{MAX_EXPANDED_POINTS_PER_CASE + 1} points; limit is "
+            rf"{MAX_EXPANDED_POINTS_PER_CASE + 1} samples; limit is "
             rf"{MAX_EXPANDED_POINTS_PER_CASE}"
         ),
     ):
@@ -329,7 +329,7 @@ def test_expansion_budget_is_shared_across_targets(tmp_path: Path) -> None:
 
     with pytest.raises(
         EvalConfigError,
-        match=r"target 'second' sample 1.*case to 10001 points.*limit is 10000",
+        match=r"target 'second' sample 1.*case to 10001 samples.*limit is 10000",
     ):
         load_eval_suite(eval_dir)
 
@@ -694,7 +694,7 @@ def test_uppercase_yaml_case_suffix_is_ignored(tmp_path: Path) -> None:
         case_suffix=".YML",
     )
 
-    with pytest.raises(EvalConfigError, match="no eval cases found"):
+    with pytest.raises(EvalConfigError, match="no case files found"):
         load_eval_suite(eval_dir)
 
 
@@ -722,7 +722,7 @@ def test_duplicate_yaml_case_stems_are_invalid(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(EvalConfigError, match="multiple eval case files"):
+    with pytest.raises(EvalConfigError, match="multiple case files"):
         load_eval_suite(eval_dir)
 
 

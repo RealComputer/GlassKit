@@ -155,7 +155,7 @@ export function Sidebar() {
           disabled={!state.suite?.config_source_yaml}
           onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "config" })}
         >
-          <SlidersHorizontal size={15} /> Eval config
+          <SlidersHorizontal size={15} /> Eval config file
         </button>
       </section>
     </aside>

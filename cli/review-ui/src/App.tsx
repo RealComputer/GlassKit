@@ -95,7 +95,7 @@ function ReviewApp() {
     return (
       <div className="loading-screen" role="status">
         <div className="loading-mark" />
-        <strong>Loading eval suite…</strong>
+        <strong>Loading eval directory…</strong>
       </div>
     );
   }

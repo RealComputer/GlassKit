@@ -49,7 +49,7 @@ from .serialization import (
 
 
 class ReviewRepository:
-    """Disk-backed source of review suite documents and atomic case edits."""
+    """Disk-backed source of review documents and atomic case edits."""
 
     def __init__(self, eval_dir: Path) -> None:
         self.eval_dir = eval_dir.expanduser().resolve()
@@ -165,7 +165,7 @@ class ReviewRepository:
             (candidate for candidate in paths if candidate.stem == normalized), None
         )
         if path is None:  # Defensive: discovery normally raises before this branch.
-            raise EvalConfigError(f"no eval case found matching {selector!r}")
+            raise EvalConfigError(f"no case file found matching {selector!r}")
         return path.name
 
     def validate_target_selector(self, case_id: str, selector: str) -> str:
@@ -326,7 +326,7 @@ class ReviewRepository:
                     ValidationIssue(
                         code="empty_target",
                         message=f"Target {target.id!r} needs at least one sample.",
-                        path=f"targets.{target.id}.points",
+                        path=f"targets.{target.id}.samples",
                         severity="error",
                         repairable=True,
                     )
@@ -338,10 +338,11 @@ class ReviewRepository:
                         ValidationIssue(
                             code="timestamp_after_video",
                             message=(
-                                f"Point at {point.timestamp_s:g} seconds exceeds video "
+                                f"Sample at {point.timestamp_s:g} seconds exceeds "
+                                "video "
                                 f"duration {metadata.duration_s:g} seconds."
                             ),
-                            path=f"targets.{target_id}.points.{point.id}.timestamp_s",
+                            path=f"targets.{target_id}.samples.{point.id}.timestamp_s",
                             severity="error",
                             repairable=True,
                         )

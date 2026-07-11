@@ -249,7 +249,7 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_error(
                 500,
                 "suite_unavailable",
-                f"The review suite could not be refreshed: {error}",
+                f"The eval directory could not be refreshed: {error}",
                 send_body=send_body,
             )
         except Exception:

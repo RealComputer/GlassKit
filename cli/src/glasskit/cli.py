@@ -264,7 +264,7 @@ def eval_review(
             "--target",
             help=(
                 "Initially focus this target; requires --case and does not filter "
-                "the suite."
+                "the eval directory."
             ),
         ),
     ] = None,

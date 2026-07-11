@@ -119,7 +119,7 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByText("Case details")).toBeNull();
     expect(screen.getAllByText("A fixture case")).toHaveLength(1);
     expect(within(sidebar).getByRole("button", { name: "Case file" })).toBeTruthy();
-    expect(within(sidebar).getByRole("button", { name: "Eval config" })).toBeTruthy();
+    expect(within(sidebar).getByRole("button", { name: "Eval config file" })).toBeTruthy();
   });
 
   it("opens purpose-named source drawers without a redundant read-only subtitle", async () => {
@@ -135,13 +135,14 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Case file" }));
+    await screen.findByText("fixture.mp4");
+    fireEvent.click(screen.getByRole("button", { name: "Case file" }));
     expect(screen.getByRole("heading", { name: "Case file" })).toBeTruthy();
     expect(screen.queryByText("Read-only source")).toBeNull();
     fireEvent.click(screen.getByLabelText("Close source drawer"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Eval config" }));
-    expect(screen.getByRole("heading", { name: "Eval config" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Eval config file" }));
+    expect(screen.getByRole("heading", { name: "Eval config file" })).toBeTruthy();
     expect(screen.queryByText("Read-only source")).toBeNull();
   });
 

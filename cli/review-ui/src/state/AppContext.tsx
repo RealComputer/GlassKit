@@ -116,7 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!controller.signal.aborted) {
           dispatch({
             type: "SUITE_FAILED",
-            message: error instanceof Error ? error.message : "Could not load the eval suite.",
+            message: error instanceof Error ? error.message : "Could not load the eval directory.",
           });
         }
       });

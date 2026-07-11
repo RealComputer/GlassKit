@@ -183,7 +183,7 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
     parsed: list[ParsedPoint] = []
     seen_ids: set[str] = set()
     for index, point in enumerate(points):
-        path = f"targets.{target_id}.points.{index}"
+        path = f"targets.{target_id}.samples.{index}"
         if point.id in seen_ids:
             raise ReviewAPIError(
                 422,
@@ -192,7 +192,7 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                 [
                     ErrorDetail(
                         path=f"{path}.id",
-                        message=f"duplicates point id {point.id!r} in this target",
+                        message=f"duplicates sample id {point.id!r} in this target",
                     )
                 ],
             )
@@ -252,10 +252,10 @@ def parse_points(target_id: str, points: Sequence[ReviewPoint]) -> list[ParsedPo
                 "Target samples are invalid.",
                 [
                     ErrorDetail(
-                        path=f"targets.{target_id}.points",
+                        path=f"targets.{target_id}.samples",
                         message=(
-                            f"point {point.id!r} at {point.timestamp_s:g} seconds is "
-                            f"within 1e-9 seconds of point {previous.id!r} at "
+                            f"sample {point.id!r} at {point.timestamp_s:g} seconds is "
+                            f"within 1e-9 seconds of sample {previous.id!r} at "
                             f"{previous.timestamp_s:g} seconds"
                         ),
                     )
