@@ -540,10 +540,10 @@ def _label_sample(
     prompt: str,
 ) -> LabeledSample:
     start_s = time.monotonic()
-    composite = compose_fold_check_image(camera_image, reference_image)
-    result = _call_gemini(
+    result = label_camera_image(
         genai.Client(),
-        image=composite,
+        camera_image=camera_image,
+        reference_image=reference_image,
         prompt=prompt,
         log_context=f"{request.target_id} at {_format_time(request.timestamp_s)}s",
     )
@@ -554,7 +554,24 @@ def _label_sample(
     )
 
 
-def _call_gemini(
+def label_camera_image(
+    client: genai.Client,
+    *,
+    camera_image: Image.Image,
+    reference_image: Image.Image,
+    prompt: str,
+    log_context: str,
+) -> GeminiResult:
+    composite = compose_fold_check_image(camera_image, reference_image)
+    return call_gemini(
+        client,
+        image=composite,
+        prompt=prompt,
+        log_context=log_context,
+    )
+
+
+def call_gemini(
     client: genai.Client,
     *,
     image: Image.Image,

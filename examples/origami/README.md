@@ -108,6 +108,7 @@ In this project, the eval answers one question for each sampled video frame: sho
 The eval files live under `backend/eval/`:
 
 - `adapter.py` connects `glasskit eval` to the origami fold-check logic.
+- `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
@@ -141,6 +142,18 @@ uv run --env-file .env python -m eval.generate_case \
 ```
 
 The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It writes a case YAML to `--output`. Review and fix the generated YAML before committing it. The reviewed case file is what `glasskit eval` runs.
+
+To check individual camera images while reviewing labels, pass the target step followed by one or more image paths:
+
+```bash
+cd backend
+uv run --env-file .env python -m eval.check_image \
+  --target step_1 \
+  /path/to/frame-38.000s.png \
+  /path/to/frame-41.500s.png
+```
+
+The checker composes each image with the target's reference image and prints Gemini's boolean result.
 
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 
