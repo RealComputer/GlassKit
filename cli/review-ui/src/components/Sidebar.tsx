@@ -147,7 +147,7 @@ export function Sidebar() {
           disabled={!workspace}
           onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "case" })}
         >
-          <FileCode2 size={15} /> Case YAML
+          <FileCode2 size={15} /> Case file
         </button>
         <button
           type="button"

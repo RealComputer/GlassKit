@@ -11,6 +11,7 @@ export function Overlays() {
       : state.sourceDrawer === "config"
         ? state.suite?.config_source_yaml
         : null;
+  const sourceTitle = state.sourceDrawer === "case" ? "Case file" : "Eval config";
   const sourceRef = useRef<HTMLElement>(null);
   const helpRef = useRef<HTMLElement>(null);
   const overlayOpen = Boolean(state.sourceDrawer || state.helpOpen);
@@ -74,17 +75,15 @@ export function Overlays() {
             className="source-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label={`${state.sourceDrawer} YAML`}
+            aria-labelledby="source-drawer-title"
             tabIndex={-1}
           >
             <div className="drawer-heading">
               <div>
-                <h2>{state.sourceDrawer === "case" ? "Case YAML" : "Eval config"}</h2>
+                <h2 id="source-drawer-title">{sourceTitle}</h2>
                 {state.sourceDrawer === "case" && workspace?.dirtyTargetIds.length ? (
                   <span>Last accepted source; local drafts are not shown yet.</span>
-                ) : (
-                  <span>Read-only source</span>
-                )}
+                ) : null}
               </div>
               <button
                 type="button"

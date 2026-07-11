@@ -26,7 +26,8 @@ export function Header() {
               <strong title={currentCase.id}>{currentCase.name}</strong>
               {state.selectedTargetId && (
                 <span className="header-target" title={state.selectedTargetId}>
-                  / {state.selectedTargetId}
+                  {" / "}
+                  {state.selectedTargetId}
                 </span>
               )}
             </>

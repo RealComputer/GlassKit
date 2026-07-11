@@ -93,6 +93,7 @@ describe("review application navigation and drafts", () => {
     const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
     expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
     expect(screen.queryByText("Sample 1.000s")).toBeNull();
+    expect(document.querySelector(".header-context")?.textContent).toBe("case-001 / target_a");
   });
 
   it("shows the selected case video path without a details disclosure", async () => {
@@ -117,6 +118,31 @@ describe("review application navigation and drafts", () => {
     ).toEqual(["Cases", "Targets", "Sources"]);
     expect(screen.queryByText("Case details")).toBeNull();
     expect(screen.getAllByText("A fixture case")).toHaveLength(1);
+    expect(within(sidebar).getByRole("button", { name: "Case file" })).toBeTruthy();
+    expect(within(sidebar).getByRole("button", { name: "Eval config" })).toBeTruthy();
+  });
+
+  it("opens purpose-named source drawers without a redundant read-only subtitle", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Case file" }));
+    expect(screen.getByRole("heading", { name: "Case file" })).toBeTruthy();
+    expect(screen.queryByText("Read-only source")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Close source drawer"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eval config" }));
+    expect(screen.getByRole("heading", { name: "Eval config" })).toBeTruthy();
+    expect(screen.queryByText("Read-only source")).toBeNull();
   });
 
   it("disables adding a sample when the video time already has one", async () => {
@@ -519,7 +545,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.click(close);
     await waitFor(() => expect(document.activeElement).toBe(opener));
 
-    const sourceOpener = screen.getByText("Case YAML");
+    const sourceOpener = screen.getByText("Case file");
     sourceOpener.focus();
     fireEvent.click(sourceOpener);
     await screen.findByLabelText("Close source drawer");
