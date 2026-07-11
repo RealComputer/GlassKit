@@ -1,4 +1,4 @@
-import type { ReviewPoint } from "../api/types.ts";
+import type { ReviewSample } from "../api/types.ts";
 
 export function formatTime(seconds: number, includeUnit = false): string {
   if (!Number.isFinite(seconds)) return "--:--.---";
@@ -13,11 +13,11 @@ export function formatSeconds(seconds: number): string {
   return `${seconds.toFixed(3)}s`;
 }
 
-export function expectationSummary(point: ReviewPoint, maxLength = 46): string {
-  let text = point.expect_json;
-  if (point.expect_type === "string") {
+export function expectationSummary(sample: ReviewSample, maxLength = 46): string {
+  let text = sample.expect_json;
+  if (sample.expect_type === "string") {
     try {
-      text = JSON.parse(point.expect_json) as string;
+      text = JSON.parse(sample.expect_json) as string;
     } catch {
       // The backend has already validated loaded values. Retain the raw text if
       // an in-progress draft somehow reaches this helper.
@@ -26,7 +26,7 @@ export function expectationSummary(point: ReviewPoint, maxLength = 46): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-export function effectiveCompare(point: ReviewPoint): string {
-  if (point.compare.mode) return point.compare.mode;
-  return point.expect_type === "number" ? "numeric (auto)" : "exact (auto)";
+export function effectiveCompare(sample: ReviewSample): string {
+  if (sample.compare.mode) return sample.compare.mode;
+  return sample.expect_type === "number" ? "numeric (auto)" : "exact (auto)";
 }

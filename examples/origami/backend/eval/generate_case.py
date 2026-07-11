@@ -99,13 +99,7 @@ class _FlowList(list[float]):
 
 
 class _CaseYamlDumper(yaml.SafeDumper):
-    def increase_indent(
-        self,
-        flow: bool = False,
-        indentless: bool = False,
-    ) -> None:
-        del indentless
-        return super().increase_indent(flow, False)
+    """Dumper with compact ranges matching the review UI's case output."""
 
 
 def _represent_flow_list(
@@ -751,6 +745,7 @@ def _write_case_yaml(
             raw_case,
             Dumper=_CaseYamlDumper,
             sort_keys=False,
+            allow_unicode=True,
             default_flow_style=False,
         ),
         encoding="utf-8",
@@ -776,22 +771,27 @@ def _sample_blocks(
                 abs_tol=1e-6,
             )
             and math.isclose(
-                cast("list[float]", blocks[-1]["range"])[1],
+                previous_request.interval_end_s,
                 request.timestamp_s,
                 abs_tol=1e-6,
             )
         ):
-            cast("list[float]", blocks[-1]["range"])[1] = request.interval_end_s
+            block = blocks[-1]
+            if "at" in block:
+                payload = {key: value for key, value in block.items() if key != "at"}
+                blocks[-1] = {
+                    "range": _FlowList(
+                        [cast(float, block["at"]), request.interval_end_s]
+                    ),
+                    **payload,
+                }
+            else:
+                cast("list[float]", block["range"])[1] = request.interval_end_s
             previous_request = request
             continue
         blocks.append(
             {
-                "range": _FlowList(
-                    [
-                        _time_value(request.timestamp_s),
-                        _time_value(request.interval_end_s),
-                    ]
-                ),
+                "at": _time_value(request.timestamp_s),
                 "expect": result.value,
             }
         )

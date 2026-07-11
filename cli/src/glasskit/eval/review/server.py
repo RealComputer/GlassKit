@@ -10,6 +10,7 @@ import mimetypes
 import os
 import re
 import secrets
+import sys
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -97,6 +98,17 @@ class ReviewServer(http.server.ThreadingHTTPServer):
     @property
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/"
+
+    def handle_error(
+        self,
+        request: Any,
+        client_address: tuple[str, int],
+    ) -> None:
+        """Keep routine browser disconnects from polluting the CLI output."""
+
+        if isinstance(sys.exception(), ConnectionError):
+            return
+        super().handle_error(request, client_address)
 
     def video_metadata(
         self, path: Path, *, response_time: int
@@ -198,20 +210,26 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
         encoded_path = urlsplit(self.path).path
         segments = _route_segments(encoded_path)
         try:
-            if segments == ["api", "suite"] and send_body:
+            if segments == ["api", "eval-directory"] and send_body:
                 self._send_model(
                     200,
-                    self.server.repository.suite_document(
+                    self.server.repository.eval_directory_document(
                         write_token=self.server.write_token
                     ),
                 )
                 return
-            if len(segments) == 3 and segments[:2] == ["api", "cases"] and send_body:
-                self._send_model(200, self.server.repository.case_document(segments[2]))
+            if (
+                len(segments) == 3
+                and segments[:2] == ["api", "case-files"]
+                and send_body
+            ):
+                self._send_model(
+                    200, self.server.repository.case_file_document(segments[2])
+                )
                 return
             if (
                 len(segments) == 4
-                and segments[:2] == ["api", "cases"]
+                and segments[:2] == ["api", "case-files"]
                 and segments[3] == "video"
             ):
                 self._serve_video(segments[2], send_body=send_body)
@@ -236,8 +254,8 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
         except (EvalConfigError, OSError) as error:
             self._send_error(
                 500,
-                "suite_unavailable",
-                f"The review suite could not be refreshed: {error}",
+                "eval_directory_unavailable",
+                f"The eval directory could not be refreshed: {error}",
                 send_body=send_body,
             )
         except Exception:
@@ -262,7 +280,7 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
         segments = _route_segments(urlsplit(self.path).path)
         if not (
             len(segments) == 4
-            and segments[:2] == ["api", "cases"]
+            and segments[:2] == ["api", "case-files"]
             and segments[3] == "samples"
         ):
             self._send_error(

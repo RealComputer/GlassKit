@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from glasskit.eval.expectations import (
-    MAX_EXPANDED_POINTS_PER_CASE,
+    MAX_EXPANDED_SAMPLES_PER_CASE,
     discover_case_paths,
     load_case,
-    load_eval_suite,
+    load_eval_directory,
     load_yaml_mapping,
 )
 from glasskit.eval.models import EvalConfigError
-from glasskit.eval.schemas import parse_case_yaml
+from glasskit.eval.schemas import parse_case_file
 
 
 def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
@@ -33,9 +33,9 @@ def test_range_expansion_uses_half_open_boundaries(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    samples = suite.cases[0].samples
+    samples = eval_directory.cases[0].samples
     assert [sample.timestamp_s for sample in samples] == [0.0, 0.5, 1.0]
     assert [sample.expected for sample in samples] == [False, False, True]
 
@@ -55,9 +55,9 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert [sample.timestamp_s for sample in suite.cases[0].samples] == [
+    assert [sample.timestamp_s for sample in eval_directory.cases[0].samples] == [
         1.0,
         2.0,
         3.0,
@@ -65,7 +65,7 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
     ]
 
 
-def test_sample_comment_is_trimmed_and_expands_to_every_point(tmp_path: Path) -> None:
+def test_sample_comment_is_trimmed_and_expands_to_every_sample(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
@@ -83,7 +83,7 @@ def test_sample_comment_is_trimmed_and_expands_to_every_point(tmp_path: Path) ->
         """,
     )
 
-    samples = load_eval_suite(eval_dir).cases[0].samples
+    samples = load_eval_directory(eval_dir).cases[0].samples
 
     assert [sample.comment for sample in samples] == [
         "First line.\nSecond line.",
@@ -109,7 +109,7 @@ def test_blank_sample_comment_is_invalid(tmp_path: Path) -> None:
     with pytest.raises(
         EvalConfigError, match=r"samples\.0\.comment.*must not be empty"
     ):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
@@ -127,9 +127,9 @@ def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert [sample.timestamp_s for sample in suite.cases[0].samples] == [
+    assert [sample.timestamp_s for sample in eval_directory.cases[0].samples] == [
         0.0,
         0.5,
         5.0,
@@ -153,10 +153,10 @@ def test_overlapping_ranges_are_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="overlaps"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
-def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
+def test_sample_inside_range_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
@@ -172,7 +172,7 @@ def test_point_inside_range_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="overlaps"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
@@ -191,7 +191,7 @@ def test_schema_errors_include_nested_location(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match=r"sampling\.every_s"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 @pytest.mark.parametrize(
@@ -220,7 +220,7 @@ def test_non_finite_sample_times_are_invalid(tmp_path: Path, sample_yaml: str) -
     )
 
     with pytest.raises(EvalConfigError, match="finite"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_huge_finite_timestamp_loads_without_tick_overflow(
@@ -238,9 +238,9 @@ def test_huge_finite_timestamp_loads_without_tick_overflow(
         """,
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert suite.samples[0].timestamp_s == 1.0e308
+    assert eval_directory.samples[0].timestamp_s == 1.0e308
 
 
 def test_range_expansion_budget_is_checked_before_materialization(
@@ -253,7 +253,7 @@ def test_range_expansion_budget_is_checked_before_materialization(
         targets:
           step_1:
             samples:
-              - range: [0.0, {MAX_EXPANDED_POINTS_PER_CASE + 1}.0]
+              - range: [0.0, {MAX_EXPANDED_SAMPLES_PER_CASE + 1}.0]
                 every_s: 1.0
                 expect: true
         """,
@@ -263,11 +263,11 @@ def test_range_expansion_budget_is_checked_before_materialization(
         EvalConfigError,
         match=(
             rf"target 'step_1' sample 1 would expand the case to "
-            rf"{MAX_EXPANDED_POINTS_PER_CASE + 1} points; limit is "
-            rf"{MAX_EXPANDED_POINTS_PER_CASE}"
+            rf"{MAX_EXPANDED_SAMPLES_PER_CASE + 1} samples; limit is "
+            rf"{MAX_EXPANDED_SAMPLES_PER_CASE}"
         ),
     ):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_range_at_budget_uses_repeated_addition_count(tmp_path: Path) -> None:
@@ -284,10 +284,10 @@ def test_range_at_budget_uses_repeated_addition_count(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert len(suite.cases[0].samples) == MAX_EXPANDED_POINTS_PER_CASE
-    assert suite.cases[0].samples[-1].timestamp_s == 999.9
+    assert len(eval_directory.cases[0].samples) == MAX_EXPANDED_SAMPLES_PER_CASE
+    assert eval_directory.cases[0].samples[-1].timestamp_s == 999.9
 
 
 def test_sub_nanosecond_cadence_hits_budget_before_expansion(tmp_path: Path) -> None:
@@ -305,7 +305,7 @@ def test_sub_nanosecond_cadence_hits_budget_before_expansion(tmp_path: Path) -> 
     )
 
     with pytest.raises(EvalConfigError, match=r"would expand.*limit is 10000"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_expansion_budget_is_shared_across_targets(tmp_path: Path) -> None:
@@ -329,9 +329,9 @@ def test_expansion_budget_is_shared_across_targets(tmp_path: Path) -> None:
 
     with pytest.raises(
         EvalConfigError,
-        match=r"target 'second' sample 1.*case to 10001 points.*limit is 10000",
+        match=r"target 'second' sample 1.*case to 10001 samples.*limit is 10000",
     ):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_range_rejects_duplicates_after_timestamp_normalization(
@@ -353,7 +353,7 @@ def test_range_rejects_duplicates_after_timestamp_normalization(
     with pytest.raises(
         EvalConfigError, match="duplicates timestamp.*nine-decimal normalization"
     ):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_at_rejects_near_duplicates_after_timestamp_normalization(
@@ -372,7 +372,7 @@ def test_at_rejects_near_duplicates_after_timestamp_normalization(
     )
 
     with pytest.raises(EvalConfigError, match="duplicates timestamp"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_target_rejects_cross_block_near_duplicates_after_normalization(
@@ -398,7 +398,7 @@ def test_target_rejects_cross_block_near_duplicates_after_normalization(
         EvalConfigError,
         match=r"target 'step_1' timestamps.*within 1e-9 seconds",
     ):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
@@ -417,7 +417,7 @@ def test_unsupported_compare_mode_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="unsupported compare mode"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
@@ -434,7 +434,7 @@ def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="JSON-like"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_video_field_is_required(tmp_path: Path) -> None:
@@ -450,7 +450,7 @@ def test_video_field_is_required(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="video"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
 def test_yml_case_files_are_discovered(tmp_path: Path) -> None:
@@ -467,9 +467,9 @@ def test_yml_case_files_are_discovered(tmp_path: Path) -> None:
         case_suffix=".yml",
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert [case.name for case in suite.cases] == ["case-001"]
+    assert [case.name for case in eval_directory.cases] == ["case-001"]
 
 
 def test_public_case_helpers_support_review_loading_without_a_video(
@@ -488,7 +488,7 @@ def test_public_case_helpers_support_review_loading_without_a_video(
         """,
     )
     case_path = discover_case_paths(eval_dir)[0]
-    raw_case = parse_case_yaml(load_yaml_mapping(case_path), label=str(case_path))
+    raw_case = parse_case_file(load_yaml_mapping(case_path), label=str(case_path))
 
     case = load_case(case_path, raw_case=raw_case, resolve_video=False)
 
@@ -516,9 +516,9 @@ def test_case_filter_matches_yml_case_file(tmp_path: Path) -> None:
         case_suffix=".yml",
     )
 
-    suite = load_eval_suite(eval_dir, case_filter="case-001")
+    eval_directory = load_eval_directory(eval_dir, case_filter="case-001")
 
-    assert suite.cases[0].path.name == "case-001.yml"
+    assert eval_directory.cases[0].path.name == "case-001.yml"
 
 
 def test_case_filter_accepts_yaml_filename(tmp_path: Path) -> None:
@@ -534,9 +534,9 @@ def test_case_filter_accepts_yaml_filename(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir, case_filter="case-001.yaml")
+    eval_directory = load_eval_directory(eval_dir, case_filter="case-001.yaml")
 
-    assert suite.cases[0].name == "case-001"
+    assert eval_directory.cases[0].name == "case-001"
 
 
 def test_case_filter_accepts_yml_filename(tmp_path: Path) -> None:
@@ -553,9 +553,9 @@ def test_case_filter_accepts_yml_filename(tmp_path: Path) -> None:
         case_suffix=".yml",
     )
 
-    suite = load_eval_suite(eval_dir, case_filter="case-001.yml")
+    eval_directory = load_eval_directory(eval_dir, case_filter="case-001.yml")
 
-    assert suite.cases[0].name == "case-001"
+    assert eval_directory.cases[0].name == "case-001"
 
 
 def test_target_filter_selects_only_matching_target(tmp_path: Path) -> None:
@@ -575,9 +575,11 @@ def test_target_filter_selects_only_matching_target(tmp_path: Path) -> None:
         """,
     )
 
-    suite = load_eval_suite(eval_dir, case_filter="case-001", target_filter="step_2")
+    eval_directory = load_eval_directory(
+        eval_dir, case_filter="case-001", target_filter="step_2"
+    )
 
-    case = suite.cases[0]
+    case = eval_directory.cases[0]
     assert [target.id for target in case.targets] == ["step_2"]
     assert [sample.target_id for sample in case.samples] == ["step_2", "step_2"]
     assert [sample.sample_index for sample in case.samples] == [1, 2]
@@ -607,10 +609,10 @@ def test_target_filter_without_case_keeps_matching_cases(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(eval_dir, target_filter="step_2")
+    eval_directory = load_eval_directory(eval_dir, target_filter="step_2")
 
-    assert [case.name for case in suite.cases] == ["case-002"]
-    assert [target.id for target in suite.cases[0].targets] == ["step_2"]
+    assert [case.name for case in eval_directory.cases] == ["case-002"]
+    assert [target.id for target in eval_directory.cases[0].targets] == ["step_2"]
 
 
 def test_target_filter_skips_non_matching_case_before_resolving_video(
@@ -639,9 +641,9 @@ def test_target_filter_skips_non_matching_case_before_resolving_video(
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(eval_dir, target_filter="step_2")
+    eval_directory = load_eval_directory(eval_dir, target_filter="step_2")
 
-    assert [case.name for case in suite.cases] == ["case-002"]
+    assert [case.name for case in eval_directory.cases] == ["case-002"]
 
 
 def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
@@ -660,7 +662,7 @@ def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
     with pytest.raises(
         EvalConfigError, match="no eval targets found matching target 'step_2'"
     ):
-        load_eval_suite(eval_dir, target_filter="step_2")
+        load_eval_directory(eval_dir, target_filter="step_2")
 
 
 def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:
@@ -677,10 +679,10 @@ def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:
     )
 
     with pytest.raises(EvalConfigError, match="target must be a target id"):
-        load_eval_suite(eval_dir, target_filter="")
+        load_eval_directory(eval_dir, target_filter="")
 
 
-def test_uppercase_yaml_case_suffix_is_ignored(tmp_path: Path) -> None:
+def test_uppercase_file_case_suffix_is_ignored(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
@@ -694,8 +696,8 @@ def test_uppercase_yaml_case_suffix_is_ignored(tmp_path: Path) -> None:
         case_suffix=".YML",
     )
 
-    with pytest.raises(EvalConfigError, match="no eval cases found"):
-        load_eval_suite(eval_dir)
+    with pytest.raises(EvalConfigError, match="no case files found"):
+        load_eval_directory(eval_dir)
 
 
 def test_duplicate_yaml_case_stems_are_invalid(tmp_path: Path) -> None:
@@ -722,8 +724,8 @@ def test_duplicate_yaml_case_stems_are_invalid(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(EvalConfigError, match="multiple eval case files"):
-        load_eval_suite(eval_dir)
+    with pytest.raises(EvalConfigError, match="multiple case files"):
+        load_eval_directory(eval_dir)
 
 
 def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
@@ -750,11 +752,11 @@ def test_config_yaml_loads_eval_thresholds(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert suite.thresholds.min_pass_rate == 0.9
-    assert suite.thresholds.max_failures == 2
-    assert suite.thresholds.per_target["step_1"].min_pass_rate == 0.95
+    assert eval_directory.thresholds.min_pass_rate == 0.9
+    assert eval_directory.thresholds.max_failures == 2
+    assert eval_directory.thresholds.per_target["step_1"].min_pass_rate == 0.95
 
 
 def test_config_yml_loads_eval_thresholds(tmp_path: Path) -> None:
@@ -777,12 +779,12 @@ def test_config_yml_loads_eval_thresholds(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert suite.thresholds.min_pass_rate == 0.9
+    assert eval_directory.thresholds.min_pass_rate == 0.9
 
 
-def test_uppercase_yaml_config_suffix_is_ignored(tmp_path: Path) -> None:
+def test_uppercase_file_config_suffix_is_ignored(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
@@ -802,9 +804,9 @@ def test_uppercase_yaml_config_suffix_is_ignored(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    suite = load_eval_suite(eval_dir)
+    eval_directory = load_eval_directory(eval_dir)
 
-    assert suite.thresholds.min_pass_rate is None
+    assert eval_directory.thresholds.min_pass_rate is None
 
 
 def test_duplicate_eval_config_files_are_invalid(tmp_path: Path) -> None:
@@ -823,13 +825,13 @@ def test_duplicate_eval_config_files_are_invalid(tmp_path: Path) -> None:
     (eval_dir / "config.yml").write_text("thresholds: {}\n", encoding="utf-8")
 
     with pytest.raises(EvalConfigError, match="multiple eval config files"):
-        load_eval_suite(eval_dir)
+        load_eval_directory(eval_dir)
 
 
-def _eval_dir(tmp_path: Path, case_yaml: str, *, case_suffix: str = ".yaml") -> Path:
+def _eval_dir(tmp_path: Path, case_file: str, *, case_suffix: str = ".yaml") -> Path:
     eval_dir = tmp_path / "eval"
     cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "video.mp4").write_bytes(b"placeholder")
-    (cases_dir / f"case-001{case_suffix}").write_text(case_yaml, encoding="utf-8")
+    (cases_dir / f"case-001{case_suffix}").write_text(case_file, encoding="utf-8")
     return eval_dir

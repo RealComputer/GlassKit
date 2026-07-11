@@ -4,18 +4,18 @@ import { useApp } from "../state/AppContext.tsx";
 
 export function Sidebar() {
   const { state, dispatch, selectCase, selectTarget } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const caseNeedle = state.caseFilter.trim().toLowerCase();
   const targetNeedle = state.targetFilter.trim().toLowerCase();
   const filteredCases = useMemo(
     () =>
-      (state.suite?.cases ?? []).filter(
+      (state.evalDirectory?.cases ?? []).filter(
         (item) =>
           !caseNeedle ||
           item.name.toLowerCase().includes(caseNeedle) ||
           item.description?.toLowerCase().includes(caseNeedle),
       ),
-    [caseNeedle, state.suite?.cases],
+    [caseNeedle, state.evalDirectory?.cases],
   );
   const filteredTargets = useMemo(
     () =>
@@ -33,12 +33,13 @@ export function Sidebar() {
       <section className="sidebar-section cases-section">
         <div className="section-heading">
           <h2>Cases</h2>
-          <span>{state.suite?.cases.length ?? 0}</span>
+          <span>{state.evalDirectory?.cases.length ?? 0}</span>
         </div>
-        <label className="filter-input">
+        <label className="filter-input" htmlFor="case-filter">
           <Search size={14} aria-hidden="true" />
           <span className="sr-only">Filter cases</span>
           <input
+            id="case-filter"
             type="search"
             value={state.caseFilter}
             placeholder="Filter cases"
@@ -67,7 +68,7 @@ export function Sidebar() {
                 )}
               </span>
               <span className="count-badge">
-                {item.point_count === null ? "—" : item.point_count}
+                {item.sample_count === null ? "—" : item.sample_count}
               </span>
               {item.description && (
                 <span className="nav-description" title={item.description}>
@@ -85,10 +86,11 @@ export function Sidebar() {
           <h2>Targets</h2>
           <span>{workspace?.document.targets.length ?? 0}</span>
         </div>
-        <label className="filter-input">
+        <label className="filter-input" htmlFor="target-filter">
           <Search size={14} aria-hidden="true" />
           <span className="sr-only">Filter targets</span>
           <input
+            id="target-filter"
             type="search"
             value={state.targetFilter}
             placeholder="Filter targets"
@@ -110,7 +112,7 @@ export function Sidebar() {
                   {target.label ?? target.id}
                 </span>
               </span>
-              <span className="count-badge">{target.points.length}</span>
+              <span className="count-badge">{target.samples.length}</span>
               {target.label && (
                 <span className="nav-description mono" title={target.id}>
                   {target.id}
@@ -124,33 +126,38 @@ export function Sidebar() {
         </div>
       </section>
 
-      <div className="sidebar-footer">
-        {workspace?.document.description && (
-          <details>
-            <summary>Case details</summary>
-            <p>{workspace.document.description}</p>
-            <p className="muted mono path-text">
+      <section className="sidebar-footer" aria-labelledby="sources-heading">
+        <div className="section-heading sources-heading">
+          <h2 id="sources-heading">Sources</h2>
+        </div>
+        {workspace && (
+          <div className="sidebar-video-path">
+            <span>Video</span>
+            <span
+              className="muted mono path-text"
+              title={workspace.document.video?.display_path ?? "Video unavailable"}
+            >
               {workspace.document.video?.display_path ?? "Video unavailable"}
-            </p>
-          </details>
+            </span>
+          </div>
         )}
         <button
           type="button"
           className="drawer-button"
           disabled={!workspace}
-          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "case" })}
+          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "case_file" })}
         >
-          <FileCode2 size={15} /> Case YAML
+          <FileCode2 size={15} /> Case file
         </button>
         <button
           type="button"
           className="drawer-button"
-          disabled={!state.suite?.config_source_yaml}
-          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "config" })}
+          disabled={!state.evalDirectory?.eval_config_source}
+          onClick={() => dispatch({ type: "SET_SOURCE_DRAWER", value: "eval_config_file" })}
         >
-          <SlidersHorizontal size={15} /> Eval config
+          <SlidersHorizontal size={15} /> Eval config file
         </button>
-      </div>
+      </section>
     </aside>
   );
 }

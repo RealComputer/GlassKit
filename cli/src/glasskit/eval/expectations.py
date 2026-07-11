@@ -11,38 +11,38 @@ from .models import (
     ComparisonConfig,
     EvalCase,
     EvalConfigError,
-    EvalSuite,
+    EvalDirectory,
     SampleExpectation,
     TargetSpec,
     TargetThreshold,
     Thresholds,
 )
 from .schemas import (
-    RawCaseYaml,
+    RawCaseFile,
     RawCompare,
     RawSampleBlock,
     RawThresholds,
-    parse_case_yaml,
-    parse_eval_config_yaml,
+    parse_case_file,
+    parse_eval_config_file,
     workflow_target_metadata,
 )
 
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 YAML_SUFFIXES = (".yaml", ".yml")
-EVAL_CONFIG_NAMES = ("config.yaml", "config.yml")
+EVAL_CONFIG_FILE_NAMES = ("config.yaml", "config.yml")
 CASES_DIR_NAME = "cases"
-MAX_EXPANDED_POINTS_PER_CASE = 10_000
+MAX_EXPANDED_SAMPLES_PER_CASE = 10_000
 _NANOSECONDS_PER_SECOND = 1_000_000_000
 _EPSILON = 1e-9
 
 
-def load_eval_suite(
+def load_eval_directory(
     eval_dir: Path,
     *,
     case_filter: str | None = None,
     target_filter: str | None = None,
     allow_empty: bool = False,
-) -> EvalSuite:
+) -> EvalDirectory:
     eval_dir = _resolve_eval_dir(eval_dir)
     thresholds = _load_eval_thresholds(eval_dir)
     case_paths = discover_case_paths(eval_dir, case_filter)
@@ -60,12 +60,12 @@ def load_eval_suite(
         cases = _filter_cases_by_target(cases, target_id)
     if not allow_empty and not any(case.samples for case in cases):
         raise EvalConfigError("eval has no declared samples")
-    return EvalSuite(path=eval_dir, cases=cases, thresholds=thresholds)
+    return EvalDirectory(path=eval_dir, cases=cases, thresholds=thresholds)
 
 
-def format_sample_schedule(suite: EvalSuite) -> list[dict[str, Any]]:
+def format_sample_schedule(eval_directory: EvalDirectory) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for case in suite.cases:
+    for case in eval_directory.cases:
         for target in case.targets:
             for sample in target.samples:
                 rows.append(
@@ -97,7 +97,7 @@ def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
     paths = [
         child
         for child in eval_dir.iterdir()
-        if child.is_file() and child.name in EVAL_CONFIG_NAMES
+        if child.is_file() and child.name in EVAL_CONFIG_FILE_NAMES
     ]
     if not paths:
         return Thresholds()
@@ -105,7 +105,7 @@ def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
         names = ", ".join(path.name for path in paths)
         raise EvalConfigError(f"multiple eval config files found: {names}; keep one")
     path = paths[0]
-    raw = parse_eval_config_yaml(load_yaml_mapping(path), label=str(path))
+    raw = parse_eval_config_file(load_yaml_mapping(path), label=str(path))
     return _thresholds_from_raw(raw.thresholds)
 
 
@@ -114,9 +114,9 @@ def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[
     eval_dir = _resolve_eval_dir(eval_dir)
     cases_dir = eval_dir / CASES_DIR_NAME
     if not cases_dir.exists():
-        raise EvalConfigError(f"eval cases directory does not exist: {cases_dir}")
+        raise EvalConfigError(f"cases directory does not exist: {cases_dir}")
     if not cases_dir.is_dir():
-        raise EvalConfigError(f"eval cases path must be a directory: {cases_dir}")
+        raise EvalConfigError(f"cases path must be a directory: {cases_dir}")
 
     discovered = sorted(
         child
@@ -130,7 +130,7 @@ def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[
         candidates = discovered
     if not candidates:
         suffix = f" matching case {case_filter!r}" if case_filter else ""
-        raise EvalConfigError(f"no eval cases found under {cases_dir}{suffix}")
+        raise EvalConfigError(f"no case files found under {cases_dir}{suffix}")
     _validate_unique_case_stems(candidates)
     return candidates
 
@@ -145,7 +145,7 @@ def _validate_unique_case_stems(case_paths: list[Path]) -> None:
             f"{stem!r}: {', '.join(path.name for path in paths)}"
             for stem, paths in sorted(duplicates.items())
         )
-        raise EvalConfigError(f"multiple eval case files share a name: {details}")
+        raise EvalConfigError(f"multiple case files share a name: {details}")
 
 
 def normalize_case_filter(case_filter: str) -> str:
@@ -167,7 +167,7 @@ def _validate_case_filter(case_filter: str) -> None:
 
 def normalize_target_filter(target_filter: str) -> str:
     if not target_filter or target_filter != target_filter.strip():
-        raise EvalConfigError("target must be a target id from case YAML")
+        raise EvalConfigError("target must be a target id from a case file")
     return target_filter
 
 
@@ -175,11 +175,11 @@ def _filter_case_paths_by_target(case_paths: list[Path], target_id: str) -> list
     return [
         case_path
         for case_path in case_paths
-        if _case_yaml_declares_target(case_path, target_id)
+        if _case_file_declares_target(case_path, target_id)
     ]
 
 
-def _case_yaml_declares_target(case_path: Path, target_id: str) -> bool:
+def _case_file_declares_target(case_path: Path, target_id: str) -> bool:
     raw_targets = load_yaml_mapping(case_path).get("targets")
     return isinstance(raw_targets, Mapping) and target_id in raw_targets
 
@@ -207,7 +207,7 @@ def load_case(
     case_path: Path,
     *,
     allow_empty: bool = False,
-    raw_case: RawCaseYaml | None = None,
+    raw_case: RawCaseFile | None = None,
     resolve_video: bool = True,
 ) -> EvalCase:
     """Load one case, optionally expanding an already-parsed in-memory candidate.
@@ -219,7 +219,7 @@ def load_case(
     """
     raw = raw_case
     if raw is None:
-        raw = parse_case_yaml(load_yaml_mapping(case_path), label=str(case_path))
+        raw = parse_case_file(load_yaml_mapping(case_path), label=str(case_path))
 
     video_path = (
         resolve_video_path(case_path, raw.video)
@@ -333,19 +333,19 @@ def _target_config(
     return config
 
 
-def _preflight_case_expansion(raw_case: RawCaseYaml, *, case_path: Path) -> None:
-    total_points = 0
+def _preflight_case_expansion(raw_case: RawCaseFile, *, case_path: Path) -> None:
+    total_samples = 0
     for target_id, raw_target in raw_case.targets.items():
         for block_index, raw_block in enumerate(raw_target.samples, start=1):
-            total_points += _sample_block_point_count(
+            total_samples += _sample_block_sample_count(
                 raw_block, default_every_s=raw_case.sampling.every_s
             )
-            if total_points > MAX_EXPANDED_POINTS_PER_CASE:
+            if total_samples > MAX_EXPANDED_SAMPLES_PER_CASE:
                 _raise_expansion_budget_error(
                     case_path=case_path,
                     target_id=target_id,
                     block_index=block_index,
-                    calculated_count=total_points,
+                    calculated_count=total_samples,
                 )
 
 
@@ -380,7 +380,7 @@ def _expand_sample_block(
         source = f"range [{source_interval[0]:g}, {source_interval[1]:g})"
     else:
         for timestamp in timestamps:
-            _add_point(intervals, timestamp, case_path, target_id, block_index)
+            _add_sample(intervals, timestamp, case_path, target_id, block_index)
         source = "at"
 
     return [
@@ -422,13 +422,15 @@ def expand_sample_timestamps(
     block_index: int,
 ) -> list[float]:
     """Expand one parsed block with the shared bounded timestamp rules."""
-    point_count = _sample_block_point_count(raw_block, default_every_s=default_every_s)
-    if point_count > MAX_EXPANDED_POINTS_PER_CASE:
+    sample_count = _sample_block_sample_count(
+        raw_block, default_every_s=default_every_s
+    )
+    if sample_count > MAX_EXPANDED_SAMPLES_PER_CASE:
         _raise_expansion_budget_error(
             case_path=case_path,
             target_id=target_id,
             block_index=block_index,
-            calculated_count=point_count,
+            calculated_count=sample_count,
         )
 
     if raw_block.range_ is not None:
@@ -438,7 +440,7 @@ def expand_sample_timestamps(
         )
         timestamps: list[float] = []
         current = start
-        for _ in range(point_count):
+        for _ in range(sample_count):
             timestamps.append(_round_timestamp(current))
             current += every_s
     else:
@@ -458,7 +460,7 @@ def expand_sample_timestamps(
     return timestamps
 
 
-def _sample_block_point_count(
+def _sample_block_sample_count(
     raw_block: RawSampleBlock, *, default_every_s: float
 ) -> int:
     if raw_block.range_ is None:
@@ -468,15 +470,15 @@ def _sample_block_point_count(
     every_s = raw_block.every_s if raw_block.every_s is not None else default_every_s
     current = start
     threshold = end - _EPSILON
-    for count in range(MAX_EXPANDED_POINTS_PER_CASE + 1):
+    for count in range(MAX_EXPANDED_SAMPLES_PER_CASE + 1):
         if not current < threshold:
             return count
         current += every_s
-    prospective_count = _prospective_range_point_count(start, end, every_s)
-    return max(prospective_count, MAX_EXPANDED_POINTS_PER_CASE + 1)
+    prospective_count = _prospective_range_sample_count(start, end, every_s)
+    return max(prospective_count, MAX_EXPANDED_SAMPLES_PER_CASE + 1)
 
 
-def _prospective_range_point_count(start: float, end: float, every_s: float) -> int:
+def _prospective_range_sample_count(start: float, end: float, every_s: float) -> int:
     span = (end - _EPSILON) - start
     if span <= 0:
         return 0
@@ -497,8 +499,8 @@ def _raise_expansion_budget_error(
 ) -> None:
     raise EvalConfigError(
         f"{case_path}: target {target_id!r} sample {block_index} would expand "
-        f"the case to {calculated_count} points; limit is "
-        f"{MAX_EXPANDED_POINTS_PER_CASE}"
+        f"the case to {calculated_count} samples; limit is "
+        f"{MAX_EXPANDED_SAMPLES_PER_CASE}"
     )
 
 
@@ -562,7 +564,7 @@ def _add_interval(
     intervals.append(interval)
 
 
-def _add_point(
+def _add_sample(
     intervals: list[tuple[float, float, str]],
     timestamp: float,
     case_path: Path,

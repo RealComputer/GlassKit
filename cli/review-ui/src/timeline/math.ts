@@ -41,6 +41,6 @@ export function rulerTicks(duration: number, zoom: number): number[] {
   return ticks;
 }
 
-export function markerSelector(targetId: string, pointId: string): string {
-  return `[data-target-id="${CSS.escape(targetId)}"][data-point-id="${CSS.escape(pointId)}"]`;
+export function markerSelector(targetId: string, sampleId: string): string {
+  return `[data-target-id="${CSS.escape(targetId)}"][data-sample-id="${CSS.escape(sampleId)}"]`;
 }

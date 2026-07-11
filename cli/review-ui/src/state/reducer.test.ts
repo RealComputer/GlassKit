@@ -1,96 +1,95 @@
 import { describe, expect, it } from "vitest";
-import { document, point, target } from "../test/fixtures.ts";
+import { caseFile, sample, target } from "../test/fixtures.ts";
 import { appReducer, initialState, isRepairComplete } from "./reducer.ts";
 
 function loadedState() {
-  const doc = document();
+  const doc = caseFile();
   return appReducer(
     { ...initialState, selectedCaseId: doc.id },
-    { type: "CASE_LOADED", document: doc },
+    { type: "CASE_FILE_LOADED", document: doc },
   );
 }
 
 describe("appReducer save ordering", () => {
   it("caches a late case response without stealing active selection or video state", () => {
     const active = {
-      ...document([target("active_target", [point("active-point", 4)])]),
+      ...caseFile([target("active_target", [sample("active-sample", 4)])]),
       id: "active.yaml",
       name: "active",
     };
     const late = {
-      ...document([target("late_target", [point("late-point", 8)])]),
+      ...caseFile([target("late_target", [sample("late-sample", 8)])]),
       id: "late.yaml",
       name: "late",
     };
     let state = appReducer(
       { ...initialState, selectedCaseId: active.id },
-      { type: "CASE_LOADED", document: active },
+      { type: "CASE_FILE_LOADED", document: active },
     );
-    state = appReducer(state, { type: "CASE_LOADED", document: late });
-    expect(state.documents).toHaveProperty(late.id);
+    state = appReducer(state, { type: "CASE_FILE_LOADED", document: late });
+    expect(state.caseFileWorkspaces).toHaveProperty(late.id);
     expect(state.selectedCaseId).toBe(active.id);
     expect(state.selectedTargetId).toBe("active_target");
-    expect(state.selectedPointId).toBe("active-point");
+    expect(state.selectedSampleId).toBe("active-sample");
     expect(state.video.currentTime).toBe(4);
   });
 
   it("caches a late discard reload without stealing active selection or video state", () => {
     const active = {
-      ...document([target("active_target", [point("active-point", 4)])]),
+      ...caseFile([target("active_target", [sample("active-sample", 4)])]),
       id: "active.yaml",
       name: "active",
     };
     const late = {
-      ...document([target("late_target", [point("late-point", 8)])]),
+      ...caseFile([target("late_target", [sample("late-sample", 8)])]),
       id: "late.yaml",
       name: "late",
     };
     let state = appReducer(
       { ...initialState, selectedCaseId: active.id },
-      { type: "CASE_LOADED", document: active },
+      { type: "CASE_FILE_LOADED", document: active },
     );
     const activeVideo = state.video;
     state = appReducer(
       {
         ...state,
-        loadingCases: { ...state.loadingCases, [late.id]: true },
-        caseLoadErrors: { ...state.caseLoadErrors, [late.id]: "Previous failure" },
+        loadingCaseFiles: { ...state.loadingCaseFiles, [late.id]: true },
+        caseFileLoadErrors: { ...state.caseFileLoadErrors, [late.id]: "Previous failure" },
       },
       { type: "DISCARD_AND_LOAD", document: late },
     );
 
-    expect(state.documents[late.id].document).toBe(late);
-    expect(state.loadingCases[late.id]).toBe(false);
-    expect(state.caseLoadErrors).not.toHaveProperty(late.id);
+    expect(state.caseFileWorkspaces[late.id].document).toBe(late);
+    expect(state.loadingCaseFiles[late.id]).toBe(false);
+    expect(state.caseFileLoadErrors).not.toHaveProperty(late.id);
     expect(state.selectedCaseId).toBe(active.id);
     expect(state.selectedTargetId).toBe("active_target");
-    expect(state.selectedPointId).toBe("active-point");
+    expect(state.selectedSampleId).toBe("active-sample");
     expect(state.video).toBe(activeVideo);
   });
 
-  it("selects and seeks the first point when a target receives focus", () => {
+  it("selects and seeks the first sample when a target receives focus", () => {
     let state = loadedState();
     const generation = state.video.seekRequest.generation;
     state = appReducer(state, { type: "SELECT_TARGET", targetId: "target_b" });
-    expect(state.selectedPointId).toBe("target_b-point");
+    expect(state.selectedSampleId).toBe("target_b-sample");
     expect(state.video.currentTime).toBe(1);
     expect(state.video.seekRequest).toEqual({
       generation: generation + 1,
       time: 1,
-      sampleTime: 1,
     });
   });
 
-  it("reloads retained selection at its point and refreshes the media element", () => {
-    const original = document([target("target_a", [point("first", 1), point("retained", 7)])]);
+  it("reloads retained selection at its sample and refreshes the media element", () => {
+    const original = caseFile([target("target_a", [sample("first", 1), sample("retained", 7)])]);
     let state = appReducer(
       { ...initialState, selectedCaseId: original.id },
-      { type: "CASE_LOADED", document: original },
+      { type: "CASE_FILE_LOADED", document: original },
     );
     state = appReducer(state, {
-      type: "SELECT_POINT",
+      type: "SELECT_SAMPLE",
       targetId: "target_a",
-      pointId: "retained",
+      sampleId: "retained",
       timestamp: 7,
     });
     const mediaGeneration = state.video.mediaGeneration;
@@ -102,10 +101,9 @@ describe("appReducer save ordering", () => {
 
     state = appReducer(state, { type: "DISCARD_AND_LOAD", document: reloaded });
 
-    expect(state.selectedPointId).toBe("retained");
+    expect(state.selectedSampleId).toBe("retained");
     expect(state.video.currentTime).toBe(7);
     expect(state.video.seekRequest.time).toBe(7);
-    expect(state.video.seekRequest.sampleTime).toBe(7);
     expect(state.video.mediaGeneration).toBe(mediaGeneration + 1);
   });
 
@@ -113,24 +111,24 @@ describe("appReducer save ordering", () => {
     let state = loadedState();
     const caseId = "case-001.yaml";
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 2, "true")],
+      samples: [sample("target_a-sample", 2, "true")],
       immediate: true,
     });
-    const submittedVersion = state.documents[caseId].versions.target_a;
+    const submittedVersion = state.caseFileWorkspaces[caseId].versions.target_a;
     state = appReducer(state, { type: "SAVE_START", caseId });
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 3, "true")],
+      samples: [sample("target_a-sample", 3, "true")],
       immediate: false,
     });
-    const serverDocument = document([
-      target("target_a", [point("target_a-point", 2, "true")]),
-      target("target_b", [point("target_b-point", 4, "true")]),
+    const serverDocument = caseFile([
+      target("target_a", [sample("target_a-sample", 2, "true")]),
+      target("target_b", [sample("target_b-sample", 4, "true")]),
     ]);
     state = appReducer(state, {
       type: "SAVE_SUCCESS",
@@ -139,99 +137,104 @@ describe("appReducer save ordering", () => {
       submittedVersions: { target_a: submittedVersion },
     });
 
-    expect(state.documents[caseId].document.targets[0].points[0].timestamp_s).toBe(3);
-    expect(state.documents[caseId].dirtyTargetIds).toEqual(["target_a"]);
-    expect(state.documents[caseId].savePhase).toBe("unsaved");
-    expect(state.documents[caseId].acceptedDocument.revision).toBe("revision-1");
+    expect(state.caseFileWorkspaces[caseId].document.targets[0].samples[0].timestamp_s).toBe(3);
+    expect(state.caseFileWorkspaces[caseId].dirtyTargetIds).toEqual(["target_a"]);
+    expect(state.caseFileWorkspaces[caseId].savePhase).toBe("unsaved");
+    expect(state.caseFileWorkspaces[caseId].acceptedCaseFile.revision).toBe("revision-1");
   });
 
   it("does not overwrite an unsent dirty target with a full-case response", () => {
     let state = loadedState();
     const caseId = "case-001.yaml";
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 2)],
+      samples: [sample("target_a-sample", 2)],
       immediate: true,
     });
-    const versionA = state.documents[caseId].versions.target_a;
+    const versionA = state.caseFileWorkspaces[caseId].versions.target_a;
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_b",
-      points: [point("target_b-point", 8, "true")],
+      samples: [sample("target_b-sample", 8, "true")],
       immediate: true,
     });
     state = appReducer(state, {
       type: "SAVE_SUCCESS",
       caseId,
-      document: document([
-        target("target_a", [point("target_a-point", 2)]),
-        target("target_b", [point("target_b-point", 1)]),
+      document: caseFile([
+        target("target_a", [sample("target_a-sample", 2)]),
+        target("target_b", [sample("target_b-sample", 1)]),
       ]),
       submittedVersions: { target_a: versionA },
     });
 
-    expect(state.documents[caseId].document.targets[1].points[0].timestamp_s).toBe(8);
-    expect(state.documents[caseId].dirtyTargetIds).toEqual(["target_b"]);
+    expect(state.caseFileWorkspaces[caseId].document.targets[1].samples[0].timestamp_s).toBe(8);
+    expect(state.caseFileWorkspaces[caseId].dirtyTargetIds).toEqual(["target_b"]);
   });
 
   it("does not report Saved when an invalid field draft appeared in flight", () => {
     let state = loadedState();
     const caseId = "case-001.yaml";
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 2)],
+      samples: [sample("target_a-sample", 2)],
       immediate: true,
     });
-    const version = state.documents[caseId].versions.target_a;
+    const version = state.caseFileWorkspaces[caseId].versions.target_a;
     state = appReducer(state, {
       type: "SET_FORM_ERROR",
-      key: "target_a:target_a-point:expect",
+      key: "target_a:target_a-sample:expect",
       message: "Enter valid JSON.",
     });
     state = appReducer(state, {
       type: "SAVE_SUCCESS",
       caseId,
-      document: document([target("target_a", [point("target_a-point", 2)]), target("target_b")]),
+      document: caseFile([target("target_a", [sample("target_a-sample", 2)]), target("target_b")]),
       submittedVersions: { target_a: version },
     });
-    expect(state.documents[caseId].savePhase).toBe("invalid");
-    expect(state.documents[caseId].formErrors).toHaveProperty("target_a:target_a-point:expect");
+    expect(state.caseFileWorkspaces[caseId].savePhase).toBe("invalid");
+    expect(state.caseFileWorkspaces[caseId].formErrors).toHaveProperty(
+      "target_a:target_a-sample:expect",
+    );
   });
 
-  it("holds a repair draft until all targets have valid bounded points", () => {
-    const repairDocument = document([target("empty", []), target("too_late", [point("late", 11)])]);
+  it("holds a repair draft until all targets have valid bounded samples", () => {
+    const repairDocument = caseFile([
+      target("empty", []),
+      target("too_late", [sample("late", 11)]),
+    ]);
     const state = appReducer(
       { ...initialState, selectedCaseId: repairDocument.id },
-      { type: "CASE_LOADED", document: repairDocument },
+      { type: "CASE_FILE_LOADED", document: repairDocument },
     );
-    expect(isRepairComplete(state.documents[repairDocument.id])).toBe(false);
+    expect(isRepairComplete(state.caseFileWorkspaces[repairDocument.id])).toBe(false);
   });
 
   it("accepts the eval validator tolerance just beyond nominal duration", () => {
-    const nearEnd = document([target("near_end", [point("end", 10.01)])]);
+    const nearEnd = caseFile([target("near_end", [sample("end", 10.01)])]);
     const state = appReducer(
       { ...initialState, selectedCaseId: nearEnd.id },
-      { type: "CASE_LOADED", document: nearEnd },
+      { type: "CASE_FILE_LOADED", document: nearEnd },
     );
-    expect(isRepairComplete(state.documents[nearEnd.id])).toBe(true);
+    expect(isRepairComplete(state.caseFileWorkspaces[nearEnd.id])).toBe(true);
   });
 
-  it("cancels an unsaved first point without leaving an empty PUT draft", () => {
-    const empty = document([target("empty", [])]);
+  it("cancels an unsaved first sample without leaving an empty PUT draft", () => {
+    const empty = caseFile([target("empty", [])]);
     let state = appReducer(
       { ...initialState, selectedCaseId: empty.id },
-      { type: "CASE_LOADED", document: empty },
+      { type: "CASE_FILE_LOADED", document: empty },
     );
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId: empty.id,
       targetId: "empty",
-      points: [point("new", 1)],
+      samples: [sample("new", 1)],
       immediate: true,
     });
     state = appReducer(state, {
@@ -239,9 +242,9 @@ describe("appReducer save ordering", () => {
       caseId: empty.id,
       targetId: "empty",
     });
-    expect(state.documents[empty.id].document.targets[0].points).toEqual([]);
-    expect(state.documents[empty.id].dirtyTargetIds).toEqual([]);
-    expect(state.documents[empty.id].savePhase).toBe("saved");
+    expect(state.caseFileWorkspaces[empty.id].document.targets[0].samples).toEqual([]);
+    expect(state.caseFileWorkspaces[empty.id].dirtyTargetIds).toEqual([]);
+    expect(state.caseFileWorkspaces[empty.id].savePhase).toBe("saved");
   });
 
   it("updates and clamps the requested playhead even without playable media", () => {
@@ -257,10 +260,10 @@ describe("appReducer save ordering", () => {
     let state = loadedState();
     const caseId = "case-001.yaml";
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 2)],
+      samples: [sample("target_a-sample", 2)],
       immediate: true,
     });
     state = appReducer(state, {
@@ -270,14 +273,14 @@ describe("appReducer save ordering", () => {
       details: [],
     });
     state = appReducer(state, {
-      type: "REPLACE_TARGET_POINTS",
+      type: "REPLACE_TARGET_SAMPLES",
       caseId,
       targetId: "target_a",
-      points: [point("target_a-point", 3)],
+      samples: [sample("target_a-sample", 3)],
       immediate: true,
     });
-    expect(state.documents[caseId].savePhase).toBe("failed");
-    expect(state.documents[caseId].saveError).toBe("disk is read-only");
-    expect(state.documents[caseId].document.targets[0].points[0].timestamp_s).toBe(3);
+    expect(state.caseFileWorkspaces[caseId].savePhase).toBe("failed");
+    expect(state.caseFileWorkspaces[caseId].saveError).toBe("disk is read-only");
+    expect(state.caseFileWorkspaces[caseId].document.targets[0].samples[0].timestamp_s).toBe(3);
   });
 });

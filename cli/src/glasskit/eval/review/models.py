@@ -78,7 +78,7 @@ class ValidationIssue(TransportModel):
     repairable: bool = False
 
 
-class PointCompare(TransportModel):
+class SampleCompare(TransportModel):
     mode: str | None = None
     tolerance: float | None = None
 
@@ -102,7 +102,7 @@ class PointCompare(TransportModel):
         return value
 
 
-class PointOrigin(TransportModel):
+class SampleOrigin(TransportModel):
     block_index: Annotated[int, Field(ge=1)]
     kind: GroupKind
     every_s: float | None = None
@@ -117,7 +117,7 @@ class PointOrigin(TransportModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_shape(self) -> PointOrigin:
+    def _validate_shape(self) -> SampleOrigin:
         if self.kind == "range" and self.every_s is None:
             raise ValueError("range origins require every_s")
         if self.kind == "at" and self.every_s is not None:
@@ -125,15 +125,15 @@ class PointOrigin(TransportModel):
         return self
 
 
-class ReviewPoint(TransportModel):
+class ReviewSample(TransportModel):
     id: str
     timestamp_s: float
     expect_type: ExpectType
     expect_json: str
     field: str | None = None
-    compare: PointCompare = Field(default_factory=PointCompare)
+    compare: SampleCompare = Field(default_factory=SampleCompare)
     comment: str | None = None
-    origin: PointOrigin | None = None
+    origin: SampleOrigin | None = None
 
     @field_validator("id")
     @classmethod
@@ -170,7 +170,7 @@ class ReviewPoint(TransportModel):
 class DisplayGroup(TransportModel):
     id: str
     kind: GroupKind
-    point_ids: list[str]
+    sample_ids: list[str]
     start_s: float | None = None
     end_s: float | None = None
     every_s: float | None = None
@@ -178,9 +178,9 @@ class DisplayGroup(TransportModel):
 
     @model_validator(mode="after")
     def _validate_shape(self) -> DisplayGroup:
-        if len(self.point_ids) != len(self.timestamps_s) or not self.point_ids:
+        if len(self.sample_ids) != len(self.timestamps_s) or not self.sample_ids:
             raise ValueError(
-                "point_ids and timestamps_s must have equal nonzero length"
+                "sample_ids and timestamps_s must have equal nonzero length"
             )
         range_fields = (self.start_s, self.end_s, self.every_s)
         if self.kind == "range" and any(value is None for value in range_fields):
@@ -194,7 +194,7 @@ class TargetDocument(TransportModel):
     id: str
     label: str | None = None
     details_yaml: str
-    points: list[ReviewPoint]
+    samples: list[ReviewSample]
     display_groups: list[DisplayGroup]
 
 
@@ -213,7 +213,7 @@ class VideoDocument(TransportModel):
         return _validate_unicode_scalar(value)
 
 
-class CaseDocument(TransportModel):
+class CaseFileDocument(TransportModel):
     id: str
     name: str
     revision: str
@@ -221,32 +221,32 @@ class CaseDocument(TransportModel):
     editing_enabled: bool
     load_error: LoadError | None = None
     description: str | None = None
-    source_yaml: str
+    case_file_source: str
     video: VideoDocument | None = None
     targets: list[TargetDocument]
     validation_issues: list[ValidationIssue]
 
 
-class CaseSummary(TransportModel):
+class CaseFileSummary(TransportModel):
     id: str
     name: str
     file_name: str
     description: str | None = None
     target_count: int | None = None
-    point_count: int | None = None
+    sample_count: int | None = None
     status: SummaryStatus
     error: LoadError | None = None
 
 
-class SuiteDocument(TransportModel):
+class EvalDirectoryDocument(TransportModel):
     eval_dir: str
     write_token: str
-    config_source_yaml: str | None = None
-    cases: list[CaseSummary]
+    eval_config_source: str | None = None
+    cases: list[CaseFileSummary]
 
 
 class TargetReplacement(TransportModel):
-    points: list[ReviewPoint]
+    samples: list[ReviewSample]
 
 
 class ReplaceSamplesRequest(TransportModel):

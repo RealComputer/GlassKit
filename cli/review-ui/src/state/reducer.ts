@@ -1,12 +1,12 @@
-import type { CaseDocument, ReviewPoint, SuiteBootstrap } from "../api/types.ts";
+import type { CaseFileDocument, ReviewSample, EvalDirectoryDocument } from "../api/types.ts";
 
 export const SAMPLE_DURATION_TOLERANCE_S = 0.05;
 
 export type SavePhase = "saved" | "unsaved" | "saving" | "repairs" | "invalid" | "failed";
 
-export interface CaseWorkspace {
-  document: CaseDocument;
-  acceptedDocument: CaseDocument;
+export interface CaseFileWorkspace {
+  document: CaseFileDocument;
+  acceptedCaseFile: CaseFileDocument;
   versions: Record<string, number>;
   dirtyTargetIds: string[];
   formErrors: Record<string, string>;
@@ -22,44 +22,44 @@ export interface VideoState {
   mediaGeneration: number;
   paused: boolean;
   playbackRate: number;
-  seekRequest: { generation: number; time: number; sampleTime: number | null };
+  seekRequest: { generation: number; time: number };
   previewStatus: "idle" | "seeking" | "ready" | "unavailable";
   shownFrameTime: number | null;
   previewMessage: string | null;
 }
 
 export interface AppState {
-  suite: SuiteBootstrap | null;
-  suiteLoading: boolean;
-  suiteError: string | null;
+  evalDirectory: EvalDirectoryDocument | null;
+  evalDirectoryLoading: boolean;
+  evalDirectoryError: string | null;
   selectedCaseId: string | null;
   selectedTargetId: string | null;
-  selectedPointId: string | null;
+  selectedSampleId: string | null;
   lastTargetByCase: Record<string, string>;
-  documents: Record<string, CaseWorkspace>;
-  loadingCases: Record<string, boolean>;
-  caseLoadErrors: Record<string, string>;
+  caseFileWorkspaces: Record<string, CaseFileWorkspace>;
+  loadingCaseFiles: Record<string, boolean>;
+  caseFileLoadErrors: Record<string, string>;
   caseFilter: string;
   targetFilter: string;
   zoom: 1 | 2 | 4 | 8;
   selectedLaneOnly: boolean;
-  sourceDrawer: "case" | "config" | null;
+  sourceDrawer: "case_file" | "eval_config_file" | null;
   helpOpen: boolean;
   toast: string | null;
   video: VideoState;
 }
 
 export const initialState: AppState = {
-  suite: null,
-  suiteLoading: true,
-  suiteError: null,
+  evalDirectory: null,
+  evalDirectoryLoading: true,
+  evalDirectoryError: null,
   selectedCaseId: null,
   selectedTargetId: null,
-  selectedPointId: null,
+  selectedSampleId: null,
   lastTargetByCase: {},
-  documents: {},
-  loadingCases: {},
-  caseLoadErrors: {},
+  caseFileWorkspaces: {},
+  loadingCaseFiles: {},
+  caseFileLoadErrors: {},
   caseFilter: "",
   targetFilter: "",
   zoom: 1,
@@ -73,7 +73,7 @@ export const initialState: AppState = {
     mediaGeneration: 0,
     paused: true,
     playbackRate: 1,
-    seekRequest: { generation: 0, time: 0, sampleTime: null },
+    seekRequest: { generation: 0, time: 0 },
     previewStatus: "idle",
     shownFrameTime: null,
     previewMessage: null,
@@ -81,29 +81,33 @@ export const initialState: AppState = {
 };
 
 export type AppAction =
-  | { type: "SUITE_LOADED"; suite: SuiteBootstrap; initialCaseId: string | null }
-  | { type: "SUITE_FAILED"; message: string }
-  | { type: "CASE_LOADING"; caseId: string }
-  | { type: "CASE_LOAD_FAILED"; caseId: string; message: string }
   | {
-      type: "CASE_LOADED";
-      document: CaseDocument;
+      type: "EVAL_DIRECTORY_LOADED";
+      evalDirectory: EvalDirectoryDocument;
+      initialCaseId: string | null;
+    }
+  | { type: "EVAL_DIRECTORY_FAILED"; message: string }
+  | { type: "CASE_FILE_LOADING"; caseId: string }
+  | { type: "CASE_FILE_LOAD_FAILED"; caseId: string; message: string }
+  | {
+      type: "CASE_FILE_LOADED";
+      document: CaseFileDocument;
       preferredTargetId?: string | null;
     }
   | { type: "CANCEL_TARGET_DRAFT"; caseId: string; targetId: string }
   | { type: "SELECT_CASE"; caseId: string }
   | { type: "SELECT_TARGET"; targetId: string }
   | {
-      type: "SELECT_POINT";
+      type: "SELECT_SAMPLE";
       targetId: string;
-      pointId: string;
+      sampleId: string;
       timestamp: number;
     }
   | {
-      type: "REPLACE_TARGET_POINTS";
+      type: "REPLACE_TARGET_SAMPLES";
       caseId: string;
       targetId: string;
-      points: ReviewPoint[];
+      samples: ReviewSample[];
       immediate: boolean;
     }
   | { type: "SET_FORM_ERROR"; key: string; message: string | null }
@@ -119,7 +123,7 @@ export type AppAction =
   | {
       type: "SAVE_SUCCESS";
       caseId: string;
-      document: CaseDocument;
+      document: CaseFileDocument;
       submittedVersions: Record<string, number>;
     }
   | {
@@ -128,25 +132,21 @@ export type AppAction =
       message: string;
       details: { path?: string | null; message: string }[];
     }
-  | { type: "DISCARD_AND_LOAD"; document: CaseDocument }
+  | { type: "DISCARD_AND_LOAD"; document: CaseFileDocument }
   | { type: "SET_CASE_FILTER"; value: string }
   | { type: "SET_TARGET_FILTER"; value: string }
   | { type: "SET_ZOOM"; value: 1 | 2 | 4 | 8 }
   | { type: "SET_SELECTED_LANE_ONLY"; value: boolean }
-  | { type: "SET_SOURCE_DRAWER"; value: "case" | "config" | null }
+  | { type: "SET_SOURCE_DRAWER"; value: "case_file" | "eval_config_file" | null }
   | { type: "SET_HELP_OPEN"; value: boolean }
   | { type: "SET_TOAST"; value: string | null }
-  | {
-      type: "REQUEST_SEEK";
-      time: number;
-      sampleTime?: number | null;
-    }
+  | { type: "REQUEST_SEEK"; time: number }
   | { type: "VIDEO_PATCH"; patch: Partial<Omit<VideoState, "seekRequest">> };
 
-function workspaceFor(document: CaseDocument): CaseWorkspace {
+function workspaceFor(document: CaseFileDocument): CaseFileWorkspace {
   return {
     document,
-    acceptedDocument: document,
+    acceptedCaseFile: document,
     versions: Object.fromEntries(document.targets.map((target) => [target.id, 0])),
     dirtyTargetIds: [],
     formErrors: {},
@@ -157,23 +157,22 @@ function workspaceFor(document: CaseDocument): CaseWorkspace {
   };
 }
 
-function firstTargetId(document: CaseDocument): string | null {
+function firstTargetId(document: CaseFileDocument): string | null {
   return document.targets[0]?.id ?? null;
 }
 
-function firstPointId(document: CaseDocument, targetId: string | null): string | null {
-  return document.targets.find((target) => target.id === targetId)?.points[0]?.id ?? null;
+function firstSampleId(document: CaseFileDocument, targetId: string | null): string | null {
+  return document.targets.find((target) => target.id === targetId)?.samples[0]?.id ?? null;
 }
 
-function videoAtPoint(video: VideoState, point: ReviewPoint | undefined): VideoState {
-  if (!point) return video;
+function videoAtSample(video: VideoState, sample: ReviewSample | undefined): VideoState {
+  if (!sample) return video;
   return {
     ...video,
-    currentTime: point.timestamp_s,
+    currentTime: sample.timestamp_s,
     seekRequest: {
       generation: video.seekRequest.generation + 1,
-      time: point.timestamp_s,
-      sampleTime: point.timestamp_s,
+      time: sample.timestamp_s,
     },
     previewStatus: "seeking",
     shownFrameTime: null,
@@ -182,7 +181,7 @@ function videoAtPoint(video: VideoState, point: ReviewPoint | undefined): VideoS
 }
 
 function phaseAfterFormErrors(
-  workspace: CaseWorkspace,
+  workspace: CaseFileWorkspace,
   formErrors: Record<string, string>,
 ): SavePhase {
   if (Object.keys(formErrors).length > 0) return "invalid";
@@ -192,54 +191,57 @@ function phaseAfterFormErrors(
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "SUITE_LOADED": {
+    case "EVAL_DIRECTORY_LOADED": {
       const selectedCaseId =
-        action.initialCaseId && action.suite.cases.some((item) => item.id === action.initialCaseId)
+        action.initialCaseId &&
+        action.evalDirectory.cases.some((item) => item.id === action.initialCaseId)
           ? action.initialCaseId
-          : (action.suite.cases[0]?.id ?? null);
+          : (action.evalDirectory.cases[0]?.id ?? null);
       return {
         ...state,
-        suite: action.suite,
-        suiteLoading: false,
-        suiteError: null,
+        evalDirectory: action.evalDirectory,
+        evalDirectoryLoading: false,
+        evalDirectoryError: null,
         selectedCaseId,
       };
     }
-    case "SUITE_FAILED":
-      return { ...state, suiteLoading: false, suiteError: action.message };
-    case "CASE_LOADING": {
-      const caseLoadErrors = { ...state.caseLoadErrors };
-      delete caseLoadErrors[action.caseId];
+    case "EVAL_DIRECTORY_FAILED":
+      return { ...state, evalDirectoryLoading: false, evalDirectoryError: action.message };
+    case "CASE_FILE_LOADING": {
+      const caseFileLoadErrors = { ...state.caseFileLoadErrors };
+      delete caseFileLoadErrors[action.caseId];
       return {
         ...state,
-        loadingCases: { ...state.loadingCases, [action.caseId]: true },
-        caseLoadErrors,
+        loadingCaseFiles: { ...state.loadingCaseFiles, [action.caseId]: true },
+        caseFileLoadErrors,
       };
     }
-    case "CASE_LOAD_FAILED":
+    case "CASE_FILE_LOAD_FAILED":
       return {
         ...state,
-        loadingCases: { ...state.loadingCases, [action.caseId]: false },
-        caseLoadErrors: {
-          ...state.caseLoadErrors,
+        loadingCaseFiles: { ...state.loadingCaseFiles, [action.caseId]: false },
+        caseFileLoadErrors: {
+          ...state.caseFileLoadErrors,
           [action.caseId]: action.message,
         },
       };
-    case "CASE_LOADED": {
-      const caseLoadErrors = Object.fromEntries(
-        Object.entries(state.caseLoadErrors).filter(([caseId]) => caseId !== action.document.id),
+    case "CASE_FILE_LOADED": {
+      const caseFileLoadErrors = Object.fromEntries(
+        Object.entries(state.caseFileLoadErrors).filter(
+          ([caseId]) => caseId !== action.document.id,
+        ),
       );
       const cachedState: AppState = {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.document.id]: workspaceFor(action.document),
         },
-        loadingCases: { ...state.loadingCases, [action.document.id]: false },
-        caseLoadErrors,
+        loadingCaseFiles: { ...state.loadingCaseFiles, [action.document.id]: false },
+        caseFileLoadErrors,
       };
       if (state.selectedCaseId !== action.document.id) return cachedState;
-      const oldWorkspace = state.documents[action.document.id];
+      const oldWorkspace = state.caseFileWorkspaces[action.document.id];
       const preferred = action.preferredTargetId;
       const targetId =
         preferred && action.document.targets.some((target) => target.id === preferred)
@@ -248,25 +250,27 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               action.document.targets.some((target) => target.id === state.selectedTargetId)
             ? state.selectedTargetId
             : firstTargetId(action.document);
-      const point = action.document.targets.find((target) => target.id === targetId)?.points.at(0);
+      const sample = action.document.targets
+        .find((target) => target.id === targetId)
+        ?.samples.at(0);
       return {
         ...cachedState,
         selectedTargetId: targetId,
-        selectedPointId: point?.id ?? null,
+        selectedSampleId: sample?.id ?? null,
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,
-        video: videoAtPoint(
+        video: videoAtSample(
           {
             ...initialState.video,
             duration: action.document.video?.duration_s ?? null,
           },
-          point,
+          sample,
         ),
       };
     }
     case "SELECT_CASE": {
-      const cached = state.documents[action.caseId]?.document;
+      const cached = state.caseFileWorkspaces[action.caseId]?.document;
       const remembered = state.lastTargetByCase[action.caseId];
       const targetId =
         cached && remembered && cached.targets.some((item) => item.id === remembered)
@@ -274,7 +278,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           : cached
             ? firstTargetId(cached)
             : null;
-      const point = cached?.targets.find((target) => target.id === targetId)?.points.at(0);
+      const sample = cached?.targets.find((target) => target.id === targetId)?.samples.at(0);
       const baseVideo = cached
         ? { ...initialState.video, duration: cached.video?.duration_s ?? null }
         : initialState.video;
@@ -282,35 +286,37 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selectedCaseId: action.caseId,
         selectedTargetId: targetId,
-        selectedPointId: point?.id ?? null,
+        selectedSampleId: sample?.id ?? null,
         targetFilter: "",
         sourceDrawer: null,
-        video: videoAtPoint(baseVideo, point),
+        video: videoAtSample(baseVideo, sample),
       };
     }
     case "SELECT_TARGET": {
-      const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
-      const point = workspace?.document.targets
+      const workspace = state.selectedCaseId
+        ? state.caseFileWorkspaces[state.selectedCaseId]
+        : null;
+      const sample = workspace?.document.targets
         .find((target) => target.id === action.targetId)
-        ?.points.at(0);
+        ?.samples.at(0);
       return {
         ...state,
         selectedTargetId: action.targetId,
-        selectedPointId: point?.id ?? null,
+        selectedSampleId: sample?.id ?? null,
         lastTargetByCase: state.selectedCaseId
           ? {
               ...state.lastTargetByCase,
               [state.selectedCaseId]: action.targetId,
             }
           : state.lastTargetByCase,
-        video: videoAtPoint(state.video, point),
+        video: videoAtSample(state.video, sample),
       };
     }
-    case "SELECT_POINT":
+    case "SELECT_SAMPLE":
       return {
         ...state,
         selectedTargetId: action.targetId,
-        selectedPointId: action.pointId,
+        selectedSampleId: action.sampleId,
         lastTargetByCase: state.selectedCaseId
           ? {
               ...state.lastTargetByCase,
@@ -323,26 +329,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           seekRequest: {
             generation: state.video.seekRequest.generation + 1,
             time: action.timestamp,
-            sampleTime: action.timestamp,
           },
           previewStatus: "seeking",
           shownFrameTime: null,
           previewMessage: null,
         },
       };
-    case "REPLACE_TARGET_POINTS": {
-      const workspace = state.documents[action.caseId];
+    case "REPLACE_TARGET_SAMPLES": {
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
       const targets = workspace.document.targets.map((target) =>
-        target.id === action.targetId ? { ...target, points: action.points } : target,
+        target.id === action.targetId ? { ...target, samples: action.samples } : target,
       );
       const dirtyTargetIds = workspace.dirtyTargetIds.includes(action.targetId)
         ? workspace.dirtyTargetIds
         : [...workspace.dirtyTargetIds, action.targetId];
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: {
             ...workspace,
             document: { ...workspace.document, targets },
@@ -365,9 +370,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "CANCEL_TARGET_DRAFT": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
-      const acceptedTarget = workspace.acceptedDocument.targets.find(
+      const acceptedTarget = workspace.acceptedCaseFile.targets.find(
         (target) => target.id === action.targetId,
       );
       if (!acceptedTarget) return state;
@@ -376,9 +381,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       );
       return {
         ...state,
-        selectedPointId: null,
-        documents: {
-          ...state.documents,
+        selectedSampleId: null,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: {
             ...workspace,
             document: {
@@ -397,15 +402,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case "SET_FORM_ERROR": {
       if (!state.selectedCaseId) return state;
-      const workspace = state.documents[state.selectedCaseId];
+      const workspace = state.caseFileWorkspaces[state.selectedCaseId];
       if (!workspace) return state;
       const formErrors = { ...workspace.formErrors };
       if (action.message) formErrors[action.key] = action.message;
       else delete formErrors[action.key];
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [state.selectedCaseId]: {
             ...workspace,
             formErrors,
@@ -415,14 +420,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "CLEAR_FORM_ERRORS": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace || action.keys.length === 0) return state;
       const formErrors = { ...workspace.formErrors };
       for (const key of action.keys) delete formErrors[key];
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: {
             ...workspace,
             formErrors,
@@ -432,29 +437,29 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "SAVE_START": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: { ...workspace, savePhase: "saving" },
         },
       };
     }
     case "SAVE_REPAIRS_REQUIRED": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: { ...workspace, savePhase: "repairs" },
         },
       };
     }
     case "SAVE_SUCCESS": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
       const currentTargets = new Map(
         workspace.document.targets.map((target) => [target.id, target]),
@@ -482,15 +487,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       );
       return {
         ...state,
-        suite: state.suite
+        evalDirectory: state.evalDirectory
           ? {
-              ...state.suite,
-              cases: state.suite.cases.map((summary) =>
+              ...state.evalDirectory,
+              cases: state.evalDirectory.cases.map((summary) =>
                 summary.id === action.caseId
                   ? {
                       ...summary,
-                      point_count: action.document.targets.reduce(
-                        (sum, target) => sum + target.points.length,
+                      sample_count: action.document.targets.reduce(
+                        (sum, target) => sum + target.samples.length,
                         0,
                       ),
                       target_count: action.document.targets.length,
@@ -500,12 +505,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               ),
             }
           : null,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: {
             ...workspace,
             document: { ...action.document, targets: mergedTargets },
-            acceptedDocument: action.document,
+            acceptedCaseFile: action.document,
             dirtyTargetIds,
             savePhase:
               Object.keys(workspace.formErrors).length > 0
@@ -521,12 +526,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "SAVE_FAILED": {
-      const workspace = state.documents[action.caseId];
+      const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
       return {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.caseId]: {
             ...workspace,
             savePhase: "failed",
@@ -539,13 +544,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "DISCARD_AND_LOAD": {
       const cachedState: AppState = {
         ...state,
-        documents: {
-          ...state.documents,
+        caseFileWorkspaces: {
+          ...state.caseFileWorkspaces,
           [action.document.id]: workspaceFor(action.document),
         },
-        loadingCases: { ...state.loadingCases, [action.document.id]: false },
-        caseLoadErrors: Object.fromEntries(
-          Object.entries(state.caseLoadErrors).filter(([caseId]) => caseId !== action.document.id),
+        loadingCaseFiles: { ...state.loadingCaseFiles, [action.document.id]: false },
+        caseFileLoadErrors: Object.fromEntries(
+          Object.entries(state.caseFileLoadErrors).filter(
+            ([caseId]) => caseId !== action.document.id,
+          ),
         ),
       };
       if (state.selectedCaseId !== action.document.id) return cachedState;
@@ -555,23 +562,24 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ? state.selectedTargetId
           : firstTargetId(action.document);
       const target = action.document.targets.find((item) => item.id === targetId);
-      const selectedPointId =
-        state.selectedPointId && target?.points.some((point) => point.id === state.selectedPointId)
-          ? state.selectedPointId
-          : firstPointId(action.document, targetId);
-      const selectedPoint = target?.points.find((point) => point.id === selectedPointId);
-      const video = videoAtPoint(
+      const selectedSampleId =
+        state.selectedSampleId &&
+        target?.samples.some((sample) => sample.id === state.selectedSampleId)
+          ? state.selectedSampleId
+          : firstSampleId(action.document, targetId);
+      const selectedSample = target?.samples.find((sample) => sample.id === selectedSampleId);
+      const video = videoAtSample(
         {
           ...initialState.video,
           duration: action.document.video?.duration_s ?? null,
           mediaGeneration: state.video.mediaGeneration + 1,
         },
-        selectedPoint,
+        selectedSample,
       );
       return {
         ...cachedState,
         selectedTargetId: targetId,
-        selectedPointId,
+        selectedSampleId,
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,
@@ -605,7 +613,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           seekRequest: {
             generation: state.video.seekRequest.generation + 1,
             time: currentTime,
-            sampleTime: action.sampleTime ?? null,
           },
           previewStatus: "seeking",
           shownFrameTime: null,
@@ -618,15 +625,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-export function isRepairComplete(workspace: CaseWorkspace): boolean {
+export function isRepairComplete(workspace: CaseFileWorkspace): boolean {
   const { document } = workspace;
   if (!document.editing_enabled || document.video?.duration_s === null || !document.video)
     return false;
   const duration = document.video.duration_s;
   return document.targets.every((target) => {
-    if (target.points.length === 0) return false;
-    const timestamps = [...target.points]
-      .map((point) => point.timestamp_s)
+    if (target.samples.length === 0) return false;
+    const timestamps = [...target.samples]
+      .map((sample) => sample.timestamp_s)
       .sort((left, right) => left - right);
     return timestamps.every(
       (value, index) =>
@@ -638,7 +645,7 @@ export function isRepairComplete(workspace: CaseWorkspace): boolean {
   });
 }
 
-export function hasUnsavedWork(workspace: CaseWorkspace): boolean {
+export function hasUnsavedWork(workspace: CaseFileWorkspace): boolean {
   return (
     workspace.dirtyTargetIds.length > 0 ||
     Object.keys(workspace.formErrors).length > 0 ||

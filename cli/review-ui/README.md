@@ -13,7 +13,7 @@ Then start the local Python review server:
 
 ```bash
 cd ..
-uv run glasskit eval review --eval-dir tests/fixtures/eval_suites/review --port 8765 --no-open
+uv run glasskit eval review --eval-dir tests/fixtures/eval_directories/review --port 8765 --no-open
 ```
 
 Start Vite in another shell. `/api` is proxied to the Python server:

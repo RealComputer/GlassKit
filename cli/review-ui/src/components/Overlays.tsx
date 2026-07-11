@@ -4,13 +4,14 @@ import { useApp } from "../state/AppContext.tsx";
 
 export function Overlays() {
   const { state, dispatch } = useApp();
-  const workspace = state.selectedCaseId ? state.documents[state.selectedCaseId] : null;
+  const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const drawerText =
-    state.sourceDrawer === "case"
-      ? workspace?.acceptedDocument.source_yaml
-      : state.sourceDrawer === "config"
-        ? state.suite?.config_source_yaml
+    state.sourceDrawer === "case_file"
+      ? workspace?.acceptedCaseFile.case_file_source
+      : state.sourceDrawer === "eval_config_file"
+        ? state.evalDirectory?.eval_config_source
         : null;
+  const sourceTitle = state.sourceDrawer === "case_file" ? "Case file" : "Eval config file";
   const sourceRef = useRef<HTMLElement>(null);
   const helpRef = useRef<HTMLElement>(null);
   const overlayOpen = Boolean(state.sourceDrawer || state.helpOpen);
@@ -74,17 +75,15 @@ export function Overlays() {
             className="source-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label={`${state.sourceDrawer} YAML`}
+            aria-labelledby="source-drawer-title"
             tabIndex={-1}
           >
             <div className="drawer-heading">
               <div>
-                <h2>{state.sourceDrawer === "case" ? "Case YAML" : "Eval config"}</h2>
-                {state.sourceDrawer === "case" && workspace?.dirtyTargetIds.length ? (
+                <h2 id="source-drawer-title">{sourceTitle}</h2>
+                {state.sourceDrawer === "case_file" && workspace?.dirtyTargetIds.length ? (
                   <span>Last accepted source; local drafts are not shown yet.</span>
-                ) : (
-                  <span>Read-only source</span>
-                )}
+                ) : null}
               </div>
               <button
                 type="button"
@@ -131,25 +130,25 @@ export function Overlays() {
                 <dt>
                   <kbd>[</kbd> / <kbd>]</kbd>
                 </dt>
-                <dd>Previous / next point</dd>
+                <dd>Previous / next sample</dd>
               </div>
               <div>
                 <dt>
                   <kbd>←</kbd> / <kbd>→</kbd>
                 </dt>
-                <dd>Nudge playhead 0.1 seconds</dd>
+                <dd>Move video time 0.1 seconds</dd>
               </div>
               <div>
                 <dt>
                   <kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd>
                 </dt>
-                <dd>Nudge playhead 1 second</dd>
+                <dd>Move video time 1 second</dd>
               </div>
               <div>
                 <dt>
                   <kbd>A</kbd>
                 </dt>
-                <dd>Add point at playhead</dd>
+                <dd>Add sample at video time</dd>
               </div>
             </dl>
           </section>

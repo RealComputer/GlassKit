@@ -101,7 +101,7 @@ def test_browser_open_failure_is_nonfatal(tmp_path: Path, monkeypatch) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["eval", "review", "--eval-dir", str(eval_dir), "--case", "inspection.yml"],
+        ["eval", "review", "--eval-dir", str(eval_dir), "--case", "inspection.yaml"],
     )
 
     assert result.exit_code == 0
@@ -145,4 +145,4 @@ def test_invalid_initial_selectors_fail_before_server_creation(
 def _copy_fixtures(tmp_path: Path) -> Path:
     destination = tmp_path / "fixtures"
     shutil.copytree(FIXTURES, destination)
-    return destination / "eval_suites" / "review"
+    return destination / "eval_directories" / "review"

@@ -1,0 +1,54 @@
+video: ../../../videos/two-state-64x64.mp4
+description: Review a two-state assembly workflow
+sampling:
+  every_s: 0.5
+workflow:
+  targets:
+  - id: bracket_seated
+    label: Bracket seated
+    prompt_id: workflow.bracket_seated
+    review_hint: Look for the green second state.
+  - id: evidence
+    label: Evidence
+    prompt_id: workflow.evidence
+targets:
+  bracket_seated:
+    config:
+      confidence_floor: 0.75
+    samples:
+    - range: [0.0, 1.0]
+      field: result.matches
+      expect: false
+      compare:
+        mode: exact
+      comment: The bracket is not seated in the first state.
+    - range: [1.0, 2.0]
+      field: result.matches
+      expect: true
+      comment: The bracket is visibly seated.
+  evidence:
+    label: Structured evidence
+    samples:
+    - range: [0.0, 0.75]
+      every_s: 0.25
+      field: result
+      expect:
+        labels:
+        - bracket
+        count: 1
+      compare:
+        mode: json_subset
+      comment: Structured expectation with a custom cadence.
+    - range: [0.75, 1.75]
+      field: result.labels
+      expect:
+      - bracket
+      - fastener
+      compare:
+        mode: set_contains_all
+      comment: Both assembly parts should be visible.
+thresholds:
+  min_pass_rate: 0.9
+  per_target:
+    evidence:
+      min_pass_rate: 0.75

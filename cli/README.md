@@ -37,17 +37,17 @@ The `uv run ...` examples below assume the package has been added to your projec
 
 Start in an app repository checked out next to a `recordings/` directory. This example uses `../recordings/task-01.mp4` from the shell working directory and creates an `eval/` directory in the app repo.
 
-Create the eval directory and write a case YAML file that points at the recording:
+Create the eval directory and write a case file that points at the recording:
 
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-01.yaml <<'YAML'
-video: "../../../recordings/task-01.mp4"
+video: ../../../recordings/task-01.mp4
 targets:
   step_1:
     samples:
-      - range: [0.0, 3.0]
-        expect: true
+    - range: [0.0, 3.0]
+      expect: true
 YAML
 ```
 
@@ -75,9 +75,9 @@ Expected result: `run` prints case progress, a summary, gates, and a per-target 
 
 An eval directory is the runnable test set. By default, `glasskit eval` uses `eval/` in the current working directory.
 
-A case is one YAML file under `<eval-dir>/cases/`. The case name is the YAML filename without `.yaml`.
+A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem.
 
-A video is declared by each case with `video:`. The path is resolved relative to the case YAML file.
+A video is declared by each case with `video:`. The path is resolved relative to the case file.
 
 A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
 
@@ -91,22 +91,22 @@ A gate is a quality bar, such as a minimum pass rate or maximum failure count, t
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and a case YAML file in `eval/` from an existing recording.
+Goal: create the required directory structure and a case file in `eval/` from an existing recording.
 
 Commands:
 
 ```bash
 mkdir -p eval/cases
 cat > eval/cases/task-02.yaml <<'YAML'
-video: "../../../recordings/task-02.mov"
-description: "Replace this note with what task-02 should cover."
+video: ../../../recordings/task-02.mov
+description: Replace this note with what task-02 should cover.
 sampling:
   every_s: 0.5
 targets:
   step_2:
     samples:
-      - at: 0.0
-        expect: false
+    - at: 0.0
+      expect: false
 YAML
 ```
 
@@ -130,7 +130,7 @@ Expected output:
 Validation passed: /absolute/path/to/eval (12 samples)
 ```
 
-Note: Validation loads the eval suite, probes videos, checks sample timestamps against video duration, and imports, constructs, and closes the adapter when `--adapter` is provided. It does not call `evaluate` or `evaluate_many`.
+Note: Validation loads the eval directory, probes videos, checks sample timestamps against video duration, and imports, constructs, and closes the adapter when `--adapter` is provided. It does not call `evaluate` or `evaluate_many`.
 
 ### Inspect the Expanded Sample Schedule
 
@@ -165,7 +165,7 @@ To jump directly to a failure reported by a separate eval run, include its case,
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
-The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete expectations. Changes are saved automatically to the case YAML.
+The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete samples. Changes are saved automatically to the case file.
 
 ### Run One Case While Debugging
 
@@ -197,7 +197,7 @@ Note: Threshold defaults are intentionally unset. Without `--min-pass-rate`, `--
 
 ### Use an Adapter Config File
 
-Goal: pass runtime settings to your adapter without putting them in case YAML.
+Goal: pass runtime settings to your adapter without putting them in case files.
 
 Command:
 
@@ -208,8 +208,8 @@ uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yam
 Example `eval/local-adapter.yaml`:
 
 ```yaml
-api_url: "https://example.test/v1"
-model: "vision-checker"
+api_url: https://example.test/v1
+model: vision-checker
 jpeg_quality: 90
 ```
 
@@ -217,7 +217,7 @@ Note: `--adapter-config` must be a YAML or JSON object. `glasskit eval` does not
 
 ## Eval Directory Layout
 
-A typical layout keeps eval YAML files and adapter code in the app repo while storing recordings outside the repo:
+A typical layout keeps the eval directory and adapter code in the app repo while storing recordings outside the repo:
 
 ```text
 recordings/
@@ -226,46 +226,46 @@ recordings/
 your-app-repo/
   eval/
     adapter.py
-    config.yaml # optional
+    config.yaml # Optional eval config file
     cases/
-      task-01.yaml # Case YAML
+      task-01.yaml # Case file
       task-02.yaml
 ```
 
-You can also keep videos next to the case YAML and reference them with a local filename such as `video: task-01.mp4`. Tip: You may not want to commit large media files to a regular Git repository because of their size. Consider cloud object storage or Git LFS instead.
+You can also keep videos next to the case file and reference them with a local filename such as `video: task-01.mp4`. Tip: You may not want to commit large media files to a regular Git repository because of their size. Consider cloud object storage or Git LFS instead.
 
-The `video:` path in the case YAML is resolved relative to the case YAML file.
+The `video:` path in the case file is resolved relative to that file.
 
-`config.yaml` is optional and supports eval-level `thresholds`. Case YAML files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case YAML are seconds from the start of the decoded clip.
+The eval config file is optional and supports eval-level `thresholds`. It must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
 
-## Case YAML Reference
+## Case File Reference
 
 Here is a representative case file:
 
 ```yaml
-video: "task-01.mp4"
-description: "Step 1 should be detected after the bracket is seated."
+video: task-01.mp4
+description: Step 1 should be detected after the bracket is seated.
 sampling:
   every_s: 0.5
 targets:
   step_1:
-    label: "Step 1"
+    label: Step 1
     config:
       prompt_id: workflow.step_1
       reference_image: assets/step_1.png
     samples:
-      - range: [0.0, 6.8]
-        expect: false
-        comment: "The bracket is not seated yet."
-      - range: [7.4, 11.8]
-        every_s: 0.25
-        field: result.matches
-        expect: true
+    - range: [0.0, 6.8]
+      expect: false
+      comment: The bracket is not seated yet.
+    - range: [7.4, 11.8]
+      every_s: 0.25
+      field: result.matches
+      expect: true
   step_2:
-    label: "Step 2"
+    label: Step 2
     samples:
-      - at: [4.0, 6.0]
-        expect: false
+    - at: [4.0, 6.0]
+      expect: false
 thresholds:
   min_pass_rate: 0.9
   max_failures: 2
@@ -278,7 +278,7 @@ Case fields:
 
 | Field | Required | Description |
 | --- | ---: | --- |
-| `video` | Yes | Video path resolved relative to the case YAML directory. |
+| `video` | Yes | Video path resolved relative to the case file's directory. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
 | `workflow.targets` | No | Optional advanced target metadata list for imported or generated workflow definitions. |
@@ -298,16 +298,16 @@ Most evals should put adapter metadata directly under `targets.<id>.config`. `wo
 ```yaml
 workflow:
   targets:
-    - id: step_1
-      app_step_id: 123
-      prompt_id: workflow.step_1
+  - id: step_1
+    app_step_id: 123
+    prompt_id: workflow.step_1
 targets:
   step_1:
     config:
       confidence_threshold: 0.85
     samples:
-      - at: 8.0
-        expect: true
+    - at: 8.0
+      expect: true
 ```
 
 Sample block fields:
@@ -322,7 +322,7 @@ Sample block fields:
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
 
-Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 points across all targets in one case; pathological ranges are rejected before their points are materialized.
+Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
 
 ## Comparison Reference
 
@@ -349,20 +349,22 @@ Example:
 targets:
   detector:
     samples:
-      - at: 2.0
-        field: result.matches
-        expect: true
-      - at: 3.0
-        field: result.confidence
-        expect: 0.8
-        compare:
-          mode: numeric
-          tolerance: 0.05
-      - at: 4.0
-        field: detected_classes
-        expect: ["bracket", "fastener"]
-        compare:
-          mode: set_contains_all
+    - at: 2.0
+      field: result.matches
+      expect: true
+    - at: 3.0
+      field: result.confidence
+      expect: 0.8
+      compare:
+        mode: numeric
+        tolerance: 0.05
+    - at: 4.0
+      field: detected_classes
+      expect:
+      - bracket
+      - fastener
+      compare:
+        mode: set_contains_all
 ```
 
 ## Adapter Reference
@@ -445,7 +447,7 @@ Sample fields passed to the evaluator:
 | `frame_index` | Zero-based decoded video frame index chosen for that timestamp. |
 | `sample_index` | Case-local sample index. |
 | `video_path` | Source video path as a string. |
-| `case_name` | Case YAML filename stem. |
+| `case_name` | Case filename stem. |
 
 Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, `glasskit eval` uses each decoded frame's presentation time when available; if a video lacks frame timestamps, it falls back to `frame_index / average_rate`.
 
@@ -453,7 +455,7 @@ Target fields passed to the evaluator:
 
 | Field | Description |
 | --- | --- |
-| `id` | Target id from the case YAML file. |
+| `id` | Target id from the case file. |
 | `index` | Target's zero-based order in the case file. |
 | `label` | Optional target label. |
 | `config` | Adapter-specific target metadata from `targets.<id>.config`, plus any matching optional metadata from `workflow.targets`. |
@@ -522,7 +524,7 @@ Options:
 | `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
 | `--no-open` | `false` | Print the URL without opening the default browser. |
 
-Because edits are saved directly to the case YAML, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
+Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
 
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
@@ -560,7 +562,7 @@ Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one o
 
 ### `glasskit eval validate`
 
-Purpose: validate an eval suite without evaluating sample observations.
+Purpose: validate an eval directory without evaluating sample observations.
 
 ```bash
 glasskit eval validate --adapter eval/adapter.py:create_evaluator
@@ -596,11 +598,11 @@ Options:
 | `--target TEXT` | All targets | Only list one target id from the selected cases. May be used with or without `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
-Exit behavior: exits `0` when the samples can be listed and `2` when the eval suite cannot be loaded.
+Exit behavior: exits `0` when the samples can be listed and `2` when the eval directory cannot be loaded.
 
 ## Configuration
 
-`glasskit eval` has no global config file. Eval configuration lives in the eval directory and case YAML files.
+`glasskit eval` has no global config file. Eval configuration lives in the eval config file and case files within the eval directory.
 
 Default values at a glance:
 
@@ -648,13 +650,13 @@ Other precedence rules:
 | --- | --- |
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
 | Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
-| Adapter config | `--adapter-config` is independent of eval YAML and is passed only to the adapter factory. |
+| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the adapter factory. |
 
 ## Environment Variables
 
 `glasskit eval` defines no CLI-specific environment variables and does not read from stdin.
 
-Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case YAML and adapter config files. With `uv`, pass a dotenv file to `uv run`:
+Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
 ```bash
 uv run --env-file .env glasskit eval run
@@ -718,7 +720,7 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 | ---: | --- | --- |
 | `0` | Command succeeded. For `run`, every gate passed. | No action needed. |
 | `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate table, fix the eval, adapter, or quality threshold, then rerun. |
-| `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the suite, and rerun with `--keep-going` if you want sample-level adapter evaluation errors recorded instead of aborting. |
+| `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the eval directory, and rerun with `--keep-going` if you want sample-level adapter evaluation errors recorded instead of aborting. |
 
 ## Errors and Troubleshooting
 
@@ -740,16 +742,16 @@ Common failures:
 | Message or Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
-| `eval cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add YAML files under `cases/` and reference videos from them. |
-| `no eval cases found` | No YAML files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
-| `no eval targets found` | `--target` does not match any target id in the selected cases. | Check the target id in case YAML or broaden the case filter. |
-| `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case YAML Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
-| `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case YAML directory, not the shell working directory. |
+| `cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add case files under `cases/` and reference videos from them. |
+| `no case files found` | No case files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
+| `no eval targets found` | `--target` does not match any target id in the selected cases. | Check the target id in the case file or broaden the case filter. |
+| `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
+| `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
 | `could not open video` or `could not decode video` | PyAV cannot read the file. | Check that the file is a real video and can be decoded locally. |
 | `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
-| `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled points. |
-| `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 points. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
+| `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled samples. |
+| `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 samples. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
 | Browser preview is unavailable | The browser cannot play the source container or codec, even though PyAV may be able to probe it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
 | `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
 | `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |

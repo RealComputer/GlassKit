@@ -1,6 +1,11 @@
-import type { CaseDocument, ReviewPoint, ReviewTarget, SuiteBootstrap } from "../api/types.ts";
+import type {
+  CaseFileDocument,
+  ReviewSample,
+  ReviewTarget,
+  EvalDirectoryDocument,
+} from "../api/types.ts";
 
-export function point(id: string, timestamp_s: number, expect_json = "false"): ReviewPoint {
+export function sample(id: string, timestamp_s: number, expect_json = "false"): ReviewSample {
   return {
     id,
     timestamp_s,
@@ -15,17 +20,17 @@ export function point(id: string, timestamp_s: number, expect_json = "false"): R
 
 export function target(
   id: string,
-  points: ReviewPoint[] = [point(`${id}-point`, 1)],
+  samples: ReviewSample[] = [sample(`${id}-sample`, 1)],
 ): ReviewTarget {
   return {
     id,
     label: id.replaceAll("_", " "),
     details_yaml: `label: ${id}\n`,
-    points,
-    display_groups: points.map((item, index) => ({
+    samples,
+    display_groups: samples.map((item, index) => ({
       id: `group-${index}`,
       kind: "at",
-      point_ids: [item.id],
+      sample_ids: [item.id],
       start_s: null,
       end_s: null,
       every_s: null,
@@ -34,9 +39,9 @@ export function target(
   };
 }
 
-export function document(
+export function caseFile(
   targets: ReviewTarget[] = [target("target_a"), target("target_b")],
-): CaseDocument {
+): CaseFileDocument {
   return {
     id: "case-001.yaml",
     name: "case-001",
@@ -45,9 +50,9 @@ export function document(
     editing_enabled: true,
     load_error: null,
     description: "A fixture case",
-    source_yaml: "video: fixture.mp4\n",
+    case_file_source: "video: fixture.mp4\n",
     video: {
-      url: "/api/cases/case-001.yaml/video",
+      url: "/api/case-files/case-001.yaml/video",
       display_path: "fixture.mp4",
       content_type: "video/mp4",
       duration_s: 10,
@@ -60,11 +65,11 @@ export function document(
   };
 }
 
-export function suite(): SuiteBootstrap {
+export function evalDirectory(): EvalDirectoryDocument {
   return {
     eval_dir: "/tmp/eval",
     write_token: "secret",
-    config_source_yaml: "sampling:\n  every_s: 0.5\n",
+    eval_config_source: "sampling:\n  every_s: 0.5\n",
     cases: [
       {
         id: "case-001.yaml",
@@ -72,17 +77,17 @@ export function suite(): SuiteBootstrap {
         file_name: "case-001.yaml",
         description: "A fixture case",
         target_count: 2,
-        point_count: 2,
+        sample_count: 2,
         status: "ready",
         error: null,
       },
       {
-        id: "case-002.yml",
+        id: "case-002.yaml",
         name: "case-002",
-        file_name: "case-002.yml",
+        file_name: "case-002.yaml",
         description: "Another fixture case",
         target_count: 1,
-        point_count: 1,
+        sample_count: 1,
         status: "ready",
         error: null,
       },

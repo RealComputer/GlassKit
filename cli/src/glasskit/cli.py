@@ -12,7 +12,7 @@ import typer
 import yaml
 from rich.console import Console
 
-from .eval.expectations import load_eval_suite
+from .eval.expectations import load_eval_directory
 from .eval.models import EvalError, RunOptions
 from .eval.report import (
     ConsoleReporter,
@@ -22,7 +22,7 @@ from .eval.report import (
 )
 from .eval.review.documents import ReviewRepository
 from .eval.review.server import create_review_server
-from .eval.runner import run_eval, validate_eval_suite
+from .eval.runner import run_eval, validate_eval_directory
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
@@ -206,7 +206,7 @@ def eval_validate(
         adapter_config=_load_config(adapter_config),
         allow_empty=allow_empty,
     )
-    report = asyncio.run(validate_eval_suite(options))
+    report = asyncio.run(validate_eval_directory(options))
     print_validation_report(report)
     raise typer.Exit(0 if report.ok else 1)
 
@@ -230,7 +230,7 @@ def eval_list_samples(
     ] = False,
 ) -> None:
     try:
-        loaded = load_eval_suite(
+        loaded = load_eval_directory(
             eval_dir,
             case_filter=case,
             target_filter=target,
@@ -264,7 +264,7 @@ def eval_review(
             "--target",
             help=(
                 "Initially focus this target; requires --case and does not filter "
-                "the suite."
+                "the eval directory."
             ),
         ),
     ] = None,

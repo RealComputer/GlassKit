@@ -31,12 +31,12 @@ def test_runner_saves_failure_artifacts_in_eval_runs_by_default(
     asyncio.run(_run_default_failure_artifact_dir_test(tmp_path))
 
 
-def test_runner_applies_suite_level_per_target_gates(tmp_path: Path) -> None:
-    asyncio.run(_run_suite_per_target_gate_test(tmp_path))
+def test_runner_applies_eval_directory_level_per_target_gates(tmp_path: Path) -> None:
+    asyncio.run(_run_eval_directory_per_target_gate_test(tmp_path))
 
 
-def test_runner_skips_filtered_out_suite_target_gates(tmp_path: Path) -> None:
-    asyncio.run(_run_filtered_suite_target_gate_test(tmp_path))
+def test_runner_skips_filtered_out_eval_directory_target_gates(tmp_path: Path) -> None:
+    asyncio.run(_run_filtered_eval_directory_target_gate_test(tmp_path))
 
 
 def test_runner_filters_by_target_without_case(tmp_path: Path) -> None:
@@ -64,7 +64,7 @@ def test_runner_handles_malformed_evaluate_many_return(tmp_path: Path) -> None:
 
 
 async def _run_committed_fixture_test(tmp_path: Path) -> None:
-    suite_dir = FIXTURES / "eval_suites" / "two-state"
+    eval_dir = FIXTURES / "eval_directories" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
     adapter_path.write_text(
         """
@@ -86,7 +86,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
         )
     )
@@ -97,7 +97,7 @@ def create_evaluator(config):
 
 
 async def _run_committed_fixture_artifact_test(tmp_path: Path) -> None:
-    suite_dir = FIXTURES / "eval_suites" / "two-state"
+    eval_dir = FIXTURES / "eval_directories" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
     adapter_path.write_text(
         """
@@ -119,7 +119,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
             artifacts_dir=tmp_path / "artifacts",
             save_failures=True,
@@ -137,8 +137,8 @@ def create_evaluator(config):
 
 
 async def _run_default_failure_artifact_dir_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
@@ -172,7 +172,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
             save_failures=True,
         )
@@ -182,17 +182,17 @@ def create_evaluator(config):
     result = report.results[0]
     assert result.artifact_image is not None
     assert result.artifact_json is not None
-    assert Path(result.artifact_image).parent == suite_dir / "runs" / "failures"
-    assert Path(result.artifact_json).parent == suite_dir / "runs" / "failures"
+    assert Path(result.artifact_image).parent == eval_dir / "runs" / "failures"
+    assert Path(result.artifact_json).parent == eval_dir / "runs" / "failures"
     assert Path(result.artifact_image).exists()
     assert Path(result.artifact_json).exists()
 
 
-async def _run_suite_per_target_gate_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+async def _run_eval_directory_per_target_gate_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
-    (suite_dir / "config.yaml").write_text(
+    (eval_dir / "config.yaml").write_text(
         """
 thresholds:
   per_target:
@@ -237,7 +237,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
         )
     )
@@ -249,11 +249,11 @@ def create_evaluator(config):
     assert not report.success
 
 
-async def _run_filtered_suite_target_gate_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+async def _run_filtered_eval_directory_target_gate_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
-    (suite_dir / "config.yaml").write_text(
+    (eval_dir / "config.yaml").write_text(
         """
 thresholds:
   per_target:
@@ -307,7 +307,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             case_filter="case-001",
             adapter=f"{adapter_path}:create_evaluator",
         )
@@ -320,10 +320,10 @@ def create_evaluator(config):
 
 
 async def _run_target_filter_without_case_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
-    (suite_dir / "config.yaml").write_text(
+    (eval_dir / "config.yaml").write_text(
         """
 thresholds:
   per_target:
@@ -377,7 +377,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             target_filter="step_2",
             adapter=f"{adapter_path}:create_evaluator",
         )
@@ -392,8 +392,8 @@ def create_evaluator(config):
 
 
 async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
@@ -428,7 +428,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
             keep_going=True,
             output_json=output_json,
@@ -445,7 +445,7 @@ def create_evaluator(config):
 async def _run_duration_report_test(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    suite_dir = FIXTURES / "eval_suites" / "two-state"
+    eval_dir = FIXTURES / "eval_directories" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
     adapter_path.write_text(
         """
@@ -470,7 +470,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
             output_json=output_json,
         )
@@ -482,8 +482,8 @@ def create_evaluator(config):
 
 
 async def _run_close_error_masking_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
@@ -518,7 +518,7 @@ def create_evaluator(config):
     with pytest.raises(AdapterRuntimeError, match="evaluation failed") as exc_info:
         await run_eval(
             RunOptions(
-                eval_dir=suite_dir,
+                eval_dir=eval_dir,
                 adapter=f"{adapter_path}:create_evaluator",
             )
         )
@@ -527,8 +527,8 @@ def create_evaluator(config):
 
 
 async def _run_malformed_evaluate_many_return_test(tmp_path: Path) -> None:
-    suite_dir = tmp_path / "eval"
-    cases_dir = suite_dir / "cases"
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
     cases_dir.mkdir(parents=True)
     (cases_dir / "case-001.yaml").write_text(
         f"""
@@ -562,7 +562,7 @@ def create_evaluator(config):
 
     report = await run_eval(
         RunOptions(
-            eval_dir=suite_dir,
+            eval_dir=eval_dir,
             adapter=f"{adapter_path}:create_evaluator",
             keep_going=True,
         )
@@ -575,7 +575,7 @@ def create_evaluator(config):
     with pytest.raises(AdapterRuntimeError, match="adapter failed for target 'step_1'"):
         await run_eval(
             RunOptions(
-                eval_dir=suite_dir,
+                eval_dir=eval_dir,
                 adapter=f"{adapter_path}:create_evaluator",
             )
         )
