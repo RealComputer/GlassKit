@@ -197,8 +197,11 @@ describe("review application navigation and drafts", () => {
 
     const timelineTab = await screen.findByRole("tab", { name: "Timeline" });
     const samplesTab = screen.getByRole("tab", { name: "Samples" });
+    const fit = await screen.findByRole("button", { name: "Fit" });
     expect(timelineTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("timeline-view-tab");
+    expect(timelineTab.closest(".review-view-toolbar")).toBe(fit.closest(".review-view-toolbar"));
+    expect(screen.getByRole("tablist").contains(fit)).toBe(false);
     timelineTab.focus();
     fireEvent.pointerUp(timelineTab);
     expect(document.activeElement).toBe(document.body);

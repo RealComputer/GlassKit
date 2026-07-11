@@ -565,14 +565,20 @@ kbd {
   border-bottom: 1px solid #d4a72c;
 }
 
-.review-view-tabs {
+.review-view-toolbar {
   flex: none;
+  display: flex;
+  align-items: stretch;
+  height: 41px;
+  min-height: 41px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-view-tabs {
   display: flex;
   gap: 18px;
   align-items: stretch;
-  min-height: 40px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border);
 }
 
 .review-view-tabs button {
@@ -608,6 +614,12 @@ kbd {
   font-size: 11px;
 }
 
+.review-view-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 .review-view-panel .timeline-section,
 .review-view-panel .samples-section {
   border-bottom: 0;
@@ -638,12 +650,7 @@ kbd {
   gap: 7px;
   align-items: center;
   min-height: 40px;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.toolbar-spacer {
-  flex: 1;
+  padding: 4px 0;
 }
 
 .segmented {

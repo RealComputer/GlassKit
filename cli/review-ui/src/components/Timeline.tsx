@@ -1,5 +1,6 @@
 import { Layers3, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import type { ReviewSample } from "../api/types.ts";
 import { useApp } from "../state/AppContext.tsx";
 import { expectationColor } from "../timeline/colors.ts";
@@ -41,7 +42,7 @@ function colorStyle(sample: ReviewSample): TimelineStyle {
   return { "--expect-color": expectationColor(sample) };
 }
 
-export function Timeline() {
+export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null }) {
   const { state, dispatch, selectSample, selectTarget, seek } = useApp();
   const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
@@ -205,39 +206,42 @@ export function Timeline() {
     }px`,
   };
 
+  const controls = (
+    <div className="timeline-toolbar">
+      <ZoomIn size={15} aria-hidden="true" />
+      <div className="segmented" aria-label="Timeline zoom">
+        {([1, 2, 4, 8] as const).map((zoom) => (
+          <button
+            key={zoom}
+            type="button"
+            className={state.zoom === zoom ? "selected" : ""}
+            onClick={() => setZoom(zoom)}
+            aria-pressed={state.zoom === zoom}
+          >
+            {zoom === 1 ? "Fit" : `${zoom}×`}
+          </button>
+        ))}
+      </div>
+      <label className="toggle-control" htmlFor="selected-lane-only">
+        <input
+          id="selected-lane-only"
+          type="checkbox"
+          checked={state.selectedLaneOnly}
+          onChange={(event) =>
+            dispatch({
+              type: "SET_SELECTED_LANE_ONLY",
+              value: event.target.checked,
+            })
+          }
+        />
+        <Layers3 size={15} /> Selected only
+      </label>
+    </div>
+  );
+
   return (
     <section className="timeline-section" aria-label="Sample timeline">
-      <div className="timeline-toolbar">
-        <div className="toolbar-spacer" />
-        <ZoomIn size={15} aria-hidden="true" />
-        <div className="segmented" aria-label="Timeline zoom">
-          {([1, 2, 4, 8] as const).map((zoom) => (
-            <button
-              key={zoom}
-              type="button"
-              className={state.zoom === zoom ? "selected" : ""}
-              onClick={() => setZoom(zoom)}
-              aria-pressed={state.zoom === zoom}
-            >
-              {zoom === 1 ? "Fit" : `${zoom}×`}
-            </button>
-          ))}
-        </div>
-        <label className="toggle-control" htmlFor="selected-lane-only">
-          <input
-            id="selected-lane-only"
-            type="checkbox"
-            checked={state.selectedLaneOnly}
-            onChange={(event) =>
-              dispatch({
-                type: "SET_SELECTED_LANE_ONLY",
-                value: event.target.checked,
-              })
-            }
-          />
-          <Layers3 size={15} /> Selected only
-        </label>
-      </div>
+      {controlsHost && createPortal(controls, controlsHost)}
       <div
         className={`timeline-scroll${state.zoom === 1 ? " fit" : ""}`}
         ref={scrollRef}
