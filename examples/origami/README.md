@@ -111,6 +111,7 @@ The eval files live under `backend/eval/`:
 - `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
+- `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
 
 To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
@@ -141,7 +142,19 @@ uv run --env-file .env python -m eval.generate_case \
   --output eval/cases/full-run.yaml
 ```
 
-The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It writes a case YAML to `--output`. Review and fix the generated YAML before committing it. The reviewed case file is what `glasskit eval` runs.
+The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It creates or overwrites the case YAML at `--output`. Review and fix the generated YAML before committing it. The reviewed case file is what `glasskit eval` runs.
+
+To regenerate only selected targets in an existing case, repeat `--target` as needed:
+
+```bash
+uv run --env-file .env python -m eval.generate_case \
+  --plan eval/plans/full-run.yaml \
+  --output eval/cases/full-run.yaml \
+  --target step_1 \
+  --target step_3
+```
+
+The generator replaces only those target blocks and preserves the other reviewed targets and top-level case fields. It rejects a targeted update when the existing case has a different video or sampling interval. Without `--target`, an existing output is replaced in full. Output replacement is atomic, so a failed or interrupted generation leaves the previous case intact.
 
 To check individual camera images while reviewing labels, pass the target step followed by one or more image paths:
 
