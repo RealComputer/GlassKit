@@ -32,6 +32,7 @@ describe("review application navigation and drafts", () => {
     const video = document.querySelector("video");
     expect(video).not.toBeNull();
     expect(video?.controls).toBe(false);
+    expect(video?.muted).toBe(true);
 
     const play = vi.spyOn(video!, "play").mockResolvedValue();
     const pause = vi.spyOn(video!, "pause").mockImplementation(() => undefined);
@@ -43,6 +44,40 @@ describe("review application navigation and drafts", () => {
     pause.mockClear();
     fireEvent.click(video!);
     expect(pause).toHaveBeenCalledOnce();
+  });
+
+  it("scrubs the video by dragging across the timeline", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const playhead = await screen.findByRole("slider", { name: "Video playhead" });
+    vi.spyOn(playhead, "getBoundingClientRect").mockReturnValue({
+      bottom: 30,
+      height: 30,
+      left: 100,
+      right: 1100,
+      top: 0,
+      width: 1000,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(playhead, { button: 0, clientX: 300, pointerId: 1 });
+    fireEvent.pointerMove(playhead, { clientX: 800, pointerId: 1 });
+    fireEvent.pointerUp(playhead, { button: 0, clientX: 800, pointerId: 1 });
+
+    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "7.000"));
+    expect(playhead.getAttribute("aria-valuenow")).toBe("7");
   });
 
   it("keeps the fit timeline's final label inside its viewport", async () => {

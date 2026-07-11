@@ -12,6 +12,19 @@ import { useApp } from "../state/AppContext.tsx";
 import { formatSeconds } from "../utils/format.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
 
+const SEEKING_MESSAGE_DELAY_MS = 200;
+
+export function DelayedSeekingStatus() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), SEEKING_MESSAGE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return visible ? <span>Seeking…</span> : null;
+}
+
 export function VideoPanel() {
   const { state, dispatch, selectPoint, addPoint, seek } = useApp();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -155,6 +168,7 @@ export function VideoPanel() {
             ref={videoRef}
             src={document.video.url}
             preload="metadata"
+            muted
             onClick={togglePlay}
             onLoadedMetadata={(event) =>
               dispatch({
@@ -327,7 +341,9 @@ export function VideoPanel() {
           {state.video.shownFrameTime !== null && (
             <span>Shown {formatSeconds(state.video.shownFrameTime)}</span>
           )}
-          {state.video.previewStatus === "seeking" && <span>Seeking…</span>}
+          {state.video.previewStatus === "seeking" && (
+            <DelayedSeekingStatus key={state.video.seekRequest.generation} />
+          )}
         </div>
       </div>
       {state.video.previewMessage && (

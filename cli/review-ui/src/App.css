@@ -636,7 +636,15 @@ kbd {
 .ruler-track {
   position: relative;
   width: var(--track-width);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
   background-image: linear-gradient(to right, transparent calc(100% - 1px), var(--border) 1px);
+}
+
+.ruler-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .ruler-tick {
@@ -682,7 +690,9 @@ kbd {
   position: relative;
   width: var(--track-width);
   min-height: inherit;
-  cursor: crosshair;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
   background-color: var(--surface);
   background-image: linear-gradient(to right, #eaeef2 1px, transparent 1px);
   background-size: 10% 100%;

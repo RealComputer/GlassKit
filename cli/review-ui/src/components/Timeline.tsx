@@ -1,9 +1,10 @@
 import { Layers3, ZoomIn } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useApp } from "../state/AppContext.tsx";
 import {
   anchoredScrollLeft,
   markerSelector,
+  positionToTime,
   rulerTicks,
   TIMELINE_LABEL_WIDTH,
   timelineTrackWidth,
@@ -24,6 +25,10 @@ export function Timeline() {
   const document = workspace?.document;
   const duration = state.video.duration ?? document?.video?.duration_s ?? 0;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeScrubPointerRef = useRef<number | null>(null);
+  const pendingScrubTimeRef = useRef<number | null>(null);
+  const lastScrubTimeRef = useRef<number | null>(null);
+  const scrubFrameRef = useRef<number | null>(null);
   const [viewportWidth, setViewportWidth] = useState(800);
   const trackWidth = timelineTrackWidth(viewportWidth, state.zoom);
   const targets = useMemo(() => {
@@ -51,6 +56,13 @@ export function Timeline() {
     marker?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [state.selectedPointId, state.selectedTargetId]);
 
+  useEffect(
+    () => () => {
+      if (scrubFrameRef.current !== null) cancelAnimationFrame(scrubFrameRef.current);
+    },
+    [],
+  );
+
   const setZoom = (zoom: 1 | 2 | 4 | 8) => {
     const element = scrollRef.current;
     if (!element || zoom === state.zoom) return;
@@ -75,11 +87,68 @@ export function Timeline() {
     });
   };
 
-  const seekFromLane = (event: MouseEvent<HTMLDivElement>) => {
-    if ((event.target as Element).closest("button")) return;
+  const timeFromPointer = (event: PointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    seek(Math.min(duration, Math.max(0, ratio * duration)));
+    if (rect.width <= 0) return 0;
+    return positionToTime((event.clientX - rect.left) / rect.width, duration);
+  };
+
+  const requestScrub = (time: number) => {
+    if (lastScrubTimeRef.current !== null && Math.abs(lastScrubTimeRef.current - time) < 1e-6)
+      return;
+    lastScrubTimeRef.current = time;
+    seek(time);
+  };
+
+  const cancelScheduledScrub = () => {
+    if (scrubFrameRef.current !== null) cancelAnimationFrame(scrubFrameRef.current);
+    scrubFrameRef.current = null;
+    pendingScrubTimeRef.current = null;
+  };
+
+  const startScrub = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as Element).closest("button")) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    activeScrubPointerRef.current = event.pointerId;
+    lastScrubTimeRef.current = null;
+    requestScrub(timeFromPointer(event));
+  };
+
+  const continueScrub = (event: PointerEvent<HTMLDivElement>) => {
+    if (activeScrubPointerRef.current !== event.pointerId) return;
+    pendingScrubTimeRef.current = timeFromPointer(event);
+    if (scrubFrameRef.current !== null) return;
+    scrubFrameRef.current = requestAnimationFrame(() => {
+      scrubFrameRef.current = null;
+      const time = pendingScrubTimeRef.current;
+      pendingScrubTimeRef.current = null;
+      if (time !== null) requestScrub(time);
+    });
+  };
+
+  const finishScrub = (event: PointerEvent<HTMLDivElement>) => {
+    if (activeScrubPointerRef.current !== event.pointerId) return;
+    cancelScheduledScrub();
+    requestScrub(timeFromPointer(event));
+    activeScrubPointerRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const cancelScrub = (event: PointerEvent<HTMLDivElement>) => {
+    if (activeScrubPointerRef.current !== event.pointerId) return;
+    cancelScheduledScrub();
+    activeScrubPointerRef.current = null;
+  };
+
+  const scrubHandlers = {
+    onPointerDown: startScrub,
+    onPointerMove: continueScrub,
+    onPointerUp: finishScrub,
+    onPointerCancel: cancelScrub,
+    onLostPointerCapture: cancelScrub,
   };
 
   const ticks = rulerTicks(duration, state.zoom);
@@ -135,7 +204,18 @@ export function Timeline() {
         <div className="timeline-content">
           <div className="time-ruler">
             <div className="lane-label ruler-label">Target / time</div>
-            <div className="ruler-track">
+            <div
+              className="ruler-track"
+              role="slider"
+              tabIndex={0}
+              aria-label="Video playhead"
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              aria-valuenow={state.video.currentTime}
+              aria-valuetext={formatSeconds(state.video.currentTime)}
+              title="Click or drag to seek"
+              {...scrubHandlers}
+            >
               {ticks.map((tick, index) => {
                 const isEnd = index > 0 && index === ticks.length - 1;
                 return (
@@ -167,7 +247,7 @@ export function Timeline() {
                     <span>{target.label ?? target.id}</span>
                     <small>{target.points.length}</small>
                   </button>
-                  <div className="lane-track" onClick={seekFromLane}>
+                  <div className="lane-track" {...scrubHandlers}>
                     {target.display_groups
                       .filter(
                         (group) =>
