@@ -32,4 +32,10 @@ describe("timeline expectation colors", () => {
       expectationColorKey(sample("object", '{"second":2,"first":1}')),
     );
   });
+
+  it("canonicalizes distinct Unicode keys independently of locale collation", () => {
+    expect(expectationColorKey(sample("object", '{"é":1,"é":2}'))).toBe(
+      expectationColorKey(sample("object", '{"é":2,"é":1}')),
+    );
+  });
 });

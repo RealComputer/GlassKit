@@ -5,12 +5,26 @@ const BOOLEAN_COLORS: Record<"false" | "true", string> = {
   true: "#0969da",
 };
 
+function compareCodePoints(left: string, right: string): number {
+  const leftCodePoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const rightCodePoints = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  const sharedLength = Math.min(leftCodePoints.length, rightCodePoints.length);
+
+  for (let index = 0; index < sharedLength; index += 1) {
+    if (leftCodePoints[index] !== rightCodePoints[index]) {
+      return leftCodePoints[index] - rightCodePoints[index];
+    }
+  }
+
+  return leftCodePoints.length - rightCodePoints.length;
+}
+
 function normalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizeJson);
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => compareCodePoints(left, right))
         .map(([key, item]) => [key, normalizeJson(item)]),
     );
   }
