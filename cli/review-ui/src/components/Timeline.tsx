@@ -248,6 +248,7 @@ export function Timeline() {
         className={`timeline-scroll${state.zoom === 1 ? " fit" : ""}`}
         ref={scrollRef}
         style={rootStyle}
+        onScroll={() => setHoveredSample(null)}
       >
         <div className="timeline-content">
           <div className="time-ruler">

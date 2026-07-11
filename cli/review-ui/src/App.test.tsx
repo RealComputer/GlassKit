@@ -247,6 +247,13 @@ describe("review application navigation and drafts", () => {
     expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
     fireEvent.pointerMove(lane!, { clientX: 200, clientY: 40, pointerId: 1 });
     expect(screen.getByRole("tooltip").textContent).toBe("2.000s · true");
+    const timelineScroll = document.querySelector<HTMLElement>(".timeline-scroll");
+    expect(timelineScroll).not.toBeNull();
+    fireEvent.scroll(timelineScroll!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
     fireEvent.pointerLeave(lane!);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
