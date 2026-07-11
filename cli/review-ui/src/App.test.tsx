@@ -95,6 +95,24 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByText("Sample 1.000s")).toBeNull();
   });
 
+  it("shows the selected case video path without a details disclosure", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    expect(await screen.findByText("fixture.mp4")).toBeTruthy();
+    expect(screen.queryByText("Case details")).toBeNull();
+    expect(screen.getAllByText("A fixture case")).toHaveLength(1);
+  });
+
   it("disables adding a sample when the video time already has one", async () => {
     const doc = caseDocument();
     vi.stubGlobal(

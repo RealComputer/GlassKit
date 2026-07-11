@@ -127,14 +127,16 @@ export function Sidebar() {
       </section>
 
       <div className="sidebar-footer">
-        {workspace?.document.description && (
-          <details>
-            <summary>Case details</summary>
-            <p>{workspace.document.description}</p>
-            <p className="muted mono path-text">
+        {workspace && (
+          <div className="sidebar-video-path">
+            <span>Video</span>
+            <span
+              className="muted mono path-text"
+              title={workspace.document.video?.display_path ?? "Video unavailable"}
+            >
               {workspace.document.video?.display_path ?? "Video unavailable"}
-            </p>
-          </details>
+            </span>
+          </div>
         )}
         <button
           type="button"
