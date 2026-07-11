@@ -273,7 +273,9 @@ export function Timeline() {
                             aria-label={`${target.label ?? target.id} range from ${formatSeconds(
                               group.start_s!,
                             )} to ${formatSeconds(group.end_s!)}`}
-                            title={`Serialized range · every ${group.every_s}s`}
+                            title={`Range from ${formatSeconds(group.start_s!)} to ${formatSeconds(
+                              group.end_s!,
+                            )} · every ${group.every_s}s`}
                           />
                         );
                       })}

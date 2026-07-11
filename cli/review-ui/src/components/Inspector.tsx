@@ -493,19 +493,18 @@ export function Inspector() {
           />
         </div>
 
-        {group && (
-          <div className="derived-group">
-            <strong>{group.kind === "range" ? "Range" : "Individual samples"}</strong>
-            <small>
-              {group.kind === "range" &&
-                group.start_s !== null &&
-                group.end_s !== null &&
-                `${formatSeconds(group.start_s)}–${formatSeconds(group.end_s)} · `}
-              {group.point_ids.length} sample{group.point_ids.length === 1 ? "" : "s"}
-              {group.every_s !== null && ` · every ${group.every_s}s`}
-            </small>
-          </div>
-        )}
+        {group?.kind === "range" &&
+          group.start_s !== null &&
+          group.end_s !== null &&
+          group.every_s !== null && (
+            <div className="derived-group">
+              <strong>Part of a range</strong>
+              <small>
+                {formatSeconds(group.start_s)}–{formatSeconds(group.end_s)} · every {group.every_s}s
+                · {group.point_ids.length} sample{group.point_ids.length === 1 ? "" : "s"}
+              </small>
+            </div>
+          )}
 
         {(workspace.saveError || workspace.saveDetails.length > 0) && (
           <div className="backend-errors" role="alert">

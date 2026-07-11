@@ -143,9 +143,32 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    expect(await screen.findByText("Range")).toBeTruthy();
-    expect(screen.getByText("1.000s–2.000s · 2 samples · every 0.5s")).toBeTruthy();
+    expect(await screen.findByText("Part of a range")).toBeTruthy();
+    expect(screen.getByText("1.000s–2.000s · every 0.5s · 2 samples")).toBeTruthy();
+    const rangeBand = screen.getByRole("button", {
+      name: "status range from 1.000s to 2.000s",
+    });
+    expect(rangeBand.getAttribute("title")).toBe("Range from 1.000s to 2.000s · every 0.5s");
     expect(screen.queryByText("Serialized group")).toBeNull();
+    expect(screen.queryByText("Serialized range")).toBeNull();
+  });
+
+  it("omits range context for an individual sample", async () => {
+    const doc = caseDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/suite") return Promise.resolve(response(suite()));
+        if (url.includes("/api/cases/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    await screen.findByLabelText("Sample inspector");
+    expect(screen.queryByText("Individual samples")).toBeNull();
+    expect(document.querySelector(".derived-group")).toBeNull();
   });
 
   it("scrubs the video by dragging across the timeline", async () => {
