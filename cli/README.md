@@ -75,7 +75,7 @@ Expected result: `run` prints case progress, a summary, gates, and a per-target 
 
 An eval directory is the runnable test set. By default, `glasskit eval` uses `eval/` in the current working directory.
 
-A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem without `.yaml` or `.yml`.
+A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem.
 
 A video is declared by each case with `video:`. The path is resolved relative to the case file.
 
@@ -236,7 +236,7 @@ You can also keep videos next to the case file and reference them with a local f
 
 The `video:` path in the case file is resolved relative to that file.
 
-The eval config file is optional and supports eval-level `thresholds`. It must be named `config.yaml` or `config.yml`. Case files must live directly under `cases/` and use the `.yaml` or `.yml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
+The eval config file is optional and supports eval-level `thresholds`. It must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
 
 ## Case File Reference
 
