@@ -28,19 +28,12 @@ This workspace contains the React application served by `glasskit eval review`. 
 
 ## Invariants
 
-- Treat expanded samples as the user-facing model. `at` versus `range`, `origin`, and `display_groups` are persistence details owned by the Python backend and must not create different timeline or table behavior. Table groups are derived only from consecutive editable sample settings, not source blocks.
-- Keep `expect_json` as opaque JSON text when transporting, comparing for grouping, or detecting changes. Parsing and reserializing it in JavaScript can round integers beyond `Number.MAX_SAFE_INTEGER` and merge distinct expectations.
-- Preserve the save queue and version checks in `AppContext.tsx` and `reducer.ts`. A case can receive edits while an older PUT is in flight; responses must update accepted state without overwriting newer local versions. Reloading from disk must invalidate stale save responses.
-- Form validation participates in navigation and persistence. Invalid inspector drafts block autosave and case, target, or sample changes until the user repairs them, deletes the affected draft when allowed, or explicitly discards drafts.
-- New samples are created at the playhead rounded to milliseconds. They copy the closest sample's expectation, field, and comparison settings, but start without a comment or persistence origin. Adding at an existing rounded timestamp selects that sample instead. An accepted target must retain at least one sample.
-- The frontend's `SAMPLE_DURATION_TOLERANCE_S` mirrors the eval pipeline's 0.05-second end-of-video tolerance. Keep frontend validation and the Python review/eval validators synchronized if this rule changes.
-- The case-file source drawer shows the last backend-accepted source, not an unsaved in-memory reconstruction. YAML reconstruction and atomic writes remain backend responsibilities.
+- Treat expanded samples as the user-facing model. `at` versus `range`, `origin`, and `display_groups` are persistence details owned by the Python backend and must not create different timeline or table behavior.
 - Selecting or seeking a sample requests a precise browser preview, but media decoding is still browser-dependent and may present an adjacent encoded frame. Eval execution decodes with PyAV and can choose a different adjacent frame.
 
 ## Commands
 
-- Run `npm run fix && npm run check` after frontend changes. `check` runs lint and formatting checks, TypeScript, and the Vitest suite.
-- Run `npm install` first in a clean checkout or after dependency changes. Keep `package-lock.json` in sync with `package.json`.
+- Run `npm install` first in a clean checkout or after dependency changes.
+- Run `npm run fix && npm run check` after frontend changes.
 - Run `npm run build` to verify the production bundle and refresh the ignored static output under `../src/glasskit/eval/review/static/`.
-- Run `npm run test:watch` for focused test-driven work.
 - For development, start the Python server from the CLI directory with `uv run glasskit eval review --eval-dir tests/fixtures/eval_directories/review --port 8765 --no-open`, then run `GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` here.
