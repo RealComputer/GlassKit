@@ -103,11 +103,12 @@ The two step-image sets are identical copies kept in both locations because Andr
 
 Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
 
-In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step reference image, sends that composed frame to Overshoot, parses the VLM response, and returns `true` or `false`.
+In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. By default, the adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step reference image, sends that composed frame to Overshoot, parses the VLM response, and returns `true` or `false`. An adapter config can instead send the camera and reference as two separate, explicitly labeled images for comparison experiments.
 
 The eval files live under `backend/eval/`:
 
 - `adapter.py` connects `glasskit eval` to the origami fold-check logic.
+- `configs/two-separate-images.yaml` selects the experimental separate camera/reference image layout.
 - `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
@@ -211,6 +212,14 @@ uv run --with-editable ../../../cli --env-file .env \
 ```
 
 The Origami adapter implements individual `evaluate` calls because each sampled frame becomes an independent Overshoot request. `--concurrency 2` lets GlassKit overlap those requests while keeping the reported samples in their original order. Concurrency changes elapsed time, not the number or cost of model calls; lower the value if the provider returns rate-limit responses. The command prints case progress, per-target results, and a final summary that you can use to improve the app and aim for a higher score.
+
+To compare the default composite against separate camera and reference images, run the same command with the experimental adapter config:
+
+```bash
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval run --concurrency 2 \
+  --adapter-config eval/configs/two-separate-images.yaml
+```
 
 ## Vision Path Comparison
 

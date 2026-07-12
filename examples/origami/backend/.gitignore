@@ -2,3 +2,4 @@
 /debug/
 __pycache__/
 /eval/runs/generate-case
+/eval/runs/image-layout-ab
