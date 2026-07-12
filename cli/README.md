@@ -181,20 +181,6 @@ Expected output: focused case and target progress, every selected sample result,
 
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
-### Run Independent Model Calls Concurrently
-
-Goal: reduce the wall-clock time spent waiting for an adapter that makes one independent remote request per sample.
-
-Command:
-
-```bash
-uv run --env-file .env glasskit eval run --concurrency 8
-```
-
-Expected behavior: GlassKit evaluates up to eight samples concurrently within each target while preserving the original sample order in console output, JSON reports, comparisons, gates, and failure artifacts. The final summary reports average adapter-call latency and end-to-end samples-per-second throughput so request latency stays distinct from the wall-clock benefit of concurrency.
-
-Note: Concurrency defaults to `1` because GlassKit cannot know whether an adapter or its provider accepts overlapping calls. Increase it deliberately and account for provider rate limits. `--concurrency` schedules calls to `evaluate`; an adapter that implements `evaluate_many` selects batch evaluation instead and owns the execution of that batch. See [Individual and Batch Evaluation](#individual-and-batch-evaluation) for the full contract.
-
 ### Enforce CI Quality Gates
 
 Goal: make the command fail when quality drops below your threshold.
@@ -440,8 +426,6 @@ Implement at least one strategy. If an evaluator implements both methods, `evalu
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
 Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
-
-Evaluation timing follows the same distinction. Results from `evaluate` record the elapsed adapter-call latency for each sample. GlassKit can only time `evaluate_many` as one target-wide operation, so batch results record the batch duration divided by its sample count and label that value `batch_amortized`; it is not individual request latency. Video decoding, comparison, reporting, and artifact writing are excluded from evaluation timing, while the separate throughput metric uses the complete run duration.
 
 The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous.
 
@@ -741,8 +725,6 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
   ]
 }
 ```
-
-For individual evaluation, `evaluation_duration_seconds` is the actual adapter-call latency for that sample. For batch evaluation, it is an amortized share of the target batch and `evaluation_timing_mode` is `batch_amortized`. Summary averages use those per-result values. `throughput_samples_per_second` divides evaluated samples by measured run duration, so it includes validation, shared setup, decoding, comparison, artifact, and adapter-lifecycle costs as well as concurrent adapter execution.
 
 `--save-failures` writes artifacts for non-passing sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
