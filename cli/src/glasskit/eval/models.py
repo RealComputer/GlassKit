@@ -12,6 +12,7 @@ type JSONValue = (
     None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
 )
 type ResultStatus = Literal["passed", "failed", "error"]
+type EvaluationTimingMode = Literal["individual", "batch_amortized"]
 
 SUPPORTED_COMPARE_MODES = frozenset(
     {
@@ -198,6 +199,8 @@ class SampleResult:
     field: str | None
     reason: str
     source: str
+    evaluation_duration_s: float | None = None
+    evaluation_timing_mode: EvaluationTimingMode | None = None
     artifact_image: str | None = None
     artifact_json: str | None = None
 
@@ -238,6 +241,38 @@ class EvalRunReport:
         if not self.results:
             return 0.0
         return self.passed_count / len(self.results)
+
+    @property
+    def average_evaluation_duration_s(self) -> float | None:
+        durations = [
+            result.evaluation_duration_s
+            for result in self.results
+            if result.evaluation_duration_s is not None
+        ]
+        if not durations:
+            return None
+        return sum(durations) / len(durations)
+
+    @property
+    def evaluation_timing_mode(
+        self,
+    ) -> EvaluationTimingMode | Literal["mixed"] | None:
+        modes = {
+            result.evaluation_timing_mode
+            for result in self.results
+            if result.evaluation_timing_mode is not None
+        }
+        if not modes:
+            return None
+        if len(modes) == 1:
+            return next(iter(modes))
+        return "mixed"
+
+    @property
+    def throughput_samples_per_s(self) -> float:
+        if not self.results or self.duration_s <= 0:
+            return 0.0
+        return len(self.results) / self.duration_s
 
     @property
     def success(self) -> bool:

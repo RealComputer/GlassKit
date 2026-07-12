@@ -5,6 +5,7 @@ import json
 import sys
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Protocol
@@ -20,6 +21,7 @@ from .models import (
     EvalConfigError,
     EvalDirectory,
     EvalRunReport,
+    EvaluationTimingMode,
     FrameSample,
     GateResult,
     RunOptions,
@@ -43,7 +45,13 @@ class RunCallbacks(Protocol):
     def on_result(self, result: SampleResult) -> None: ...
 
 
-type _EvaluationOutcome = tuple[SampleExpectation, Any, Exception | None]
+@dataclass(frozen=True)
+class _EvaluationOutcome:
+    sample: SampleExpectation
+    observation: Any
+    runtime_error: Exception | None
+    duration_s: float
+    timing_mode: EvaluationTimingMode
 
 
 async def validate_eval_directory(options: RunOptions) -> ValidationReport:
@@ -135,20 +143,16 @@ async def run_eval(
                     config=target.config,
                 )
                 frames = [decoded[sample.sample_index] for sample in target_samples]
-                observations = await _evaluate_samples(
+                evaluations = await _evaluate_samples(
                     evaluator,
                     frames,
                     target_samples,
                     context,
                     options=options,
                 )
-                for sample, observation, runtime_error in observations:
-                    result = _result_for_observation(
-                        sample,
-                        observation,
-                        runtime_error,
-                        options=options,
-                    )
+                for evaluation in evaluations:
+                    sample = evaluation.sample
+                    result = _result_for_evaluation(evaluation, options=options)
                     if result.status != "passed" and options.save_failures:
                         frame = decoded.get(sample.sample_index)
                         if frame is not None:
@@ -234,6 +238,7 @@ async def _evaluate_sample_batch(
     *,
     options: RunOptions,
 ) -> list[_EvaluationOutcome]:
+    started_at = perf_counter()
     try:
         observation_items = list(await evaluator.evaluate_many(frames, target))
         if len(observation_items) != len(samples):
@@ -242,19 +247,33 @@ async def _evaluate_sample_batch(
                 f"{len(samples)} samples in target {target.id!r}"
             )
     except Exception as error:
+        duration_s = _elapsed_seconds(started_at)
         runtime_error = _batch_adapter_runtime_error(error, target)
         if not options.keep_going:
             if runtime_error is error:
                 raise runtime_error from None
             raise runtime_error from error
-        return [(sample, None, runtime_error) for sample in samples]
+        amortized_duration_s = duration_s / len(samples)
+        return [
+            _EvaluationOutcome(
+                sample=sample,
+                observation=None,
+                runtime_error=runtime_error,
+                duration_s=amortized_duration_s,
+                timing_mode="batch_amortized",
+            )
+            for sample in samples
+        ]
 
+    amortized_duration_s = _elapsed_seconds(started_at) / len(samples)
     results: list[_EvaluationOutcome] = []
     for sample, observation in zip(samples, observation_items, strict=True):
         results.append(
             _validated_observation(
                 sample,
                 observation,
+                duration_s=amortized_duration_s,
+                timing_mode="batch_amortized",
                 keep_going=options.keep_going,
             )
         )
@@ -271,18 +290,28 @@ async def _evaluate_samples_individually(
 ) -> list[_EvaluationOutcome]:
     async def evaluate_index(index: int) -> _EvaluationOutcome:
         sample = samples[index]
+        started_at = perf_counter()
         try:
             observation = await evaluator.evaluate(frames[index], target)
         except Exception as error:
+            duration_s = _elapsed_seconds(started_at)
             runtime_error = _sample_adapter_runtime_error(error, sample)
             if not options.keep_going:
                 if runtime_error is error:
                     raise runtime_error from None
                 raise runtime_error from error
-            return sample, None, runtime_error
+            return _EvaluationOutcome(
+                sample=sample,
+                observation=None,
+                runtime_error=runtime_error,
+                duration_s=duration_s,
+                timing_mode="individual",
+            )
         return _validated_observation(
             sample,
             observation,
+            duration_s=_elapsed_seconds(started_at),
+            timing_mode="individual",
             keep_going=options.keep_going,
         )
 
@@ -349,6 +378,8 @@ def _validated_observation(
     sample: SampleExpectation,
     observation: Any,
     *,
+    duration_s: float,
+    timing_mode: EvaluationTimingMode,
     keep_going: bool,
 ) -> _EvaluationOutcome:
     if error_message := json_value_error(observation, label="observation"):
@@ -359,8 +390,24 @@ def _validated_observation(
         )
         if not keep_going:
             raise error
-        return sample, None, error
-    return sample, observation, None
+        return _EvaluationOutcome(
+            sample=sample,
+            observation=None,
+            runtime_error=error,
+            duration_s=duration_s,
+            timing_mode=timing_mode,
+        )
+    return _EvaluationOutcome(
+        sample=sample,
+        observation=observation,
+        runtime_error=None,
+        duration_s=duration_s,
+        timing_mode=timing_mode,
+    )
+
+
+def _elapsed_seconds(started_at: float) -> float:
+    return max(0.0, perf_counter() - started_at)
 
 
 def _batch_adapter_runtime_error(error: Exception, target: TargetContext) -> Exception:
@@ -396,13 +443,12 @@ async def _close_evaluator(evaluator: LoadedEvaluator) -> None:
         ) from close_error
 
 
-def _result_for_observation(
-    sample: SampleExpectation,
-    observation: Any,
-    runtime_error: Exception | None,
-    *,
-    options: RunOptions,
+def _result_for_evaluation(
+    evaluation: _EvaluationOutcome, *, options: RunOptions
 ) -> SampleResult:
+    sample = evaluation.sample
+    observation = evaluation.observation
+    runtime_error = evaluation.runtime_error
     if runtime_error is not None:
         return SampleResult(
             case_name=sample.case_name,
@@ -418,6 +464,8 @@ def _result_for_observation(
             field=sample.field,
             reason=f"adapter_error: {runtime_error}",
             source=sample.source,
+            evaluation_duration_s=evaluation.duration_s,
+            evaluation_timing_mode=evaluation.timing_mode,
         )
 
     try:
@@ -439,6 +487,8 @@ def _result_for_observation(
             field=sample.field,
             reason=f"comparison_error: {error}",
             source=sample.source,
+            evaluation_duration_s=evaluation.duration_s,
+            evaluation_timing_mode=evaluation.timing_mode,
         )
     return SampleResult(
         case_name=sample.case_name,
@@ -454,6 +504,8 @@ def _result_for_observation(
         field=sample.field,
         reason=outcome.reason,
         source=sample.source,
+        evaluation_duration_s=evaluation.duration_s,
+        evaluation_timing_mode=evaluation.timing_mode,
     )
 
 
@@ -493,6 +545,8 @@ def _save_failure_artifacts(
         field=result.field,
         reason=result.reason,
         source=result.source,
+        evaluation_duration_s=result.evaluation_duration_s,
+        evaluation_timing_mode=result.evaluation_timing_mode,
         artifact_image=str(image_path),
         artifact_json=str(json_path),
     )
@@ -675,6 +729,11 @@ def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
             "errors": report.error_count,
             "pass_rate": report.pass_rate,
             "duration_seconds": report.duration_s,
+            "evaluation_timing_mode": report.evaluation_timing_mode,
+            "average_evaluation_seconds_per_sample": (
+                report.average_evaluation_duration_s
+            ),
+            "throughput_samples_per_second": report.throughput_samples_per_s,
         },
         "gates": [gate.__dict__ for gate in report.gate_results],
         "results": [_result_to_json(result) for result in report.results],
@@ -696,6 +755,8 @@ def _result_to_json(result: SampleResult) -> dict[str, Any]:
         "field": result.field,
         "reason": result.reason,
         "source": result.source,
+        "evaluation_duration_seconds": result.evaluation_duration_s,
+        "evaluation_timing_mode": result.evaluation_timing_mode,
         "artifact_image": result.artifact_image,
         "artifact_json": result.artifact_json,
     }

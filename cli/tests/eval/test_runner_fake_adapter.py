@@ -132,6 +132,8 @@ def create_evaluator(config):
     for result in failed:
         assert result.artifact_image is not None
         assert result.artifact_json is not None
+        assert result.evaluation_duration_s is not None
+        assert result.evaluation_timing_mode == "batch_amortized"
         assert Path(result.artifact_image).exists()
         assert Path(result.artifact_json).exists()
 
@@ -465,7 +467,7 @@ def create_evaluator(config):
         encoding="utf-8",
     )
     output_json = tmp_path / "report.json"
-    clock_values = iter([10.0, 72.25])
+    clock_values = iter([10.0, 20.0, 30.0, 72.25])
     monkeypatch.setattr("glasskit.eval.runner.perf_counter", lambda: next(clock_values))
 
     report = await run_eval(
@@ -477,8 +479,21 @@ def create_evaluator(config):
     )
 
     assert report.duration_s == pytest.approx(62.25)
+    assert report.evaluation_timing_mode == "batch_amortized"
+    assert report.average_evaluation_duration_s == pytest.approx(2.5)
+    assert report.throughput_samples_per_s == pytest.approx(4 / 62.25)
+    assert [result.evaluation_duration_s for result in report.results] == [
+        pytest.approx(2.5)
+    ] * 4
     data = json.loads(output_json.read_text(encoding="utf-8"))
     assert data["summary"]["duration_seconds"] == pytest.approx(62.25)
+    assert data["summary"]["evaluation_timing_mode"] == "batch_amortized"
+    assert data["summary"]["average_evaluation_seconds_per_sample"] == pytest.approx(
+        2.5
+    )
+    assert data["summary"]["throughput_samples_per_second"] == pytest.approx(4 / 62.25)
+    assert data["results"][0]["evaluation_timing_mode"] == "batch_amortized"
+    assert data["results"][0]["evaluation_duration_seconds"] == pytest.approx(2.5)
 
 
 async def _run_close_error_masking_test(tmp_path: Path) -> None:
@@ -570,6 +585,8 @@ def create_evaluator(config):
 
     assert report.error_count == 1
     assert report.results[0].status == "error"
+    assert report.results[0].evaluation_duration_s is not None
+    assert report.results[0].evaluation_timing_mode == "batch_amortized"
     assert "adapter failed for target 'step_1'" in report.results[0].reason
 
     with pytest.raises(AdapterRuntimeError, match="adapter failed for target 'step_1'"):

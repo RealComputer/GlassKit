@@ -40,6 +40,14 @@ def test_runner_bounds_concurrent_evaluation_and_preserves_result_order(
     assert evaluator.peak_active == 3
     assert evaluator.completed != [0, 1, 2, 3]
     assert [result.sample_index for result in report.results] == [0, 1, 2, 3]
+    assert report.evaluation_timing_mode == "individual"
+    assert report.average_evaluation_duration_s is not None
+    assert report.average_evaluation_duration_s > 0
+    assert all(
+        result.evaluation_timing_mode == "individual"
+        and result.evaluation_duration_s is not None
+        for result in report.results
+    )
     assert evaluator.closed
 
 
@@ -90,6 +98,8 @@ def test_keep_going_records_only_the_failing_individual_sample(
         "passed",
     ]
     assert "case-001/step_1 sample 1 at 0.5s" in report.results[1].reason
+    assert report.results[1].evaluation_timing_mode == "individual"
+    assert report.results[1].evaluation_duration_s is not None
     assert evaluator.closed
 
 

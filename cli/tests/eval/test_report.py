@@ -9,6 +9,7 @@ from glasskit.eval.models import (
     EvalCase,
     EvalDirectory,
     EvalRunReport,
+    EvaluationTimingMode,
     SampleExpectation,
     SampleResult,
     TargetSpec,
@@ -50,6 +51,36 @@ def test_print_run_summary_uses_target_label_with_id() -> None:
     print_run_summary(report, console=console)
 
     assert "Step 1 (step_1)" in buffer.getvalue()
+
+
+def test_print_run_summary_includes_individual_timing_and_throughput() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+
+    print_run_summary(_report(), console=console)
+
+    output = buffer.getvalue()
+    assert "Avg evaluation latency: 1.25s/sample" in output
+    assert "Throughput: 1.00 samples/s" in output
+    assert "Avg latency" in output
+    assert "1.25s" in output
+
+
+def test_print_run_summary_labels_amortized_batch_timing() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+
+    print_run_summary(
+        _report(
+            evaluation_duration_s=0.5,
+            evaluation_timing_mode="batch_amortized",
+        ),
+        console=console,
+    )
+
+    output = buffer.getvalue()
+    assert "Avg amortized batch time: 500ms/sample" in output
+    assert "Avg batch/sample" in output
 
 
 def test_print_sample_schedule_uses_target_label_with_id() -> None:
@@ -145,17 +176,33 @@ def _case(*, target_label: str = "Step 1") -> EvalCase:
     )
 
 
-def _report(*, target_label: str = "Step 1") -> EvalRunReport:
+def _report(
+    *,
+    target_label: str = "Step 1",
+    evaluation_duration_s: float = 1.25,
+    evaluation_timing_mode: EvaluationTimingMode = "individual",
+) -> EvalRunReport:
     return EvalRunReport(
         eval_dir=Path("eval"),
         case_names=["case-001"],
-        results=[_result(target_label=target_label)],
+        results=[
+            _result(
+                target_label=target_label,
+                evaluation_duration_s=evaluation_duration_s,
+                evaluation_timing_mode=evaluation_timing_mode,
+            )
+        ],
         gate_results=[],
         duration_s=1.0,
     )
 
 
-def _result(*, target_label: str = "Step 1") -> SampleResult:
+def _result(
+    *,
+    target_label: str = "Step 1",
+    evaluation_duration_s: float = 1.25,
+    evaluation_timing_mode: EvaluationTimingMode = "individual",
+) -> SampleResult:
     return SampleResult(
         case_name="case-001",
         target_id="step_1",
@@ -170,4 +217,6 @@ def _result(*, target_label: str = "Step 1") -> SampleResult:
         field=None,
         reason="mismatch",
         source="at",
+        evaluation_duration_s=evaluation_duration_s,
+        evaluation_timing_mode=evaluation_timing_mode,
     )

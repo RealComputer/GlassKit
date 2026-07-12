@@ -18,7 +18,7 @@ This package provides the `glasskit` command. Its current command group is recor
 - `src/glasskit/cli.py`: Typer command definitions and CLI exit-code handling.
 - `src/glasskit/eval/models.py`: dataclasses, protocols, JSON value aliases, result types, and eval errors.
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
-- `src/glasskit/eval/runner.py`: validation and run orchestration, bounded individual-sample concurrency, native batch dispatch, adapter lifecycle, reports, artifacts, and quality gates.
+- `src/glasskit/eval/runner.py`: validation and run orchestration, bounded individual-sample concurrency, native batch dispatch, adapter timing, adapter lifecycle, reports, artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading, individual-versus-batch strategy detection, and sync/async normalization for simple functions, factories, and evaluator objects.
 - `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.

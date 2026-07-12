@@ -124,6 +124,18 @@ def print_run_summary(
     )
     console.print(f"Pass rate: {report.pass_rate:.1%} ({status})", highlight=False)
     console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
+    if report.average_evaluation_duration_s is not None:
+        timing_label = _summary_timing_label(report.evaluation_timing_mode)
+        console.print(
+            f"{timing_label}: "
+            f"{_format_evaluation_duration(report.average_evaluation_duration_s)}"
+            "/sample",
+            highlight=False,
+        )
+        console.print(
+            f"Throughput: {report.throughput_samples_per_s:.2f} samples/s",
+            highlight=False,
+        )
 
     if report.gate_results:
         gate_table = Table(title="Gates")
@@ -143,17 +155,30 @@ def print_run_summary(
     target_table.add_column("Pass rate", justify="right")
     target_table.add_column("Passed", justify="right")
     target_table.add_column("Total", justify="right")
+    show_timing = report.average_evaluation_duration_s is not None
+    if show_timing:
+        target_table.add_column(
+            _target_timing_column(report.evaluation_timing_mode), justify="right"
+        )
     for target_id, target_results in _group_by_target(report.results).items():
         passed = sum(1 for result in target_results if result.status == "passed")
         total = len(target_results)
         pass_rate = passed / total if total else 0.0
         target_label = _first_target_label(target_results)
-        target_table.add_row(
+        row = [
             _format_target_text(target_id, target_label),
             f"{pass_rate:.1%}",
             str(passed),
             str(total),
-        )
+        ]
+        if show_timing:
+            average_duration_s = _average_evaluation_duration(target_results)
+            row.append(
+                "n/a"
+                if average_duration_s is None
+                else _format_evaluation_duration(average_duration_s)
+            )
+        target_table.add_row(*row)
     console.print(target_table)
 
     failures = [result for result in report.results if result.status != "passed"]
@@ -195,6 +220,33 @@ def _first_target_label(results: list[SampleResult]) -> str | None:
     )
 
 
+def _average_evaluation_duration(results: list[SampleResult]) -> float | None:
+    durations = [
+        result.evaluation_duration_s
+        for result in results
+        if result.evaluation_duration_s is not None
+    ]
+    if not durations:
+        return None
+    return sum(durations) / len(durations)
+
+
+def _summary_timing_label(mode: str | None) -> str:
+    if mode == "individual":
+        return "Avg evaluation latency"
+    if mode == "batch_amortized":
+        return "Avg amortized batch time"
+    return "Avg evaluation time"
+
+
+def _target_timing_column(mode: str | None) -> str:
+    if mode == "individual":
+        return "Avg latency"
+    if mode == "batch_amortized":
+        return "Avg batch/sample"
+    return "Avg eval/sample"
+
+
 def _target_label_for_case(case: EvalCase, target_id: str) -> str | None:
     return next(
         (target.label for target in case.targets if target.id == target_id),
@@ -227,3 +279,13 @@ def _format_duration(duration_s: float) -> str:
         return f"{int(minutes)}m {seconds:.1f}s"
     hours, minutes = divmod(minutes, 60)
     return f"{int(hours)}h {int(minutes)}m {seconds:.1f}s"
+
+
+def _format_evaluation_duration(duration_s: float) -> str:
+    if duration_s < 0.01:
+        return f"{duration_s * 1000:.2f}ms"
+    if duration_s < 1:
+        return f"{duration_s * 1000:.0f}ms"
+    if duration_s < 10:
+        return f"{duration_s:.2f}s"
+    return _format_duration(duration_s)
