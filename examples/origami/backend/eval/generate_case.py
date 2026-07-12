@@ -7,8 +7,8 @@ import io
 import json
 import math
 import os
+import secrets
 import sys
-import tempfile
 import time
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
@@ -865,20 +865,25 @@ def _load_existing_case_for_target_update(
 
 
 def _write_text_atomically(path: Path, content: str) -> None:
+    output_mode = path.stat().st_mode & 0o777 if path.exists() else None
     temporary_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as file:
+        while temporary_path is None:
+            candidate = path.parent / (f".{path.name}.{secrets.token_hex(8)}.tmp")
+            try:
+                file_descriptor = os.open(
+                    candidate,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o666,
+                )
+            except FileExistsError:
+                continue
+            temporary_path = candidate
+
+        with os.fdopen(file_descriptor, mode="w", encoding="utf-8") as file:
             file.write(content)
-            temporary_path = Path(file.name)
-        output_mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-        temporary_path.chmod(output_mode)
+        if output_mode is not None:
+            temporary_path.chmod(output_mode)
         temporary_path.replace(path)
     finally:
         if temporary_path is not None and temporary_path.exists():

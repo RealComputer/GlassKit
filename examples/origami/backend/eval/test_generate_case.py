@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,28 @@ from eval.generate_case import (
 
 
 class WriteCaseYamlTests(unittest.TestCase):
+    def test_new_case_respects_process_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video_path = root / "video.mp4"
+            video_path.touch()
+            output_path = root / "case.yaml"
+            plan, requests, results = _generation_inputs(video_path)
+
+            previous_umask = os.umask(0o077)
+            try:
+                _write_case_yaml(
+                    output_path,
+                    plan=plan,
+                    requests_by_target=requests,
+                    results=results,
+                    existing_case=None,
+                )
+            finally:
+                os.umask(previous_umask)
+
+            self.assertEqual(output_path.stat().st_mode & 0o777, 0o600)
+
     def test_target_update_preserves_other_targets_and_case_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
