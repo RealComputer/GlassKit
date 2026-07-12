@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich.text import Text
 from typer.core import TyperGroup, TyperOption
 from typer.main import get_command
 from typer.testing import CliRunner
@@ -53,7 +54,7 @@ def test_eval_run_rejects_non_positive_concurrency() -> None:
     result = CliRunner().invoke(app, ["eval", "run", "--concurrency", "0"])
 
     assert result.exit_code == 2
-    assert "Invalid value for '--concurrency'" in result.output
+    assert "Invalid value for '--concurrency'" in Text.from_ansi(result.output).plain
 
 
 def test_default_adapter_target_follows_eval_dir() -> None:
