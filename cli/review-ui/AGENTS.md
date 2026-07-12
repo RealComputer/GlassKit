@@ -6,11 +6,11 @@ This workspace contains the React application served by `glasskit eval review`. 
 
 - Browse cases and targets, filter both lists, and open the case file or eval config file source.
 - Seek and play the case video, navigate samples, nudge the current time, add a sample, and download the currently displayed frame as a PNG.
-- Inspect all targets on a zoomable timeline. Every sample is a uniform tick; equal expectation values receive the same deterministic color, selection has a separate outline, and hover details show only the timestamp and expected value.
-- Switch from the timeline to a table for the selected target. Consecutive samples with identical settings are grouped and can be expanded to select an individual timestamp.
+- Inspect all targets on a zoomable timeline. Every sample is a uniform tick; equal expectation values receive the same color, selection has a separate outline, and hover details show only the timestamp and expected value.
+- Switch from the timeline to a table for the selected target.
 - Edit a sample's timestamp, expectation type and value, field, comparison mode, tolerance, and comment in the inspector, or delete the sample when deletion is valid.
 - Autosave valid edits to the case file, surface validation and persistence errors, guard unsaved work, and support reloading the accepted case file from disk.
-- Use keyboard shortcuts for playback, repeated previous and next sample navigation, time nudging, and adding samples. The help overlay is the user-facing shortcut reference.
+- Use keyboard shortcuts for playback, repeated previous and next sample navigation, time nudging, and adding samples.
 
 ## Architecture
 
@@ -23,19 +23,13 @@ This workspace contains the React application served by `glasskit eval review`. 
 - `src/App.css` contains application layout and component styling; `src/index.css` contains the base theme and global styles.
 - Tests live beside the code they cover. Shared DOM setup and fixtures live under `src/test/`.
 
-## Data and UI Invariants
+## Notes
 
 - Treat expanded samples as the user-facing model. `at` versus `range`, `origin`, and `display_groups` are persistence details owned by the Python backend and must not create different timeline or table behavior.
-- Preserve `ReviewSample.expect_json` as lossless JSON text. Do not parse and reserialize it for equality or grouping because valid JSON integers can exceed JavaScript's safe integer range. Presentation helpers may parse it only when exact source identity is not required.
-- Expectation colors must be deterministic for equal values and independent of object key insertion order or the user's locale.
-- Selecting or seeking a sample requests a precise preview, but browser decoding remains best effort and can show an adjacent encoded frame. Keep preview readiness explicit when adding actions that consume the displayed frame.
-- Invalid inspector drafts must block persistence. Keep autosave lifecycle and server-accepted state in `AppContext`; components should use its editing operations rather than calling the write API directly.
-- Do not expose the write token outside the API request path or bypass the server's revision and validation behavior.
-- Do not edit `../src/glasskit/eval/review/static/` directly. It is ignored generated output produced by Vite and embedded into Python distributions by `hatch_build.py`.
+- Selecting or seeking a sample requests a precise preview, but browser decoding remains best effort and can show an adjacent encoded frame. (Depends on the browser impl.) Eval cli command use PyAV and their logic and may select different adjacent frame.
 
 ## Commands
 
-- Run `npm install` in a clean checkout or after dependency changes.
 - Run `npm run fix && npm run check` after frontend changes. `check` runs lint and formatting checks, TypeScript, and the Vitest suite.
 - Run `npm run build` to verify the production bundle and refresh the ignored static output.
 - For development, start the Python server from the CLI directory with `uv run glasskit eval review --eval-dir tests/fixtures/eval_directories/review --port 8765 --no-open`, then run `GLASSKIT_REVIEW_BACKEND=http://127.0.0.1:8765 npm run dev` here.
