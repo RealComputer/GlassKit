@@ -25,7 +25,7 @@
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "criteria": "Accept a model with a large lower diamond, a horizontal crease across the middle, triangular side flaps opened upward to the left and right, and a narrow upright flap at the top center. Reject a plain diamond or a model without the opened left and right triangular side flaps."
+    "criteria": "Accept only a model with a large lower diamond, a horizontal crease across the middle, two distinct broad triangular side flaps opened outward and upward, and a narrow upright flap at the top center. One side triangle must project clearly to the left and the other clearly to the right, forming a wide, roughly symmetric crown around the separated center flap as in the reference. Reject a plain diamond, a narrow or asymmetric cluster of mostly upright top flaps, overlapping top flaps, either side flap still folded toward the center, or any model without both clearly opened outward-facing side triangles."
   },
   {
     "id": "step_5",
