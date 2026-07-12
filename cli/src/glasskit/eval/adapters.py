@@ -77,7 +77,7 @@ class LoadedEvaluator:
 
     async def close(self) -> None:
         if self._close is not None:
-            await _invoke_adapter_callable(self._close)
+            await _invoke_adapter_callable(self._close, cancel_pending=False)
 
 
 def _adapter_import_roots(config: AdapterConfig) -> list[Path]:
@@ -248,7 +248,11 @@ def _optional_callable(value: Any, name: str) -> Callable[..., Any] | None:
     return candidate if callable(candidate) else None
 
 
-async def _invoke_adapter_callable(function: Callable[..., Any], *args: Any) -> Any:
+async def _invoke_adapter_callable(
+    function: Callable[..., Any],
+    *args: Any,
+    cancel_pending: bool = True,
+) -> Any:
     if _is_async_callable(function):
         return await function(*args)
     cancellable_call = _CancellableThreadCall(function, args)
@@ -256,7 +260,7 @@ async def _invoke_adapter_callable(function: Callable[..., Any], *args: Any) -> 
     try:
         result = await asyncio.shield(thread_call)
     except asyncio.CancelledError as cancellation:
-        if cancellable_call.cancel_if_pending():
+        if cancel_pending and cancellable_call.cancel_if_pending():
             thread_call.cancel()
         await _drain_thread_call(thread_call)
         if error := _thread_call_failure(thread_call):

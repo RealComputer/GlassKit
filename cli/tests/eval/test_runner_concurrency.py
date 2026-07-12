@@ -158,6 +158,16 @@ def test_cancellation_skips_sync_calls_still_queued_in_executor(
     assert evaluator.closed
 
 
+def test_repeated_cancellation_still_runs_queued_sync_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evaluator = QueuedCloseSyncEvaluator()
+
+    asyncio.run(_cancel_run_while_sync_close_is_queued(monkeypatch, evaluator))
+
+    assert evaluator.closed
+
+
 def test_cancellation_preserves_every_sync_drain_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -288,6 +298,46 @@ async def _cancel_run_with_saturated_executor(
                 await asyncio.sleep(0.005)
         run_task.cancel()
         await asyncio.sleep(0)
+    finally:
+        blocker_release.set()
+        await blocker
+
+    assert run_task is not None
+    with pytest.raises(asyncio.CancelledError):
+        await run_task
+
+
+async def _cancel_run_while_sync_close_is_queued(
+    monkeypatch: pytest.MonkeyPatch,
+    evaluator: QueuedCloseSyncEvaluator,
+) -> None:
+    loop = asyncio.get_running_loop()
+    executor = SubmissionTrackingExecutor(max_workers=1)
+    loop.set_default_executor(executor)
+    blocker_release = threading.Event()
+    blocker_started = threading.Event()
+
+    def occupy_only_worker() -> None:
+        blocker_started.set()
+        blocker_release.wait(timeout=5)
+
+    blocker = loop.run_in_executor(None, occupy_only_worker)
+    run_task: asyncio.Task[Any] | None = None
+    try:
+        async with asyncio.timeout(1):
+            while not blocker_started.is_set():
+                await asyncio.sleep(0.005)
+        run_task = asyncio.create_task(_run_with_evaluator(monkeypatch, evaluator))
+        async with asyncio.timeout(1):
+            while not evaluator.evaluate_started.is_set():
+                await asyncio.sleep(0.005)
+        run_task.cancel()
+        async with asyncio.timeout(1):
+            while executor.submission_count < 2:
+                await asyncio.sleep(0.005)
+        run_task.cancel()
+        await asyncio.sleep(0.02)
+        assert not run_task.done()
     finally:
         blocker_release.set()
         await blocker
@@ -449,6 +499,20 @@ class QueuedCancellationSyncEvaluator:
         with self._lock:
             self.started += 1
         return _observation(sample)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class QueuedCloseSyncEvaluator:
+    def __init__(self) -> None:
+        self.evaluate_started = threading.Event()
+        self.closed = False
+
+    async def evaluate(self, sample: Any, target: Any) -> bool:
+        self.evaluate_started.set()
+        await asyncio.Future()
+        raise AssertionError("unreachable")
 
     def close(self) -> None:
         self.closed = True
