@@ -39,7 +39,7 @@
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "criteria": "Accept a model with upper side flaps, a small centered triangle between them, a wide horizontal band across the middle, and a large downward diamond below the band. Reject a model where a large upward-pointing triangle covers the center or the wide middle band is missing."
+    "criteria": "Accept a model with a broad downward-pointing lower body, a visible horizontal folded band along its top edge, and an upper crown formed by a centered upright flap between left and right side flaps. The lower body may look triangular or diamond-like under perspective, and the band may look shallow; judge the fold geometry, not paper color or exact proportions. The three upper flaps may overlap slightly as long as the center, left, and right points remain distinguishable. Reject a model where a large upward-pointing triangle covers the center, the lower body does not point downward, the horizontal band is absent, or the upper crown does not have distinguishable center and side points."
   },
   {
     "id": "step_7",

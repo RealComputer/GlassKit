@@ -59,15 +59,23 @@ targets:
       expect: false
   step_6:
     samples:
-    - range: [226.0, 242.5]
+    - range: [226.0, 238.0]
       expect: false
-    - range: [242.5, 243.5]
+    - at: 238.0
       expect: true
-    - range: [243.5, 248.0]
+    - range: [238.5, 242.5]
       expect: false
-    - range: [248.0, 249.0]
+    - range: [242.5, 244.5]
       expect: true
-    - range: [249.0, 258.0]
+    - range: [244.5, 247.0]
+      expect: false
+    - range: [247.0, 249.0]
+      expect: true
+    - range: [249.0, 250.0]
+      expect: false
+    - at: 250.0
+      expect: true
+    - range: [250.5, 258.0]
       expect: false
   step_7:
     samples:
