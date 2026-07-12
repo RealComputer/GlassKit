@@ -250,8 +250,29 @@ def _optional_callable(value: Any, name: str) -> Callable[..., Any] | None:
 async def _invoke_adapter_callable(function: Callable[..., Any], *args: Any) -> Any:
     if _is_async_callable(function):
         return await function(*args)
-    result = await asyncio.to_thread(function, *args)
+    thread_call = asyncio.create_task(asyncio.to_thread(function, *args))
+    try:
+        result = await asyncio.shield(thread_call)
+    except asyncio.CancelledError as cancellation:
+        await _drain_thread_call(thread_call)
+        try:
+            thread_call.result()
+        except BaseException as error:
+            cancellation.add_note(
+                f"synchronous adapter call failed while draining cancellation: {error}"
+            )
+        raise
     return await _maybe_await(result)
+
+
+async def _drain_thread_call(thread_call: asyncio.Task[Any]) -> None:
+    while not thread_call.done():
+        try:
+            await asyncio.shield(thread_call)
+        except asyncio.CancelledError:
+            continue
+        except BaseException:
+            return
 
 
 def _is_async_callable(function: Callable[..., Any]) -> bool:

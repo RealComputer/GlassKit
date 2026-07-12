@@ -320,13 +320,29 @@ async def _bounded_map(
     workers = [
         asyncio.create_task(worker()) for _ in range(min(concurrency, item_count))
     ]
-    await asyncio.gather(*workers)
+    try:
+        await asyncio.gather(*workers)
+    except asyncio.CancelledError:
+        for worker_task in workers:
+            worker_task.cancel()
+        await _drain_workers(workers)
+        raise
     if errors:
         _, error = min(errors, key=lambda item: item[0])
         raise error
     if any(result is None for result in results):
         raise RuntimeError("internal error: concurrent evaluation left missing results")
     return [result for result in results if result is not None]
+
+
+async def _drain_workers(workers: list[asyncio.Task[None]]) -> None:
+    pending = asyncio.gather(*workers, return_exceptions=True)
+    while not pending.done():
+        try:
+            await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            continue
+    pending.result()
 
 
 def _validated_observation(
