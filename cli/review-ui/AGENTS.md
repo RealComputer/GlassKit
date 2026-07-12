@@ -1,15 +1,15 @@
 # GlassKit Eval Review UI Development
 
-This workspace contains the React application served by `glasskit eval review`. It is a focused editor for checking video frames against timed expectations and updating the case YAML without requiring users to understand its `at` and `range` source syntax.
+This workspace contains the React application served by `glasskit eval review`. It is a focused editor for checking video frames against timed expectations and updating the case file without requiring users to understand its `at` and `range` source syntax.
 
 ## Features
 
-- Browse eval cases and targets, filter both lists, and open the original case or eval configuration source.
+- Browse cases and targets, filter both lists, and open the case file or eval config file source.
 - Seek and play the case video, navigate samples, nudge the current time, add a sample, and download the currently displayed frame as a PNG.
 - Inspect all targets on a zoomable timeline. Every sample is a uniform tick; equal expectation values receive the same deterministic color, selection has a separate outline, and hover details show only the timestamp and expected value.
 - Switch from the timeline to a table for the selected target. Consecutive samples with identical settings are grouped and can be expanded to select an individual timestamp.
 - Edit a sample's timestamp, expectation type and value, field, comparison mode, tolerance, and comment in the inspector, or delete the sample when deletion is valid.
-- Autosave valid edits to the case file, surface validation and persistence errors, guard unsaved work, and support reloading the accepted file from disk.
+- Autosave valid edits to the case file, surface validation and persistence errors, guard unsaved work, and support reloading the accepted case file from disk.
 - Use keyboard shortcuts for playback, repeated previous and next sample navigation, time nudging, and adding samples. The help overlay is the user-facing shortcut reference.
 
 ## Architecture
