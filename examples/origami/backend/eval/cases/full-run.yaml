@@ -79,9 +79,9 @@ targets:
       expect: false
     - range: [270.5, 273.5]
       expect: true
-    - range: [273.5, 275.5]
+    - range: [273.5, 274.5]
       expect: false
-    - range: [275.5, 277.5]
+    - range: [274.5, 277.5]
       expect: true
     - at: 277.5
       expect: false
