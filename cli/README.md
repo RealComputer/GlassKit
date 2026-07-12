@@ -554,7 +554,7 @@ Options:
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run one target id from the selected cases. May be used with or without `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
-| `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Adapters with `evaluate_many` control their own batch execution. |
+| `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
 | `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
 | `--max-failures INTEGER` | None | Run-level maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
