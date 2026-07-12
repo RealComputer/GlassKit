@@ -26,7 +26,7 @@ This package provides the `glasskit` command. Its current command group is recor
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.
 - `tests/fixtures/`: reproducible videos and sample eval directories used by default tests.
 - `PUBLISHING.md`: release runbook for the `glasskit.ai` PyPI package and tag-triggered Trusted Publishing flow.
-- `../.github/workflows/ci.yml` and `../.github/workflows/release.yml`: repository-level CI and PyPI release automation for this package. Keep their package commands scoped to the `cli/` working directory.
+- `../.github/workflows/cli-ci.yml` and `../.github/workflows/release.yml`: repository-level CI and PyPI release automation for this package. Keep their package commands scoped to the `cli/` working directory.
 
 ## Commands
 
