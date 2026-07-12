@@ -32,7 +32,7 @@
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "Accept a model with upper side flaps behind a large centered upward-pointing front triangle, with the triangle base along the middle crease and its point near the upper center. Reject a model without the large centered upward front triangle or with a front triangle pointing downward below the middle crease."
+    "criteria": "Accept only a model with upper side flaps behind one large centered upward-pointing foreground triangle. The front triangle must have a broad base along the middle crease that spans most of the model's width from near the left middle corner to near the right middle corner, an apex near the upper center, and a clearly visible face covering the center in front of the other flaps. Do not count a narrow upright center flap or small center triangle. Reject the previous-step crown of exposed side triangles around a narrow center flap, any model without the large broad foreground triangle, or a front triangle pointing downward below the middle crease."
   },
   {
     "id": "step_6",
