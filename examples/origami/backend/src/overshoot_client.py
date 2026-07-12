@@ -12,10 +12,7 @@ from .constants import (
     OVERSHOOT_CHAT_COMPLETION_TIMEOUT_SECONDS,
 )
 from .fold_check import fold_check_stream_image_url
-from .fold_check_prompts import (
-    fold_check_completion_payload,
-    fold_check_image_pair_completion_payload,
-)
+from .fold_check_prompts import fold_check_completion_payload
 from .payload_utils import _parse_positive_int, _response_text
 
 logger = logging.getLogger("uvicorn.error")
@@ -212,38 +209,6 @@ class OvershootClient:
             prompt=prompt,
             image_url=image_url,
         )
-        return await self._chat_completion_with_payload(
-            payload=payload,
-            log_context=log_context,
-        )
-
-    async def chat_completion_for_image_pair(
-        self,
-        *,
-        camera_image_url: str,
-        reference_image_url: str,
-        thread_id: str,
-        prompt: str,
-        log_context: str = "fold-check",
-    ) -> OvershootCompletionResult | None:
-        payload = fold_check_image_pair_completion_payload(
-            model=self._model,
-            thread_id=thread_id,
-            prompt=prompt,
-            camera_image_url=camera_image_url,
-            reference_image_url=reference_image_url,
-        )
-        return await self._chat_completion_with_payload(
-            payload=payload,
-            log_context=log_context,
-        )
-
-    async def _chat_completion_with_payload(
-        self,
-        *,
-        payload: dict[str, Any],
-        log_context: str,
-    ) -> OvershootCompletionResult | None:
         for attempt, delay in enumerate((0.0, *_CHAT_COMPLETION_RETRY_DELAYS), start=1):
             if delay:
                 await asyncio.sleep(delay)
