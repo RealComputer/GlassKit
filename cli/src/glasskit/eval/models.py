@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
@@ -12,6 +12,7 @@ type JSONValue = (
     None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
 )
 type ResultStatus = Literal["passed", "failed", "error"]
+type EvaluationTimingMode = Literal["individual", "batch_amortized"]
 
 SUPPORTED_COMPARE_MODES = frozenset(
     {
@@ -68,17 +69,15 @@ class TargetContext:
 
 
 class FrameEvaluator(Protocol):
-    async def evaluate(
+    def evaluate(
         self, sample: FrameSample, target: TargetContext
-    ) -> JSONValue: ...
-
-    async def close(self) -> None: ...
+    ) -> JSONValue | Awaitable[JSONValue]: ...
 
 
-class BatchFrameEvaluator(FrameEvaluator, Protocol):
-    async def evaluate_many(
+class BatchFrameEvaluator(Protocol):
+    def evaluate_many(
         self, samples: list[FrameSample], target: TargetContext
-    ) -> list[JSONValue]: ...
+    ) -> list[JSONValue] | Awaitable[list[JSONValue]]: ...
 
 
 @dataclass(frozen=True)
@@ -200,6 +199,8 @@ class SampleResult:
     field: str | None
     reason: str
     source: str
+    evaluation_duration_s: float | None = None
+    evaluation_timing_mode: EvaluationTimingMode | None = None
     artifact_image: str | None = None
     artifact_json: str | None = None
 
@@ -242,6 +243,38 @@ class EvalRunReport:
         return self.passed_count / len(self.results)
 
     @property
+    def average_evaluation_duration_s(self) -> float | None:
+        durations = [
+            result.evaluation_duration_s
+            for result in self.results
+            if result.evaluation_duration_s is not None
+        ]
+        if not durations:
+            return None
+        return sum(durations) / len(durations)
+
+    @property
+    def evaluation_timing_mode(
+        self,
+    ) -> EvaluationTimingMode | Literal["mixed"] | None:
+        modes = {
+            result.evaluation_timing_mode
+            for result in self.results
+            if result.evaluation_timing_mode is not None
+        }
+        if not modes:
+            return None
+        if len(modes) == 1:
+            return next(iter(modes))
+        return "mixed"
+
+    @property
+    def throughput_samples_per_s(self) -> float:
+        if not self.results or self.duration_s <= 0:
+            return 0.0
+        return len(self.results) / self.duration_s
+
+    @property
     def success(self) -> bool:
         return all(gate.passed for gate in self.gate_results)
 
@@ -253,6 +286,7 @@ class RunOptions:
     case_filter: str | None = None
     target_filter: str | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
+    concurrency: int = 1
     min_pass_rate: float | None = None
     min_target_pass_rate: float | None = None
     max_failures: int | None = None

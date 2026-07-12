@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Protocol
 
-from .adapters import load_evaluator
+from .adapters import LoadedEvaluator, load_evaluator
 from .compare import compare_observation
 from .expectations import load_eval_directory
 from .json_values import json_value_error
@@ -18,6 +21,8 @@ from .models import (
     EvalConfigError,
     EvalDirectory,
     EvalRunReport,
+    EvaluationTimingMode,
+    FrameSample,
     GateResult,
     RunOptions,
     SampleExpectation,
@@ -38,6 +43,15 @@ class RunCallbacks(Protocol):
     ) -> None: ...
 
     def on_result(self, result: SampleResult) -> None: ...
+
+
+@dataclass(frozen=True)
+class _EvaluationOutcome:
+    sample: SampleExpectation
+    observation: Any
+    runtime_error: Exception | None
+    duration_s: float
+    timing_mode: EvaluationTimingMode
 
 
 async def validate_eval_directory(options: RunOptions) -> ValidationReport:
@@ -81,6 +95,8 @@ async def run_eval(
 ) -> EvalRunReport:
     if options.adapter is None:
         raise EvalConfigError("glasskit eval run requires --adapter")
+    if options.concurrency < 1:
+        raise EvalConfigError("concurrency must be greater than 0")
     started_at = perf_counter()
     eval_directory = load_eval_directory(
         options.eval_dir,
@@ -127,20 +143,16 @@ async def run_eval(
                     config=target.config,
                 )
                 frames = [decoded[sample.sample_index] for sample in target_samples]
-                observations = await _evaluate_samples(
+                evaluations = await _evaluate_samples(
                     evaluator,
                     frames,
                     target_samples,
                     context,
                     options=options,
                 )
-                for sample, observation, runtime_error in observations:
-                    result = _result_for_observation(
-                        sample,
-                        observation,
-                        runtime_error,
-                        options=options,
-                    )
+                for evaluation in evaluations:
+                    sample = evaluation.sample
+                    result = _result_for_evaluation(evaluation, options=options)
                     if result.status != "passed" and options.save_failures:
                         frame = decoded.get(sample.sample_index)
                         if frame is not None:
@@ -192,60 +204,243 @@ def _validate_videos(eval_directory: EvalDirectory) -> list[ValidationIssue]:
 
 
 async def _evaluate_samples(
-    evaluator: Any,
-    frames: list[Any],
+    evaluator: LoadedEvaluator,
+    frames: list[FrameSample],
     samples: list[SampleExpectation],
     target: TargetContext,
     *,
     options: RunOptions,
-) -> list[tuple[SampleExpectation, Any, Exception | None]]:
+) -> list[_EvaluationOutcome]:
     if not samples:
         return []
+    if evaluator.supports_batch_evaluation:
+        return await _evaluate_sample_batch(
+            evaluator,
+            frames,
+            samples,
+            target,
+            options=options,
+        )
+    return await _evaluate_samples_individually(
+        evaluator,
+        frames,
+        samples,
+        target,
+        options=options,
+    )
+
+
+async def _evaluate_sample_batch(
+    evaluator: LoadedEvaluator,
+    frames: list[FrameSample],
+    samples: list[SampleExpectation],
+    target: TargetContext,
+    *,
+    options: RunOptions,
+) -> list[_EvaluationOutcome]:
+    started_at = perf_counter()
     try:
-        observations = await evaluator.evaluate_many(frames, target)
-        observation_count = len(observations)
-        if observation_count != len(samples):
-            raise AdapterRuntimeError(
-                f"adapter returned {observation_count} observations for "
-                f"{len(samples)} samples"
-            )
-        observation_items = list(observations)
+        observation_items = list(await evaluator.evaluate_many(frames, target))
         if len(observation_items) != len(samples):
             raise AdapterRuntimeError(
-                f"adapter returned {len(observation_items)} iterable observations "
-                f"for {len(samples)} samples"
+                f"adapter returned {len(observation_items)} observations for "
+                f"{len(samples)} samples in target {target.id!r}"
             )
     except Exception as error:
-        runtime_error = _adapter_runtime_error(error, target)
+        duration_s = _elapsed_seconds(started_at)
+        runtime_error = _batch_adapter_runtime_error(error, target)
         if not options.keep_going:
             if runtime_error is error:
                 raise runtime_error from None
             raise runtime_error from error
-        return [(sample, None, runtime_error) for sample in samples]
-
-    results: list[tuple[SampleExpectation, Any, Exception | None]] = []
-    for sample, observation in zip(samples, observation_items, strict=True):
-        if error_message := json_value_error(observation, label="observation"):
-            error = AdapterRuntimeError(
-                "adapter returned non-JSON observation for "
-                f"{sample.case_name}/{sample.target_id} sample "
-                f"{sample.sample_index}: {error_message}"
+        amortized_duration_s = duration_s / len(samples)
+        return [
+            _EvaluationOutcome(
+                sample=sample,
+                observation=None,
+                runtime_error=runtime_error,
+                duration_s=amortized_duration_s,
+                timing_mode="batch_amortized",
             )
-            if not options.keep_going:
-                raise error
-            results.append((sample, None, error))
-            continue
-        results.append((sample, observation, None))
+            for sample in samples
+        ]
+
+    amortized_duration_s = _elapsed_seconds(started_at) / len(samples)
+    results: list[_EvaluationOutcome] = []
+    for sample, observation in zip(samples, observation_items, strict=True):
+        results.append(
+            _validated_observation(
+                sample,
+                observation,
+                duration_s=amortized_duration_s,
+                timing_mode="batch_amortized",
+                keep_going=options.keep_going,
+            )
+        )
     return results
 
 
-def _adapter_runtime_error(error: Exception, target: TargetContext) -> Exception:
+async def _evaluate_samples_individually(
+    evaluator: LoadedEvaluator,
+    frames: list[FrameSample],
+    samples: list[SampleExpectation],
+    target: TargetContext,
+    *,
+    options: RunOptions,
+) -> list[_EvaluationOutcome]:
+    async def evaluate_index(index: int) -> _EvaluationOutcome:
+        sample = samples[index]
+        started_at = perf_counter()
+        try:
+            observation = await evaluator.evaluate(frames[index], target)
+        except Exception as error:
+            duration_s = _elapsed_seconds(started_at)
+            runtime_error = _sample_adapter_runtime_error(error, sample)
+            if not options.keep_going:
+                if runtime_error is error:
+                    raise runtime_error from None
+                raise runtime_error from error
+            return _EvaluationOutcome(
+                sample=sample,
+                observation=None,
+                runtime_error=runtime_error,
+                duration_s=duration_s,
+                timing_mode="individual",
+            )
+        return _validated_observation(
+            sample,
+            observation,
+            duration_s=_elapsed_seconds(started_at),
+            timing_mode="individual",
+            keep_going=options.keep_going,
+        )
+
+    return await _bounded_map(
+        len(samples),
+        concurrency=options.concurrency,
+        evaluate_index=evaluate_index,
+    )
+
+
+async def _bounded_map(
+    item_count: int,
+    *,
+    concurrency: int,
+    evaluate_index: Callable[[int], Awaitable[_EvaluationOutcome]],
+) -> list[_EvaluationOutcome]:
+    results: list[_EvaluationOutcome | None] = [None] * item_count
+    next_index = 0
+    stopped = False
+    errors: list[tuple[int, Exception]] = []
+
+    async def worker() -> None:
+        nonlocal next_index, stopped
+        while not stopped:
+            index = next_index
+            if index >= item_count:
+                return
+            next_index += 1
+            try:
+                results[index] = await evaluate_index(index)
+            except Exception as error:
+                errors.append((index, error))
+                stopped = True
+
+    workers = [
+        asyncio.create_task(worker()) for _ in range(min(concurrency, item_count))
+    ]
+    try:
+        await asyncio.gather(*workers)
+    except asyncio.CancelledError as cancellation:
+        for worker_task in workers:
+            worker_task.cancel()
+        for note in await _drain_workers(workers):
+            cancellation.add_note(note)
+        raise
+    if errors:
+        _, error = min(errors, key=lambda item: item[0])
+        raise error
+    if any(result is None for result in results):
+        raise RuntimeError("internal error: concurrent evaluation left missing results")
+    return [result for result in results if result is not None]
+
+
+async def _drain_workers(workers: list[asyncio.Task[None]]) -> list[str]:
+    pending = asyncio.gather(*workers, return_exceptions=True)
+    while not pending.done():
+        try:
+            await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            continue
+    pending.result()
+    notes: list[str] = []
+    for worker in workers:
+        try:
+            worker.result()
+        except asyncio.CancelledError as cancellation:
+            notes.extend(getattr(cancellation, "__notes__", ()))
+        except BaseException as error:
+            notes.append(
+                f"evaluation worker failed while draining cancellation: {error}"
+            )
+    return notes
+
+
+def _validated_observation(
+    sample: SampleExpectation,
+    observation: Any,
+    *,
+    duration_s: float,
+    timing_mode: EvaluationTimingMode,
+    keep_going: bool,
+) -> _EvaluationOutcome:
+    if error_message := json_value_error(observation, label="observation"):
+        error = AdapterRuntimeError(
+            "adapter returned non-JSON observation for "
+            f"{sample.case_name}/{sample.target_id} sample "
+            f"{sample.sample_index}: {error_message}"
+        )
+        if not keep_going:
+            raise error
+        return _EvaluationOutcome(
+            sample=sample,
+            observation=None,
+            runtime_error=error,
+            duration_s=duration_s,
+            timing_mode=timing_mode,
+        )
+    return _EvaluationOutcome(
+        sample=sample,
+        observation=observation,
+        runtime_error=None,
+        duration_s=duration_s,
+        timing_mode=timing_mode,
+    )
+
+
+def _elapsed_seconds(started_at: float) -> float:
+    return max(0.0, perf_counter() - started_at)
+
+
+def _batch_adapter_runtime_error(error: Exception, target: TargetContext) -> Exception:
     if isinstance(error, AdapterRuntimeError):
         return error
     return AdapterRuntimeError(f"adapter failed for target {target.id!r}: {error}")
 
 
-async def _close_evaluator(evaluator: Any) -> None:
+def _sample_adapter_runtime_error(
+    error: Exception, sample: SampleExpectation
+) -> Exception:
+    if isinstance(error, AdapterRuntimeError):
+        return error
+    return AdapterRuntimeError(
+        "adapter failed for "
+        f"{sample.case_name}/{sample.target_id} sample {sample.sample_index} "
+        f"at {sample.timestamp_s:g}s: {error}"
+    )
+
+
+async def _close_evaluator(evaluator: LoadedEvaluator) -> None:
     active_error = sys.exc_info()[1]
     try:
         await evaluator.close()
@@ -260,13 +455,12 @@ async def _close_evaluator(evaluator: Any) -> None:
         ) from close_error
 
 
-def _result_for_observation(
-    sample: SampleExpectation,
-    observation: Any,
-    runtime_error: Exception | None,
-    *,
-    options: RunOptions,
+def _result_for_evaluation(
+    evaluation: _EvaluationOutcome, *, options: RunOptions
 ) -> SampleResult:
+    sample = evaluation.sample
+    observation = evaluation.observation
+    runtime_error = evaluation.runtime_error
     if runtime_error is not None:
         return SampleResult(
             case_name=sample.case_name,
@@ -282,6 +476,8 @@ def _result_for_observation(
             field=sample.field,
             reason=f"adapter_error: {runtime_error}",
             source=sample.source,
+            evaluation_duration_s=evaluation.duration_s,
+            evaluation_timing_mode=evaluation.timing_mode,
         )
 
     try:
@@ -303,6 +499,8 @@ def _result_for_observation(
             field=sample.field,
             reason=f"comparison_error: {error}",
             source=sample.source,
+            evaluation_duration_s=evaluation.duration_s,
+            evaluation_timing_mode=evaluation.timing_mode,
         )
     return SampleResult(
         case_name=sample.case_name,
@@ -318,6 +516,8 @@ def _result_for_observation(
         field=sample.field,
         reason=outcome.reason,
         source=sample.source,
+        evaluation_duration_s=evaluation.duration_s,
+        evaluation_timing_mode=evaluation.timing_mode,
     )
 
 
@@ -357,6 +557,8 @@ def _save_failure_artifacts(
         field=result.field,
         reason=result.reason,
         source=result.source,
+        evaluation_duration_s=result.evaluation_duration_s,
+        evaluation_timing_mode=result.evaluation_timing_mode,
         artifact_image=str(image_path),
         artifact_json=str(json_path),
     )
@@ -539,6 +741,11 @@ def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
             "errors": report.error_count,
             "pass_rate": report.pass_rate,
             "duration_seconds": report.duration_s,
+            "evaluation_timing_mode": report.evaluation_timing_mode,
+            "average_evaluation_seconds_per_sample": (
+                report.average_evaluation_duration_s
+            ),
+            "throughput_samples_per_second": report.throughput_samples_per_s,
         },
         "gates": [gate.__dict__ for gate in report.gate_results],
         "results": [_result_to_json(result) for result in report.results],
@@ -560,6 +767,8 @@ def _result_to_json(result: SampleResult) -> dict[str, Any]:
         "field": result.field,
         "reason": result.reason,
         "source": result.source,
+        "evaluation_duration_seconds": result.evaluation_duration_s,
+        "evaluation_timing_mode": result.evaluation_timing_mode,
         "artifact_image": result.artifact_image,
         "artifact_json": result.artifact_json,
     }

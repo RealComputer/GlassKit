@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich.text import Text
 from typer.core import TyperGroup, TyperOption
 from typer.main import get_command
 from typer.testing import CliRunner
@@ -32,6 +33,30 @@ def test_eval_commands_define_target_filter() -> None:
             isinstance(option, TyperOption) and "--target" in option.opts
             for option in command_options
         )
+
+
+def test_eval_run_defines_serial_concurrency_default() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+
+    concurrency = next(
+        option
+        for option in eval_command.commands["run"].params
+        if isinstance(option, TyperOption) and "--concurrency" in option.opts
+    )
+
+    assert concurrency.default == 1
+    assert concurrency.help is not None
+    assert "ignored when the adapter uses evaluate_many" in concurrency.help
+
+
+def test_eval_run_rejects_non_positive_concurrency() -> None:
+    result = CliRunner().invoke(app, ["eval", "run", "--concurrency", "0"])
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--concurrency'" in Text.from_ansi(result.output).plain
 
 
 def test_default_adapter_target_follows_eval_dir() -> None:

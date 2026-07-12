@@ -1,19 +1,17 @@
-name: CI
+name: CLI CI
 
 on:
   pull_request:
     paths:
       - "cli/**"
-      - "js/**"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/cli-ci.yml"
       - ".github/workflows/release.yml"
   push:
     branches:
       - main
     paths:
       - "cli/**"
-      - "js/**"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/cli-ci.yml"
       - ".github/workflows/release.yml"
 
 jobs:
@@ -144,34 +142,3 @@ jobs:
           PATH="${NODE_FREE_PATH}" "${UV_BIN}" build --no-sources --wheel --out-dir "${REBUILT_WHEEL_DIR}" dist/*.tar.gz
           uv run --isolated --no-project --with "${REBUILT_WHEEL_DIR}"/*.whl glasskit --help
           uv run --isolated --no-project --with "${REBUILT_WHEEL_DIR}"/*.whl python -c "from importlib.resources import files; import re; root = files('glasskit.eval.review').joinpath('static'); source = root.joinpath('index.html').read_text(); refs = re.findall(r'(?:src|href)=\"([^\"]+)\"', source); assert refs and all(root.joinpath(*ref.lstrip('/').split('/')).is_file() for ref in refs), refs"
-
-  test-js:
-    name: Test JS create package
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
-    defaults:
-      run:
-        working-directory: js
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: js/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Test
-        run: npm test
-
-      - name: Check package contents
-        run: npm pack --dry-run

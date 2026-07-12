@@ -57,7 +57,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/rendering.py`: fold-check reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
-- `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends composed sampled frames through the shared fold-check/Overshoot chat-completion path without LiveKit.
+- `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends each composed sampled frame through the shared fold-check/Overshoot chat-completion path without LiveKit. It deliberately implements individual `evaluate` calls so `glasskit eval run --concurrency N` can overlap independent requests.
 - `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the case generator's labeling path.
 - `eval/generate_case.py`: Gemini-backed helper for turning a small label plan into an initial recorded-video eval case YAML.
 - `eval/test_generate_case.py`: regression coverage for full-case overwrite and selected-target update behavior.
@@ -80,5 +80,5 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --with-editable ../../../cli --env-file .env glasskit eval run`: run a local recorded-video eval suite with this repo's current CLI checkout
+- `uv run --with-editable ../../../cli --env-file .env glasskit eval run --concurrency 2`: run a local recorded-video eval suite with this repo's current CLI checkout and bounded parallel Overshoot requests
 - `uv add <package>`: add a package

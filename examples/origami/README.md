@@ -202,14 +202,15 @@ targets:
 
 In this example, frames from 0.0s up to 21.0s are expected to return `false`; frames from 21.0s up to 51.0s are expected to return `true`.
 
-Run evals locally from `backend/` with the default CLI options:
+Run evals locally from `backend/` with two concurrent Overshoot requests:
 
 ```bash
 cd backend
-uv run --with glasskit.ai --env-file .env glasskit eval run
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval run --concurrency 2
 ```
 
-The command prints case progress, per-target results, and a final summary. You can use these results to improve the app and aim for a higher score.
+The Origami adapter implements individual `evaluate` calls because each sampled frame becomes an independent Overshoot request. `--concurrency 2` lets GlassKit overlap those requests while keeping the reported samples in their original order. Concurrency changes elapsed time, not the number or cost of model calls; lower the value if the provider returns rate-limit responses. The command prints case progress, per-target results, and a final summary that you can use to improve the app and aim for a higher score.
 
 ## Vision Path Comparison
 

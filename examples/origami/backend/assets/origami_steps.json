@@ -32,7 +32,7 @@
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "Accept only a model with upper side flaps behind one large centered upward-pointing foreground triangle. The front triangle must have a broad base along the middle crease that spans most of the model's width from near the left middle corner to near the right middle corner, an apex near the upper center, and a clearly visible face covering the center in front of the other flaps. Do not count a narrow upright center flap or small center triangle. Reject the previous-step crown of exposed side triangles around a narrow center flap, any model without the large broad foreground triangle, or a front triangle pointing downward below the middle crease."
+    "criteria": "First locate the crown: one narrow center point and left and right side points. The target has one large, centered, roughly symmetric, uninterrupted triangular face directly in front of the crown. Its apex points into the crown, both diagonal edges reach the left and right middle corners, and a horizontal base separates it from a lower diamond. All crown points remain visible behind it. The earlier drawing has only same-layer narrow crown flaps above the lower diamond, with no separate broad center face. Opposite-side color or surface contrast is useful layer evidence, but no particular colors are required. A narrow or one-sided front flap, a face missing either diagonal edge, or a missing lower diamond is not the target. Reject while multiple fingers press or hold the central face or its base, or a hand substantially covers the model. One fingertip may lightly touch the face or base when both diagonal edges, the base, and lower diamond stay visible."
   },
   {
     "id": "step_6",
@@ -46,6 +46,6 @@
     "title": "Step 7",
     "hud_image": "origami_step_7",
     "reference_image": "ref-imgs/7.jpg",
-    "criteria": "Accept a model with upper side flaps, a small centered triangle above the middle, and a long shallow horizontal base across the bottom. Reject a model with a large downward diamond below the middle or without the long shallow bottom base."
+    "criteria": "Accept either of two perspective views of the completed boat-and-crown shape. In a front or tilted view, a taller centered triangular point and separate left and right side flaps rise above a wide folded base; perspective may make the base look like one broad shallow triangle. In a nearly edge-on view, the crown layers may overlap and the base may look like a thin dark wedge or a shallow triangular gap between two long edges. This edge-on appearance is still the target when the base is roughly three or more times wider than its visible depth, both base ends and the full outer silhouette are visible, and no long body hangs below. Do not reject that shallow wedge as an open pocket. The model may rest on a surface, move with its support, or be held from behind or at a peripheral edge. Reject the earlier large downward diamond, any open or unfinished pocket whose depth is comparable to its width, a one-sided or strongly asymmetric base, a missing base end, or required geometry hidden by a hand or frame boundary. Do not require particular paper colors."
   }
 ]

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.util
 import inspect
 import sys
+import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from types import ModuleType
@@ -12,16 +14,16 @@ from typing import Any
 from .models import (
     AdapterConfig,
     AdapterLoadError,
+    AdapterRuntimeError,
     FrameSample,
-    JSONValue,
     TargetContext,
 )
 
 
-async def load_evaluator(adapter_target: str, config: AdapterConfig) -> Any:
+async def load_evaluator(adapter_target: str, config: AdapterConfig) -> LoadedEvaluator:
     target = _load_target(adapter_target, import_roots=_adapter_import_roots(config))
     if _looks_like_frame_function(target):
-        return _FunctionEvaluator(target)
+        return _function_evaluator(target)
 
     try:
         result = target(config) if _callable_accepts_config(target) else target()
@@ -31,13 +33,51 @@ async def load_evaluator(adapter_target: str, config: AdapterConfig) -> Any:
             f"adapter factory {adapter_target!r} failed: {error}"
         ) from error
 
-    if _has_evaluate(evaluator):
-        return _ObjectEvaluator(evaluator)
+    if _has_evaluation_method(evaluator):
+        return _object_evaluator(evaluator)
     if callable(evaluator) and _looks_like_frame_function(evaluator):
-        return _FunctionEvaluator(evaluator)
+        return _function_evaluator(evaluator)
     raise AdapterLoadError(
-        f"adapter {adapter_target!r} did not return an object with evaluate(...)"
+        f"adapter {adapter_target!r} did not return an object with "
+        "evaluate(...) or evaluate_many(...)"
     )
+
+
+class LoadedEvaluator:
+    def __init__(
+        self,
+        *,
+        evaluate: Callable[[FrameSample, TargetContext], Any] | None,
+        evaluate_many: Callable[[list[FrameSample], TargetContext], Any] | None,
+        close: Callable[[], Any] | None,
+    ) -> None:
+        self._evaluate = evaluate
+        self._evaluate_many = evaluate_many
+        self._close = close
+
+    @property
+    def supports_batch_evaluation(self) -> bool:
+        return self._evaluate_many is not None
+
+    @property
+    def supports_individual_evaluation(self) -> bool:
+        return self._evaluate is not None
+
+    async def evaluate(self, sample: FrameSample, target: TargetContext) -> Any:
+        if self._evaluate is None:
+            raise AdapterRuntimeError("adapter does not implement evaluate(...)")
+        return await _invoke_adapter_callable(self._evaluate, sample, target)
+
+    async def evaluate_many(
+        self, samples: list[FrameSample], target: TargetContext
+    ) -> Any:
+        if self._evaluate_many is None:
+            raise AdapterRuntimeError("adapter does not implement evaluate_many(...)")
+        return await _invoke_adapter_callable(self._evaluate_many, samples, target)
+
+    async def close(self) -> None:
+        if self._close is not None:
+            await _invoke_adapter_callable(self._close, cancel_pending=False)
 
 
 def _adapter_import_roots(config: AdapterConfig) -> list[Path]:
@@ -159,8 +199,10 @@ def _callable_accepts_config(value: Callable[..., Any]) -> bool:
     return bool(required)
 
 
-def _has_evaluate(value: Any) -> bool:
-    return callable(getattr(value, "evaluate", None))
+def _has_evaluation_method(value: Any) -> bool:
+    return callable(getattr(value, "evaluate", None)) or callable(
+        getattr(value, "evaluate_many", None)
+    )
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -169,60 +211,110 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-class _FunctionEvaluator:
-    def __init__(self, function: Callable[..., Any]) -> None:
+def _function_evaluator(function: Callable[..., Any]) -> LoadedEvaluator:
+    signature = inspect.signature(function)
+    positional = [
+        parameter
+        for parameter in signature.parameters.values()
+        if parameter.kind
+        in {
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        }
+    ]
+    image_target_style = (positional[0].name, positional[1].name) == (
+        "image",
+        "target_id",
+    )
+
+    async def evaluate(sample: FrameSample, target: TargetContext) -> Any:
+        if image_target_style:
+            return await _invoke_adapter_callable(function, sample.image, target.id)
+        return await _invoke_adapter_callable(function, sample, target)
+
+    return LoadedEvaluator(evaluate=evaluate, evaluate_many=None, close=None)
+
+
+def _object_evaluator(evaluator: Any) -> LoadedEvaluator:
+    return LoadedEvaluator(
+        evaluate=_optional_callable(evaluator, "evaluate"),
+        evaluate_many=_optional_callable(evaluator, "evaluate_many"),
+        close=_optional_callable(evaluator, "close"),
+    )
+
+
+def _optional_callable(value: Any, name: str) -> Callable[..., Any] | None:
+    candidate = getattr(value, name, None)
+    return candidate if callable(candidate) else None
+
+
+async def _invoke_adapter_callable(
+    function: Callable[..., Any],
+    *args: Any,
+    cancel_pending: bool = True,
+) -> Any:
+    if _is_async_callable(function):
+        return await function(*args)
+    cancellable_call = _CancellableThreadCall(function, args)
+    thread_call = asyncio.create_task(asyncio.to_thread(cancellable_call))
+    try:
+        result = await asyncio.shield(thread_call)
+    except asyncio.CancelledError as cancellation:
+        if cancel_pending and cancellable_call.cancel_if_pending():
+            thread_call.cancel()
+        await _drain_thread_call(thread_call)
+        if error := _thread_call_failure(thread_call):
+            cancellation.add_note(
+                f"synchronous adapter call failed while draining cancellation: {error}"
+            )
+        raise
+    return await _maybe_await(result)
+
+
+class _CancellableThreadCall:
+    def __init__(self, function: Callable[..., Any], args: tuple[Any, ...]) -> None:
         self._function = function
-        self._signature = inspect.signature(function)
-        self._style = self._detect_style()
+        self._args = args
+        self._lock = threading.Lock()
+        self._started = False
+        self._cancelled = False
 
-    async def evaluate(self, sample: FrameSample, target: TargetContext) -> JSONValue:
-        if self._style == "image_target_id":
-            result = self._function(sample.image, target.id)
-        else:
-            result = self._function(sample, target)
-        return await _maybe_await(result)
+    def __call__(self) -> Any:
+        with self._lock:
+            if self._cancelled:
+                return None
+            self._started = True
+        return self._function(*self._args)
 
-    async def evaluate_many(
-        self, samples: list[FrameSample], target: TargetContext
-    ) -> list[JSONValue]:
-        return [await self.evaluate(sample, target) for sample in samples]
+    def cancel_if_pending(self) -> bool:
+        with self._lock:
+            if self._started:
+                return False
+            self._cancelled = True
+            return True
 
-    async def close(self) -> None:
+
+async def _drain_thread_call(thread_call: asyncio.Task[Any]) -> None:
+    while not thread_call.done():
+        try:
+            await asyncio.shield(thread_call)
+        except asyncio.CancelledError:
+            continue
+        except BaseException:
+            return
+
+
+def _thread_call_failure(thread_call: asyncio.Task[Any]) -> BaseException | None:
+    if thread_call.cancelled():
         return None
-
-    def _detect_style(self) -> str:
-        positional = [
-            parameter
-            for parameter in self._signature.parameters.values()
-            if parameter.kind
-            in {
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            }
-        ]
-        return (
-            "image_target_id"
-            if (positional[0].name, positional[1].name) == ("image", "target_id")
-            else "sample_target"
-        )
+    try:
+        thread_call.result()
+    except BaseException as error:
+        return error
+    return None
 
 
-class _ObjectEvaluator:
-    def __init__(self, evaluator: Any) -> None:
-        self._evaluator = evaluator
-
-    async def evaluate(self, sample: FrameSample, target: TargetContext) -> JSONValue:
-        return await _maybe_await(self._evaluator.evaluate(sample, target))
-
-    async def evaluate_many(
-        self, samples: list[FrameSample], target: TargetContext
-    ) -> list[JSONValue]:
-        evaluate_many = getattr(self._evaluator, "evaluate_many", None)
-        if callable(evaluate_many):
-            return await _maybe_await(evaluate_many(samples, target))
-        return [await self.evaluate(sample, target) for sample in samples]
-
-    async def close(self) -> None:
-        close = getattr(self._evaluator, "close", None)
-        if callable(close):
-            await _maybe_await(close())
+def _is_async_callable(function: Callable[..., Any]) -> bool:
+    return inspect.iscoroutinefunction(function) or inspect.iscoroutinefunction(
+        type(function).__call__
+    )

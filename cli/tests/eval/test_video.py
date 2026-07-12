@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from PIL import Image
+
 from glasskit.eval.models import ComparisonConfig, SampleExpectation
 from glasskit.eval.video import _stream_duration_s, decode_sample_frames, probe_video
 
@@ -54,6 +57,40 @@ def test_decode_sample_frames_uses_committed_fixture() -> None:
     assert decoded[1].image.size == (64, 64)
 
 
+def test_decode_sample_frames_stops_after_final_requested_frame(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "long-video.mp4"
+    container = _CountingContainer(frame_count=10)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+    samples = [
+        _sample(timestamp_s=0.0, sample_index=0, video_path=video_path),
+        _sample(timestamp_s=1.0, sample_index=1, video_path=video_path),
+    ]
+
+    decoded = decode_sample_frames(video_path, samples, case_name="case")
+
+    assert list(decoded) == [0, 1]
+    assert container.decoded_frame_count == 2
+
+
+def test_decode_sample_frames_can_stop_on_first_frame(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "long-video.mp4"
+    container = _CountingContainer(frame_count=10)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+
+    decoded = decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    assert decoded[0].frame_index == 0
+    assert container.decoded_frame_count == 1
+
+
 def _sample(
     *, timestamp_s: float, sample_index: int, video_path: Path
 ) -> SampleExpectation:
@@ -69,3 +106,37 @@ def _sample(
         expected=True,
         compare=ComparisonConfig(),
     )
+
+
+class _CountingContainer:
+    def __init__(self, *, frame_count: int) -> None:
+        self.frame_count = frame_count
+        self.decoded_frame_count = 0
+        self.streams = [_FakeStream()]
+
+    def __enter__(self) -> _CountingContainer:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def decode(self, stream: object):
+        for frame_index in range(self.frame_count):
+            self.decoded_frame_count += 1
+            yield _FakeFrame(timestamp_s=float(frame_index))
+
+
+class _FakeStream:
+    type = "video"
+    average_rate = 1.0
+
+
+class _FakeFrame:
+    pts = None
+    time_base = None
+
+    def __init__(self, *, timestamp_s: float) -> None:
+        self.time = timestamp_s
+
+    def to_image(self) -> Image.Image:
+        return Image.new("RGB", (2, 2), "white")
