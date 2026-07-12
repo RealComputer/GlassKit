@@ -80,5 +80,5 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
-- `uv run --with-editable ../../../cli --env-file .env glasskit eval run --concurrency 8`: run a local recorded-video eval suite with this repo's current CLI checkout and bounded parallel Overshoot requests
+- `uv run --with-editable ../../../cli --env-file .env glasskit eval run --concurrency 4`: run a local recorded-video eval suite with this repo's current CLI checkout and bounded parallel Overshoot requests
 - `uv add <package>`: add a package
