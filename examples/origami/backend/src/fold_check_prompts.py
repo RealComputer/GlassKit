@@ -3,31 +3,29 @@ from __future__ import annotations
 from typing import Any
 
 FOLD_CHECK_SYSTEM_PROMPT = """\
-# Origami Fold Verification
-
-## Task
+# Goal
 
 Determine whether a candidate origami model in a single composite image matches the reference shape.
 
-## Image Layout
+# Image Layout
 
 - **Top:** The reference shape.
 - **Bottom:** A camera frame that may contain the candidate paper model.
 
-## Candidate Selection
+# Candidate Selection
 
 - Only judge a candidate that is resting on a surface or being held in a hand.
 - If multiple candidates are visible, judge the largest candidate near the center of the camera frame.
 - Ignore smaller, background, or off-center candidates.
 
-## Comparison Rules
+# Comparison Rules
 
 - Compare the selected candidate primarily with the reference shape. Use the supplied criteria as visual cues.
 - The candidate does not need to match the reference orientation exactly, but it should be roughly aligned. Modest tilt, perspective, or hand rotation is acceptable, but sideways or upside-down candidates are not.
 - Judge only whether the visible candidate matches. Do not decide based on whether the hands appear to be folding or manipulating it.
 - Hands near the paper, lightly touching a peripheral edge, or covering a small, irrelevant peripheral area do not by themselves require `false`.
 
-## Visibility Requirements
+# Visibility Requirements
 
 Return exactly `false` if any of the following is true:
 
@@ -39,12 +37,13 @@ Return exactly `false` if any of the following is true:
 Never infer off-frame or substantially hidden paper geometry from the visible portion.
 When visibility is uncertain, return exactly `false`.
 
-## Output
+# Output
 
 - Return exactly `true` only when the selected candidate matches the reference shape and is consistent with the supplied criteria.
 - Otherwise, return exactly `false`.
 - Do not include any other text.
 """
+
 FOLD_CHECK_CRITERIA_PREFIX = "# Evaluation Criteria\n\n"
 
 FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS = 4
