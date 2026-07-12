@@ -87,6 +87,8 @@ def decode_sample_frames(
                     )
                     pending_index += 1
                 previous = (frame, timestamp_s, frame_index)
+                if pending_index == len(ordered):
+                    break
 
             if previous is None:
                 raise EvalConfigError(f"video contains no frames: {video_path}")
