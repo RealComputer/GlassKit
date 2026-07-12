@@ -25,21 +25,21 @@
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "criteria": "Accept a model with a large lower diamond, a horizontal crease across the middle, triangular side flaps opened upward to the left and right, and a narrow upright flap at the top center. Reject a plain diamond or a model without the opened left and right triangular side flaps."
+    "criteria": "Accept only a model with a large lower diamond, a horizontal crease across the middle, two distinct broad triangular side flaps opened outward and upward, and a narrow upright flap at the top center. One side triangle must project clearly to the left and the other clearly to the right, forming a wide, roughly symmetric crown around the separated center flap as in the reference. Reject a plain diamond, a narrow or asymmetric cluster of mostly upright top flaps, overlapping top flaps, either side flap still folded toward the center, or any model without both clearly opened outward-facing side triangles."
   },
   {
     "id": "step_5",
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "Accept a model with upper side flaps behind a large centered upward-pointing front triangle, with the triangle base along the middle crease and its point near the upper center. Reject a model without the large centered upward front triangle or with a front triangle pointing downward below the middle crease."
+    "criteria": "Accept only a model with upper side flaps behind one large centered upward-pointing foreground triangle. The front triangle must have a broad base along the middle crease that spans most of the model's width from near the left middle corner to near the right middle corner, an apex near the upper center, and a clearly visible face covering the center in front of the other flaps. Do not count a narrow upright center flap or small center triangle. Reject the previous-step crown of exposed side triangles around a narrow center flap, any model without the large broad foreground triangle, or a front triangle pointing downward below the middle crease."
   },
   {
     "id": "step_6",
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "criteria": "Accept a model with upper side flaps, a small centered triangle between them, a wide horizontal band across the middle, and a large downward diamond below the band. Reject a model where a large upward-pointing triangle covers the center or the wide middle band is missing."
+    "criteria": "Accept a model with a broad downward-pointing lower body, a visible horizontal folded band along its top edge, and an upper crown formed by a centered upright flap between left and right side flaps. The lower body may look triangular or diamond-like under perspective, and the band may look shallow; judge the fold geometry, not paper color or exact proportions. The three upper flaps may overlap slightly as long as the center, left, and right points remain distinguishable. Reject a model where a large upward-pointing triangle covers the center, the lower body does not point downward, the horizontal band is absent, or the upper crown does not have distinguishable center and side points."
   },
   {
     "id": "step_7",

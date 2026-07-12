@@ -108,8 +108,10 @@ In this project, the eval answers one question for each sampled video frame: sho
 The eval files live under `backend/eval/`:
 
 - `adapter.py` connects `glasskit eval` to the origami fold-check logic.
+- `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
+- `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
 
 To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
@@ -140,7 +142,48 @@ uv run --env-file .env python -m eval.generate_case \
   --output eval/cases/full-run.yaml
 ```
 
-The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It writes a case YAML to `--output`. Review and fix the generated YAML before committing it. The reviewed case file is what `glasskit eval` runs.
+The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It creates or overwrites the case YAML at `--output`. Treat this generated case as a draft: the reviewed case file is what `glasskit eval` runs and what should be committed.
+
+To regenerate only selected targets in an existing case, repeat `--target` as needed:
+
+```bash
+uv run --env-file .env python -m eval.generate_case \
+  --plan eval/plans/full-run.yaml \
+  --output eval/cases/full-run.yaml \
+  --target step_1 \
+  --target step_3
+```
+
+The generator replaces only those target blocks and preserves the other reviewed targets and top-level case fields. It rejects a targeted update when the existing case has a different video or sampling interval. Without `--target`, an existing output is replaced in full. Output replacement is atomic, so a failed or interrupted generation leaves the previous case intact.
+
+#### Review and Refine Generated Labels
+
+Review the generated expectations with the `glasskit eval` browser UI:
+
+```bash
+cd backend
+uv run --with-editable ../../../cli glasskit eval review \
+  --eval-dir eval \
+  --case full-run
+```
+
+The review UI is a convenient data viewer for this workflow: it puts the source video, expanded per-target sample schedule, timestamps, and expected values in one place. You can focus a target, move through its samples, and compare each expectation with the corresponding video moment. Add options such as `--target step_5 --time 202.5` to open directly at a target and timestamp. Edits are saved directly to the case YAML, so commit the generated case first or use Git to inspect and undo review changes.
+
+For an isolated labeling mistake, edit the sample's expected value in the review UI. A one-off correction usually does not justify changing a prompt that already handles the surrounding samples well.
+
+When the same bad labeling pattern appears repeatedly, fix the labeling rule instead of correcting every expectation by hand. In this example, global comparison and visibility behavior lives in `backend/src/fold_check_prompts.py`, while step-specific shape requirements live in the `criteria` fields of `backend/assets/origami_steps.json`. Prefer the narrowest fix that explains the repeated errors, and check both failing examples and known-good counterexamples so the new rule does not become unnecessarily strict.
+
+The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to iterate on the prompt:
+
+```bash
+cd backend
+uv run --env-file .env python -m eval.check_image \
+  --target step_1 \
+  /path/to/frame-38.000s.png \
+  /path/to/frame-41.500s.png
+```
+
+The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as case generation. After the downloaded bad examples return the intended result and known-good frames still pass, regenerate only the affected target with `--target`, reopen the review UI, and inspect that target again. This keeps the rest of the reviewed case intact while turning a repeated manual correction into a reusable prompt improvement.
 
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 

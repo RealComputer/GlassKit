@@ -7,6 +7,7 @@ import io
 import json
 import math
 import os
+import secrets
 import sys
 import time
 from collections import defaultdict
@@ -94,6 +95,12 @@ class LabeledSample:
     elapsed_s: float
 
 
+@dataclass(frozen=True)
+class ExistingCase:
+    raw: dict[str, Any]
+    source_text: str
+
+
 class _FlowList(list[float]):
     pass
 
@@ -129,11 +136,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             concurrency=args.concurrency,
         )
     except KeyboardInterrupt:
-        print("interrupted", file=sys.stderr)
+        print("interrupted", file=sys.stderr, flush=True)
         _print_resume_cache_hint(cache_path)
         return 130
     except Exception as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(f"error: {error}", file=sys.stderr, flush=True)
         _print_resume_cache_hint(cache_path)
         return 1
     return 0
@@ -142,10 +149,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _print_resume_cache_hint(cache_path: Path) -> None:
     if not cache_path.exists():
         return
-    print(f"partial cache kept at {cache_path}", file=sys.stderr)
+    print(f"partial cache kept at {cache_path}", file=sys.stderr, flush=True)
     print(
         "rerun the same command to resume; delete this file to start over",
         file=sys.stderr,
+        flush=True,
     )
 
 
@@ -166,13 +174,19 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--output",
         required=True,
         type=Path,
-        help="Case YAML to write, usually under eval/cases/.",
+        help=(
+            "Case YAML to create or overwrite, usually under eval/cases/. With "
+            "--target, an existing case is updated only for the selected targets."
+        ),
     )
     parser.add_argument(
         "--target",
         action="append",
         default=[],
-        help="Target id to label. Repeat to label multiple targets. Defaults to all.",
+        help=(
+            "Target id to label or update. Repeat to select multiple targets. "
+            "Defaults to regenerating the whole case."
+        ),
     )
     parser.add_argument(
         "--concurrency",
@@ -202,10 +216,12 @@ def _run_generation(
     concurrency: int,
 ) -> None:
     run_start_s = time.monotonic()
-    if output_path.exists():
-        raise RuntimeError(f"output already exists: {output_path}")
-
     plan = _load_label_plan(plan_path, target_ids=target_ids)
+    existing_case = (
+        _load_existing_case_for_target_update(output_path, plan=plan)
+        if target_ids and output_path.exists()
+        else None
+    )
     steps = {
         step.id: step
         for step in load_fold_check_steps(BACKEND_DIR / "assets" / "origami_steps.json")
@@ -227,7 +243,10 @@ def _run_generation(
     call_text = f"{len(missing_requests)} Gemini calls"
     if missing_requests:
         call_text += f", concurrency {concurrency}"
-    print(f"labeling {len(requests)} samples ({len(results)} cached, {call_text})")
+    print(
+        f"labeling {len(requests)} samples ({len(results)} cached, {call_text})",
+        flush=True,
+    )
 
     gemini_durations: list[float] = []
     gemini_wall_s = 0.0
@@ -255,10 +274,11 @@ def _run_generation(
         plan=plan,
         requests_by_target=requests_by_target,
         results=results,
+        existing_case=existing_case,
     )
     if cache_path.exists():
         cache_path.unlink()
-    print(f"wrote {output_path}")
+    print(f"wrote {output_path}", flush=True)
     print(
         _format_completion_summary(
             total_samples=len(requests),
@@ -266,7 +286,8 @@ def _run_generation(
             gemini_durations=gemini_durations,
             gemini_wall_s=gemini_wall_s,
             total_elapsed_s=time.monotonic() - run_start_s,
-        )
+        ),
+        flush=True,
     )
 
 
@@ -473,7 +494,8 @@ def _label_missing_requests(
                 f"[{completed}/{len(requests)}] {labeled.request.target_id} "
                 f"{_format_time(labeled.request.timestamp_s)}s -> "
                 f"{str(labeled.result.value).lower()} "
-                f"({_format_duration(labeled.elapsed_s)})"
+                f"({_format_duration(labeled.elapsed_s)})",
+                flush=True,
             )
         return first_error
 
@@ -540,10 +562,10 @@ def _label_sample(
     prompt: str,
 ) -> LabeledSample:
     start_s = time.monotonic()
-    composite = compose_fold_check_image(camera_image, reference_image)
-    result = _call_gemini(
+    result = label_camera_image(
         genai.Client(),
-        image=composite,
+        camera_image=camera_image,
+        reference_image=reference_image,
         prompt=prompt,
         log_context=f"{request.target_id} at {_format_time(request.timestamp_s)}s",
     )
@@ -554,7 +576,24 @@ def _label_sample(
     )
 
 
-def _call_gemini(
+def label_camera_image(
+    client: genai.Client,
+    *,
+    camera_image: Image.Image,
+    reference_image: Image.Image,
+    prompt: str,
+    log_context: str,
+) -> GeminiResult:
+    composite = compose_fold_check_image(camera_image, reference_image)
+    return call_gemini(
+        client,
+        image=composite,
+        prompt=prompt,
+        log_context=log_context,
+    )
+
+
+def call_gemini(
     client: genai.Client,
     *,
     image: Image.Image,
@@ -601,6 +640,7 @@ def _call_gemini(
                 f"Gemini call failed for {log_context}; retrying in {delay_s}s: "
                 f"{error}",
                 file=sys.stderr,
+                flush=True,
             )
             time.sleep(delay_s)
     raise RuntimeError(f"Gemini call failed for {log_context}: {last_error}")
@@ -721,13 +761,14 @@ def _write_case_yaml(
     plan: LabelPlan,
     requests_by_target: dict[str, list[SampleRequest]],
     results: dict[str, GeminiResult],
+    existing_case: ExistingCase | None,
 ) -> None:
-    raw_case: dict[str, Any] = {
+    generated_case: dict[str, Any] = {
         "video": _relative_video_path(plan.video_path, path.parent),
     }
     if plan.description is not None:
-        raw_case["description"] = plan.description
-    raw_case["sampling"] = {"every_s": _time_value(plan.every_s)}
+        generated_case["description"] = plan.description
+    generated_case["sampling"] = {"every_s": _time_value(plan.every_s)}
     raw_targets: dict[str, Any] = {}
     for target in plan.targets:
         raw_target: dict[str, Any] = {}
@@ -738,18 +779,115 @@ def _write_case_yaml(
             results=results,
         )
         raw_targets[target.id] = raw_target
-    raw_case["targets"] = raw_targets
+    generated_case["targets"] = raw_targets
 
-    path.write_text(
-        yaml.dump(
-            raw_case,
-            Dumper=_CaseYamlDumper,
-            sort_keys=False,
-            allow_unicode=True,
-            default_flow_style=False,
-        ),
-        encoding="utf-8",
+    if existing_case is None:
+        raw_case = generated_case
+    else:
+        current_text = path.read_text(encoding="utf-8")
+        if current_text != existing_case.source_text:
+            raise RuntimeError(
+                f"output changed during generation; refusing to overwrite: {path}"
+            )
+        existing_targets = cast("dict[str, Any]", existing_case.raw["targets"])
+        merged_targets = dict(existing_targets)
+        merged_targets.update(raw_targets)
+        raw_case = dict(existing_case.raw)
+        raw_case["targets"] = merged_targets
+
+    _use_flow_style_for_sample_ranges(raw_case)
+    rendered = yaml.dump(
+        raw_case,
+        Dumper=_CaseYamlDumper,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
     )
+    _write_text_atomically(path, rendered)
+
+
+def _use_flow_style_for_sample_ranges(raw_case: dict[str, Any]) -> None:
+    targets = raw_case.get("targets")
+    if not isinstance(targets, dict):
+        return
+    for raw_target in targets.values():
+        if not isinstance(raw_target, dict):
+            continue
+        samples = raw_target.get("samples")
+        if not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            sample_range = sample.get("range")
+            if isinstance(sample_range, list):
+                sample["range"] = _FlowList(cast("list[float]", sample_range))
+
+
+def _load_existing_case_for_target_update(
+    path: Path,
+    *,
+    plan: LabelPlan,
+) -> ExistingCase:
+    source_text = path.read_text(encoding="utf-8")
+    raw = yaml.safe_load(source_text)
+    if not isinstance(raw, dict):
+        raise RuntimeError("existing output YAML must be an object")
+
+    video_raw = _required_string(raw, "video")
+    existing_video_path = _resolve_plan_path(path.parent, video_raw)
+    if existing_video_path != plan.video_path.resolve():
+        raise RuntimeError(
+            "cannot update selected targets because the existing output uses a "
+            f"different video: {existing_video_path}"
+        )
+
+    sampling = raw.get("sampling")
+    if not isinstance(sampling, dict):
+        raise RuntimeError(
+            "cannot update selected targets because the existing output has no "
+            "sampling object"
+        )
+    existing_every_s = _positive_number(
+        sampling.get("every_s"),
+        "existing output sampling.every_s",
+    )
+    if not math.isclose(existing_every_s, plan.every_s, abs_tol=TIME_EPSILON):
+        raise RuntimeError(
+            "cannot update selected targets because the existing output uses "
+            f"sampling.every_s={existing_every_s:g}, not {plan.every_s:g}"
+        )
+
+    targets = raw.get("targets")
+    if not isinstance(targets, dict):
+        raise RuntimeError("existing output targets must be an object")
+    return ExistingCase(raw=cast("dict[str, Any]", raw), source_text=source_text)
+
+
+def _write_text_atomically(path: Path, content: str) -> None:
+    output_mode = path.stat().st_mode & 0o777 if path.exists() else None
+    temporary_path: Path | None = None
+    try:
+        while temporary_path is None:
+            candidate = path.parent / (f".{path.name}.{secrets.token_hex(8)}.tmp")
+            try:
+                file_descriptor = os.open(
+                    candidate,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o666,
+                )
+            except FileExistsError:
+                continue
+            temporary_path = candidate
+
+        with os.fdopen(file_descriptor, mode="w", encoding="utf-8") as file:
+            file.write(content)
+        if output_mode is not None:
+            temporary_path.chmod(output_mode)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def _sample_blocks(

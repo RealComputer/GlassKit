@@ -89,11 +89,44 @@ describe("review application navigation and drafts", () => {
     expect(within(videoControls).getByRole("button", { name: "Play video" })).toBeTruthy();
     expect(within(videoControls).getByLabelText("Time")).toBeTruthy();
     expect(within(videoControls).getByLabelText("Playback rate")).toBeTruthy();
+    expect(
+      within(videoControls).getByRole("button", { name: "Download current frame" }),
+    ).toBeTruthy();
 
     const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
     expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
     expect(screen.queryByText("Sample 1.000s")).toBeNull();
     expect(document.querySelector(".header-context")?.textContent).toBe("case-001 / target_a");
+  });
+
+  it.each([
+    ["an empty target", caseFile([target("empty", [])])],
+    ["no targets", caseFile([])],
+  ])("enables frame downloads after video data loads with %s", async (_scenario, doc) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const download = await screen.findByRole("button", { name: "Download current frame" });
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(download).toHaveProperty("disabled", true);
+
+    Object.defineProperties(video!, {
+      readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+      videoWidth: { configurable: true, value: 64 },
+      videoHeight: { configurable: true, value: 64 },
+    });
+    fireEvent.loadedData(video!);
+
+    expect(download).toHaveProperty("disabled", false);
   });
 
   it("shows the selected case video path without a details disclosure", async () => {
@@ -169,8 +202,9 @@ describe("review application navigation and drafts", () => {
     expect(add.getAttribute("title")).toBe("Add sample at video time (A)");
   });
 
-  it("describes reconstructed ranges with user-facing terminology", async () => {
+  it("switches between timeline and source-agnostic grouped samples", async () => {
     const rangedTarget = target("status", [sample("first", 1), sample("second", 1.5)]);
+    rangedTarget.samples[1].origin = { block_index: 1, kind: "range", every_s: 0.5 };
     rangedTarget.display_groups = [
       {
         id: "range-group",
@@ -194,14 +228,94 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
 
-    expect(await screen.findByText("Part of a range")).toBeTruthy();
-    expect(screen.getByText("1.000s–2.000s · every 0.5s · 2 samples")).toBeTruthy();
-    const rangeBand = screen.getByRole("button", {
-      name: "status range from 1.000s to 2.000s",
+    const timelineTab = await screen.findByRole("tab", { name: "Timeline" });
+    const samplesTab = screen.getByRole("tab", { name: "Samples" });
+    const fit = await screen.findByRole("button", { name: "Fit" });
+    expect(timelineTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("timeline-view-tab");
+    expect(timelineTab.closest(".review-view-toolbar")).toBe(fit.closest(".review-view-toolbar"));
+    expect(screen.getByRole("tablist").contains(fit)).toBe(false);
+    timelineTab.focus();
+    fireEvent.pointerUp(timelineTab);
+    expect(document.activeElement).toBe(document.body);
+    const first = screen.getByRole("button", {
+      name: "status, 1.000s, expected false",
     });
-    expect(rangeBand.getAttribute("title")).toBe("Range from 1.000s to 2.000s · every 0.5s");
-    expect(screen.queryByText("Serialized group")).toBeNull();
-    expect(screen.queryByText("Serialized range")).toBeNull();
+    const second = screen.getByRole("button", {
+      name: "status, 1.500s, expected false",
+    });
+    expect(document.querySelector(".range-band")).toBeNull();
+    expect(first.style.getPropertyValue("--expect-color")).toBe(
+      second.style.getPropertyValue("--expect-color"),
+    );
+    expect(screen.queryByText("Part of a range")).toBeNull();
+
+    fireEvent.keyDown(timelineTab, { key: "ArrowRight" });
+    expect(timelineTab.getAttribute("aria-selected")).toBe("true");
+    expect(samplesTab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByLabelText("Time")).toHaveProperty("value", "1.100");
+
+    fireEvent.click(samplesTab);
+    expect(samplesTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByLabelText("Sample timeline")).toBeNull();
+    const group = screen.getByRole("button", {
+      name: "Expand 1.000s–1.500s · 2 samples",
+    });
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
+
+    fireEvent.click(group);
+    expect(document.querySelectorAll(".sample-group-member")).toHaveLength(2);
+    expect(screen.queryByText("Same settings as group")).toBeNull();
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(3);
+    expect(screen.queryByText("Part of a range")).toBeNull();
+  });
+
+  it("shows an immediate timestamp and expectation tooltip over timeline samples", async () => {
+    const doc = caseFile([
+      target("target_a", [sample("first", 1, "false"), sample("second", 2, "true")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const first = await screen.findByRole("button", {
+      name: "target a, 1.000s, expected false",
+    });
+    expect(first.getAttribute("title")).toBeNull();
+    const lane = document.querySelector<HTMLElement>(".lane-track");
+    expect(lane).not.toBeNull();
+    vi.spyOn(lane!, "getBoundingClientRect").mockReturnValue({
+      bottom: 52,
+      height: 52,
+      left: 0,
+      right: 1000,
+      top: 0,
+      width: 1000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    fireEvent.pointerMove(lane!, { clientX: 200, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("2.000s · true");
+    const timelineScroll = document.querySelector<HTMLElement>(".timeline-scroll");
+    expect(timelineScroll).not.toBeNull();
+    fireEvent.scroll(timelineScroll!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    fireEvent.pointerLeave(lane!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("omits range context for an individual sample", async () => {
@@ -256,8 +370,14 @@ describe("review application navigation and drafts", () => {
     expect(playhead.getAttribute("aria-valuenow")).toBe("7");
   });
 
-  it("keeps navigation shortcuts available after a timeline sample receives focus", async () => {
-    const doc = caseFile([target("target_a", [sample("first", 1, "1"), sample("second", 2, "2")])]);
+  it("keeps repeating navigation shortcuts available after a timeline sample receives focus", async () => {
+    const doc = caseFile([
+      target("target_a", [
+        sample("first", 1, "1"),
+        sample("second", 2, "2"),
+        sample("third", 3, "3"),
+      ]),
+    ]);
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
@@ -280,8 +400,11 @@ describe("review application navigation and drafts", () => {
     fireEvent.keyDown(first, { key: "]" });
     await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2"));
 
+    fireEvent.keyDown(first, { key: "]", repeat: true });
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "3"));
+
     fireEvent.keyDown(first, { key: "ArrowRight" });
-    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "2.100"));
+    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "3.100"));
   });
 
   it("keeps the fit timeline's final label inside its viewport", async () => {
@@ -359,6 +482,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     const secondRow = screen
       .getAllByText("2.000s")
       .find((element) => element.tagName === "TD")
@@ -414,6 +538,8 @@ describe("review application navigation and drafts", () => {
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
+
     const add = screen.getByRole("button", { name: /Add sample/ });
     expect(add).toHaveProperty("disabled", true);
     fireEvent.click(add);
@@ -455,6 +581,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(expected).toHaveProperty("value", "1"));
     fireEvent.change(expected, { target: { value: "-" } });
     fireEvent.blur(expected);
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete sample" }));
 
     await waitFor(() =>

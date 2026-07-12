@@ -1,3 +1,5 @@
+const REPEATABLE_SHORTCUTS = new Set(["[", "]", "ArrowLeft", "ArrowRight"]);
+
 function targetOwnsShortcut(event: KeyboardEvent): boolean {
   if (!(event.target instanceof Element)) return false;
   if (
@@ -16,7 +18,7 @@ export function shouldHandleShortcut(event: KeyboardEvent): boolean {
   return !(
     event.defaultPrevented ||
     event.isComposing ||
-    event.repeat ||
+    (event.repeat && !REPEATABLE_SHORTCUTS.has(event.key)) ||
     event.ctrlKey ||
     event.metaKey ||
     event.altKey ||

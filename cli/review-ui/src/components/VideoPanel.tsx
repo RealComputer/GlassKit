@@ -1,5 +1,6 @@
 import {
   CirclePlus,
+  Download,
   Pause,
   Play,
   SkipBack,
@@ -11,6 +12,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
 import { findSampleAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
+import {
+  downloadVideoFrame,
+  frameDownloadFilename,
+  isVideoFrameReady,
+} from "../video/downloadFrame.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
 
@@ -32,6 +38,8 @@ export function VideoPanel() {
   const seekerRef = useRef<PreciseVideoSeeker | null>(null);
   const skipNextTimeBlur = useRef(false);
   const [timeDraft, setTimeDraft] = useState("0.000");
+  const [frameCaptureReady, setFrameCaptureReady] = useState(false);
+  const [frameDownloadPending, setFrameDownloadPending] = useState(false);
   const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
   const target = document?.targets.find((item) => item.id === state.selectedTargetId);
@@ -47,6 +55,10 @@ export function VideoPanel() {
       setTimeDraft(state.video.currentTime.toFixed(3));
     }
   }, [state.video.currentTime]);
+
+  useEffect(() => {
+    setFrameCaptureReady(false);
+  }, [document?.video?.url, state.video.mediaGeneration]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -159,6 +171,25 @@ export function VideoPanel() {
     setTimeDraft(clamped.toFixed(3));
     seek(clamped);
   };
+  const downloadCurrentFrame = async () => {
+    const video = videoRef.current;
+    if (!video || !document) return;
+    setFrameDownloadPending(true);
+    try {
+      await downloadVideoFrame(video, frameDownloadFilename(document.name, video.currentTime));
+    } catch (error) {
+      dispatch({
+        type: "SET_TOAST",
+        value:
+          error instanceof Error ? error.message : "The current frame could not be downloaded.",
+      });
+    } finally {
+      setFrameDownloadPending(false);
+    }
+  };
+  const updateFrameCaptureReady = (video: HTMLVideoElement) => {
+    setFrameCaptureReady(isVideoFrameReady(video));
+  };
 
   return (
     <section className="video-section" aria-label="Video preview">
@@ -171,14 +202,17 @@ export function VideoPanel() {
             preload="metadata"
             muted
             onClick={togglePlay}
-            onLoadedMetadata={(event) =>
+            onLoadedMetadata={(event) => {
+              updateFrameCaptureReady(event.currentTarget);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: {
                   duration: document.video?.duration_s ?? event.currentTarget.duration,
                 },
-              })
-            }
+              });
+            }}
+            onLoadedData={(event) => updateFrameCaptureReady(event.currentTarget)}
+            onCanPlay={(event) => updateFrameCaptureReady(event.currentTarget)}
             onDurationChange={(event) =>
               dispatch({
                 type: "VIDEO_PATCH",
@@ -191,13 +225,17 @@ export function VideoPanel() {
                 },
               })
             }
-            onTimeUpdate={(event) =>
+            onTimeUpdate={(event) => {
+              updateFrameCaptureReady(event.currentTarget);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: { currentTime: event.currentTarget.currentTime },
-              })
-            }
+              });
+            }}
+            onSeeking={() => setFrameCaptureReady(false)}
+            onSeeked={(event) => updateFrameCaptureReady(event.currentTarget)}
             onPlay={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: false } })}
+            onPlaying={(event) => updateFrameCaptureReady(event.currentTarget)}
             onPause={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: true } })}
             onRateChange={(event) =>
               dispatch({
@@ -205,15 +243,17 @@ export function VideoPanel() {
                 patch: { playbackRate: event.currentTarget.playbackRate },
               })
             }
-            onError={() =>
+            onEmptied={() => setFrameCaptureReady(false)}
+            onError={() => {
+              setFrameCaptureReady(false);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: {
                   previewStatus: "unavailable",
                   previewMessage: "This browser cannot play the video codec.",
                 },
-              })
-            }
+              });
+            }}
           />
         ) : (
           <div className="video-unavailable">
@@ -337,6 +377,22 @@ export function VideoPanel() {
                 <option value="2">2×</option>
               </select>
             </label>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => void downloadCurrentFrame()}
+              disabled={
+                !document?.video?.url ||
+                !frameCaptureReady ||
+                state.video.previewStatus === "seeking" ||
+                state.video.previewStatus === "unavailable" ||
+                frameDownloadPending
+              }
+              title="Download current frame"
+              aria-label="Download current frame"
+            >
+              <Download size={16} />
+            </button>
           </div>
           <div
             className="transport-group transport-create-group"

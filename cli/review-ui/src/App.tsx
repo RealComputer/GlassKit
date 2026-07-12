@@ -2,9 +2,8 @@ import { useEffect } from "react";
 import { Header } from "./components/Header.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { Overlays } from "./components/Overlays.tsx";
-import { SamplesTable } from "./components/SamplesTable.tsx";
+import { ReviewViews } from "./components/ReviewViews.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { Timeline } from "./components/Timeline.tsx";
 import { VideoPanel } from "./components/VideoPanel.tsx";
 import { AppProvider, useApp } from "./state/AppContext.tsx";
 import { shouldHandleShortcut } from "./utils/shortcuts.ts";
@@ -153,8 +152,7 @@ function ReviewApp() {
           ) : (
             <>
               <VideoPanel />
-              <Timeline />
-              <SamplesTable />
+              <ReviewViews />
             </>
           )}
         </main>

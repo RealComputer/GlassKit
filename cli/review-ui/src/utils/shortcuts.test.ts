@@ -27,11 +27,23 @@ describe("keyboard shortcut filtering", () => {
     expect(shouldHandleShortcut(keyboardEventFrom(button, " "))).toBe(false);
   });
 
-  it("ignores modifiers, repeats, and handled events", () => {
-    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: "a", ctrlKey: true }))).toBe(
+  it("allows repeats for continuous navigation shortcuts only", () => {
+    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: "]", repeat: true }))).toBe(
+      true,
+    );
+    expect(
+      shouldHandleShortcut(new KeyboardEvent("keydown", { key: "ArrowRight", repeat: true })),
+    ).toBe(true);
+    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: "a", repeat: true }))).toBe(
       false,
     );
-    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: "a", repeat: true }))).toBe(
+    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: " ", repeat: true }))).toBe(
+      false,
+    );
+  });
+
+  it("ignores modifiers and handled events", () => {
+    expect(shouldHandleShortcut(new KeyboardEvent("keydown", { key: "a", ctrlKey: true }))).toBe(
       false,
     );
     const handled = new KeyboardEvent("keydown", {
