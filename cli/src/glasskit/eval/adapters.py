@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 import inspect
 import sys
+import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from types import ModuleType
@@ -250,19 +251,43 @@ def _optional_callable(value: Any, name: str) -> Callable[..., Any] | None:
 async def _invoke_adapter_callable(function: Callable[..., Any], *args: Any) -> Any:
     if _is_async_callable(function):
         return await function(*args)
-    thread_call = asyncio.create_task(asyncio.to_thread(function, *args))
+    cancellable_call = _CancellableThreadCall(function, args)
+    thread_call = asyncio.create_task(asyncio.to_thread(cancellable_call))
     try:
         result = await asyncio.shield(thread_call)
     except asyncio.CancelledError as cancellation:
+        if cancellable_call.cancel_if_pending():
+            thread_call.cancel()
         await _drain_thread_call(thread_call)
-        try:
-            thread_call.result()
-        except BaseException as error:
+        if error := _thread_call_failure(thread_call):
             cancellation.add_note(
                 f"synchronous adapter call failed while draining cancellation: {error}"
             )
         raise
     return await _maybe_await(result)
+
+
+class _CancellableThreadCall:
+    def __init__(self, function: Callable[..., Any], args: tuple[Any, ...]) -> None:
+        self._function = function
+        self._args = args
+        self._lock = threading.Lock()
+        self._started = False
+        self._cancelled = False
+
+    def __call__(self) -> Any:
+        with self._lock:
+            if self._cancelled:
+                return None
+            self._started = True
+        return self._function(*self._args)
+
+    def cancel_if_pending(self) -> bool:
+        with self._lock:
+            if self._started:
+                return False
+            self._cancelled = True
+            return True
 
 
 async def _drain_thread_call(thread_call: asyncio.Task[Any]) -> None:
@@ -273,6 +298,16 @@ async def _drain_thread_call(thread_call: asyncio.Task[Any]) -> None:
             continue
         except BaseException:
             return
+
+
+def _thread_call_failure(thread_call: asyncio.Task[Any]) -> BaseException | None:
+    if thread_call.cancelled():
+        return None
+    try:
+        thread_call.result()
+    except BaseException as error:
+        return error
+    return None
 
 
 def _is_async_callable(function: Callable[..., Any]) -> bool:

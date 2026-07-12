@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -146,6 +147,40 @@ def test_cancellation_drains_sync_calls_before_closing_evaluator(
     assert evaluator.closed
 
 
+def test_cancellation_skips_sync_calls_still_queued_in_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evaluator = QueuedCancellationSyncEvaluator()
+
+    asyncio.run(_cancel_run_with_saturated_executor(monkeypatch, evaluator))
+
+    assert evaluator.started == 0
+    assert evaluator.closed
+
+
+def test_cancellation_preserves_every_sync_drain_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evaluator = CancellationFailureSyncEvaluator(expected_started=3)
+
+    cancellation = asyncio.run(
+        _cancel_run_while_sync_calls_are_active(
+            monkeypatch,
+            evaluator,
+            batch=False,
+            concurrency=3,
+        )
+    )
+
+    notes = cancellation.__notes__
+    assert len(notes) == 3
+    for sample_index in range(3):
+        assert any(f"provider failure {sample_index}" in note for note in notes)
+    assert evaluator.completed == 3
+    assert evaluator.close_active == 0
+    assert evaluator.closed
+
+
 def test_runner_rejects_non_positive_programmatic_concurrency(
     tmp_path: Path,
 ) -> None:
@@ -195,7 +230,7 @@ async def _cancel_run_while_sync_calls_are_active(
     *,
     batch: bool,
     concurrency: int,
-) -> None:
+) -> asyncio.CancelledError:
     run_task = asyncio.create_task(
         _run_with_evaluator(
             monkeypatch,
@@ -204,7 +239,6 @@ async def _cancel_run_while_sync_calls_are_active(
             concurrency=concurrency,
         )
     )
-    cancelled = False
     try:
         async with asyncio.timeout(1):
             while not evaluator.all_started.is_set():
@@ -221,9 +255,46 @@ async def _cancel_run_while_sync_calls_are_active(
             run_task.cancel()
         try:
             await run_task
-        except asyncio.CancelledError:
-            cancelled = True
-    assert cancelled
+        except asyncio.CancelledError as cancellation:
+            return cancellation
+    raise AssertionError("eval run did not propagate cancellation")
+
+
+async def _cancel_run_with_saturated_executor(
+    monkeypatch: pytest.MonkeyPatch,
+    evaluator: QueuedCancellationSyncEvaluator,
+) -> None:
+    loop = asyncio.get_running_loop()
+    executor = SubmissionTrackingExecutor(max_workers=1)
+    loop.set_default_executor(executor)
+    blocker_release = threading.Event()
+    blocker_started = threading.Event()
+
+    def occupy_only_worker() -> None:
+        blocker_started.set()
+        blocker_release.wait(timeout=5)
+
+    blocker = loop.run_in_executor(None, occupy_only_worker)
+    run_task: asyncio.Task[Any] | None = None
+    try:
+        async with asyncio.timeout(1):
+            while not blocker_started.is_set():
+                await asyncio.sleep(0.005)
+        run_task = asyncio.create_task(
+            _run_with_evaluator(monkeypatch, evaluator, concurrency=4)
+        )
+        async with asyncio.timeout(1):
+            while executor.submission_count < 5:
+                await asyncio.sleep(0.005)
+        run_task.cancel()
+        await asyncio.sleep(0)
+    finally:
+        blocker_release.set()
+        await blocker
+
+    assert run_task is not None
+    with pytest.raises(asyncio.CancelledError):
+        await run_task
 
 
 def _observation(sample: Any) -> bool:
@@ -366,3 +437,42 @@ class CancellationTrackingSyncEvaluator:
             with self._lock:
                 self.active -= 1
                 self.completed += 1
+
+
+class QueuedCancellationSyncEvaluator:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.started = 0
+        self.closed = False
+
+    def evaluate(self, sample: Any, target: Any) -> bool:
+        with self._lock:
+            self.started += 1
+        return _observation(sample)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class CancellationFailureSyncEvaluator(CancellationTrackingSyncEvaluator):
+    def evaluate(self, sample: Any, target: Any) -> bool:
+        self._wait_for_release()
+        raise RuntimeError(f"provider failure {sample.sample_index}")
+
+
+class SubmissionTrackingExecutor(ThreadPoolExecutor):
+    def __init__(self, *, max_workers: int) -> None:
+        super().__init__(max_workers=max_workers)
+        self._submission_lock = threading.Lock()
+        self.submission_count = 0
+
+    def submit(
+        self,
+        fn: Any,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Future[Any]:
+        with self._submission_lock:
+            self.submission_count += 1
+        return super().submit(fn, *args, **kwargs)

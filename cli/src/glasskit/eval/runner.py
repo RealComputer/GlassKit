@@ -351,10 +351,11 @@ async def _bounded_map(
     ]
     try:
         await asyncio.gather(*workers)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as cancellation:
         for worker_task in workers:
             worker_task.cancel()
-        await _drain_workers(workers)
+        for note in await _drain_workers(workers):
+            cancellation.add_note(note)
         raise
     if errors:
         _, error = min(errors, key=lambda item: item[0])
@@ -364,7 +365,7 @@ async def _bounded_map(
     return [result for result in results if result is not None]
 
 
-async def _drain_workers(workers: list[asyncio.Task[None]]) -> None:
+async def _drain_workers(workers: list[asyncio.Task[None]]) -> list[str]:
     pending = asyncio.gather(*workers, return_exceptions=True)
     while not pending.done():
         try:
@@ -372,6 +373,17 @@ async def _drain_workers(workers: list[asyncio.Task[None]]) -> None:
         except asyncio.CancelledError:
             continue
     pending.result()
+    notes: list[str] = []
+    for worker in workers:
+        try:
+            worker.result()
+        except asyncio.CancelledError as cancellation:
+            notes.extend(getattr(cancellation, "__notes__", ()))
+        except BaseException as error:
+            notes.append(
+                f"evaluation worker failed while draining cancellation: {error}"
+            )
+    return notes
 
 
 def _validated_observation(
