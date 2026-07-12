@@ -62,6 +62,17 @@ def eval_run(
             "--adapter-config", help="YAML or JSON config passed to the adapter."
         ),
     ] = None,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            "--concurrency",
+            min=1,
+            help=(
+                "Maximum concurrent per-sample evaluate calls. Adapters with "
+                "evaluate_many control their own batch execution."
+            ),
+        ),
+    ] = 1,
     min_pass_rate: Annotated[
         float | None,
         typer.Option(
@@ -141,6 +152,7 @@ def eval_run(
         case_filter=case,
         target_filter=target,
         adapter_config=_load_config(adapter_config),
+        concurrency=concurrency,
         min_pass_rate=min_pass_rate,
         min_target_pass_rate=min_target_pass_rate,
         max_failures=max_failures,

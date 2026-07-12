@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
@@ -68,17 +68,15 @@ class TargetContext:
 
 
 class FrameEvaluator(Protocol):
-    async def evaluate(
+    def evaluate(
         self, sample: FrameSample, target: TargetContext
-    ) -> JSONValue: ...
-
-    async def close(self) -> None: ...
+    ) -> JSONValue | Awaitable[JSONValue]: ...
 
 
-class BatchFrameEvaluator(FrameEvaluator, Protocol):
-    async def evaluate_many(
+class BatchFrameEvaluator(Protocol):
+    def evaluate_many(
         self, samples: list[FrameSample], target: TargetContext
-    ) -> list[JSONValue]: ...
+    ) -> list[JSONValue] | Awaitable[list[JSONValue]]: ...
 
 
 @dataclass(frozen=True)
@@ -253,6 +251,7 @@ class RunOptions:
     case_filter: str | None = None
     target_filter: str | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
+    concurrency: int = 1
     min_pass_rate: float | None = None
     min_target_pass_rate: float | None = None
     max_failures: int | None = None

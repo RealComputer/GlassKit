@@ -181,6 +181,20 @@ Expected output: focused case and target progress, every selected sample result,
 
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
+### Run Independent Model Calls Concurrently
+
+Goal: reduce the wall-clock time spent waiting for an adapter that makes one independent remote request per sample.
+
+Command:
+
+```bash
+uv run --env-file .env glasskit eval run --concurrency 8
+```
+
+Expected behavior: GlassKit evaluates up to eight samples concurrently within each target while preserving the original sample order in console output, JSON reports, comparisons, gates, and failure artifacts.
+
+Note: Concurrency defaults to `1` because GlassKit cannot know whether an adapter or its provider accepts overlapping calls. Increase it deliberately and account for provider rate limits. `--concurrency` schedules calls to `evaluate`; an adapter that implements `evaluate_many` selects batch evaluation instead and owns the execution of that batch. See [Individual and Batch Evaluation](#individual-and-batch-evaluation) for the full contract.
+
 ### Enforce CI Quality Gates
 
 Goal: make the command fail when quality drops below your threshold.
@@ -412,15 +426,22 @@ class Evaluator:
 
 Adapter factories may be synchronous or asynchronous. No-argument factories are supported, but they do not receive `AdapterConfig`. If the factory needs `--adapter-config`, `--artifacts-dir`, `--verbose`, or the eval directory, define it with one required argument.
 
-Evaluator methods:
+### Individual and Batch Evaluation
 
-| Method | Required | Description |
-| --- | ---: | --- |
-| `evaluate(sample, target)` | Yes | Called per sample when `evaluate_many` is not available. May be sync or async. |
-| `evaluate_many(samples, target)` | No | Called once per target when present. Must return exactly one JSON-like observation for each input sample in the same order. |
-| `close()` | No | Called after the run or adapter validation check. May be sync or async. |
+An evaluator chooses one of two execution strategies by implementing `evaluate` or `evaluate_many`. Both methods may be synchronous or asynchronous.
 
-Implement `evaluate_many` only when batching samples for a target is more efficient, such as sending multiple frames in one backend request. Otherwise, implement `evaluate`; `glasskit eval` will call it once per sample.
+| Strategy | Adapter method | GlassKit execution | Use when |
+| --- | --- | --- | --- |
+| Individual | `evaluate(sample, target)` | Calls the method once per sample, with at most `--concurrency` calls in flight for the current target. | Each sample maps to an independent request or local operation. This is the recommended default for ordinary model APIs. |
+| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
+
+Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
+
+Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
+
+Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
+
+The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous.
 
 Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
@@ -547,6 +568,7 @@ Options:
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run one target id from the selected cases. May be used with or without `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
+| `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Adapters with `evaluate_many` control their own batch execution. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
 | `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate from `0.0` to `1.0` for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
 | `--max-failures INTEGER` | None | Run-level maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
@@ -610,6 +632,7 @@ Default values at a glance:
 | --- | --- |
 | Eval directory | `eval` from the command's working directory. |
 | `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
+| Individual evaluation concurrency | `1`. Increase with `run --concurrency`. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
@@ -757,7 +780,7 @@ Common failures:
 | `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
 | `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |
 | `adapter target not found` | The module imported, but the callable path does not exist. | Check the function, class, or nested attribute name after `:`. |
-| `adapter ... did not return an object with evaluate(...)` | The factory returned the wrong shape. | Return an object with `evaluate(sample, target)` or use a supported simple function adapter. |
+| `adapter ... did not return an object with evaluate(...) or evaluate_many(...)` | The factory returned the wrong shape. | Return an object implementing an individual or batch evaluation strategy, or use a supported simple function adapter. |
 | `adapter returned non-JSON observation` | The adapter returned a dataclass, SDK object, image, bytes, infinite number, or other non-JSON value. | Return only JSON-like values. |
 | `adapter returned N observations for M samples` | `evaluate_many` returned the wrong number of observations. | Return exactly one observation per input sample in order. |
 | `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |

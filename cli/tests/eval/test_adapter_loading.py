@@ -30,6 +30,8 @@ def evaluate_frame(image, target_id):
         AdapterConfig(eval_dir=tmp_path),
     )
 
+    assert evaluator.supports_individual_evaluation
+    assert not evaluator.supports_batch_evaluation
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
     assert result is True
 
@@ -48,6 +50,10 @@ def test_file_adapter_can_import_app_root_modules(
 
 def test_file_adapter_path_may_contain_colons(tmp_path: Path) -> None:
     asyncio.run(_run_colon_path_adapter_test(tmp_path))
+
+
+def test_detects_native_batch_evaluator(tmp_path: Path) -> None:
+    asyncio.run(_run_native_batch_evaluator_test(tmp_path))
 
 
 async def _run_import_path_factory_adapter_test(
@@ -76,6 +82,8 @@ def create_evaluator(config):
         AdapterConfig(eval_dir=tmp_path),
     )
 
+    assert evaluator.supports_individual_evaluation
+    assert not evaluator.supports_batch_evaluation
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_2", index=1))
     assert result == {"target": "step_2", "time": 0.0}
 
@@ -144,6 +152,32 @@ def create_evaluator(config):
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
     assert result == "step_1"
+
+
+async def _run_native_batch_evaluator_test(tmp_path: Path) -> None:
+    adapter_path = tmp_path / "batch_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [sample.timestamp_s for sample in samples]
+
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    evaluator = await load_evaluator(
+        f"{adapter_path}:create_evaluator",
+        AdapterConfig(eval_dir=tmp_path),
+    )
+    sample = _sample()
+    target = TargetContext(id="step_1", index=0)
+
+    assert not evaluator.supports_individual_evaluation
+    assert evaluator.supports_batch_evaluation
+    assert await evaluator.evaluate_many([sample, sample], target) == [0.0, 0.0]
 
 
 def _without_import_paths(paths: list[str], root: Path) -> list[str]:
