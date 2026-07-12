@@ -77,11 +77,15 @@ targets:
     samples:
     - range: [258.0, 270.5]
       expect: false
-    - range: [270.5, 274.0]
+    - range: [270.5, 273.5]
       expect: true
-    - range: [274.0, 275.5]
+    - range: [273.5, 275.5]
       expect: false
-    - range: [275.5, 277.5]
+    - at: 275.5
+      expect: true
+    - at: 276.0
+      expect: false
+    - range: [276.5, 277.5]
       expect: true
     - at: 277.5
       expect: false
@@ -89,9 +93,9 @@ targets:
       expect: true
     - range: [278.5, 286.0]
       expect: false
-    - range: [286.0, 287.0]
+    - at: 286.0
       expect: true
-    - range: [287.0, 289.0]
+    - range: [286.5, 289.0]
       expect: false
     - at: 289.0
       expect: true
