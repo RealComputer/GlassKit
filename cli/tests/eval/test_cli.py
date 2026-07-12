@@ -48,6 +48,8 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     )
 
     assert concurrency.default == 1
+    assert concurrency.help is not None
+    assert "ignored when the adapter uses evaluate_many" in concurrency.help
 
 
 def test_eval_run_rejects_non_positive_concurrency() -> None:

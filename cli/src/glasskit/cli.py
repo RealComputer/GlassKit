@@ -68,8 +68,8 @@ def eval_run(
             "--concurrency",
             min=1,
             help=(
-                "Maximum concurrent per-sample evaluate calls. Adapters with "
-                "evaluate_many control their own batch execution."
+                "Maximum concurrent per-sample evaluate calls; ignored when the "
+                "adapter uses evaluate_many."
             ),
         ),
     ] = 1,
