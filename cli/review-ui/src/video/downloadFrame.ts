@@ -9,13 +9,17 @@ export function frameDownloadFilename(caseName: string, timestamp: number): stri
   return `${safeCaseName || "frame"}-${safeTimestamp.toFixed(3)}s.png`;
 }
 
+export function isVideoFrameReady(video: HTMLVideoElement): boolean {
+  return (
+    !video.seeking &&
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0
+  );
+}
+
 export async function downloadVideoFrame(video: HTMLVideoElement, filename: string): Promise<void> {
-  if (
-    video.seeking ||
-    video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
-    video.videoWidth <= 0 ||
-    video.videoHeight <= 0
-  ) {
+  if (!isVideoFrameReady(video)) {
     throw new Error("The current video frame is not ready to download.");
   }
 

@@ -12,7 +12,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
 import { findSampleAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
-import { downloadVideoFrame, frameDownloadFilename } from "../video/downloadFrame.ts";
+import {
+  downloadVideoFrame,
+  frameDownloadFilename,
+  isVideoFrameReady,
+} from "../video/downloadFrame.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
 
@@ -34,6 +38,7 @@ export function VideoPanel() {
   const seekerRef = useRef<PreciseVideoSeeker | null>(null);
   const skipNextTimeBlur = useRef(false);
   const [timeDraft, setTimeDraft] = useState("0.000");
+  const [frameCaptureReady, setFrameCaptureReady] = useState(false);
   const [frameDownloadPending, setFrameDownloadPending] = useState(false);
   const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
@@ -50,6 +55,10 @@ export function VideoPanel() {
       setTimeDraft(state.video.currentTime.toFixed(3));
     }
   }, [state.video.currentTime]);
+
+  useEffect(() => {
+    setFrameCaptureReady(false);
+  }, [document?.video?.url, state.video.mediaGeneration]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -178,6 +187,9 @@ export function VideoPanel() {
       setFrameDownloadPending(false);
     }
   };
+  const updateFrameCaptureReady = (video: HTMLVideoElement) => {
+    setFrameCaptureReady(isVideoFrameReady(video));
+  };
 
   return (
     <section className="video-section" aria-label="Video preview">
@@ -190,14 +202,17 @@ export function VideoPanel() {
             preload="metadata"
             muted
             onClick={togglePlay}
-            onLoadedMetadata={(event) =>
+            onLoadedMetadata={(event) => {
+              updateFrameCaptureReady(event.currentTarget);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: {
                   duration: document.video?.duration_s ?? event.currentTarget.duration,
                 },
-              })
-            }
+              });
+            }}
+            onLoadedData={(event) => updateFrameCaptureReady(event.currentTarget)}
+            onCanPlay={(event) => updateFrameCaptureReady(event.currentTarget)}
             onDurationChange={(event) =>
               dispatch({
                 type: "VIDEO_PATCH",
@@ -210,13 +225,17 @@ export function VideoPanel() {
                 },
               })
             }
-            onTimeUpdate={(event) =>
+            onTimeUpdate={(event) => {
+              updateFrameCaptureReady(event.currentTarget);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: { currentTime: event.currentTarget.currentTime },
-              })
-            }
+              });
+            }}
+            onSeeking={() => setFrameCaptureReady(false)}
+            onSeeked={(event) => updateFrameCaptureReady(event.currentTarget)}
             onPlay={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: false } })}
+            onPlaying={(event) => updateFrameCaptureReady(event.currentTarget)}
             onPause={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: true } })}
             onRateChange={(event) =>
               dispatch({
@@ -224,15 +243,17 @@ export function VideoPanel() {
                 patch: { playbackRate: event.currentTarget.playbackRate },
               })
             }
-            onError={() =>
+            onEmptied={() => setFrameCaptureReady(false)}
+            onError={() => {
+              setFrameCaptureReady(false);
               dispatch({
                 type: "VIDEO_PATCH",
                 patch: {
                   previewStatus: "unavailable",
                   previewMessage: "This browser cannot play the video codec.",
                 },
-              })
-            }
+              });
+            }}
           />
         ) : (
           <div className="video-unavailable">
@@ -362,7 +383,9 @@ export function VideoPanel() {
               onClick={() => void downloadCurrentFrame()}
               disabled={
                 !document?.video?.url ||
-                state.video.previewStatus !== "ready" ||
+                !frameCaptureReady ||
+                state.video.previewStatus === "seeking" ||
+                state.video.previewStatus === "unavailable" ||
                 frameDownloadPending
               }
               title="Download current frame"

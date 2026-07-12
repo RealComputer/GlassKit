@@ -99,6 +99,36 @@ describe("review application navigation and drafts", () => {
     expect(document.querySelector(".header-context")?.textContent).toBe("case-001 / target_a");
   });
 
+  it.each([
+    ["an empty target", caseFile([target("empty", [])])],
+    ["no targets", caseFile([])],
+  ])("enables frame downloads after video data loads with %s", async (_scenario, doc) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const download = await screen.findByRole("button", { name: "Download current frame" });
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(download).toHaveProperty("disabled", true);
+
+    Object.defineProperties(video!, {
+      readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+      videoWidth: { configurable: true, value: 64 },
+      videoHeight: { configurable: true, value: 64 },
+    });
+    fireEvent.loadedData(video!);
+
+    expect(download).toHaveProperty("disabled", false);
+  });
+
   it("shows the selected case video path without a details disclosure", async () => {
     const doc = caseFile();
     vi.stubGlobal(
