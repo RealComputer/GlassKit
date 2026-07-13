@@ -179,7 +179,7 @@ For an isolated labeling mistake, edit the sample's expected value in the review
 
 When the same bad labeling pattern appears repeatedly, fix the labeling rule instead of correcting every expectation by hand. In this example, global comparison and visibility behavior lives in `backend/src/fold_check_prompts.py`, while step-specific shape requirements live in the `criteria` fields of `backend/assets/origami_steps.json`. Prefer the narrowest fix that explains the repeated errors, and check both failing examples and known-good counterexamples so the new rule does not become unnecessarily strict.
 
-The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Samples are spread across label blocks, timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects. Start without evaluator feedback:
+The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Without evaluator feedback, samples are spread across label blocks. With an eval report, misclassified frames are selected first within each class budget and the remaining slots are filled with spread counterexamples. Timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects. Start without evaluator feedback:
 
 ```sh
 cd backend

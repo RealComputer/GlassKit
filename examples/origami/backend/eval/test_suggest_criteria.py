@@ -72,6 +72,33 @@ class SelectExamplesTests(unittest.TestCase):
         self.assertEqual({example.block_index for example in true_samples}, {3, 4})
         self.assertEqual(selected, _select_examples(examples, per_class=4))
 
+    def test_prioritizes_misclassifications_before_spread_matches(self) -> None:
+        examples = [
+            *[CaseExample(float(index), False, 1) for index in range(6)],
+            *[CaseExample(float(index), False, 2) for index in range(6, 8)],
+            *[CaseExample(float(index), True, 3) for index in range(8, 12)],
+        ]
+        observations = {
+            "1.000000": EvalObservation(1.0, False, True, "failed"),
+            "7.000000": EvalObservation(7.0, False, True, "failed"),
+            "10.000000": EvalObservation(10.0, True, False, "failed"),
+        }
+
+        selected = _select_examples(
+            examples,
+            per_class=3,
+            observations=observations,
+        )
+
+        false_times = {
+            example.timestamp_s for example in selected if not example.expected
+        }
+        true_times = {example.timestamp_s for example in selected if example.expected}
+        self.assertEqual(len(false_times), 3)
+        self.assertEqual(len(true_times), 3)
+        self.assertTrue({1.0, 7.0}.issubset(false_times))
+        self.assertIn(10.0, true_times)
+
 
 class LoadEvalObservationsTests(unittest.TestCase):
     def test_loads_only_scored_results_for_the_selected_case_and_target(self) -> None:

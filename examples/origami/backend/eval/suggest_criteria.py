@@ -246,6 +246,7 @@ def _suggest_criteria(
     selected = _select_examples(
         loaded_case.examples,
         per_class=examples_per_class,
+        observations=observations,
     )
     selected_values = {example.expected for example in selected}
     if selected_values != {False, True}:
@@ -453,6 +454,7 @@ def _select_examples(
     examples: list[CaseExample],
     *,
     per_class: int,
+    observations: dict[str, EvalObservation] | None = None,
 ) -> list[CaseExample]:
     selected: list[CaseExample] = []
     for expected in (False, True):
@@ -461,11 +463,46 @@ def _select_examples(
         ]
         if not class_examples:
             continue
-        groups: dict[int, list[CaseExample]] = defaultdict(list)
-        for example in class_examples:
-            groups[example.block_index].append(example)
-        selected.extend(_sample_groups(groups, limit=per_class))
+        class_selected: list[CaseExample] = []
+        if observations is not None:
+            misclassified = [
+                example
+                for example in class_examples
+                if (observation := observations.get(_time_key(example.timestamp_s)))
+                is not None
+                and observation.expected is expected
+                and observation.observed is not expected
+            ]
+            class_selected.extend(
+                _sample_groups(
+                    _group_examples(misclassified),
+                    limit=min(per_class, len(misclassified)),
+                )
+            )
+
+        remaining = per_class - len(class_selected)
+        if remaining > 0:
+            already_selected = set(class_selected)
+            candidates = [
+                example for example in class_examples if example not in already_selected
+            ]
+            class_selected.extend(
+                _sample_groups(
+                    _group_examples(candidates),
+                    limit=min(remaining, len(candidates)),
+                )
+            )
+        selected.extend(class_selected)
     return sorted(selected, key=lambda example: (example.expected, example.timestamp_s))
+
+
+def _group_examples(
+    examples: list[CaseExample],
+) -> dict[int, list[CaseExample]]:
+    groups: dict[int, list[CaseExample]] = defaultdict(list)
+    for example in examples:
+        groups[example.block_index].append(example)
+    return groups
 
 
 def _sample_groups(
