@@ -125,11 +125,14 @@ async def run_eval(
     try:
         for case in eval_directory.cases:
             case_samples = case.samples
+            evaluated_case_samples = [
+                sample for sample in case_samples if sample.ignore is None
+            ]
             if callbacks is not None:
                 callbacks.on_case_start(case, len(case_samples))
             decoded = decode_sample_frames(
                 case.video_path,
-                case_samples,
+                evaluated_case_samples,
                 case_name=case.name,
             )
             for target in case.targets:
@@ -142,18 +145,32 @@ async def run_eval(
                     label=target.label,
                     config=target.config,
                 )
-                frames = [decoded[sample.sample_index] for sample in target_samples]
+                evaluated_target_samples = [
+                    sample for sample in target_samples if sample.ignore is None
+                ]
+                frames = [
+                    decoded[sample.sample_index] for sample in evaluated_target_samples
+                ]
                 evaluations = await _evaluate_samples(
                     evaluator,
                     frames,
-                    target_samples,
+                    evaluated_target_samples,
                     context,
                     options=options,
                 )
-                for evaluation in evaluations:
-                    sample = evaluation.sample
-                    result = _result_for_evaluation(evaluation, options=options)
-                    if result.status != "passed" and options.save_failures:
+                evaluated_results = {
+                    evaluation.sample.sample_index: _result_for_evaluation(
+                        evaluation, options=options
+                    )
+                    for evaluation in evaluations
+                }
+                for sample in target_samples:
+                    result = (
+                        _ignored_result(sample)
+                        if sample.ignore is not None
+                        else evaluated_results[sample.sample_index]
+                    )
+                    if result.status in {"failed", "error"} and options.save_failures:
                         frame = decoded.get(sample.sample_index)
                         if frame is not None:
                             result = _save_failure_artifacts(
@@ -179,6 +196,26 @@ async def run_eval(
     if options.output_json is not None:
         write_json_report(report, options.output_json)
     return report
+
+
+def _ignored_result(sample: SampleExpectation) -> SampleResult:
+    if sample.ignore is None:
+        raise ValueError("ignored results require an ignore reason")
+    return SampleResult(
+        case_name=sample.case_name,
+        target_id=sample.target_id,
+        target_label=sample.target_label,
+        sample_index=sample.sample_index,
+        timestamp_s=sample.timestamp_s,
+        status="ignored",
+        expected=sample.expected,
+        observed=None,
+        observed_value=None,
+        compare_mode=sample.compare.mode,
+        field=sample.field,
+        reason=sample.ignore,
+        source=sample.source,
+    )
 
 
 def write_json_report(report: EvalRunReport, path: Path) -> None:
@@ -567,6 +604,7 @@ def _save_failure_artifacts(
 def _apply_quality_gates(
     eval_directory: EvalDirectory, results: list[SampleResult], options: RunOptions
 ) -> list[GateResult]:
+    results = [result for result in results if result.status != "ignored"]
     gates: list[GateResult] = []
     error_count = sum(1 for result in results if result.status == "error")
     gates.append(
@@ -739,6 +777,7 @@ def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
             "passed": report.passed_count,
             "failed": report.failed_count,
             "errors": report.error_count,
+            "ignored": report.ignored_count,
             "pass_rate": report.pass_rate,
             "duration_seconds": report.duration_s,
             "evaluation_timing_mode": report.evaluation_timing_mode,

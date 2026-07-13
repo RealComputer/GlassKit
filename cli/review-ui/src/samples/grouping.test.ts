@@ -23,10 +23,13 @@ describe("sample table grouping", () => {
     const second = sample("second", 0.5, "true");
     second.origin = { block_index: 1, kind: "range", every_s: 0.5 };
     const commented = { ...sample("commented", 1, "true"), comment: "Check this" };
+    const ignored = { ...sample("ignored", 1.5, "true"), ignore: "Flaky" };
 
     expect(
-      groupConsecutiveSamples([first, second, commented]).map((group) => group.samples.length),
-    ).toEqual([2, 1]);
+      groupConsecutiveSamples([first, second, commented, ignored]).map(
+        (group) => group.samples.length,
+      ),
+    ).toEqual([2, 1, 1]);
   });
 
   it("reports a cadence only when three or more timestamps are regular", () => {

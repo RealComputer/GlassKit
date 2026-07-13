@@ -78,6 +78,7 @@ def format_sample_schedule(eval_directory: EvalDirectory) -> list[dict[str, Any]
                         "expected": sample.expected,
                         "field": sample.field,
                         "mode": sample.compare.mode,
+                        "ignore": sample.ignore,
                         "source": sample.source,
                     }
                 )
@@ -398,6 +399,7 @@ def _expand_sample_block(
             compare=compare,
             source=source,
             comment=raw_block.comment,
+            ignore=raw_block.ignore,
         )
         for offset, timestamp in enumerate(timestamps)
     ]

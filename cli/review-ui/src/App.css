@@ -882,6 +882,16 @@ kbd {
     0 0 0 3px var(--text);
 }
 
+.sample-marker.ignored::before {
+  left: 6px;
+  width: 4px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--expect-color, #57606a) 0 3px,
+    transparent 3px 6px
+  );
+}
+
 .timeline-tooltip {
   position: fixed;
   z-index: 100;
@@ -1162,6 +1172,13 @@ textarea[aria-invalid="true"] {
   margin: 4px 0 0;
   color: var(--danger);
   font-size: 10px;
+}
+
+.field-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .timestamp-editor {

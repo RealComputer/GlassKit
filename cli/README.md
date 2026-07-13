@@ -261,6 +261,9 @@ targets:
       every_s: 0.25
       field: result.matches
       expect: true
+    - at: 11.9
+      expect: true
+      ignore: Difficult frame with known flaky observations.
   step_2:
     label: Step 2
     samples:
@@ -321,8 +324,11 @@ Sample block fields:
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
+| `ignore` | No | Nonempty reason for ignoring this block. Ignored samples are reported but are not decoded, sent to the adapter, or included in pass rates, failure counts, or quality gates. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
+
+Use `ignore` for a known exceptional sample that should remain documented without affecting a run. The value is the reason, so it is more durable than a YAML comment and remains visible after saving from `glasskit eval review`. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
 
 ## Comparison Reference
 
@@ -422,6 +428,8 @@ An evaluator chooses one of two execution strategies by implementing `evaluate` 
 | Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
+
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`.
 
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
@@ -531,7 +539,7 @@ Options:
 | `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
 | `--no-open` | `false` | Print the URL without opening the default browser. |
 
-Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
+Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved. Setting an ignore reason in the inspector excludes that sample from eval execution and quality gates; clearing the reason makes it active again.
 
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
@@ -563,7 +571,7 @@ Options:
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
 | `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written under its `failures/` subdirectory; when omitted, they are written under `<eval-dir>/runs/failures/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
-| `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
+| `--max-failures-to-print INTEGER` | `20` | Maximum number of failed or errored results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` when setup or runtime errors abort the run.
@@ -687,6 +695,7 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
     "passed": 1,
     "failed": 0,
     "errors": 0,
+    "ignored": 0,
     "pass_rate": 1.0,
     "duration_seconds": 0.42,
     "evaluation_timing_mode": "individual",
@@ -726,7 +735,9 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 }
 ```
 
-`--save-failures` writes artifacts for non-passing sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
+Ignored samples remain in the `results` array with status `ignored`, their ignore reason in `reason`, and null observation and evaluation-timing fields. The summary's `evaluated` count, pass rate, timing, throughput, and quality gates exclude those results.
+
+`--save-failures` writes artifacts for failed or errored sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
 ## Exit Codes
 

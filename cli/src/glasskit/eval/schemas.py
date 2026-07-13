@@ -72,6 +72,7 @@ class RawSampleBlock(_SchemaModel):
     field: str | None = None
     compare: RawCompare | None = None
     comment: str | None = None
+    ignore: str | None = None
 
     @field_validator("expect")
     @classmethod
@@ -122,9 +123,9 @@ class RawSampleBlock(_SchemaModel):
         _validate_unicode_scalar(stripped)
         return stripped
 
-    @field_validator("comment")
+    @field_validator("comment", "ignore")
     @classmethod
-    def _strip_comment(cls, value: str | None) -> str | None:
+    def _strip_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()

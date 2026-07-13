@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, MessageSquareText } from "lucide-react";
+import { Ban, ChevronDown, ChevronRight, MessageSquareText } from "lucide-react";
 import type { ReviewSample } from "../api/types.ts";
 import {
   groupConsecutiveSamples,
@@ -21,6 +21,7 @@ function SampleSettingsCells({ sample }: { sample: ReviewSample }) {
       </td>
       <td>{effectiveCompare(sample)}</td>
       <td className="mono">{sample.compare.tolerance ?? "—"}</td>
+      <td>{sample.ignore ? <Ban size={15} aria-label={`Ignored: ${sample.ignore}`} /> : "—"}</td>
       <td>
         {sample.comment ? (
           <MessageSquareText size={15} aria-label={`Comment: ${sample.comment}`} />
@@ -72,6 +73,7 @@ export function SamplesTable() {
                 <th>Field</th>
                 <th>Compare</th>
                 <th>Tolerance</th>
+                <th>Ignored</th>
                 <th aria-label="Comment">Note</th>
               </tr>
             </thead>
@@ -152,7 +154,7 @@ export function SamplesTable() {
                               </span>
                               {formatSeconds(sample.timestamp_s)}
                             </td>
-                            <td colSpan={5} />
+                            <td colSpan={6} />
                           </tr>
                         );
                       })}

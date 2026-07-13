@@ -72,6 +72,7 @@ export function Inspector() {
   const [field, setField] = useState("");
   const [tolerance, setTolerance] = useState("");
   const [comment, setComment] = useState("");
+  const [ignore, setIgnore] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const expectationRef = useRef<HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement>(null);
 
@@ -83,6 +84,7 @@ export function Inspector() {
     setField(selected.field ?? "");
     setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
     setComment(selected.comment ?? "");
+    setIgnore(selected.ignore ?? "");
     setErrors({});
   }, [selectionKey]);
 
@@ -99,6 +101,7 @@ export function Inspector() {
       setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
     }
     setComment(selected.comment ?? "");
+    setIgnore(selected.ignore ?? "");
     if (!["timestamp", "expect", "tolerance"].some(hasError)) setErrors({});
   }, [selectionKey, workspace?.acceptedCaseFile]);
 
@@ -465,6 +468,33 @@ export function Inspector() {
             />
             {errors.tolerance && <p className="field-error">{errors.tolerance}</p>}
           </div>
+        </div>
+
+        <div className="field-group">
+          <label htmlFor="sample-ignore">
+            Ignore reason <span className="optional">optional</span>
+          </label>
+          <textarea
+            id="sample-ignore"
+            rows={2}
+            value={ignore}
+            aria-describedby="sample-ignore-help"
+            onChange={(event) => {
+              const value = event.target.value;
+              setIgnore(value);
+              updateSample(target.id, sample.id, {
+                ignore: value.trim() ? value : null,
+              });
+            }}
+            onBlur={() => {
+              const value = ignore.trim();
+              setIgnore(value);
+              updateSample(target.id, sample.id, { ignore: value || null }, true);
+            }}
+          />
+          <p id="sample-ignore-help" className="field-help">
+            A reason here skips this sample during eval runs and excludes it from quality gates.
+          </p>
         </div>
 
         <div className="field-group">

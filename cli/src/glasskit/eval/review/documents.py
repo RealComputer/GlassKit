@@ -510,6 +510,7 @@ def _samples_for_target(
                         tolerance=sample.compare.tolerance,
                     ),
                     comment=sample.comment,
+                    ignore=sample.ignore,
                     origin=SampleOrigin(
                         block_index=block_index,
                         kind=kind,

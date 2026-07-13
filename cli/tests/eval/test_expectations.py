@@ -112,6 +112,51 @@ def test_blank_sample_comment_is_invalid(tmp_path: Path) -> None:
         load_eval_directory(eval_dir)
 
 
+def test_sample_ignore_reason_is_trimmed_and_expands_to_every_sample(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 0.5]
+                expect: true
+                ignore: "  Known flaky observation.  "
+              - at: 1.0
+                expect: true
+        """,
+    )
+
+    samples = load_eval_directory(eval_dir).cases[0].samples
+
+    assert [sample.ignore for sample in samples] == [
+        "Known flaky observation.",
+        "Known flaky observation.",
+        None,
+    ]
+
+
+def test_blank_sample_ignore_reason_is_invalid(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+                ignore: "   "
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match=r"samples\.0\.ignore.*must not be empty"):
+        load_eval_directory(eval_dir)
+
+
 def test_unlabeled_gaps_are_allowed(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

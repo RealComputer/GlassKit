@@ -63,6 +63,12 @@ def test_runner_handles_malformed_evaluate_many_return(tmp_path: Path) -> None:
     asyncio.run(_run_malformed_evaluate_many_return_test(tmp_path))
 
 
+def test_runner_reports_ignored_samples_without_evaluating_or_scoring_them(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_ignored_sample_test(tmp_path))
+
+
 async def _run_committed_fixture_test(tmp_path: Path) -> None:
     eval_dir = FIXTURES / "eval_directories" / "two-state"
     adapter_path = tmp_path / "fake_adapter.py"
@@ -94,6 +100,69 @@ def create_evaluator(config):
     assert report.success
     assert report.evaluated_count == 4
     assert report.passed_count == 4
+
+
+async def _run_ignored_sample_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: false
+        ignore: Provider output is flaky for this difficult frame.
+      - at: 1.0
+        expect: true
+thresholds:
+  min_pass_rate: 1.0
+  max_failures: 0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        if [sample.timestamp_s for sample in samples] != [1.0]:
+            raise RuntimeError("ignored sample reached the adapter")
+        return [True]
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "report.json"
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            output_json=output_path,
+        )
+    )
+
+    assert report.success
+    assert [result.status for result in report.results] == ["ignored", "passed"]
+    assert report.results[0].reason == (
+        "Provider output is flaky for this difficult frame."
+    )
+    assert report.results[0].evaluation_duration_s is None
+    assert report.evaluated_count == 1
+    assert report.ignored_count == 1
+    assert report.pass_rate == 1.0
+    written = json.loads(output_path.read_text(encoding="utf-8"))
+    assert written["summary"]["evaluated"] == 1
+    assert written["summary"]["ignored"] == 1
+    assert [result["status"] for result in written["results"]] == [
+        "ignored",
+        "passed",
+    ]
 
 
 async def _run_committed_fixture_artifact_test(tmp_path: Path) -> None:

@@ -3,11 +3,12 @@ import { sample, target } from "../test/fixtures.ts";
 import { canDeleteFromTarget, createSampleAt } from "./editing.ts";
 
 describe("sample editing helpers", () => {
-  it("rounds a new time and copies the closest payload without comment or origin", () => {
+  it("rounds a new time and copies the closest payload without notes or origin", () => {
     const earlier = {
       ...sample("earlier", 1, "true"),
       field: "result.ok",
       comment: "do not copy",
+      ignore: "do not copy",
     };
     const later = sample("later", 3, "false");
     const created = createSampleAt(target("status", [earlier, later]), 1.23456, "new-id");
@@ -18,6 +19,7 @@ describe("sample editing helpers", () => {
       expect_json: "true",
       field: "result.ok",
       comment: null,
+      ignore: null,
       origin: null,
     });
   });

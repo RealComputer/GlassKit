@@ -315,7 +315,9 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                         <button
                           key={sample.id}
                           type="button"
-                          className={`sample-marker ${selected ? "selected" : ""}`}
+                          className={`sample-marker${selected ? " selected" : ""}${
+                            sample.ignore ? " ignored" : ""
+                          }`}
                           style={markerStyle}
                           data-sample-id={sample.id}
                           data-target-id={target.id}
@@ -324,7 +326,9 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                           aria-pressed={selected}
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
                             sample.timestamp_s,
-                          )}, expected ${expectationSummary(sample)}`}
+                          )}, expected ${expectationSummary(sample)}${
+                            sample.ignore ? `, ignored: ${sample.ignore}` : ""
+                          }`}
                         />
                       );
                     })}
@@ -344,6 +348,7 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
         >
           {formatSeconds(hoveredSample.sample.timestamp_s)} ·{" "}
           {expectationSummary(hoveredSample.sample)}
+          {hoveredSample.sample.ignore ? " · ignored" : ""}
         </div>
       )}
     </section>

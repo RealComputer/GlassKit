@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from glasskit.eval.models import (
     EvalDirectory,
     EvalRunReport,
     EvaluationTimingMode,
+    ResultStatus,
     SampleExpectation,
     SampleResult,
     TargetSpec,
@@ -128,6 +130,30 @@ def test_console_reporter_does_not_auto_highlight_values() -> None:
     )
 
 
+def test_run_summary_counts_ignored_samples_without_listing_them_as_failures() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+    ignored = replace(
+        _result(status="ignored", reason="Known flaky observation."),
+        evaluation_duration_s=None,
+        evaluation_timing_mode=None,
+    )
+    report = EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"],
+        results=[ignored],
+        gate_results=[],
+        duration_s=1.0,
+    )
+
+    print_run_summary(report, console=console)
+
+    output = buffer.getvalue()
+    assert "0 evaluated" in output
+    assert "1 ignored" in output
+    assert "Failures" not in output
+
+
 def test_table_reports_render_markup_like_target_labels_literally() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
@@ -202,6 +228,8 @@ def _result(
     target_label: str = "Step 1",
     evaluation_duration_s: float = 1.25,
     evaluation_timing_mode: EvaluationTimingMode = "individual",
+    status: ResultStatus = "failed",
+    reason: str = "mismatch",
 ) -> SampleResult:
     return SampleResult(
         case_name="case-001",
@@ -209,13 +237,13 @@ def _result(
         target_label=target_label,
         sample_index=0,
         timestamp_s=0.0,
-        status="failed",
+        status=status,
         expected=True,
         observed=False,
         observed_value=False,
         compare_mode="exact",
         field=None,
-        reason="mismatch",
+        reason=reason,
         source="at",
         evaluation_duration_s=evaluation_duration_s,
         evaluation_timing_mode=evaluation_timing_mode,

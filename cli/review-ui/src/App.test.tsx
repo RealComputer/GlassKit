@@ -617,6 +617,47 @@ describe("review application navigation and drafts", () => {
     expect(putCount).toBe(0);
   });
 
+  it("saves an ignore reason and marks the sample as ignored", async () => {
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
+    let submitted: Record<string, { samples: ReturnType<typeof sample>[] }> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body)) as {
+            targets: Record<string, { samples: ReturnType<typeof sample>[] }>;
+          };
+          submitted = body.targets;
+          return Promise.resolve(
+            response({
+              ...doc,
+              revision: "ignored-sample",
+              targets: [target("target_a", body.targets.target_a.samples)],
+            }),
+          );
+        }
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+    const ignore = await screen.findByLabelText("Ignore reason optional");
+
+    fireEvent.change(ignore, { target: { value: "Provider output is flaky." } });
+    expect(
+      screen.getByRole("button", {
+        name: "target a, 1.000s, expected true, ignored: Provider output is flaky.",
+      }),
+    ).toBeTruthy();
+    fireEvent.blur(ignore);
+
+    await waitFor(() =>
+      expect(submitted?.target_a.samples[0].ignore).toBe("Provider output is flaky."),
+    );
+  });
+
   it("commits human-entered transport time only on Enter", async () => {
     const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     vi.stubGlobal(
@@ -711,6 +752,7 @@ describe("review application navigation and drafts", () => {
       screen.findByLabelText("Expected value"),
       screen.findByLabelText(/Field/),
       screen.findByLabelText("Tolerance"),
+      screen.findByLabelText("Ignore reason optional"),
       screen.findByLabelText("Comment optional"),
     ]);
     await waitFor(() => expect(controls[1]).toHaveProperty("value", "1"));

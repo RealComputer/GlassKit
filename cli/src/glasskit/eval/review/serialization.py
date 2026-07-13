@@ -60,6 +60,7 @@ class ParsedSample:
     mode: str | None
     tolerance: float | None
     comment: str | None
+    ignore: str | None
     origin: SampleOrigin | None
 
 
@@ -242,6 +243,7 @@ def parse_samples(
                 mode=sample.compare.mode,
                 tolerance=sample.compare.tolerance,
                 comment=sample.comment,
+                ignore=sample.ignore,
                 origin=sample.origin,
             )
         )
@@ -588,6 +590,8 @@ def _payload_block(sample: ParsedSample) -> dict[str, Any]:
         result["compare"] = compare
     if sample.comment is not None:
         result["comment"] = sample.comment
+    if sample.ignore is not None:
+        result["ignore"] = sample.ignore
     return result
 
 
@@ -598,6 +602,7 @@ def _same_payload(left: ParsedSample, right: ParsedSample) -> bool:
         and left.mode == right.mode
         and _same_optional_number(left.tolerance, right.tolerance)
         and left.comment == right.comment
+        and left.ignore == right.ignore
     )
 
 

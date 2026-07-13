@@ -15,6 +15,7 @@ function sampleSettingsKey(sample: ReviewSample): string {
     sample.compare.mode,
     sample.compare.tolerance,
     sample.comment,
+    sample.ignore,
   ]);
 }
 
