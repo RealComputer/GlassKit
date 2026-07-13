@@ -53,8 +53,11 @@ def eval_run(
         typer.Option("--case", help="Only run one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
-        typer.Option("--target", help="Only run one target id from selected cases."),
+        list[str] | None,
+        typer.Option(
+            "--target",
+            help="Only run this target id; repeat to select multiple targets.",
+        ),
     ] = None,
     from_time: Annotated[
         float | None,
@@ -173,7 +176,7 @@ def eval_run(
         adapter=adapter_target,
         eval_dir=eval_dir,
         case_filter=case,
-        target_filter=target,
+        target_filter=_target_filter(target),
         from_time_s=from_time,
         until_time_s=until_time,
         adapter_config=_load_config(adapter_config),
@@ -219,9 +222,10 @@ def eval_validate(
         typer.Option("--case", help="Only validate one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
-            "--target", help="Only validate one target id from selected cases."
+            "--target",
+            help="Only validate this target id; repeat to select multiple targets.",
         ),
     ] = None,
     adapter_config: Annotated[
@@ -239,7 +243,7 @@ def eval_validate(
         adapter=adapter,
         eval_dir=eval_dir,
         case_filter=case,
-        target_filter=target,
+        target_filter=_target_filter(target),
         adapter_config=_load_config(adapter_config),
         allow_empty=allow_empty,
     )
@@ -258,8 +262,11 @@ def eval_list_samples(
         typer.Option("--case", help="Only list one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
-        typer.Option("--target", help="Only list one target id from selected cases."),
+        list[str] | None,
+        typer.Option(
+            "--target",
+            help="Only list this target id; repeat to select multiple targets.",
+        ),
     ] = None,
     from_time: Annotated[
         float | None,
@@ -293,7 +300,7 @@ def eval_list_samples(
         loaded = load_eval_directory(
             eval_dir,
             case_filter=case,
-            target_filter=target,
+            target_filter=_target_filter(target),
             from_time_s=from_time,
             until_time_s=until_time,
             allow_empty=allow_empty,
@@ -458,3 +465,7 @@ def _load_config(path: Path | None) -> dict[str, Any]:
 def _default_adapter_target(eval_dir: Path) -> str:
     adapter_path = eval_dir / "adapter.py"
     return f"{adapter_path.as_posix()}:{DEFAULT_ADAPTER_CALLABLE}"
+
+
+def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
+    return tuple(targets) if targets is not None else None

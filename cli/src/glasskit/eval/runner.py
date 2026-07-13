@@ -609,6 +609,7 @@ def _apply_quality_gates(
     eval_directory: EvalDirectory, results: list[SampleResult], options: RunOptions
 ) -> list[GateResult]:
     results = [result for result in results if result.status != "ignored"]
+    selected_target_ids = _selected_target_ids(options.target_filter)
     gates: list[GateResult] = []
     error_count = sum(1 for result in results if result.status == "error")
     gates.append(
@@ -649,16 +650,16 @@ def _apply_quality_gates(
                 results,
                 global_thresholds,
                 "eval",
-                selected_target=options.target_filter,
+                selected_target_ids=selected_target_ids,
                 fail_empty_targets=(
-                    options.case_filter is None and options.target_filter is None
+                    options.case_filter is None and selected_target_ids is None
                 ),
             )
         )
 
     for case in eval_directory.cases:
         case_results = [result for result in results if result.case_name == case.name]
-        gates.extend(_case_gates(case, case_results, options))
+        gates.extend(_case_gates(case, case_results, options, selected_target_ids))
     return gates
 
 
@@ -666,13 +667,14 @@ def _case_gates(
     case: EvalCase,
     results: list[SampleResult],
     options: RunOptions,
+    selected_target_ids: set[str] | None,
 ) -> list[GateResult]:
     if options.min_pass_rate is not None or options.max_failures is not None:
         return []
     case_name = case.name
     thresholds = case.thresholds
     declared_target_ids = {target.id for target in case.targets}
-    selected_target_ids = {target.id for target in case.targets if target.samples}
+    sampled_target_ids = {target.id for target in case.targets if target.samples}
     time_filtered = options.from_time_s is not None or options.until_time_s is not None
     gates: list[GateResult] = []
     if thresholds.min_pass_rate is not None:
@@ -694,14 +696,14 @@ def _case_gates(
             )
         )
     for target_id, threshold in thresholds.per_target.items():
-        if options.target_filter is not None and target_id != options.target_filter:
+        if selected_target_ids is not None and target_id not in selected_target_ids:
             continue
         # Undeclared target ids still produce an empty, failing gate. Only suppress
         # targets known to have been emptied by the requested time window.
         if (
             time_filtered
             and target_id in declared_target_ids
-            and target_id not in selected_target_ids
+            and target_id not in sampled_target_ids
         ):
             continue
         if threshold.min_pass_rate is None:
@@ -736,12 +738,12 @@ def _configured_target_pass_rate_gates(
     thresholds: Thresholds,
     prefix: str,
     *,
-    selected_target: str | None,
+    selected_target_ids: set[str] | None,
     fail_empty_targets: bool,
 ) -> list[GateResult]:
     gates: list[GateResult] = []
     for target_id, threshold in thresholds.per_target.items():
-        if selected_target is not None and target_id != selected_target:
+        if selected_target_ids is not None and target_id not in selected_target_ids:
             continue
         if threshold.min_pass_rate is None:
             continue
@@ -749,7 +751,7 @@ def _configured_target_pass_rate_gates(
         if (
             not target_results
             and not fail_empty_targets
-            and target_id != selected_target
+            and (selected_target_ids is None or target_id not in selected_target_ids)
         ):
             continue
         gates.append(
@@ -760,6 +762,16 @@ def _configured_target_pass_rate_gates(
             )
         )
     return gates
+
+
+def _selected_target_ids(
+    target_filter: str | tuple[str, ...] | None,
+) -> set[str] | None:
+    if target_filter is None:
+        return None
+    if isinstance(target_filter, str):
+        return {target_filter}
+    return set(target_filter)
 
 
 def _pass_rate_gate(

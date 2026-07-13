@@ -49,6 +49,10 @@ def test_runner_filters_by_target_without_case(tmp_path: Path) -> None:
     asyncio.run(_run_target_filter_without_case_test(tmp_path))
 
 
+def test_runner_filters_multiple_targets_and_their_gates(tmp_path: Path) -> None:
+    asyncio.run(_run_multiple_target_filter_test(tmp_path))
+
+
 def test_runner_filters_adapter_input_and_gates_by_time_window(tmp_path: Path) -> None:
     asyncio.run(_run_time_window_filter_test(tmp_path))
 
@@ -586,6 +590,88 @@ def create_evaluator(config):
     assert [result.target_id for result in report.results] == ["step_2"]
     assert "eval_step_1_min_pass_rate" not in gate_names
     assert "eval_step_2_min_pass_rate" in gate_names
+    assert report.success
+
+
+async def _run_multiple_target_filter_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (eval_dir / "config.yaml").write_text(
+        """
+thresholds:
+  per_target:
+    step_1:
+      min_pass_rate: 1.0
+    step_2:
+      min_pass_rate: 1.0
+    step_3:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+  step_2:
+    samples:
+      - at: 1.0
+        expect: true
+  step_3:
+    samples:
+      - at: 0.0
+        expect: true
+thresholds:
+  per_target:
+    step_1:
+      min_pass_rate: 1.0
+    step_2:
+      min_pass_rate: 1.0
+    step_3:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [target.id in {"step_1", "step_2"} for sample in samples]
+
+    async def evaluate(self, sample, target):
+        return target.id in {"step_1", "step_2"}
+
+    async def close(self):
+        return None
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            target_filter=("step_2", "step_1"),
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    gate_names = {gate.name for gate in report.gate_results}
+    assert [result.target_id for result in report.results] == ["step_1", "step_2"]
+    assert "eval_step_1_min_pass_rate" in gate_names
+    assert "eval_step_2_min_pass_rate" in gate_names
+    assert "eval_step_3_min_pass_rate" not in gate_names
+    assert "case-001_step_1_min_pass_rate" in gate_names
+    assert "case-001_step_2_min_pass_rate" in gate_names
+    assert "case-001_step_3_min_pass_rate" not in gate_names
     assert report.success
 
 

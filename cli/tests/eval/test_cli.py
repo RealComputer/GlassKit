@@ -29,11 +29,42 @@ def test_eval_commands_define_target_filter() -> None:
 
     for command in ("run", "validate", "list-samples"):
         command_options = eval_command.commands[command].params
-
-        assert any(
-            isinstance(option, TyperOption) and "--target" in option.opts
+        target_option = next(
+            option
             for option in command_options
+            if isinstance(option, TyperOption) and "--target" in option.opts
         )
+
+        assert target_option.multiple
+
+
+def test_eval_list_samples_accepts_multiple_target_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_load_eval_directory(eval_dir: Path, **kwargs: object) -> object:
+        captured["eval_dir"] = eval_dir
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("glasskit.cli.load_eval_directory", fake_load_eval_directory)
+    monkeypatch.setattr("glasskit.cli.print_sample_schedule", lambda loaded: None)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            "list-samples",
+            "--target",
+            "step_1",
+            "--target",
+            "step_2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["target_filter"] == ("step_1", "step_2")
 
 
 def test_eval_run_defines_serial_concurrency_default() -> None:

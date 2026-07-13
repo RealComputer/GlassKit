@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -41,7 +41,7 @@ def load_eval_directory(
     eval_dir: Path,
     *,
     case_filter: str | None = None,
-    target_filter: str | None = None,
+    target_filter: str | Sequence[str] | None = None,
     from_time_s: float | None = None,
     until_time_s: float | None = None,
     allow_empty: bool = False,
@@ -54,18 +54,14 @@ def load_eval_directory(
     eval_dir = _resolve_eval_dir(eval_dir)
     thresholds = _load_eval_thresholds(eval_dir)
     case_paths = discover_case_paths(eval_dir, case_filter)
-    target_id = (
-        normalize_target_filter(target_filter) if target_filter is not None else None
+    target_ids = (
+        normalize_target_filters(target_filter) if target_filter is not None else None
     )
-    if target_id is not None:
-        case_paths = _filter_case_paths_by_target(case_paths, target_id)
-        if not case_paths:
-            raise EvalConfigError(
-                f"no eval targets found matching target {target_filter!r}"
-            )
+    if target_ids is not None:
+        case_paths = _filter_case_paths_by_targets(case_paths, target_ids)
     cases = [load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
-    if target_id is not None:
-        cases = _filter_cases_by_target(cases, target_id)
+    if target_ids is not None:
+        cases = _filter_cases_by_targets(cases, target_ids)
     if from_time_s is not None or until_time_s is not None:
         cases = _filter_cases_by_time(
             cases,
@@ -189,23 +185,61 @@ def normalize_target_filter(target_filter: str) -> str:
     return target_filter
 
 
-def _filter_case_paths_by_target(case_paths: list[Path], target_id: str) -> list[Path]:
+def normalize_target_filters(target_filter: str | Sequence[str]) -> tuple[str, ...]:
+    target_ids = (target_filter,) if isinstance(target_filter, str) else target_filter
+    if not target_ids:
+        raise EvalConfigError("at least one target id must be provided")
+    return tuple(
+        dict.fromkeys(normalize_target_filter(target_id) for target_id in target_ids)
+    )
+
+
+def _filter_case_paths_by_targets(
+    case_paths: list[Path], target_ids: tuple[str, ...]
+) -> list[Path]:
+    declared_by_path = {
+        case_path: _case_file_target_ids(case_path) for case_path in case_paths
+    }
+    declared_target_ids = {
+        target_id
+        for case_target_ids in declared_by_path.values()
+        for target_id in case_target_ids
+    }
+    missing_target_ids = [
+        target_id for target_id in target_ids if target_id not in declared_target_ids
+    ]
+    if missing_target_ids:
+        if len(missing_target_ids) == 1:
+            raise EvalConfigError(
+                f"no eval targets found matching target {missing_target_ids[0]!r}"
+            )
+        missing = ", ".join(repr(target_id) for target_id in missing_target_ids)
+        raise EvalConfigError(f"no eval targets found matching targets: {missing}")
+
+    selected_target_ids = set(target_ids)
     return [
         case_path
-        for case_path in case_paths
-        if _case_file_declares_target(case_path, target_id)
+        for case_path, case_target_ids in declared_by_path.items()
+        if selected_target_ids.intersection(case_target_ids)
     ]
 
 
-def _case_file_declares_target(case_path: Path, target_id: str) -> bool:
+def _case_file_target_ids(case_path: Path) -> set[str]:
     raw_targets = load_yaml_mapping(case_path).get("targets")
-    return isinstance(raw_targets, Mapping) and target_id in raw_targets
+    if not isinstance(raw_targets, Mapping):
+        return set()
+    return {target_id for target_id in raw_targets if isinstance(target_id, str)}
 
 
-def _filter_cases_by_target(cases: list[EvalCase], target_id: str) -> list[EvalCase]:
+def _filter_cases_by_targets(
+    cases: list[EvalCase], target_ids: tuple[str, ...]
+) -> list[EvalCase]:
+    selected_target_ids = set(target_ids)
     filtered: list[EvalCase] = []
     for case in cases:
-        targets = [target for target in case.targets if target.id == target_id]
+        targets = [
+            target for target in case.targets if target.id in selected_target_ids
+        ]
         if not targets:
             continue
         filtered.append(

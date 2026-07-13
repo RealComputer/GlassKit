@@ -289,7 +289,7 @@ class RunOptions:
     eval_dir: Path
     adapter: str | None = None
     case_filter: str | None = None
-    target_filter: str | None = None
+    target_filter: str | tuple[str, ...] | None = None
     from_time_s: float | None = None
     until_time_s: float | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
