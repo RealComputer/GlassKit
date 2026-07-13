@@ -20,14 +20,14 @@ The Python package is `glasskit.ai`; it provides the `glasskit` console command.
 
 Add it to your app repo's dev dependencies:
 
-```bash
+```sh
 uv add --dev glasskit.ai
 uv run glasskit --help
 ```
 
 Or run it once without adding the dependency:
 
-```bash
+```sh
 uv run --with glasskit.ai glasskit --help
 ```
 
@@ -39,7 +39,7 @@ Start in an app repository checked out next to a `recordings/` directory. This e
 
 Create the eval directory and write a case file that points at the recording:
 
-```bash
+```sh
 mkdir -p eval/cases
 cat > eval/cases/task-01.yaml <<'YAML'
 video: ../../../recordings/task-01.mp4
@@ -65,7 +65,7 @@ def create_evaluator(config):
 
 Run the eval:
 
-```bash
+```sh
 uv run glasskit eval run
 ```
 
@@ -95,7 +95,7 @@ Goal: create the required directory structure and a case file in `eval/` from an
 
 Commands:
 
-```bash
+```sh
 mkdir -p eval/cases
 cat > eval/cases/task-02.yaml <<'YAML'
 video: ../../../recordings/task-02.mov
@@ -120,7 +120,7 @@ Goal: catch YAML, video, timestamp, and optional adapter setup problems before c
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval validate
 ```
 
@@ -138,7 +138,7 @@ Goal: confirm that ranges, `at` lists, fields, and compare modes expand as inten
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval list-samples --case task-01 --target step_1
 ```
@@ -155,13 +155,13 @@ Without the review UI, verifying expectations means juggling a media player and 
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval review --eval-dir eval
 ```
 
 To jump directly to a failure reported by a separate eval run, include its case, target, and timestamp:
 
-```bash
+```sh
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
@@ -173,7 +173,7 @@ Goal: run a focused eval and print every sample result.
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
 ```
 
@@ -187,7 +187,7 @@ Goal: make the command fail when quality drops below your threshold.
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/results.json
 ```
 
@@ -201,7 +201,7 @@ Goal: pass runtime settings to your adapter without putting them in case files.
 
 Command:
 
-```bash
+```sh
 uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
 ```
 
@@ -485,7 +485,7 @@ Every command supports `--help`.
 
 Purpose: top-level command group.
 
-```bash
+```sh
 glasskit --help
 ```
 
@@ -507,7 +507,7 @@ Commands:
 
 Purpose: command group for recorded-video evals.
 
-```bash
+```sh
 glasskit eval --help
 ```
 
@@ -524,7 +524,7 @@ Commands:
 
 Purpose: launch the local eval review UI without loading or running an adapter.
 
-```bash
+```sh
 glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
@@ -549,7 +549,7 @@ Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid
 
 Purpose: execute eval samples and apply quality gates.
 
-```bash
+```sh
 glasskit eval run --case task-01 --output-json eval/runs/results.json
 ```
 
@@ -580,7 +580,7 @@ Options:
 
 To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
-```bash
+```sh
 glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
 ```
 
@@ -590,7 +590,7 @@ Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one o
 
 Purpose: validate an eval directory without evaluating sample observations.
 
-```bash
+```sh
 glasskit eval validate --adapter eval/adapter.py:create_evaluator
 ```
 
@@ -611,7 +611,7 @@ Exit behavior: exits `0` when validation passes and `1` when validation fails.
 
 Purpose: print expanded sample rows.
 
-```bash
+```sh
 glasskit eval list-samples --case task-01
 ```
 
@@ -687,7 +687,7 @@ Other precedence rules:
 
 Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
-```bash
+```sh
 uv run --env-file .env glasskit eval run
 ```
 
@@ -763,13 +763,13 @@ Ignored samples remain in the `results` array with status `ignored`, their ignor
 
 Start with validation:
 
-```bash
+```sh
 uv run glasskit eval validate
 ```
 
 Then inspect samples and run one case:
 
-```bash
+```sh
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
 ```
