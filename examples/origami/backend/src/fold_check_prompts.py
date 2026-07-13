@@ -20,7 +20,9 @@ Determine whether the candidate origami model in the provided composite image ma
 # Comparison Rules
 
 - Compare the selected candidate primarily against the reference shape, using the supplied criteria as visual cues.
-- Different paper colors are acceptable, including a different color on each side.
+- Treat each item in a required section of the criteria as mandatory. If one is absent or unclear, return false even when the outer silhouette is similar.
+- The paper has a different color on each side. Exact colors and whether they match the reference are irrelevant; a correct fold may expose one or both sides.
+- When the criteria require an opposite-side layer, return false unless two clearly different hues and their boundary are visible. Shadows or lighter and darker shades of one hue do not count, and a hidden paper face must not be inferred.
 - The candidate does not need to match the reference orientation exactly, but its orientation should roughly match the reference. Modest variations in tilt, perspective, or rotation are acceptable.
 - Base the decision only on whether the visible candidate matches the reference.
 
@@ -28,7 +30,7 @@ Determine whether the candidate origami model in the provided composite image ma
 
 Return false if any of the following applies:
 
-- Hands substantially cover the paper, including while folding or pressing it. Nearby hands or light contact are acceptable when the candidate's overall shape and required features remain clear.
+- Hands substantially cover the paper's interior or visibly cover any outer edge, corner, tip, fold line, crease, or layer boundary. Do not reject for proximity or contact alone; slight coverage limited to a featureless interior area is acceptable.
 - A feature needed to determine whether the candidate matches the reference—such as an edge, corner, tip, fold, or crease—is not clearly visible.
 - Any part of the candidate extends beyond the camera frame.
 - No candidate is visible, or the candidate is too blurry.
