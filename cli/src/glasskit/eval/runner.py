@@ -4,7 +4,7 @@ import asyncio
 import json
 import sys
 from collections import defaultdict
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -32,7 +32,7 @@ from .models import (
     ValidationIssue,
     ValidationReport,
 )
-from .video import decode_sample_frames, probe_video, validate_sample_times
+from .video import iter_sample_frames, probe_video, validate_sample_times
 
 
 class RunCallbacks(Protocol):
@@ -52,6 +52,33 @@ class _EvaluationOutcome:
     runtime_error: Exception | None
     duration_s: float
     timing_mode: EvaluationTimingMode
+
+
+class _FrameCursor:
+    def __init__(self, frames: Generator[FrameSample, None, None]) -> None:
+        self._frames = frames
+        self._cached: dict[int, FrameSample] = {}
+
+    def take(self, sample: SampleExpectation) -> FrameSample:
+        try:
+            return self._cached.pop(sample.sample_index)
+        except KeyError:
+            pass
+
+        for frame in self._frames:
+            if frame.sample_index == sample.sample_index:
+                return frame
+            self._cached[frame.sample_index] = frame
+        raise RuntimeError(
+            "internal error: video decoder did not produce "
+            f"sample {sample.sample_index} for {sample.case_name}/{sample.target_id}"
+        )
+
+    def close(self) -> None:
+        for frame in self._cached.values():
+            frame.image.close()
+        self._cached.clear()
+        self._frames.close()
 
 
 async def validate_eval_directory(options: RunOptions) -> ValidationReport:
@@ -132,60 +159,52 @@ async def run_eval(
             ]
             if callbacks is not None:
                 callbacks.on_case_start(case, len(case_samples))
-            decoded = decode_sample_frames(
-                case.video_path,
-                evaluated_case_samples,
-                case_name=case.name,
+            frame_cursor = _FrameCursor(
+                iter_sample_frames(
+                    case.video_path,
+                    evaluated_case_samples,
+                    case_name=case.name,
+                )
             )
-            for target in case.targets:
-                target_samples = target.samples
-                if not target_samples:
-                    continue
-                if callbacks is not None:
-                    callbacks.on_target_start(case, target.id, len(target_samples))
-                context = TargetContext(
-                    id=target.id,
-                    index=target.index,
-                    label=target.label,
-                    config=target.config,
-                )
-                evaluated_target_samples = [
-                    sample for sample in target_samples if sample.ignore is None
-                ]
-                frames = [
-                    decoded[sample.sample_index] for sample in evaluated_target_samples
-                ]
-                evaluations = await _evaluate_samples(
-                    evaluator,
-                    frames,
-                    evaluated_target_samples,
-                    context,
-                    options=options,
-                )
-                evaluated_results = {
-                    evaluation.sample.sample_index: _result_for_evaluation(
-                        evaluation, options=options
-                    )
-                    for evaluation in evaluations
-                }
-                for sample in target_samples:
-                    result = (
-                        _ignored_result(sample)
-                        if sample.ignore is not None
-                        else evaluated_results[sample.sample_index]
-                    )
-                    if result.status in {"failed", "error"} and options.save_failures:
-                        frame = decoded.get(sample.sample_index)
-                        if frame is not None:
-                            result = _save_failure_artifacts(
-                                result,
-                                frame.image,
-                                options=options,
-                                eval_dir=eval_directory.path,
-                            )
-                    results.append(result)
+            try:
+                for target in case.targets:
+                    target_samples = target.samples
+                    if not target_samples:
+                        continue
                     if callbacks is not None:
-                        callbacks.on_result(result)
+                        callbacks.on_target_start(case, target.id, len(target_samples))
+                    context = TargetContext(
+                        id=target.id,
+                        index=target.index,
+                        label=target.label,
+                        config=target.config,
+                    )
+                    evaluated_target_samples = sorted(
+                        (sample for sample in target_samples if sample.ignore is None),
+                        key=lambda sample: (sample.timestamp_s, sample.sample_index),
+                    )
+                    evaluated_results = {
+                        result.sample_index: result
+                        for result in await _evaluate_samples(
+                            evaluator,
+                            frame_cursor,
+                            evaluated_target_samples,
+                            context,
+                            options=options,
+                            eval_dir=eval_directory.path,
+                        )
+                    }
+                    for sample in target_samples:
+                        result = (
+                            _ignored_result(sample)
+                            if sample.ignore is not None
+                            else evaluated_results[sample.sample_index]
+                        )
+                        results.append(result)
+                        if callbacks is not None:
+                            callbacks.on_result(result)
+            finally:
+                frame_cursor.close()
     finally:
         await _close_evaluator(evaluator)
 
@@ -246,28 +265,43 @@ def _validate_videos(eval_directory: EvalDirectory) -> list[ValidationIssue]:
 
 async def _evaluate_samples(
     evaluator: LoadedEvaluator,
-    frames: list[FrameSample],
+    frame_cursor: _FrameCursor,
     samples: list[SampleExpectation],
     target: TargetContext,
     *,
     options: RunOptions,
-) -> list[_EvaluationOutcome]:
+    eval_dir: Path,
+) -> list[SampleResult]:
     if not samples:
         return []
     if evaluator.supports_batch_evaluation:
-        return await _evaluate_sample_batch(
-            evaluator,
-            frames,
-            samples,
-            target,
-            options=options,
-        )
+        frames = [frame_cursor.take(sample) for sample in samples]
+        try:
+            evaluations = await _evaluate_sample_batch(
+                evaluator,
+                frames,
+                samples,
+                target,
+                options=options,
+            )
+            return [
+                _result_for_frame(
+                    evaluation,
+                    frame,
+                    options=options,
+                    eval_dir=eval_dir,
+                )
+                for evaluation, frame in zip(evaluations, frames, strict=True)
+            ]
+        finally:
+            _close_frames(frames)
     return await _evaluate_samples_individually(
         evaluator,
-        frames,
+        frame_cursor,
         samples,
         target,
         options=options,
+        eval_dir=eval_dir,
     )
 
 
@@ -323,38 +357,50 @@ async def _evaluate_sample_batch(
 
 async def _evaluate_samples_individually(
     evaluator: LoadedEvaluator,
-    frames: list[FrameSample],
+    frame_cursor: _FrameCursor,
     samples: list[SampleExpectation],
     target: TargetContext,
     *,
     options: RunOptions,
-) -> list[_EvaluationOutcome]:
-    async def evaluate_index(index: int) -> _EvaluationOutcome:
+    eval_dir: Path,
+) -> list[SampleResult]:
+    async def evaluate_index(index: int) -> SampleResult:
         sample = samples[index]
-        started_at = perf_counter()
+        frame = frame_cursor.take(sample)
         try:
-            observation = await evaluator.evaluate(frames[index], target)
-        except Exception as error:
-            duration_s = _elapsed_seconds(started_at)
-            runtime_error = _sample_adapter_runtime_error(error, sample)
-            if not options.keep_going:
-                if runtime_error is error:
-                    raise runtime_error from None
-                raise runtime_error from error
-            return _EvaluationOutcome(
-                sample=sample,
-                observation=None,
-                runtime_error=runtime_error,
-                duration_s=duration_s,
-                timing_mode="individual",
+            started_at = perf_counter()
+            try:
+                observation = await evaluator.evaluate(frame, target)
+            except Exception as error:
+                duration_s = _elapsed_seconds(started_at)
+                runtime_error = _sample_adapter_runtime_error(error, sample)
+                if not options.keep_going:
+                    if runtime_error is error:
+                        raise runtime_error from None
+                    raise runtime_error from error
+                evaluation = _EvaluationOutcome(
+                    sample=sample,
+                    observation=None,
+                    runtime_error=runtime_error,
+                    duration_s=duration_s,
+                    timing_mode="individual",
+                )
+            else:
+                evaluation = _validated_observation(
+                    sample,
+                    observation,
+                    duration_s=_elapsed_seconds(started_at),
+                    timing_mode="individual",
+                    keep_going=options.keep_going,
+                )
+            return _result_for_frame(
+                evaluation,
+                frame,
+                options=options,
+                eval_dir=eval_dir,
             )
-        return _validated_observation(
-            sample,
-            observation,
-            duration_s=_elapsed_seconds(started_at),
-            timing_mode="individual",
-            keep_going=options.keep_going,
-        )
+        finally:
+            frame.image.close()
 
     return await _bounded_map(
         len(samples),
@@ -367,9 +413,9 @@ async def _bounded_map(
     item_count: int,
     *,
     concurrency: int,
-    evaluate_index: Callable[[int], Awaitable[_EvaluationOutcome]],
-) -> list[_EvaluationOutcome]:
-    results: list[_EvaluationOutcome | None] = [None] * item_count
+    evaluate_index: Callable[[int], Awaitable[SampleResult]],
+) -> list[SampleResult]:
+    results: list[SampleResult | None] = [None] * item_count
     next_index = 0
     stopped = False
     errors: list[tuple[int, Exception]] = []
@@ -560,6 +606,29 @@ def _result_for_evaluation(
         evaluation_duration_s=evaluation.duration_s,
         evaluation_timing_mode=evaluation.timing_mode,
     )
+
+
+def _result_for_frame(
+    evaluation: _EvaluationOutcome,
+    frame: FrameSample,
+    *,
+    options: RunOptions,
+    eval_dir: Path,
+) -> SampleResult:
+    result = _result_for_evaluation(evaluation, options=options)
+    if result.status not in {"failed", "error"} or not options.save_failures:
+        return result
+    return _save_failure_artifacts(
+        result,
+        frame.image,
+        options=options,
+        eval_dir=eval_dir,
+    )
+
+
+def _close_frames(frames: list[FrameSample]) -> None:
+    for frame in frames:
+        frame.image.close()
 
 
 def _save_failure_artifacts(

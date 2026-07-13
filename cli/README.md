@@ -431,6 +431,8 @@ Implement at least one strategy. If an evaluator implements both methods, `evalu
 
 Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`.
 
+GlassKit keeps one video decoder open per case and produces requested frames on demand. Individual evaluation retains a frame only while its adapter call is in flight, so decoded-image memory is bounded primarily by `--concurrency`. Batch evaluation retains the current target's decoded frames until `evaluate_many` returns. Cases whose target time ranges overlap or run backward may temporarily cache frames already reached for a later target rather than seeking and changing frame-selection behavior.
+
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
 Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
