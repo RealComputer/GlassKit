@@ -328,7 +328,7 @@ Sample block fields:
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
 
-Use `ignore` for a known exceptional sample that should remain documented without affecting a run. The value is the reason, so it is more durable than a YAML comment and remains visible after saving from `glasskit eval review`. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
+Use `ignore` for a known exceptional sample that should remain documented without affecting a run. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
 
 ## Comparison Reference
 
