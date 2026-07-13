@@ -76,8 +76,11 @@ targets:
       expect: true
   step_6:
     samples:
-    - range: [226.0, 243.5]
+    - range: [226.0, 243.0]
       expect: false
+    - at: 243.0
+      expect: false
+      ignore: ambiguous transition frame
     - at: 243.5
       expect: true
     - range: [244.0, 247.0]
