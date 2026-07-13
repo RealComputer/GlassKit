@@ -60,6 +60,7 @@ def decode_sample_frames(
     try:
         with av.open(str(video_path)) as container:
             stream = _video_stream(container)
+            stream.thread_type = "AUTO"
             frame_rate = _average_rate(stream)
             pending_index = 0
             frame_index = -1

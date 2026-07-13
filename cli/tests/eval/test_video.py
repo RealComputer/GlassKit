@@ -74,6 +74,22 @@ def test_decode_sample_frames_stops_after_final_requested_frame(
     assert container.decoded_frame_count == 2
 
 
+def test_decode_sample_frames_enables_auto_decoder_threading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    container = _CountingContainer(frame_count=1)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+
+    decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    assert container.streams[0].thread_type == "AUTO"
+
+
 def test_decode_sample_frames_can_stop_on_first_frame(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -129,6 +145,7 @@ class _CountingContainer:
 class _FakeStream:
     type = "video"
     average_rate = 1.0
+    thread_type = "SLICE"
 
 
 class _FakeFrame:
