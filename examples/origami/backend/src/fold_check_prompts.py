@@ -20,6 +20,7 @@ Determine whether the candidate origami model in the provided composite image ma
 # Comparison Rules
 
 - Compare the selected candidate primarily against the reference shape, using the supplied criteria as visual cues.
+- Different paper colors are acceptable, including a different color on each side.
 - The candidate does not need to match the reference orientation exactly, but its orientation should roughly match the reference. Modest variations in tilt, perspective, or rotation are acceptable.
 - Base the decision only on whether the visible candidate matches the reference.
 
