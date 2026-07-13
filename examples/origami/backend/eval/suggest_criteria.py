@@ -56,6 +56,7 @@ Write improved step-specific evaluation criteria for {target_id} ({target_title}
 
 - The target reference drawing is the source of truth for the intended fold.
 - Positive examples are reviewed frames where the target fold is complete. Negative examples are reviewed frames where it is not complete.
+- When fast-evaluator feedback is attached to an example, the reviewed label remains ground truth. Use the mismatch to make general visual distinctions easier for a smaller model; do not write a rule for that individual image.
 - Use the examples to understand stable geometry and layer topology, especially confusing adjacent states. Do not merely summarize or memorize them.
 - Generalize to different people, paper sizes, two-sided paper colors, lighting, surfaces, cameras, modest rotations, and perspective.
 - Do not mention example identifiers, timestamps, exact colors, the recording background, or the order in which examples appear.
@@ -121,6 +122,14 @@ class CriteriaSuggestion:
     criteria: str
 
 
+@dataclass(frozen=True)
+class EvalObservation:
+    timestamp_s: float
+    expected: bool
+    observed: bool
+    status: str
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
@@ -129,6 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             target_id=args.target,
             steps_path=args.steps.expanduser().resolve(),
             examples_per_class=args.examples_per_class,
+            eval_results_path=(
+                args.eval_results.expanduser().resolve()
+                if args.eval_results is not None
+                else None
+            ),
         )
         rendered = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.output is None:
@@ -178,6 +192,14 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--eval-results",
+        type=Path,
+        help=(
+            "Optional glasskit eval --output-json report. Selected examples are "
+            "annotated with fast-evaluator matches and mismatches."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         help="Optional JSON report path. Without it, the report is printed.",
@@ -201,6 +223,7 @@ def _suggest_criteria(
     target_id: str,
     steps_path: Path,
     examples_per_class: int,
+    eval_results_path: Path | None,
 ) -> dict[str, Any]:
     steps = load_fold_check_steps(steps_path)
     step_index = next(
@@ -211,6 +234,15 @@ def _suggest_criteria(
         raise RuntimeError(f"unknown origami target id: {target_id}")
     step = steps[step_index]
     loaded_case = _load_case(case_path, target_id=target_id)
+    observations = (
+        _load_eval_observations(
+            eval_results_path,
+            case_name=case_path.stem,
+            target_id=target_id,
+        )
+        if eval_results_path is not None
+        else None
+    )
     selected = _select_examples(
         loaded_case.examples,
         per_class=examples_per_class,
@@ -235,6 +267,7 @@ def _suggest_criteria(
         references=references,
         selected=selected,
         images_by_time=images_by_time,
+        observations=observations,
     )
     suggestion, interaction_id = _call_gemini(inputs, target_id=target_id)
     return {
@@ -249,6 +282,25 @@ def _suggest_criteria(
             ],
             "true": [example.timestamp_s for example in selected if example.expected],
         },
+        "eval_results": str(eval_results_path)
+        if eval_results_path is not None
+        else None,
+        "evaluator_feedback": (
+            [
+                {
+                    "timestamp_s": example.timestamp_s,
+                    "expected": observation.expected,
+                    "observed": observation.observed,
+                    "status": observation.status,
+                }
+                for example in selected
+                if observations is not None
+                and (observation := observations.get(_time_key(example.timestamp_s)))
+                is not None
+            ]
+            if observations is not None
+            else None
+        ),
         "visual_analysis": suggestion.visual_analysis,
         "generalization_notes": suggestion.generalization_notes,
         "criteria": suggestion.criteria,
@@ -353,6 +405,50 @@ def _expand_case_block(
     ]
 
 
+def _load_eval_observations(
+    path: Path,
+    *,
+    case_name: str,
+    target_id: str,
+) -> dict[str, EvalObservation]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("results"), list):
+        raise RuntimeError("eval results JSON must contain a results array")
+    observations: dict[str, EvalObservation] = {}
+    for raw_result in raw["results"]:
+        if not isinstance(raw_result, dict):
+            raise RuntimeError("eval results entries must be objects")
+        if raw_result.get("case") != case_name or raw_result.get("target") != target_id:
+            continue
+        expected = raw_result.get("expected")
+        observed = raw_result.get("observed_value")
+        if not isinstance(expected, bool) or not isinstance(observed, bool):
+            continue
+        timestamp_s = _nonnegative_number(
+            raw_result.get("timestamp_s"),
+            "eval result timestamp_s",
+        )
+        status = raw_result.get("status")
+        if not isinstance(status, str) or not status.strip():
+            raise RuntimeError("eval result status must be a non-empty string")
+        key = _time_key(timestamp_s)
+        if key in observations:
+            raise RuntimeError(
+                f"duplicate eval result for {target_id} at {timestamp_s:g}s"
+            )
+        observations[key] = EvalObservation(
+            timestamp_s=timestamp_s,
+            expected=expected,
+            observed=observed,
+            status=status.strip(),
+        )
+    if not observations:
+        raise RuntimeError(
+            f"eval results contain no scored samples for {case_name}/{target_id}"
+        )
+    return observations
+
+
 def _select_examples(
     examples: list[CaseExample],
     *,
@@ -431,6 +527,7 @@ def _build_authoring_inputs(
     references: dict[str, Image.Image],
     selected: list[CaseExample],
     images_by_time: dict[str, Image.Image],
+    observations: dict[str, EvalObservation] | None,
 ) -> list[dict[str, Any]]:
     inputs: list[dict[str, Any]] = [
         {
@@ -476,11 +573,30 @@ def _build_authoring_inputs(
         image = images_by_time.get(_time_key(example.timestamp_s))
         if image is None:
             raise RuntimeError(f"video decoder missed a selected {label.lower()} frame")
+        feedback = ""
+        if observations is not None:
+            observation = observations.get(_time_key(example.timestamp_s))
+            if observation is None:
+                raise RuntimeError("eval results are missing a selected camera example")
+            if observation.expected is not example.expected:
+                raise RuntimeError("eval result disagrees with the reviewed case label")
+            verdict = (
+                "MATCHED"
+                if observation.observed is example.expected
+                else "MISCLASSIFIED"
+            )
+            feedback = (
+                f" Fast evaluator returned {str(observation.observed).upper()} "
+                f"({verdict})."
+            )
         inputs.extend(
             [
                 {
                     "type": "text",
-                    "text": f"Reviewed {label} camera example {prefix}{counts[example.expected]}:",
+                    "text": (
+                        f"Reviewed {label} camera example "
+                        f"{prefix}{counts[example.expected]}.{feedback}"
+                    ),
                 },
                 _image_input(image),
             ]

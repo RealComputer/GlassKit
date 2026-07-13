@@ -184,8 +184,11 @@ cd backend
 uv run --env-file .env python -m eval.suggest_criteria \
   --case eval/cases/full-run.yaml \
   --target step_5 \
+  --eval-results eval/runs/suggest-criteria/step_5-eval.json \
   --output eval/runs/suggest-criteria/step_5.json
 ```
+
+The optional `--eval-results` value is a report previously written by `glasskit eval run --output-json`. It marks which selected images confused the fast evaluator without exposing timestamps to Gemini; the full balanced true/false set still anchors the revision. Omit it when drafting criteria for the first time.
 
 The JSON report records the selected timestamps for reproducibility, the model's visual analysis and generalization notes, and ready-to-review Markdown criteria. The tool deliberately does not update `origami_steps.json`; compare its proposal with the reference and the full reviewed sample set before applying it, then run the Overshoot eval to measure the effect.
 

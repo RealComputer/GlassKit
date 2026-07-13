@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from eval.suggest_criteria import (
     CaseExample,
+    EvalObservation,
     _load_case,
+    _load_eval_observations,
     _parse_suggestion,
     _select_examples,
 )
@@ -68,6 +71,63 @@ class SelectExamplesTests(unittest.TestCase):
         self.assertEqual({example.block_index for example in false_samples}, {1, 2})
         self.assertEqual({example.block_index for example in true_samples}, {3, 4})
         self.assertEqual(selected, _select_examples(examples, per_class=4))
+
+
+class LoadEvalObservationsTests(unittest.TestCase):
+    def test_loads_only_scored_results_for_the_selected_case_and_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "case": "full-run",
+                                "target": "step_5",
+                                "timestamp_s": 202.5,
+                                "expected": False,
+                                "observed_value": True,
+                                "status": "failed",
+                            },
+                            {
+                                "case": "other",
+                                "target": "step_5",
+                                "timestamp_s": 1.0,
+                                "expected": True,
+                                "observed_value": True,
+                                "status": "passed",
+                            },
+                            {
+                                "case": "full-run",
+                                "target": "step_5",
+                                "timestamp_s": 221.0,
+                                "expected": True,
+                                "observed_value": None,
+                                "status": "ignored",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            observations = _load_eval_observations(
+                path,
+                case_name="full-run",
+                target_id="step_5",
+            )
+
+            self.assertEqual(
+                observations,
+                {
+                    "202.500000": EvalObservation(
+                        timestamp_s=202.5,
+                        expected=False,
+                        observed=True,
+                        status="failed",
+                    )
+                },
+            )
 
 
 class ParseSuggestionTests(unittest.TestCase):
