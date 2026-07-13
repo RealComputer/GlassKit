@@ -4,48 +4,48 @@
     "title": "Step 1",
     "hud_image": "origami_step_1",
     "reference_image": "ref-imgs/1.jpg",
-    "criteria": "## Target\n\n- A single downward-pointing triangle.\n- A long horizontal top edge and two diagonal edges that meet at the bottom point.\n\n## Reject\n\n- A square or diamond.\n- An upward-pointing triangle.\n- Extra visible flaps that break the simple triangular silhouette."
+    "criteria": "## Required Features\n\n- A single downward-pointing triangle.\n- A long horizontal top edge and two diagonal edges that meet at the bottom point.\n\n## Reject If\n\n- A square or diamond.\n- An upward-pointing triangle.\n- Extra visible flaps that break the simple triangular silhouette."
   },
   {
     "id": "step_2",
     "title": "Step 2",
     "hud_image": "origami_step_2",
     "reference_image": "ref-imgs/2.jpg",
-    "criteria": "## Target\n\n- An upright kite or diamond with top, bottom, left, and right points.\n- Two narrow front flaps that meet along the vertical center near the bottom.\n\n## Reject\n\n- A downward-pointing triangle.\n- A plain kite or diamond without the two narrow center flaps."
+    "criteria": "## Required Features\n\n- An upright kite or diamond with top, bottom, left, and right points.\n- Two narrow front flaps that meet along the vertical center near the bottom.\n\n## Reject If\n\n- A downward-pointing triangle.\n- A plain kite or diamond without the two narrow center flaps."
   },
   {
     "id": "step_3",
     "title": "Step 3",
     "hud_image": "origami_step_3",
     "reference_image": "ref-imgs/3.jpg",
-    "criteria": "## Target\n\n- A diamond with a clear horizontal crease across the middle.\n- Two narrow upright flaps that rise from the middle crease to the top center.\n\n## Reject\n\n- A closed kite or diamond without the horizontal middle crease.\n- A model without both narrow top-center flaps."
+    "criteria": "## Required Features\n\n- A diamond with a clear horizontal crease across the middle.\n- Two narrow upright flaps that rise from the middle crease to the top center.\n\n## Reject If\n\n- A closed kite or diamond without the horizontal middle crease.\n- A model without both narrow top-center flaps."
   },
   {
     "id": "step_4",
     "title": "Step 4",
     "hud_image": "origami_step_4",
     "reference_image": "ref-imgs/4.jpg",
-    "criteria": "## Target\n\n- A large lower diamond with a horizontal crease across the middle.\n- Two distinct, broad triangular side flaps opened outward and upward: one to the left and one to the right.\n- A narrow upright flap separated at the top center.\n- A wide, roughly symmetric crown formed by the three flaps.\n\n## Reject\n\n- A plain diamond.\n- A narrow or asymmetric cluster of mostly upright top flaps.\n- Overlapping top flaps.\n- Either side flap still folded toward the center or not clearly projecting outward."
+    "criteria": "## Required Features\n\n- A large lower diamond with a horizontal crease across the middle.\n- Two distinct, broad triangular side flaps opened outward and upward: one to the left and one to the right.\n- A narrow upright flap separated at the top center.\n- A wide, roughly symmetric crown formed by the three flaps.\n\n## Reject If\n\n- A plain diamond.\n- A narrow or asymmetric cluster of mostly upright top flaps.\n- Overlapping top flaps.\n- Either side flap still folded toward the center or not clearly projecting outward."
   },
   {
     "id": "step_5",
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "## Target\n\n- A lower diamond and a crown with left, center, and right points.\n- One broad, centered, roughly symmetric triangular face in front of the crown.\n- The front triangle's tip points into the crown, its diagonal edges reach both middle corners, and its horizontal base borders the lower diamond. All three crown points remain visible behind it.\n\n## Allowed Variations\n\n- Paper color is irrelevant; surface contrast may help identify the front triangle as a separate layer.\n- One fingertip may touch the triangle or its base if the complete triangle and lower diamond remain visible.\n\n## Reject\n\n- Narrow crown flaps with no separate broad front triangle.\n- A narrow, one-sided, or incomplete front triangle.\n- A missing lower diamond.\n- Multiple fingers pressing or holding the triangle or its base."
+    "criteria": "## Required Features\n\n- A lower diamond and a crown with left, center, and right points.\n- One broad, centered, roughly symmetric triangular face in front of the crown.\n- The front triangle's tip points into the crown, its diagonal edges reach both middle corners, and its horizontal base borders the lower diamond. All three crown points remain visible behind it.\n\n## Acceptable Variations\n\n- Paper color is irrelevant; surface contrast may help identify the front triangle as a separate layer.\n- One fingertip may touch the triangle or its base if the complete triangle and lower diamond remain visible.\n\n## Reject If\n\n- Narrow crown flaps with no separate broad front triangle.\n- A narrow, one-sided, or incomplete front triangle.\n- A missing lower diamond.\n- Multiple fingers pressing or holding the triangle or its base."
   },
   {
     "id": "step_6",
     "title": "Step 6",
     "hud_image": "origami_step_6",
     "reference_image": "ref-imgs/6.jpg",
-    "criteria": "## Target\n\n- A broad downward-pointing lower body with a horizontal folded band along its top edge.\n- A crown above the band with a centered upright flap between distinct left and right side flaps.\n\n## Allowed Variations\n\n- Perspective may make the lower body triangular or diamond-like and the band shallow.\n- Crown flaps may overlap slightly if the left, center, and right points remain distinct. Paper color and exact proportions are irrelevant.\n\n## Reject\n\n- A large upward-pointing triangle covering the center.\n- A missing band, a lower body that does not point downward, or a crown without three distinct points."
+    "criteria": "## Required Features\n\n- A broad downward-pointing lower body with a horizontal folded band along its top edge.\n- A crown above the band with a centered upright flap between distinct left and right side flaps.\n\n## Acceptable Variations\n\n- Perspective may make the lower body triangular or diamond-like and the band shallow.\n- Crown flaps may overlap slightly if the left, center, and right points remain distinct. Paper color and exact proportions are irrelevant.\n\n## Reject If\n\n- A large upward-pointing triangle covering the center.\n- A missing band, a lower body that does not point downward, or a crown without three distinct points."
   },
   {
     "id": "step_7",
     "title": "Step 7",
     "hud_image": "origami_step_7",
     "reference_image": "ref-imgs/7.jpg",
-    "criteria": "## Target\n\n- A completed crown above a wide, shallow folded base.\n- No long body or large diamond below the base.\n\n## Allowed Views\n\n- Front or tilted: a tall center point and separate left and right flaps rise above the base, which may look like one broad, shallow triangle.\n- Nearly edge-on: crown layers may overlap and the base may look like a thin wedge or shallow triangular gap. This view is valid when the base is at least about three times wider than its visible depth and both ends are visible.\n- Paper color is irrelevant.\n\n## Reject\n\n- A large downward-pointing body below the crown.\n- A deep, open pocket whose visible depth is comparable to its width.\n- A one-sided or strongly asymmetric base.\n- A missing or hidden base end."
+    "criteria": "## Required Features\n\n- A completed crown above a wide, shallow folded base.\n- No long body or large diamond below the base.\n\n## Acceptable Views\n\n- Front or tilted: a tall center point and separate left and right flaps rise above the base, which may look like one broad, shallow triangle.\n- Nearly edge-on: crown layers may overlap and the base may look like a thin wedge or shallow triangular gap. This view is valid when the base is at least about three times wider than its visible depth and both ends are visible.\n- Paper color is irrelevant.\n\n## Reject If\n\n- A large downward-pointing body below the crown.\n- A deep, open pocket whose visible depth is comparable to its width.\n- A one-sided or strongly asymmetric base.\n- A missing or hidden base end."
   }
 ]
