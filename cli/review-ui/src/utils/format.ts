@@ -10,7 +10,8 @@ export function formatTime(seconds: number, includeUnit = false): string {
 }
 
 export function formatSeconds(seconds: number): string {
-  return `${seconds.toFixed(3)}s`;
+  const rounded = Number(seconds.toFixed(3));
+  return `${Object.is(rounded, -0) ? 0 : rounded}s`;
 }
 
 export function expectationSummary(sample: ReviewSample, maxLength = 46): string {

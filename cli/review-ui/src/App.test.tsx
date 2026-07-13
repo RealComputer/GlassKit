@@ -95,7 +95,7 @@ describe("review application navigation and drafts", () => {
 
     const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
     expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
-    expect(screen.queryByText("Sample 1.000s")).toBeNull();
+    expect(screen.queryByText("Sample 1s")).toBeNull();
     expect(document.querySelector(".header-context")?.textContent).toBe("case-001 / target_a");
   });
 
@@ -239,10 +239,10 @@ describe("review application navigation and drafts", () => {
     fireEvent.pointerUp(timelineTab);
     expect(document.activeElement).toBe(document.body);
     const first = screen.getByRole("button", {
-      name: "status, 1.000s, expected false",
+      name: "status, 1s, expected false",
     });
     const second = screen.getByRole("button", {
-      name: "status, 1.500s, expected false",
+      name: "status, 1.5s, expected false",
     });
     expect(document.querySelector(".range-band")).toBeNull();
     expect(first.style.getPropertyValue("--expect-color")).toBe(
@@ -259,7 +259,7 @@ describe("review application navigation and drafts", () => {
     expect(samplesTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByLabelText("Sample timeline")).toBeNull();
     const group = screen.getByRole("button", {
-      name: "Expand 1.000s–1.500s · 2 samples",
+      name: "Expand 1s–1.5s · 2 samples",
     });
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
 
@@ -286,7 +286,7 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const first = await screen.findByRole("button", {
-      name: "target a, 1.000s, expected false",
+      name: "target a, 1s, expected false",
     });
     expect(first.getAttribute("title")).toBeNull();
     const lane = document.querySelector<HTMLElement>(".lane-track");
@@ -304,16 +304,16 @@ describe("review application navigation and drafts", () => {
     });
 
     fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
     fireEvent.pointerMove(lane!, { clientX: 200, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("2.000s · true");
+    expect(screen.getByRole("tooltip").textContent).toBe("2s · true");
     const timelineScroll = document.querySelector<HTMLElement>(".timeline-scroll");
     expect(timelineScroll).not.toBeNull();
     fireEvent.scroll(timelineScroll!);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
     fireEvent.pointerLeave(lane!);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
@@ -334,10 +334,10 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const first = await screen.findByRole("button", {
-      name: "target a, 1.000s, expected false",
+      name: "target a, 1s, expected false",
     });
     const second = screen.getByRole("button", {
-      name: "target a, 1.100s, expected true",
+      name: "target a, 1.1s, expected true",
     });
     const lane = document.querySelector<HTMLElement>(".lane-track");
     expect(lane).not.toBeNull();
@@ -357,7 +357,7 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
 
     fireEvent.pointerMove(lane!, { clientX: 104, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
     fireEvent.pointerDown(lane!, { button: 0, clientX: 104, pointerId: 1 });
     fireEvent.pointerUp(lane!, { button: 0, clientX: 104, pointerId: 1 });
 
@@ -447,7 +447,7 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const first = await screen.findByRole("button", {
-      name: "target a, 1.000s, expected 1",
+      name: "target a, 1s, expected 1",
     });
     first.focus();
     fireEvent.pointerUp(first);
@@ -565,7 +565,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.blur(expected);
     fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     const secondRow = screen
-      .getAllByText("2.000s")
+      .getAllByText("2s")
       .find((element) => element.tagName === "TD")
       ?.closest("tr");
     expect(secondRow).not.toBeNull();
@@ -734,7 +734,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.change(ignore, { target: { value: "Provider output is flaky." } });
     expect(
       screen.getByRole("button", {
-        name: "target a, 1.000s, expected true, ignored: Provider output is flaky.",
+        name: "target a, 1s, expected true, ignored: Provider output is flaky.",
       }),
     ).toBeTruthy();
     fireEvent.blur(ignore);
