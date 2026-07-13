@@ -578,11 +578,11 @@ Options:
 
 `--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
-To test one specific sample, first find its timestamp and the following timestamp, then use the selected timestamp as `--from` and the following timestamp as `--until`. Because `--until` is exclusive, this example runs the sample at `7.4` seconds but not the next sample at `7.65` seconds:
+To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
 ```bash
 glasskit eval list-samples --case task-01 --target step_1
-glasskit eval run --case task-01 --target step_1 --from 7.4 --until 7.65
+glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
 ```
 
 Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` when setup or runtime errors abort the run.
