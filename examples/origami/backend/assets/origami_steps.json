@@ -32,7 +32,7 @@
     "title": "Step 5",
     "hud_image": "origami_step_5",
     "reference_image": "ref-imgs/5.jpg",
-    "criteria": "## Required Features\n\n- A lower diamond and a crown with left, center, and right points.\n- One broad, centered, roughly symmetric triangular face in front of the crown.\n- The front triangle's tip points into the crown, its diagonal edges reach both middle corners, and its horizontal base borders the lower diamond. All three crown points remain visible behind it.\n\n## Acceptable Variations\n\n- One fingertip may touch the triangle or its base if the complete triangle and lower diamond remain visible.\n\n## Reject If\n\n- Narrow crown flaps with no separate broad front triangle.\n- A narrow, one-sided, or incomplete front triangle.\n- A missing lower diamond.\n- Multiple fingers pressing or holding the triangle or its base."
+    "criteria": "## Required Features\n\n- A lower diamond and a crown with left, center, and right points.\n- One broad, centered, roughly symmetric triangular face in front of the crown.\n- The front triangle's tip points into the crown, its diagonal edges reach both middle corners, and its horizontal base borders the lower diamond. All three crown points remain visible behind it.\n\n## Reject If\n\n- Narrow crown flaps with no separate broad front triangle.\n- A narrow, one-sided, or incomplete front triangle.\n- A missing lower diamond."
   },
   {
     "id": "step_6",
