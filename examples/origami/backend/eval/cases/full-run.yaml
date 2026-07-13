@@ -67,6 +67,8 @@ targets:
       expect: true
     - range: [215.0, 226.0]
       expect: false
+    - range: [226.0, 227.5]
+      expect: true
   step_6:
     samples:
     - range: [226.0, 243.0]
