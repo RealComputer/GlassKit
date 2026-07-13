@@ -76,10 +76,15 @@ targets:
       expect: true
   step_6:
     samples:
-    - range: [226.0, 243.5]
+    - range: [226.0, 242.5]
       expect: false
-    - at: 243.5
+    - at: 242.5
       expect: true
+      ignore: unstable
+    - at: 243.0
+      expect: true
+    - at: 243.5
+      expect: false
     - at: 244.0
       expect: true
       ignore: unstable
@@ -97,11 +102,14 @@ targets:
     samples:
     - range: [258.0, 270.5]
       expect: false
-    - range: [270.5, 272.5]
+    - range: [270.5, 273.5]
       expect: true
-    - range: [272.5, 275.5]
+    - at: 273.5
       expect: false
-    - range: [275.5, 277.5]
+      ignore: unstable
+    - range: [274.0, 275.0]
+      expect: false
+    - range: [275.0, 277.5]
       expect: true
     - at: 277.5
       expect: false
