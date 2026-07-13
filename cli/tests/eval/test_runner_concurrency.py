@@ -124,6 +124,52 @@ def test_runner_handles_targets_declared_out_of_timestamp_order(
     ]
 
 
+def test_runner_preserves_declared_sample_order_for_individual_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _write_eval(
+        tmp_path,
+        """
+  step:
+    samples:
+      - at: 1.0
+        expect: true
+      - at: 0.0
+        expect: false
+        """,
+    )
+    evaluator = AsyncTrackingEvaluator()
+
+    report = asyncio.run(_run_with_evaluator(monkeypatch, evaluator, eval_dir=eval_dir))
+
+    assert report.success
+    assert evaluator.completed == [0, 1]
+
+
+def test_runner_preserves_declared_sample_order_for_batch_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _write_eval(
+        tmp_path,
+        """
+  step:
+    samples:
+      - at: 1.0
+        expect: true
+      - at: 0.0
+        expect: false
+        """,
+    )
+    evaluator = BatchEvaluator()
+
+    report = asyncio.run(
+        _run_with_evaluator(monkeypatch, evaluator, eval_dir=eval_dir, batch=True)
+    )
+
+    assert report.success
+    assert evaluator.batch_sample_indices == [[0, 1]]
+
+
 def test_keep_going_records_only_the_failing_individual_sample(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -569,10 +615,12 @@ class BatchEvaluator:
     def __init__(self) -> None:
         self.batch_calls = 0
         self.batch_sizes: list[int] = []
+        self.batch_sample_indices: list[list[int]] = []
 
     async def evaluate_many(self, samples: list[Any], target: Any) -> list[bool]:
         self.batch_calls += 1
         self.batch_sizes.append(len(samples))
+        self.batch_sample_indices.append([sample.sample_index for sample in samples])
         return [_observation(sample) for sample in samples]
 
     async def close(self) -> None:

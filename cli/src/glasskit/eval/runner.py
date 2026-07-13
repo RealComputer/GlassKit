@@ -227,10 +227,9 @@ async def _run_trial(
                         label=target.label,
                         config=target.config,
                     )
-                    evaluated_target_samples = sorted(
-                        (sample for sample in target_samples if sample.ignore is None),
-                        key=lambda sample: (sample.timestamp_s, sample.sample_index),
-                    )
+                    evaluated_target_samples = [
+                        sample for sample in target_samples if sample.ignore is None
+                    ]
                     evaluated_results = {
                         result.sample_index: result
                         for result in await _evaluate_samples(

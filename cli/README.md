@@ -443,9 +443,9 @@ An evaluator chooses one of two execution strategies by implementing `evaluate` 
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
 
-Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`.
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit schedules the remaining samples in case-file declaration order and passes batch samples in that order.
 
-Within each trial, GlassKit keeps one video decoder open per case and produces requested frames on demand. Individual evaluation retains a frame only while its adapter call is in flight, so decoded-image memory is bounded primarily by `--concurrency`. Batch evaluation retains the current target's decoded frames until `evaluate_many` returns. Cases whose target time ranges overlap or run backward may temporarily cache frames already reached for a later target rather than seeking and changing frame-selection behavior.
+Within each trial, GlassKit keeps one video decoder open per case and produces requested frames on demand. Individual evaluation retains a frame only while its adapter call is in flight, so decoded-image memory is bounded primarily by `--concurrency`. Batch evaluation retains the current target's decoded frames until `evaluate_many` returns. Cases with samples declared out of timestamp order, or with target time ranges that overlap or run backward, may temporarily cache already decoded frames rather than seeking and changing frame-selection behavior.
 
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
