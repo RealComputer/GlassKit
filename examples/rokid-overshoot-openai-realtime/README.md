@@ -48,7 +48,7 @@ BACKEND_BASE_URL=http://<YOUR_BACKEND>
 
 Create the backend env file:
 
-```bash
+```sh
 cd backend
 cp .env.example .env
 # set OVERSHOOT_API_KEY and OPENAI_API_KEY
@@ -56,7 +56,7 @@ cp .env.example .env
 
 ## Run The Backend
 
-```bash
+```sh
 cd backend
 uv run --env-file .env fastapi dev main.py --host 0.0.0.0
 ```
@@ -67,7 +67,7 @@ Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB
 
 Useful ADB commands:
 
-```bash
+```sh
 adb devices # confirm your device is visible
 adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
 adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
@@ -77,7 +77,7 @@ adb shell cmd wifi status # confirm the connection
 
 Optional wireless ADB:
 
-```bash
+```sh
 adb shell ip -f inet addr show wlan0 # check the glasses IP
 ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
 adb tcpip 5555 # enable remote ADB mode
