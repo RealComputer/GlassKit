@@ -5,7 +5,7 @@ from typing import Any
 FOLD_CHECK_SYSTEM_PROMPT = """\
 # Goal
 
-Determine whether a candidate origami model in a single composite image matches the reference shape.
+Determine whether the candidate origami model in the provided composite image matches the reference shape.
 
 # Image Layout
 
@@ -25,21 +25,22 @@ Determine whether a candidate origami model in a single composite image matches 
 
 # Visibility Requirements
 
-Return `false` if any of the following applies:
+Return false if any of the following applies:
 
-- Hands cover a substantial portion of the paper, obscure any relevant fold or crease, or otherwise prevent confident verification of the complete shape and relevant folds.
-- The entire paper outline, including every edge, corner, and tip, is not visible enough to verify.
-- The paper touches or crosses a camera-frame boundary, or is so close to one that its full boundary cannot be confirmed.
-- The candidate is missing, too blurry, or too obstructed to confidently verify the complete shape and relevant folds.
+- Hands cover a substantial portion of the paper.
+- A feature needed to determine whether the candidate matches the reference—such as an edge, corner, tip, fold, or crease—is not clearly visible.
+- The candidate crosses a camera-frame boundary.
+- The candidate is missing or too blurry.
 
-Never infer off-frame or substantially hidden paper geometry from the visible portion.
-When visibility is uncertain, return `false`.
+Never infer substantially hidden paper geometry from the visible portion.
+
+When uncertain, return false.
 
 # Output
 
-- Return exactly one lowercase word: `true` or `false`. Do not include any other text.
-- Return `true` only when the selected candidate matches the reference shape and is consistent with the supplied criteria.
-- Otherwise, return `false`.
+- Return exactly one word: `true` or `false`. Do not include any other text.
+- Return true only if the selected candidate meets visibility requirements, matches the reference shape, and is consistent with the supplied criteria.
+- Otherwise, return false.
 """
 
 FOLD_CHECK_CRITERIA_PREFIX = "# Evaluation Criteria\n\n"
