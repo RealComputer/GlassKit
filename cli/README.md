@@ -581,7 +581,6 @@ Options:
 To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
 ```bash
-glasskit eval list-samples --case task-01 --target step_1
 glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
 ```
 
@@ -613,7 +612,7 @@ Exit behavior: exits `0` when validation passes and `1` when validation fails.
 Purpose: print expanded sample rows.
 
 ```bash
-glasskit eval list-samples --case task-01 --from 7.4 --until 11.8
+glasskit eval list-samples --case task-01
 ```
 
 Options:
