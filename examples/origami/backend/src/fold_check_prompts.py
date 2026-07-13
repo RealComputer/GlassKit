@@ -27,8 +27,7 @@ Determine whether the candidate origami model in the provided composite image ma
 
 Return false if any of the following applies:
 
-- Hands cover a substantial portion of the paper.
-- Hands or fingers are actively folding, pressing, or adjusting the paper.
+- Hands substantially cover the paper, including while folding or pressing it. Nearby hands or light contact are acceptable when the candidate's overall shape and required features remain clear.
 - A feature needed to determine whether the candidate matches the reference—such as an edge, corner, tip, fold, or crease—is not clearly visible.
 - Any part of the candidate extends beyond the camera frame.
 - No candidate is visible, or the candidate is too blurry.
