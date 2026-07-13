@@ -6,7 +6,7 @@ This first version only copies the Rokid Glasses starter app. The interface and 
 
 ## Usage
 
-```bash
+```sh
 npm create @glasskit.ai
 npm create @glasskit.ai my-rokid-app
 ```
