@@ -20,8 +20,8 @@ Determine whether the candidate origami model in the provided composite image ma
 # Comparison Rules
 
 - Compare the selected candidate primarily against the reference shape, using the supplied criteria as visual cues.
-- The candidate does not need to match the reference orientation exactly, but it should be roughly aligned. Modest variations in tilt, perspective, or rotation are acceptable.
-- Base the decision only on whether the visible candidate matches.
+- The candidate does not need to match the reference orientation exactly, but its orientation should roughly match the reference. Modest variations in tilt, perspective, or rotation are acceptable.
+- Base the decision only on whether the visible candidate matches the reference.
 
 # Visibility Requirements
 
@@ -29,10 +29,10 @@ Return false if any of the following applies:
 
 - Hands cover a substantial portion of the paper.
 - A feature needed to determine whether the candidate matches the reference—such as an edge, corner, tip, fold, or crease—is not clearly visible.
-- The candidate crosses a camera-frame boundary.
-- The candidate is missing or too blurry.
+- Any part of the candidate extends beyond the camera frame.
+- No candidate is visible, or the candidate is too blurry.
 
-Never infer substantially hidden paper geometry from the visible portion.
+Never infer the shape of substantially hidden parts of the paper from the visible portion.
 
 When uncertain, return false.
 
