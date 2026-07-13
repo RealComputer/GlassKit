@@ -18,7 +18,7 @@
     "title": "Step 3",
     "hud_image": "origami_step_3",
     "reference_image": "ref-imgs/3.jpg",
-    "criteria": "## Required Features\n\n- A diamond with a clear horizontal crease across the middle.\n- Two narrow upright flaps that rise from the middle crease to the top center.\n\n## Reject If\n\n- A closed kite or diamond without the horizontal middle crease.\n- A model without both narrow top-center flaps."
+    "criteria": "## Required Features\n\n- A diamond with a clear horizontal crease across the middle and its bottom point visible inside the camera frame.\n- Two narrow upright flaps that are fully visible and rise from the middle crease to the top center.\n\n## Reject If\n\n- A closed kite or diamond without the horizontal middle crease.\n- A model without both narrow top-center flaps."
   },
   {
     "id": "step_4",
