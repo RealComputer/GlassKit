@@ -539,7 +539,7 @@ Options:
 | `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
 | `--no-open` | `false` | Print the URL without opening the default browser. |
 
-Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved. Select **Ignore this sample** in the inspector and enter the required reason to exclude a sample from eval execution and quality gates; clear the checkbox to make it active again.
+Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved.
 
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
