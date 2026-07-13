@@ -11,6 +11,7 @@ function sample(expect_type: ReviewSample["expect_type"], expect_json: string): 
     field: null,
     compare: { mode: null, tolerance: null },
     comment: null,
+    ignore: null,
     origin: null,
   };
 }

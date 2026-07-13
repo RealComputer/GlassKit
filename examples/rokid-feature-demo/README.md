@@ -23,7 +23,7 @@ https://github.com/user-attachments/assets/f97bb15e-ada5-4029-ac5a-343e9dfbdd92
 
 Vosk is used for voice commands. Install the model before building:
 
-```bash
+```sh
 ./scripts/download_vosk_model.sh
 ```
 
@@ -33,7 +33,7 @@ The configuration below is one example of an Android emulator setup. You may nee
 
 Install the system image and create an AVD:
 
-```bash
+```sh
 sdkmanager "system-images;android-36.1;google_apis;arm64-v8a"
 avdmanager create avd \
   -n glass_480x640 \
@@ -52,7 +52,7 @@ hw.audioOutput=yes
 
 Start the emulator with the software-backed emulated rear camera:
 
-```bash
+```sh
 emulator -avd glass_480x640 -camera-back emulated
 ```
 

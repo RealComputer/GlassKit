@@ -37,7 +37,7 @@ BACKEND_BASE_URL=http://<YOUR_BACKEND>:8000
 
 Create the backend environment file:
 
-```bash
+```sh
 cd backend
 cp .env.example .env
 # set OVERSHOOT_API_KEY
@@ -54,7 +54,7 @@ Optional backend overrides can also be specified inline when starting FastAPI:
 
 ### Run the Backend
 
-```bash
+```sh
 cd backend
 uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0
 ```
@@ -71,7 +71,7 @@ Connect Rokid Glasses to your computer using the dev cable, enable Wi-Fi via ADB
 
 Useful ADB commands:
 
-```bash
+```sh
 adb devices # confirm your device is visible
 adb shell cmd wifi status # see whether it's connected; if not, follow the commands below
 adb shell cmd wifi set-wifi-enabled enabled # enable Wi-Fi
@@ -81,7 +81,7 @@ adb shell cmd wifi status # confirm the connection
 
 Optional wireless ADB:
 
-```bash
+```sh
 adb shell ip -f inet addr show wlan0 # check the glasses IP
 ping -c 5 -W 3 <IP> # check connectivity (the first ping may time out)
 adb tcpip 5555 # enable remote ADB mode
@@ -98,6 +98,8 @@ The two step-image sets are identical copies kept in both locations because Andr
 
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
+
+To view the step IDs, reference images, and criteria in HTML, run `cd backend && uv run scripts/render_origami_steps.py`, then open `backend/debug/origami_steps.html`.
 
 ### Recorded-Video Fold-Check Evals
 
@@ -135,7 +137,7 @@ The plan's `video:` path is resolved relative to the plan YAML file. Before runn
 
 Generate a new case YAML:
 
-```bash
+```sh
 cd backend
 uv run --env-file .env python -m eval.generate_case \
   --plan eval/plans/full-run.yaml \
@@ -146,7 +148,7 @@ The generator calls Gemini with the same fold-check prompt shape used by the run
 
 To regenerate only selected targets in an existing case, repeat `--target` as needed:
 
-```bash
+```sh
 uv run --env-file .env python -m eval.generate_case \
   --plan eval/plans/full-run.yaml \
   --output eval/cases/full-run.yaml \
@@ -160,7 +162,7 @@ The generator replaces only those target blocks and preserves the other reviewed
 
 Review the generated expectations with the `glasskit eval` browser UI:
 
-```bash
+```sh
 cd backend
 uv run --with-editable ../../../cli glasskit eval review \
   --eval-dir eval \
@@ -175,7 +177,7 @@ When the same bad labeling pattern appears repeatedly, fix the labeling rule ins
 
 The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to iterate on the prompt:
 
-```bash
+```sh
 cd backend
 uv run --env-file .env python -m eval.check_image \
   --target step_1 \
@@ -204,7 +206,7 @@ In this example, frames from 0.0s up to 21.0s are expected to return `false`; fr
 
 Run evals locally from `backend/` with two concurrent Overshoot requests:
 
-```bash
+```sh
 cd backend
 uv run --with-editable ../../../cli --env-file .env \
   glasskit eval run --concurrency 2

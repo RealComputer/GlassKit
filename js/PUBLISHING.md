@@ -6,7 +6,7 @@ The npm package is `@glasskit.ai/create`, and the supported create command is `n
 
 The first version was published manually because npm Trusted Publishing requires the package to already exist:
 
-```bash
+```sh
 npm ci
 npm test
 npm pack --dry-run
@@ -15,7 +15,7 @@ npm publish --access public
 
 Then configure npm Trusted Publishing for `@glasskit.ai/create`:
 
-```bash
+```sh
 npm trust github @glasskit.ai/create \
   --repo RealComputer/GlassKit \
   --file release.yml \
@@ -29,7 +29,7 @@ The GitHub environment is named `npm`, with `tash-2s` as the required reviewer a
 
 Run the local checks from this directory before tagging:
 
-```bash
+```sh
 npm ci
 npm test
 npm pack --dry-run
@@ -37,7 +37,7 @@ npm pack --dry-run
 
 For a normal future release, bump the version without npm's default `vX.Y.Z` tag, commit the version change, create the package-specific tag, and atomically push both the branch and tag:
 
-```bash
+```sh
 npm version patch --no-git-tag-version
 VERSION="$(node -p "require('./package.json').version")"
 git add package.json package-lock.json

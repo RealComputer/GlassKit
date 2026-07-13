@@ -416,6 +416,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if ("comment" in update) {
         normalizedUpdate.comment = update.comment?.trim() || null;
       }
+      if ("ignore" in update) {
+        normalizedUpdate.ignore = update.ignore?.trim() || null;
+      }
       const nextSample = { ...currentSample, ...normalizedUpdate };
       const unchanged =
         nextSample.timestamp_s === currentSample.timestamp_s &&
@@ -423,6 +426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         nextSample.expect_json === currentSample.expect_json &&
         nextSample.field === currentSample.field &&
         nextSample.comment === currentSample.comment &&
+        nextSample.ignore === currentSample.ignore &&
         nextSample.compare.mode === currentSample.compare.mode &&
         nextSample.compare.tolerance === currentSample.compare.tolerance;
       if (unchanged) return;

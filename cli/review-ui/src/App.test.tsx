@@ -95,7 +95,7 @@ describe("review application navigation and drafts", () => {
 
     const sampleCreation = within(transport).getByRole("group", { name: "Sample creation" });
     expect(within(sampleCreation).getByRole("button", { name: /Add sample/ })).toBeTruthy();
-    expect(screen.queryByText("Sample 1.000s")).toBeNull();
+    expect(screen.queryByText("Sample 1s")).toBeNull();
     expect(document.querySelector(".header-context")?.textContent).toBe("case-001 / target_a");
   });
 
@@ -239,10 +239,10 @@ describe("review application navigation and drafts", () => {
     fireEvent.pointerUp(timelineTab);
     expect(document.activeElement).toBe(document.body);
     const first = screen.getByRole("button", {
-      name: "status, 1.000s, expected false",
+      name: "status, 1s, expected false",
     });
     const second = screen.getByRole("button", {
-      name: "status, 1.500s, expected false",
+      name: "status, 1.5s, expected false",
     });
     expect(document.querySelector(".range-band")).toBeNull();
     expect(first.style.getPropertyValue("--expect-color")).toBe(
@@ -259,7 +259,7 @@ describe("review application navigation and drafts", () => {
     expect(samplesTab.getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByLabelText("Sample timeline")).toBeNull();
     const group = screen.getByRole("button", {
-      name: "Expand 1.000s–1.500s · 2 samples",
+      name: "Expand 1s–1.5s · 2 samples",
     });
     expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
 
@@ -286,7 +286,7 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const first = await screen.findByRole("button", {
-      name: "target a, 1.000s, expected false",
+      name: "target a, 1s, expected false",
     });
     expect(first.getAttribute("title")).toBeNull();
     const lane = document.querySelector<HTMLElement>(".lane-track");
@@ -304,18 +304,75 @@ describe("review application navigation and drafts", () => {
     });
 
     fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
     fireEvent.pointerMove(lane!, { clientX: 200, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("2.000s · true");
+    expect(screen.getByRole("tooltip").textContent).toBe("2s · true");
     const timelineScroll = document.querySelector<HTMLElement>(".timeline-scroll");
     expect(timelineScroll).not.toBeNull();
     fireEvent.scroll(timelineScroll!);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     fireEvent.pointerMove(lane!, { clientX: 100, clientY: 40, pointerId: 1 });
-    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
     fireEvent.pointerLeave(lane!);
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("selects the sample shown by the tooltip when marker hit areas overlap", async () => {
+    const doc = caseFile([
+      target("target_a", [sample("first", 1, "false"), sample("second", 1.1, "true")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const first = await screen.findByRole("button", {
+      name: "target a, 1s, expected false",
+    });
+    const second = screen.getByRole("button", {
+      name: "target a, 1.1s, expected true",
+    });
+    const lane = document.querySelector<HTMLElement>(".lane-track");
+    expect(lane).not.toBeNull();
+    vi.spyOn(lane!, "getBoundingClientRect").mockReturnValue({
+      bottom: 52,
+      height: 52,
+      left: 0,
+      right: 1000,
+      top: 0,
+      width: 1000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(second, { clientX: 110, detail: 1 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
+
+    fireEvent.pointerMove(lane!, { clientX: 104, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1s · false");
+    fireEvent.pointerDown(lane!, { button: 0, clientX: 104, pointerId: 1 });
+    fireEvent.pointerUp(lane!, { button: 0, clientX: 104, pointerId: 1 });
+
+    await waitFor(() => expect(first.getAttribute("aria-pressed")).toBe("true"));
+
+    fireEvent.click(second, { clientX: 110, detail: 1 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.pointerMove(lane!, { clientX: 104, clientY: 40, pointerId: 2 });
+    fireEvent.click(second, { clientX: 104, detail: 1 });
+
+    await waitFor(() => expect(first.getAttribute("aria-pressed")).toBe("true"));
+
+    second.focus();
+    fireEvent.click(second, { clientX: 104, detail: 0 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
   });
 
   it("omits range context for an individual sample", async () => {
@@ -390,7 +447,7 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const first = await screen.findByRole("button", {
-      name: "target a, 1.000s, expected 1",
+      name: "target a, 1s, expected 1",
     });
     first.focus();
     fireEvent.pointerUp(first);
@@ -405,6 +462,30 @@ describe("review application navigation and drafts", () => {
 
     fireEvent.keyDown(first, { key: "ArrowRight" });
     await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "3.100"));
+  });
+
+  it("clears pointer focus from timeline lane labels", async () => {
+    const doc = caseFile();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const timeline = await screen.findByLabelText("Sample timeline");
+    const laneLabel = within(timeline).getByRole("button", { name: "target a1" });
+    laneLabel.focus();
+    fireEvent.pointerUp(laneLabel);
+
+    expect(document.activeElement).toBe(document.body);
+
+    laneLabel.focus();
+    expect(document.activeElement).toBe(laneLabel);
   });
 
   it("keeps the fit timeline's final label inside its viewport", async () => {
@@ -484,7 +565,7 @@ describe("review application navigation and drafts", () => {
     fireEvent.blur(expected);
     fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
     const secondRow = screen
-      .getAllByText("2.000s")
+      .getAllByText("2s")
       .find((element) => element.tagName === "TD")
       ?.closest("tr");
     expect(secondRow).not.toBeNull();
@@ -617,6 +698,56 @@ describe("review application navigation and drafts", () => {
     expect(putCount).toBe(0);
   });
 
+  it("saves an ignore reason and marks the sample as ignored", async () => {
+    const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
+    let submitted: Record<string, { samples: ReturnType<typeof sample>[] }> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body)) as {
+            targets: Record<string, { samples: ReturnType<typeof sample>[] }>;
+          };
+          submitted = body.targets;
+          return Promise.resolve(
+            response({
+              ...doc,
+              revision: "ignored-sample",
+              targets: [target("target_a", body.targets.target_a.samples)],
+            }),
+          );
+        }
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+    const toggle = await screen.findByLabelText("Ignore this sample");
+    expect(screen.queryByLabelText("Ignore reason")).toBeNull();
+
+    fireEvent.click(toggle);
+    const ignore = await screen.findByLabelText("Ignore reason");
+    expect(screen.getByText("Enter a reason for ignoring this sample.")).toBeTruthy();
+
+    fireEvent.change(ignore, { target: { value: "Provider output is flaky." } });
+    expect(
+      screen.getByRole("button", {
+        name: "target a, 1s, expected true, ignored: Provider output is flaky.",
+      }),
+    ).toBeTruthy();
+    fireEvent.blur(ignore);
+
+    await waitFor(() =>
+      expect(submitted?.target_a.samples[0].ignore).toBe("Provider output is flaky."),
+    );
+
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText("Ignore reason")).toBeNull();
+    await waitFor(() => expect(submitted?.target_a.samples[0].ignore).toBeNull());
+  });
+
   it("commits human-entered transport time only on Enter", async () => {
     const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     vi.stubGlobal(
@@ -711,6 +842,7 @@ describe("review application navigation and drafts", () => {
       screen.findByLabelText("Expected value"),
       screen.findByLabelText(/Field/),
       screen.findByLabelText("Tolerance"),
+      screen.findByLabelText("Ignore this sample"),
       screen.findByLabelText("Comment optional"),
     ]);
     await waitFor(() => expect(controls[1]).toHaveProperty("value", "1"));

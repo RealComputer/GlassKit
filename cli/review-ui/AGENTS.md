@@ -5,25 +5,25 @@ This workspace contains the React application served by `glasskit eval review`. 
 ## Features
 
 - Browse cases and targets, filter both lists, and open the case file or eval config file source.
-- Seek and play the case video, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the currently displayed native-resolution frame as a PNG.
-- Inspect and scrub all targets on a zoomable timeline, or limit the view to the selected target. Every sample is a uniform tick; equal typed expectation values receive the same color, selection has a separate outline, and hover details show only the timestamp and expected value.
-- Switch from the timeline to a table that groups consecutive samples with the same expectation, field, comparison settings, and comment for the selected target.
-- Edit a sample's timestamp, expectation type and value, field, comparison mode, tolerance, and comment in the inspector, or delete the sample when deletion is valid.
-- Repair eligible empty-target or out-of-bounds sample issues, autosave valid edits to the case file, surface validation and persistence errors, guard unsaved work, and support discarding drafts by reloading the accepted case file from disk.
-- Use keyboard shortcuts for playback, repeated previous and next sample navigation, time nudging, and adding samples.
-- Deep-link to the selected case, target, and requested time through the `case`, `target`, and `time` URL query parameters.
+- Seek and play the case video, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the currently displayed frame image.
+- Inspect and scrub all targets on a zoomable timeline, or limit the view to the selected target. Equal typed expectation values receive the same color.
+- Switch between the timeline and a table that groups consecutive equivalent samples for the selected target.
+- Edit sample timing, expectations, comparison settings, notes, and ignore status, or delete samples when valid.
+- Repair eligible sample issues, autosave valid changes, surface errors, and protect or discard unsaved drafts.
+- Use keyboard shortcuts for playback, sample navigation and creation, and time nudging.
+- Deep-link to a case, target, and requested time.
 
 ## Architecture
 
-- `src/App.tsx` composes the header, case and target sidebar, video panel, review views, inspector, and overlays. It also owns application-wide keyboard shortcut dispatch.
-- `src/state/AppContext.tsx` loads documents, coordinates per-case workspaces, exposes editing operations, debounces and serializes saves, merges responses with newer drafts, updates the URL selection, and protects unsaved changes. `src/state/reducer.ts` contains state transitions and repair-completeness rules, while `src/state/editing.ts` contains sample creation, duplicate detection, and deletion rules.
+- `src/App.tsx` composes the application shell and owns application-wide keyboard shortcut dispatch.
+- `src/state/AppContext.tsx` owns document loading, per-case editing and save state, URL selection, and unsaved-change protection. `src/state/reducer.ts` contains state transitions, while `src/state/editing.ts` contains sample mutation rules.
 - `src/api/types.ts` is the frontend model of the review protocol. `src/api/client.ts` is the only HTTP boundary and talks to the Python server under `/api`.
-- `src/components/VideoPanel.tsx` owns transport controls and the browser video element. `src/video/PreciseVideoSeeker.ts` coordinates cancellable seek generations and waits for frame presentation when the browser exposes `requestVideoFrameCallback`, while `src/video/downloadFrame.ts` captures the displayed native-resolution frame.
-- `src/components/ReviewViews.tsx` owns the Timeline and Samples tabs and the shared toolbar. `src/components/Timeline.tsx` renders the ruler, lanes, sample ticks, playhead, tooltip, zoom, and scrubbing. Timeline geometry and expectation colors live under `src/timeline/`.
-- `src/components/SamplesTable.tsx` renders source-agnostic consecutive groups produced by `src/samples/grouping.ts`. `src/components/Inspector.tsx` owns draft field state, validates edits, and reports form errors to the case workspace so invalid drafts cannot be saved or abandoned accidentally.
-- `src/components/Overlays.tsx` renders the accepted-source drawer, keyboard-shortcut dialog, focus traps, and transient toasts. `src/utils/shortcuts.ts` decides when application shortcuts may handle an event.
+- `src/components/VideoPanel.tsx` owns playback and frame capture. Helpers for precise seeking and frame downloads live under `src/video/`.
+- `src/components/ReviewViews.tsx` switches between the timeline and sample table. Timeline rendering, geometry, and expectation colors live in `src/components/Timeline.tsx` and `src/timeline/`.
+- `src/components/SamplesTable.tsx` renders groups produced by `src/samples/grouping.ts`. `src/components/Inspector.tsx` manages validated sample drafts.
+- `src/components/Overlays.tsx` contains drawers, dialogs, and toasts. `src/utils/shortcuts.ts` centralizes shortcut eligibility.
 - `src/App.css` contains application layout and component styling; `src/index.css` contains the base theme and global styles.
-- `vite.config.ts` enables the React compiler, proxies `/api` to `GLASSKIT_REVIEW_BACKEND` during development, and writes production assets to `../src/glasskit/eval/review/static/` for Python packaging.
+- `vite.config.ts` configures React compilation, the development API proxy, and production output for Python packaging.
 - Tests live beside the code they cover. Shared DOM setup and fixtures live under `src/test/`.
 
 ## Invariants

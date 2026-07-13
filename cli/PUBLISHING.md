@@ -20,7 +20,7 @@ The GitHub environment named `pypi` requires review by `tash-2s` before the rele
 
 Run the local checks from this directory before tagging. The local Python version is pinned by `.python-version` and should match the release workflow.
 
-```bash
+```sh
 cd review-ui
 npm ci
 npm run check
@@ -42,7 +42,7 @@ uv run --isolated --no-project --with dist/*.tar.gz python -c "from importlib.re
 
 For a normal future release, bump the version, commit the version change, tag the commit with the PyPI package-specific tag format, and atomically push both the branch and tag:
 
-```bash
+```sh
 uv version --bump patch
 VERSION="$(uv version --short)"
 git add pyproject.toml uv.lock

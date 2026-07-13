@@ -27,6 +27,7 @@ export interface ReviewSample {
   field: string | null;
   compare: SampleComparison;
   comment: string | null;
+  ignore: string | null;
   origin: SampleOrigin | null;
 }
 

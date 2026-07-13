@@ -20,14 +20,14 @@ The Python package is `glasskit.ai`; it provides the `glasskit` console command.
 
 Add it to your app repo's dev dependencies:
 
-```bash
+```sh
 uv add --dev glasskit.ai
 uv run glasskit --help
 ```
 
 Or run it once without adding the dependency:
 
-```bash
+```sh
 uv run --with glasskit.ai glasskit --help
 ```
 
@@ -39,7 +39,7 @@ Start in an app repository checked out next to a `recordings/` directory. This e
 
 Create the eval directory and write a case file that points at the recording:
 
-```bash
+```sh
 mkdir -p eval/cases
 cat > eval/cases/task-01.yaml <<'YAML'
 video: ../../../recordings/task-01.mp4
@@ -65,7 +65,7 @@ def create_evaluator(config):
 
 Run the eval:
 
-```bash
+```sh
 uv run glasskit eval run
 ```
 
@@ -95,7 +95,7 @@ Goal: create the required directory structure and a case file in `eval/` from an
 
 Commands:
 
-```bash
+```sh
 mkdir -p eval/cases
 cat > eval/cases/task-02.yaml <<'YAML'
 video: ../../../recordings/task-02.mov
@@ -120,7 +120,7 @@ Goal: catch YAML, video, timestamp, and optional adapter setup problems before c
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval validate
 ```
 
@@ -138,7 +138,7 @@ Goal: confirm that ranges, `at` lists, fields, and compare modes expand as inten
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval list-samples --case task-01 --target step_1
 ```
@@ -155,13 +155,13 @@ Without the review UI, verifying expectations means juggling a media player and 
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval review --eval-dir eval
 ```
 
 To jump directly to a failure reported by a separate eval run, include its case, target, and timestamp:
 
-```bash
+```sh
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
@@ -173,7 +173,7 @@ Goal: run a focused eval and print every sample result.
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
 ```
 
@@ -187,7 +187,7 @@ Goal: make the command fail when quality drops below your threshold.
 
 Command:
 
-```bash
+```sh
 uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/results.json
 ```
 
@@ -201,7 +201,7 @@ Goal: pass runtime settings to your adapter without putting them in case files.
 
 Command:
 
-```bash
+```sh
 uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
 ```
 
@@ -261,6 +261,9 @@ targets:
       every_s: 0.25
       field: result.matches
       expect: true
+    - at: 11.9
+      expect: true
+      ignore: Difficult frame with known flaky observations.
   step_2:
     label: Step 2
     samples:
@@ -321,8 +324,11 @@ Sample block fields:
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
+| `ignore` | No | Nonempty reason for ignoring this block. Ignored samples are reported but are not decoded, sent to the adapter, or included in pass rates, failure counts, or quality gates. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
+
+Use `ignore` for a known exceptional sample that should remain documented without affecting a run. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
 
 ## Comparison Reference
 
@@ -423,6 +429,8 @@ An evaluator chooses one of two execution strategies by implementing `evaluate` 
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
 
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`.
+
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
 Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
@@ -477,7 +485,7 @@ Every command supports `--help`.
 
 Purpose: top-level command group.
 
-```bash
+```sh
 glasskit --help
 ```
 
@@ -499,7 +507,7 @@ Commands:
 
 Purpose: command group for recorded-video evals.
 
-```bash
+```sh
 glasskit eval --help
 ```
 
@@ -516,7 +524,7 @@ Commands:
 
 Purpose: launch the local eval review UI without loading or running an adapter.
 
-```bash
+```sh
 glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
@@ -531,7 +539,7 @@ Options:
 | `--port INTEGER` | `0` | Loopback port. `0` chooses an available port. |
 | `--no-open` | `false` | Print the URL without opening the default browser. |
 
-Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` fields are preserved.
+Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved.
 
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
@@ -541,7 +549,7 @@ Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid
 
 Purpose: execute eval samples and apply quality gates.
 
-```bash
+```sh
 glasskit eval run --case task-01 --output-json eval/runs/results.json
 ```
 
@@ -553,6 +561,8 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run one target id from the selected cases. May be used with or without `--case`. |
+| `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -563,8 +573,16 @@ Options:
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
 | `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written under its `failures/` subdirectory; when omitted, they are written under `<eval-dir>/runs/failures/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
-| `--max-failures-to-print INTEGER` | `20` | Maximum number of non-passing results printed in the final failures table. Use `0` to hide table rows. |
+| `--max-failures-to-print INTEGER` | `20` | Maximum number of failed or errored results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+`--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
+
+To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
+
+```sh
+glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
+```
 
 Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` when setup or runtime errors abort the run.
 
@@ -572,7 +590,7 @@ Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one o
 
 Purpose: validate an eval directory without evaluating sample observations.
 
-```bash
+```sh
 glasskit eval validate --adapter eval/adapter.py:create_evaluator
 ```
 
@@ -593,7 +611,7 @@ Exit behavior: exits `0` when validation passes and `1` when validation fails.
 
 Purpose: print expanded sample rows.
 
-```bash
+```sh
 glasskit eval list-samples --case task-01
 ```
 
@@ -604,6 +622,8 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
 | `--target TEXT` | All targets | Only list one target id from the selected cases. May be used with or without `--case`. |
+| `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when the samples can be listed and `2` when the eval directory cannot be loaded.
@@ -650,7 +670,7 @@ Threshold precedence:
 | `--min-pass-rate` | Selected run | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
 | `--max-failures` | Selected run | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
 | `--min-target-pass-rate` | Selected run targets | Adds the same per-target pass-rate gate for each target present in the selected results and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
-| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a `--case` or `--target` filtered run are skipped. |
+| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a case, target, or time-window filtered run are skipped. |
 | `cases/<case>.yaml` `thresholds` | That case | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
 
 Other precedence rules:
@@ -667,7 +687,7 @@ Other precedence rules:
 
 Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
-```bash
+```sh
 uv run --env-file .env glasskit eval run
 ```
 
@@ -687,6 +707,7 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
     "passed": 1,
     "failed": 0,
     "errors": 0,
+    "ignored": 0,
     "pass_rate": 1.0,
     "duration_seconds": 0.42,
     "evaluation_timing_mode": "individual",
@@ -726,7 +747,9 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 }
 ```
 
-`--save-failures` writes artifacts for non-passing sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
+Ignored samples remain in the `results` array with status `ignored`, their ignore reason in `reason`, and null observation and evaluation-timing fields. The summary's `evaluated` count, pass rate, timing, throughput, and quality gates exclude those results.
+
+`--save-failures` writes artifacts for failed or errored sample results. By default, files go under `<eval-dir>/runs/failures/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp.
 
 ## Exit Codes
 
@@ -740,13 +763,13 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 
 Start with validation:
 
-```bash
+```sh
 uv run glasskit eval validate
 ```
 
 Then inspect samples and run one case:
 
-```bash
+```sh
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
 ```
@@ -759,6 +782,7 @@ Common failures:
 | `cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add case files under `cases/` and reference videos from them. |
 | `no case files found` | No case files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
 | `no eval targets found` | `--target` does not match any target id in the selected cases. | Check the target id in the case file or broaden the case filter. |
+| `no eval samples found` | No expanded timestamps fall within the `--from`/`--until` window. | Inspect the case with `list-samples`, then broaden or correct the time bounds. |
 | `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |

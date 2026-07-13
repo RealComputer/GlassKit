@@ -29,7 +29,7 @@ This document explains how the Expo mobile app (`client/`) and Node server (`bac
    - Logs Sideband `error` events, catches tool execution failures, and responds with JSON error payloads to keep the model loop alive.
 
 **Commands:**
-```bash
+```sh
 cd backend
 npm run typecheck # Always run this after changes
 npm run format # Always run this after changes
@@ -65,7 +65,7 @@ client/
 - Resolves the backend URL once at module load from `Constants.expoConfig?.extra?.SERVER_BASE_URL`, falling back to `http://localhost:3000` for local dev. Set this via `app.config.js` or app.json extras when targeting devices.
 
 ### 3.4 Commands
-```bash
+```sh
 cd client
 npm run typecheck # Always run this after changes
 npm run lint # Always run this after changes

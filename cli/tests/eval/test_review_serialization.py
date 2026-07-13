@@ -152,6 +152,23 @@ def test_sample_rejects_present_blank_optional_text() -> None:
         _sample("a", 0.0, field="   ")
     with pytest.raises(ValidationError, match="use null"):
         _sample("a", 0.0, comment="\n")
+    with pytest.raises(ValidationError, match="use null"):
+        _sample("a", 0.0, ignore="  ")
+
+
+def test_reconstruction_preserves_ignore_reason_and_splits_active_samples() -> None:
+    reconstructed = reconstruct_target(
+        "state",
+        [
+            _sample("a", 0.0),
+            _sample("b", 0.5, ignore="Known flaky observation."),
+            _sample("c", 1.0),
+        ],
+        default_every_s=0.5,
+    )
+
+    assert [block["at"] for block in reconstructed.blocks] == [0.0, 0.5, 1.0]
+    assert reconstructed.blocks[1]["ignore"] == "Known flaky observation."
 
 
 def test_atomic_replace_preserves_mode_and_removes_temporary_file(
@@ -210,6 +227,7 @@ def test_seeded_reconstruction_round_trips_through_shared_case_loader() -> None:
                     expect_type=expect_type,
                     field=("result" if randomizer.randrange(4) == 0 else None),
                     comment=("note" if randomizer.randrange(5) == 0 else None),
+                    ignore=("flaky" if randomizer.randrange(7) == 0 else None),
                 )
             )
         reconstructed = reconstruct_target("state", samples, default_every_s=0.5)
@@ -241,6 +259,7 @@ def test_seeded_reconstruction_round_trips_through_shared_case_loader() -> None:
             assert accepted_sample.compare.mode == reconstructed_sample.mode
             assert accepted_sample.compare.tolerance == reconstructed_sample.tolerance
             assert accepted_sample.comment == reconstructed_sample.comment
+            assert accepted_sample.ignore == reconstructed_sample.ignore
 
 
 def _sample(
@@ -251,6 +270,7 @@ def _sample(
     expect_type: str = "boolean",
     field: str | None = None,
     comment: str | None = None,
+    ignore: str | None = None,
     origin: SampleOrigin | None = None,
 ) -> ReviewSample:
     return ReviewSample.model_validate(
@@ -262,6 +282,7 @@ def _sample(
             "field": field,
             "compare": SampleCompare().model_dump(),
             "comment": comment,
+            "ignore": ignore,
             "origin": origin.model_dump() if origin else None,
         }
     )

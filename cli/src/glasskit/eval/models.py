@@ -11,7 +11,7 @@ from PIL import Image
 type JSONValue = (
     None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
 )
-type ResultStatus = Literal["passed", "failed", "error"]
+type ResultStatus = Literal["passed", "failed", "error", "ignored"]
 type EvaluationTimingMode = Literal["individual", "batch_amortized"]
 
 SUPPORTED_COMPARE_MODES = frozenset(
@@ -114,6 +114,7 @@ class SampleExpectation:
     compare: ComparisonConfig = dc_field(default_factory=ComparisonConfig)
     source: str = ""
     comment: str | None = None
+    ignore: str | None = None
 
 
 @dataclass(frozen=True)
@@ -233,21 +234,25 @@ class EvalRunReport:
         return sum(1 for result in self.results if result.status == "error")
 
     @property
+    def ignored_count(self) -> int:
+        return sum(1 for result in self.results if result.status == "ignored")
+
+    @property
     def evaluated_count(self) -> int:
-        return len(self.results)
+        return len(self.results) - self.ignored_count
 
     @property
     def pass_rate(self) -> float:
-        if not self.results:
+        if self.evaluated_count == 0:
             return 0.0
-        return self.passed_count / len(self.results)
+        return self.passed_count / self.evaluated_count
 
     @property
     def average_evaluation_duration_s(self) -> float | None:
         durations = [
             result.evaluation_duration_s
             for result in self.results
-            if result.evaluation_duration_s is not None
+            if result.status != "ignored" and result.evaluation_duration_s is not None
         ]
         if not durations:
             return None
@@ -260,7 +265,7 @@ class EvalRunReport:
         modes = {
             result.evaluation_timing_mode
             for result in self.results
-            if result.evaluation_timing_mode is not None
+            if result.status != "ignored" and result.evaluation_timing_mode is not None
         }
         if not modes:
             return None
@@ -270,9 +275,9 @@ class EvalRunReport:
 
     @property
     def throughput_samples_per_s(self) -> float:
-        if not self.results or self.duration_s <= 0:
+        if self.evaluated_count == 0 or self.duration_s <= 0:
             return 0.0
-        return len(self.results) / self.duration_s
+        return self.evaluated_count / self.duration_s
 
     @property
     def success(self) -> bool:
@@ -285,6 +290,8 @@ class RunOptions:
     adapter: str | None = None
     case_filter: str | None = None
     target_filter: str | None = None
+    from_time_s: float | None = None
+    until_time_s: float | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
     concurrency: int = 1
     min_pass_rate: float | None = None

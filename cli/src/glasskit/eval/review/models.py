@@ -133,6 +133,7 @@ class ReviewSample(TransportModel):
     field: str | None = None
     compare: SampleCompare = Field(default_factory=SampleCompare)
     comment: str | None = None
+    ignore: str | None = None
     origin: SampleOrigin | None = None
 
     @field_validator("id")
@@ -156,7 +157,7 @@ class ReviewSample(TransportModel):
             raise ValueError("must contain one JSON value")
         return _validate_unicode_scalar(value)
 
-    @field_validator("field", "comment")
+    @field_validator("field", "comment", "ignore")
     @classmethod
     def _normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:

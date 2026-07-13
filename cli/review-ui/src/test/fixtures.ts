@@ -14,6 +14,7 @@ export function sample(id: string, timestamp_s: number, expect_json = "false"): 
     field: null,
     compare: { mode: null, tolerance: null },
     comment: null,
+    ignore: null,
     origin: { block_index: 0, kind: "at", every_s: null },
   };
 }

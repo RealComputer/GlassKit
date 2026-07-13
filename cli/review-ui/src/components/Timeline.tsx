@@ -139,6 +139,37 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
     requestScrub(timeFromPointer(event));
   };
 
+  const sampleNearPointer = (
+    track: HTMLElement,
+    clientX: number,
+    samples: ReviewSample[],
+  ): ReviewSample | null => {
+    const rect = track.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const pointerX = Math.min(rect.width, Math.max(0, clientX - rect.left));
+    const timestamp = positionToTime(pointerX / rect.width, duration);
+    const sample = findNearestSample(samples, timestamp);
+    if (!sample) return null;
+    const sampleX = timeToPosition(sample.timestamp_s, duration) * rect.width;
+    return Math.abs(sampleX - pointerX) <= SAMPLE_HOVER_RADIUS_PX ? sample : null;
+  };
+
+  const startLaneInteraction = (
+    event: PointerEvent<HTMLDivElement>,
+    targetId: string,
+    samples: ReviewSample[],
+  ) => {
+    if (event.button === 0 && !(event.target as Element).closest("button")) {
+      const sample = sampleNearPointer(event.currentTarget, event.clientX, samples);
+      if (sample) {
+        event.preventDefault();
+        void selectSample(targetId, sample.id);
+        return;
+      }
+    }
+    startScrub(event);
+  };
+
   const continueScrub = (event: PointerEvent<HTMLDivElement>) => {
     if (activeScrubPointerRef.current !== event.pointerId) return;
     pendingScrubTimeRef.current = timeFromPointer(event);
@@ -180,14 +211,8 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
       setHoveredSample(null);
       return;
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const pointerX = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
-    const timestamp = positionToTime(pointerX / rect.width, duration);
-    const sample = findNearestSample(samples, timestamp);
-    if (!sample) return;
-    const sampleX = timeToPosition(sample.timestamp_s, duration) * rect.width;
-    if (Math.abs(sampleX - pointerX) > SAMPLE_HOVER_RADIUS_PX) {
+    const sample = sampleNearPointer(event.currentTarget, event.clientX, samples);
+    if (!sample) {
       setHoveredSample(null);
       return;
     }
@@ -290,13 +315,19 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                     className="lane-label"
                     title={target.label ?? target.id}
                     onClick={() => void selectTarget(target.id)}
+                    onPointerUp={(event) => event.currentTarget.blur()}
                   >
                     <span>{target.label ?? target.id}</span>
                     <small>{target.samples.length}</small>
                   </button>
                   <div
                     className="lane-track"
-                    {...scrubHandlers}
+                    onPointerDown={(event) =>
+                      startLaneInteraction(event, target.id, target.samples)
+                    }
+                    onPointerUp={finishScrub}
+                    onPointerCancel={cancelScrub}
+                    onLostPointerCapture={cancelScrub}
                     onPointerMove={(event) => {
                       continueScrub(event);
                       updateHoveredSample(event, target.samples);
@@ -315,16 +346,27 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                         <button
                           key={sample.id}
                           type="button"
-                          className={`sample-marker ${selected ? "selected" : ""}`}
+                          className={`sample-marker${selected ? " selected" : ""}${
+                            sample.ignore ? " ignored" : ""
+                          }`}
                           style={markerStyle}
                           data-sample-id={sample.id}
                           data-target-id={target.id}
-                          onClick={() => void selectSample(target.id, sample.id)}
+                          onClick={(event) => {
+                            const lane = event.currentTarget.parentElement;
+                            const nearest =
+                              event.detail > 0 && lane
+                                ? sampleNearPointer(lane, event.clientX, target.samples)
+                                : null;
+                            void selectSample(target.id, nearest?.id ?? sample.id);
+                          }}
                           onPointerUp={(event) => event.currentTarget.blur()}
                           aria-pressed={selected}
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
                             sample.timestamp_s,
-                          )}, expected ${expectationSummary(sample)}`}
+                          )}, expected ${expectationSummary(sample)}${
+                            sample.ignore ? `, ignored: ${sample.ignore}` : ""
+                          }`}
                         />
                       );
                     })}
@@ -344,6 +386,7 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
         >
           {formatSeconds(hoveredSample.sample.timestamp_s)} ·{" "}
           {expectationSummary(hoveredSample.sample)}
+          {hoveredSample.sample.ignore ? " · ignored" : ""}
         </div>
       )}
     </section>

@@ -45,16 +45,20 @@ class ConsoleReporter:
     def on_result(self, result: SampleResult) -> None:
         if result.status == "passed" and not self.verbose:
             return
-        style = "green" if result.status == "passed" else "red"
-        self.console.print(
-            f"    [{style}]{result.status.upper()}[/{style}] "
-            f"{escape(_format_target_name(result.target_id, result.target_label))} "
+        style = {
+            "passed": "green",
+            "ignored": "yellow",
+        }.get(result.status, "red")
+        line = Text("    ")
+        line.append(result.status.upper(), style=style)
+        line.append(
+            f" {_format_target_name(result.target_id, result.target_label)} "
             f"@{result.timestamp_s:g}s "
             f"expected={_short(result.expected)} "
             f"observed={_short(result.observed_value)} "
-            f"reason={result.reason}",
-            highlight=False,
+            f"reason={result.reason}"
         )
+        self.console.print(line, highlight=False)
 
 
 def print_validation_report(
@@ -89,7 +93,16 @@ def print_sample_schedule(
 ) -> None:
     console = console or Console()
     table = Table(title=f"Samples: {eval_directory.path}")
-    for column in ("Case", "Target", "Time", "Expected", "Mode", "Field", "Source"):
+    for column in (
+        "Case",
+        "Target",
+        "Time",
+        "Expected",
+        "Mode",
+        "Field",
+        "Ignored",
+        "Source",
+    ):
         table.add_column(column)
     for row in format_sample_schedule(eval_directory):
         table.add_row(
@@ -99,6 +112,7 @@ def print_sample_schedule(
             _short(row["expected"]),
             str(row["mode"] or ""),
             str(row["field"] or ""),
+            Text(str(row["ignore"] or "")),
             str(row["source"] or ""),
         )
     console.print(table)
@@ -119,7 +133,8 @@ def print_run_summary(
         f"{report.evaluated_count} evaluated, "
         f"{report.passed_count} passed, "
         f"{report.failed_count} failed, "
-        f"{report.error_count} errors",
+        f"{report.error_count} errors, "
+        f"{report.ignored_count} ignored",
         highlight=False,
     )
     console.print(f"Pass rate: {report.pass_rate:.1%} ({status})", highlight=False)
@@ -154,7 +169,8 @@ def print_run_summary(
     target_table.add_column("Target")
     target_table.add_column("Pass rate", justify="right")
     target_table.add_column("Passed", justify="right")
-    target_table.add_column("Total", justify="right")
+    target_table.add_column("Evaluated", justify="right")
+    target_table.add_column("Ignored", justify="right")
     show_timing = report.average_evaluation_duration_s is not None
     if show_timing:
         target_table.add_column(
@@ -162,7 +178,8 @@ def print_run_summary(
         )
     for target_id, target_results in _group_by_target(report.results).items():
         passed = sum(1 for result in target_results if result.status == "passed")
-        total = len(target_results)
+        ignored = sum(1 for result in target_results if result.status == "ignored")
+        total = len(target_results) - ignored
         pass_rate = passed / total if total else 0.0
         target_label = _first_target_label(target_results)
         row = [
@@ -170,6 +187,7 @@ def print_run_summary(
             f"{pass_rate:.1%}",
             str(passed),
             str(total),
+            str(ignored),
         ]
         if show_timing:
             average_duration_s = _average_evaluation_duration(target_results)
@@ -181,7 +199,9 @@ def print_run_summary(
         target_table.add_row(*row)
     console.print(target_table)
 
-    failures = [result for result in report.results if result.status != "passed"]
+    failures = [
+        result for result in report.results if result.status in {"failed", "error"}
+    ]
     if failures:
         failure_table = Table(title=f"Failures (first {max_failures_to_print})")
         for column in (
@@ -224,7 +244,7 @@ def _average_evaluation_duration(results: list[SampleResult]) -> float | None:
     durations = [
         result.evaluation_duration_s
         for result in results
-        if result.evaluation_duration_s is not None
+        if result.status != "ignored" and result.evaluation_duration_s is not None
     ]
     if not durations:
         return None

@@ -35,12 +35,22 @@ def test_runner_applies_eval_directory_level_per_target_gates(tmp_path: Path) ->
     asyncio.run(_run_eval_directory_per_target_gate_test(tmp_path))
 
 
+def test_runner_keeps_missing_case_target_gate_on_unfiltered_run(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_missing_case_target_gate_test(tmp_path))
+
+
 def test_runner_skips_filtered_out_eval_directory_target_gates(tmp_path: Path) -> None:
     asyncio.run(_run_filtered_eval_directory_target_gate_test(tmp_path))
 
 
 def test_runner_filters_by_target_without_case(tmp_path: Path) -> None:
     asyncio.run(_run_target_filter_without_case_test(tmp_path))
+
+
+def test_runner_filters_adapter_input_and_gates_by_time_window(tmp_path: Path) -> None:
+    asyncio.run(_run_time_window_filter_test(tmp_path))
 
 
 def test_runner_records_non_json_adapter_observations_with_keep_going(
@@ -61,6 +71,12 @@ def test_runner_preserves_eval_error_when_close_also_fails(tmp_path: Path) -> No
 
 def test_runner_handles_malformed_evaluate_many_return(tmp_path: Path) -> None:
     asyncio.run(_run_malformed_evaluate_many_return_test(tmp_path))
+
+
+def test_runner_reports_ignored_samples_without_evaluating_or_scoring_them(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_run_ignored_sample_test(tmp_path))
 
 
 async def _run_committed_fixture_test(tmp_path: Path) -> None:
@@ -94,6 +110,138 @@ def create_evaluator(config):
     assert report.success
     assert report.evaluated_count == 4
     assert report.passed_count == 4
+
+
+async def _run_time_window_filter_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  early:
+    samples:
+      - at: 0.0
+        expect: true
+  late:
+    samples:
+      - at: [0.5, 1.0, 1.5]
+        expect: true
+thresholds:
+  per_target:
+    early:
+      min_pass_rate: 1.0
+    late:
+      min_pass_rate: 1.0
+    misspelled:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        if target.id != "late":
+            raise RuntimeError("time-filtered target reached the adapter")
+        if [sample.timestamp_s for sample in samples] != [1.0]:
+            raise RuntimeError("unexpected time-filtered batch")
+        return [True]
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            case_filter="case-001",
+            from_time_s=1.0,
+            until_time_s=1.5,
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    assert [result.target_id for result in report.results] == ["late"]
+    assert [result.timestamp_s for result in report.results] == [1.0]
+    assert [result.sample_index for result in report.results] == [2]
+    gate_names = {gate.name for gate in report.gate_results}
+    assert "case-001_early_min_pass_rate" not in gate_names
+    assert "case-001_late_min_pass_rate" in gate_names
+    missing_gate = next(
+        gate
+        for gate in report.gate_results
+        if gate.name == "case-001_misspelled_min_pass_rate"
+    )
+    assert not missing_gate.passed
+    assert not report.success
+
+
+async def _run_ignored_sample_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: false
+        ignore: Provider output is flaky for this difficult frame.
+      - at: 1.0
+        expect: true
+thresholds:
+  min_pass_rate: 1.0
+  max_failures: 0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        if [sample.timestamp_s for sample in samples] != [1.0]:
+            raise RuntimeError("ignored sample reached the adapter")
+        return [True]
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "report.json"
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+            output_json=output_path,
+        )
+    )
+
+    assert report.success
+    assert [result.status for result in report.results] == ["ignored", "passed"]
+    assert report.results[0].reason == (
+        "Provider output is flaky for this difficult frame."
+    )
+    assert report.results[0].evaluation_duration_s is None
+    assert report.evaluated_count == 1
+    assert report.ignored_count == 1
+    assert report.pass_rate == 1.0
+    written = json.loads(output_path.read_text(encoding="utf-8"))
+    assert written["summary"]["evaluated"] == 1
+    assert written["summary"]["ignored"] == 1
+    assert [result["status"] for result in written["results"]] == [
+        "ignored",
+        "passed",
+    ]
 
 
 async def _run_committed_fixture_artifact_test(tmp_path: Path) -> None:
@@ -246,6 +394,54 @@ def create_evaluator(config):
 
     gate = next(
         gate for gate in report.gate_results if gate.name == "eval_step_2_min_pass_rate"
+    )
+    assert not gate.passed
+    assert not report.success
+
+
+async def _run_missing_case_target_gate_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+thresholds:
+  per_target:
+    misspelled:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        return [True for sample in samples]
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    gate = next(
+        gate
+        for gate in report.gate_results
+        if gate.name == "case-001_misspelled_min_pass_rate"
     )
     assert not gate.passed
     assert not report.success

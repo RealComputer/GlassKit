@@ -2,8 +2,48 @@ from __future__ import annotations
 
 from typing import Any
 
-FOLD_CHECK_SYSTEM_PROMPT = "You verify whether an origami model matches a reference in a single image. The reference shape is at the top of the image. The area below it is a camera frame that may contain the candidate paper model. Only judge a candidate paper model that is resting on a surface or being held in a hand. If multiple candidates are visible, judge the largest candidate near the center of the camera frame and ignore smaller, background, or off-center candidates. Compare the selected candidate primarily with the reference shape, using the supplied criteria as visual cues. The candidate does not need to match the reference orientation exactly, but it should be roughly aligned; modest tilt, perspective, or hand rotation is fine, but sideways or upside-down candidates are not. Judge only whether the visible candidate matches; do not decide based on whether the hands appear to be folding or manipulating it. Hands near the paper, lightly touching a peripheral edge, or covering a small irrelevant peripheral area do not by themselves require false. Return exactly false if hands cover a substantial portion of the paper's interior, cover its central region or any relevant fold or crease, or otherwise prevent confident verification of the complete shape and relevant folds. To return true, the entire paper outline, including every edge, corner, and tip, must be visible enough to verify. If the paper touches or crosses a camera-frame boundary, or is so close to one that its full boundary cannot be confirmed, return exactly false. Never infer off-frame or substantially hidden paper geometry from the visible portion. Also return exactly false if the candidate is missing, too blurry, or too obstructed to confidently verify the complete shape and relevant folds. When visibility is uncertain, return exactly false. Return exactly true only when the selected candidate matches the reference shape and is consistent with the criteria; otherwise return exactly false. Do not include any other text."
-FOLD_CHECK_CRITERIA_PREFIX = "Criteria: "
+FOLD_CHECK_SYSTEM_PROMPT = """\
+# Goal
+
+Determine whether the candidate origami model in the provided composite image matches the reference shape.
+
+# Image Layout
+
+- Top: The reference shape.
+- Bottom: A camera frame that may contain the candidate paper model.
+
+# Candidate Selection
+
+- Evaluate only a candidate that is either resting on a surface or being held in a hand.
+- If multiple candidates are visible, evaluate the largest one near the center of the camera frame.
+
+# Comparison Rules
+
+- Compare the selected candidate primarily against the reference shape, using the supplied criteria as visual cues.
+- The candidate does not need to match the reference orientation exactly, but its orientation should roughly match the reference. Modest variations in tilt, perspective, or rotation are acceptable.
+- Base the decision only on whether the visible candidate matches the reference.
+
+# Visibility Requirements
+
+Return false if any of the following applies:
+
+- Hands substantially cover the paper, including while folding or pressing it. Nearby hands or light contact are acceptable when the candidate's overall shape and required features remain clear.
+- A feature needed to determine whether the candidate matches the reference—such as an edge, corner, tip, fold, or crease—is not clearly visible.
+- Any part of the candidate extends beyond the camera frame.
+- No candidate is visible, or the candidate is too blurry.
+
+Never infer the shape of substantially hidden parts of the paper from the visible portion.
+
+When uncertain, return false.
+
+# Output
+
+- Return exactly one word: `true` or `false`. Do not include any other text.
+- Return true only if the selected candidate meets visibility requirements, matches the reference shape, and is consistent with the supplied criteria.
+- Otherwise, return false.
+"""
+
+FOLD_CHECK_CRITERIA_PREFIX = "# Evaluation Criteria\n\n"
 
 FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS = 4
 

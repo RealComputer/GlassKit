@@ -72,8 +72,11 @@ export function Inspector() {
   const [field, setField] = useState("");
   const [tolerance, setTolerance] = useState("");
   const [comment, setComment] = useState("");
+  const [ignoreSelected, setIgnoreSelected] = useState(false);
+  const [ignore, setIgnore] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const expectationRef = useRef<HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement>(null);
+  const ignoreRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const selected = sampleRef.current;
@@ -83,6 +86,8 @@ export function Inspector() {
     setField(selected.field ?? "");
     setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
     setComment(selected.comment ?? "");
+    setIgnoreSelected(selected.ignore !== null);
+    setIgnore(selected.ignore ?? "");
     setErrors({});
   }, [selectionKey]);
 
@@ -99,7 +104,11 @@ export function Inspector() {
       setTolerance(selected.compare.tolerance === null ? "" : String(selected.compare.tolerance));
     }
     setComment(selected.comment ?? "");
-    if (!["timestamp", "expect", "tolerance"].some(hasError)) setErrors({});
+    if (!hasError("ignore")) {
+      setIgnoreSelected(selected.ignore !== null);
+      setIgnore(selected.ignore ?? "");
+    }
+    if (!["timestamp", "expect", "tolerance", "ignore"].some(hasError)) setErrors({});
   }, [selectionKey, workspace?.acceptedCaseFile]);
 
   useEffect(() => {
@@ -465,6 +474,64 @@ export function Inspector() {
             />
             {errors.tolerance && <p className="field-error">{errors.tolerance}</p>}
           </div>
+        </div>
+
+        <div className="field-group">
+          <label className="ignore-toggle" htmlFor="sample-ignored">
+            <input
+              id="sample-ignored"
+              type="checkbox"
+              checked={ignoreSelected}
+              onChange={(event) => {
+                if (event.target.checked) {
+                  setIgnoreSelected(true);
+                  setError("ignore", "Enter a reason for ignoring this sample.");
+                  requestAnimationFrame(() => ignoreRef.current?.focus());
+                  return;
+                }
+                setIgnoreSelected(false);
+                setIgnore("");
+                setError("ignore", null);
+                updateSample(target.id, sample.id, { ignore: null }, true);
+              }}
+            />
+            Ignore this sample
+          </label>
+          {ignoreSelected && (
+            <div className="ignore-reason">
+              <label htmlFor="sample-ignore">Ignore reason</label>
+              <textarea
+                ref={ignoreRef}
+                id="sample-ignore"
+                rows={2}
+                value={ignore}
+                required
+                aria-invalid={Boolean(errors.ignore)}
+                aria-describedby="sample-ignore-help"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const reason = value.trim();
+                  setIgnore(value);
+                  setError("ignore", reason ? null : "Enter a reason for ignoring this sample.");
+                  if (reason) {
+                    updateSample(target.id, sample.id, { ignore: reason });
+                  }
+                }}
+                onBlur={() => {
+                  const reason = ignore.trim();
+                  setIgnore(reason);
+                  setError("ignore", reason ? null : "Enter a reason for ignoring this sample.");
+                  if (reason) {
+                    updateSample(target.id, sample.id, { ignore: reason }, true);
+                  }
+                }}
+              />
+              {errors.ignore && <p className="field-error">{errors.ignore}</p>}
+              <p id="sample-ignore-help" className="field-help">
+                Ignored samples are skipped during eval runs and excluded from quality gates.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="field-group">

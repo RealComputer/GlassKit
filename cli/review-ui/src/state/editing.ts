@@ -37,6 +37,7 @@ export function createSampleAt(
       field: source?.field ?? null,
       compare: source ? { ...source.compare } : { mode: null, tolerance: null },
       comment: null,
+      ignore: null,
       origin: null,
     },
   };
