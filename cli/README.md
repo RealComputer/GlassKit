@@ -179,14 +179,6 @@ uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going -
 
 Expected output: focused case and target progress, every selected sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
 
-To run only expanded samples in part of the case timeline, add an inclusive `--from` bound, an exclusive `--until` bound, or both:
-
-```bash
-uv run glasskit eval run --case task-01 --target step_1 --from 7.4 --until 11.8
-```
-
-Time bounds require `--case`. They filter declared expanded samples rather than creating new timestamps, and configured quality gates apply only to the selected results. Use the same bounds with `list-samples` to preview exactly which samples will run.
-
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
 ### Enforce CI Quality Gates
@@ -583,6 +575,15 @@ Options:
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--max-failures-to-print INTEGER` | `20` | Maximum number of failed or errored results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+`--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
+
+To test one specific sample, first find its timestamp and the following timestamp, then use the selected timestamp as `--from` and the following timestamp as `--until`. Because `--until` is exclusive, this example runs the sample at `7.4` seconds but not the next sample at `7.65` seconds:
+
+```bash
+glasskit eval list-samples --case task-01 --target step_1
+glasskit eval run --case task-01 --target step_1 --from 7.4 --until 7.65
+```
 
 Exit behavior: exits `0` when every gate passes, `1` when the eval ran but one or more gates failed, and `2` when setup or runtime errors abort the run.
 

@@ -754,7 +754,8 @@ def test_time_window_filter_uses_inclusive_from_and_exclusive_until(
     )
 
     case = eval_directory.cases[0]
-    assert [target.id for target in case.targets] == ["step_1"]
+    assert [target.id for target in case.targets] == ["step_1", "step_2"]
+    assert case.targets[1].samples == []
     assert [sample.timestamp_s for sample in case.samples] == [1.0, 2.0]
     assert [sample.sample_index for sample in case.samples] == [1, 2]
 

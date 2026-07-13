@@ -258,8 +258,8 @@ def _filter_cases_by_time(
                 if (from_time_s is None or sample.timestamp_s >= from_time_s)
                 and (until_time_s is None or sample.timestamp_s < until_time_s)
             ]
-            if not samples:
-                continue
+            # Retain declared targets so gate evaluation can distinguish a target
+            # removed by this window from a misspelled threshold target id.
             filtered_targets.append(
                 TargetSpec(
                     id=target.id,
@@ -269,7 +269,7 @@ def _filter_cases_by_time(
                     samples=samples,
                 )
             )
-        if not filtered_targets:
+        if not any(target.samples for target in filtered_targets):
             continue
         filtered_cases.append(
             EvalCase(

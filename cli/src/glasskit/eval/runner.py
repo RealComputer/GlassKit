@@ -139,6 +139,8 @@ async def run_eval(
             )
             for target in case.targets:
                 target_samples = target.samples
+                if not target_samples:
+                    continue
                 if callbacks is not None:
                     callbacks.on_target_start(case, target.id, len(target_samples))
                 context = TargetContext(
@@ -669,7 +671,9 @@ def _case_gates(
         return []
     case_name = case.name
     thresholds = case.thresholds
-    selected_target_ids = {target.id for target in case.targets}
+    declared_target_ids = {target.id for target in case.targets}
+    selected_target_ids = {target.id for target in case.targets if target.samples}
+    time_filtered = options.from_time_s is not None or options.until_time_s is not None
     gates: list[GateResult] = []
     if thresholds.min_pass_rate is not None:
         gates.append(
@@ -690,7 +694,15 @@ def _case_gates(
             )
         )
     for target_id, threshold in thresholds.per_target.items():
-        if target_id not in selected_target_ids:
+        if options.target_filter is not None and target_id != options.target_filter:
+            continue
+        # Undeclared target ids still produce an empty, failing gate. Only suppress
+        # targets known to have been emptied by the requested time window.
+        if (
+            time_filtered
+            and target_id in declared_target_ids
+            and target_id not in selected_target_ids
+        ):
             continue
         if threshold.min_pass_rate is None:
             continue
