@@ -11,7 +11,7 @@
     "title": "Step 2",
     "hud_image": "origami_step_2",
     "reference_image": "ref-imgs/2.jpg",
-    "criteria": "## Required Features\n\n- An upright kite or diamond with top, bottom, left, and right points.\n- Two narrow front flaps that meet along the vertical center near the bottom.\n\n## Reject If\n\n- A plain kite or diamond without the two narrow center flaps."
+    "criteria": "## Required Features\n\n- An upright kite or diamond with top, bottom, left, and right points.\n- Both narrow front flaps are clearly visible and folded inward to meet along the vertical center near the bottom.\n\n## Reject If\n\n- Either front flap remains open to the side instead of being folded inward to the center.\n- A plain kite or diamond without the two narrow center flaps."
   },
   {
     "id": "step_3",
