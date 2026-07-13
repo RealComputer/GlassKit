@@ -113,7 +113,7 @@ The eval files live under `backend/eval/`:
 - `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
-- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference and balanced reviewed true/false frames.
+- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference, balanced reviewed true/false frames, and optional fast-evaluator feedback.
 - `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
 - `test_suggest_criteria.py` covers criteria example selection and response validation.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
@@ -175,24 +175,57 @@ The review UI is a convenient data viewer for this workflow: it puts the source 
 
 For an isolated labeling mistake, edit the sample's expected value in the review UI. A one-off correction usually does not justify changing a prompt that already handles the surrounding samples well.
 
+#### Improve Step Criteria
+
 When the same bad labeling pattern appears repeatedly, fix the labeling rule instead of correcting every expectation by hand. In this example, global comparison and visibility behavior lives in `backend/src/fold_check_prompts.py`, while step-specific shape requirements live in the `criteria` fields of `backend/assets/origami_steps.json`. Prefer the narrowest fix that explains the repeated errors, and check both failing examples and known-good counterexamples so the new rule does not become unnecessarily strict.
 
-The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Samples are spread across label blocks, timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects:
+The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Samples are spread across label blocks, timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects. Start without evaluator feedback:
 
 ```sh
 cd backend
 uv run --env-file .env python -m eval.suggest_criteria \
   --case eval/cases/full-run.yaml \
   --target step_5 \
-  --eval-results eval/runs/suggest-criteria/step_5-eval.json \
   --output eval/runs/suggest-criteria/step_5.json
 ```
 
-The optional `--eval-results` value is a report previously written by `glasskit eval run --output-json`. It marks which selected images confused the fast evaluator without exposing timestamps to Gemini; the full balanced true/false set still anchors the revision. Omit it when drafting criteria for the first time.
+The JSON report records the selected timestamps for reproducibility, the model's visual analysis and generalization notes, and ready-to-review Markdown criteria. The tool deliberately does not update `origami_steps.json`. Treat the report as an analyst's proposal rather than ground truth: compare it with the target reference, adjacent fold states, and the complete reviewed sample set before applying a narrowly scoped criteria change.
 
-The JSON report records the selected timestamps for reproducibility, the model's visual analysis and generalization notes, and ready-to-review Markdown criteria. The tool deliberately does not update `origami_steps.json`; compare its proposal with the reference and the full reviewed sample set before applying it, then run the Overshoot eval to measure the effect.
+After applying a candidate change, keep the reviewed case fixed and run the fast Overshoot evaluator for the whole target. Save machine-readable results for the next suggestion pass:
 
-The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to iterate on the prompt:
+```sh
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval run --concurrency 2 --target step_5 \
+  --output-json eval/runs/suggest-criteria/step_5-eval.json
+```
+
+If the target still has failures, feed that report back to the criteria suggester:
+
+```sh
+uv run --env-file .env python -m eval.suggest_criteria \
+  --case eval/cases/full-run.yaml \
+  --target step_5 \
+  --eval-results eval/runs/suggest-criteria/step_5-eval.json \
+  --output eval/runs/suggest-criteria/step_5-feedback.json
+```
+
+Evaluator feedback marks which selected images confused the fast model without exposing timestamps to Gemini. The full balanced true/false set still anchors the revision. Inspect false positives, false negatives, and nearby passing counterexamples; do not derive a rule from one failed frame alone. Apply one logical wording or structure change at a time and rerun the complete target, because even semantically similar phrasing or headings can shift model attention.
+
+Criteria do not require a fixed three-section template. A useful pattern is to separate candidate or material context from `Required Visual Evidence`, `Allowed Variations`, and `Return False If`. Use nouns already defined by the system prompt, such as "candidate" and "reference," and describe observable image evidence rather than hidden folding actions. Keep a condition beside the visual feature it qualifies when an apparently cleaner move measurably hurts the eval.
+
+Once a version passes, enforce the intended target threshold and repeat the full run to check stability:
+
+```sh
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval run --concurrency 2 --target step_5 \
+  --min-target-pass-rate 1
+```
+
+A perfect score on one recording is evidence for that suite, not proof of universal behavior. Add recordings with different people, viewpoints, lighting, and valid paper colors over time rather than making criteria increasingly specific to one video.
+
+Periodically audit criteria across steps for repeated general rules. A rule about candidate selection, orientation tolerance, visibility, or interaction with hands may belong in the shared system prompt when it is truly universal. Promote it only after checking that its meaning is identical across steps, remove the duplicated step-level copies, and rerun every affected target because system-prompt changes have a wider regression surface. Keep step geometry, fold-specific layer relationships, and application-specific material assumptions in the step criteria.
+
+The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to investigate how Gemini labels it:
 
 ```sh
 cd backend
@@ -202,7 +235,7 @@ uv run --env-file .env python -m eval.check_image \
   /path/to/frame-41.500s.png
 ```
 
-The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as case generation. After the downloaded bad examples return the intended result and known-good frames still pass, regenerate only the affected target with `--target`, reopen the review UI, and inspect that target again. This keeps the rest of the reviewed case intact while turning a repeated manual correction into a reusable prompt improvement.
+The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as case generation. It is useful for investigating generated labels, but it is not a substitute for the fast Overshoot eval. Do not regenerate a reviewed target after changing its criteria: that would change the ground truth while measuring the prompt. Keep the reviewed case fixed, rerun `glasskit eval`, and edit expectations only when human review shows that a label itself is wrong.
 
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 
