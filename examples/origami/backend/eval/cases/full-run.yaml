@@ -105,7 +105,10 @@ targets:
       ignore: unstable
     - range: [274.0, 275.0]
       expect: false
-    - range: [275.0, 276.0]
+    - at: 275.0
+      expect: true
+      ignore: unclear
+    - at: 275.5
       expect: true
     - at: 276.0
       expect: true
