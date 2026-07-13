@@ -643,7 +643,12 @@ describe("review application navigation and drafts", () => {
       }),
     );
     render(<App />);
-    const ignore = await screen.findByLabelText("Ignore reason optional");
+    const toggle = await screen.findByLabelText("Ignore this sample");
+    expect(screen.queryByLabelText("Ignore reason")).toBeNull();
+
+    fireEvent.click(toggle);
+    const ignore = await screen.findByLabelText("Ignore reason");
+    expect(screen.getByText("Enter a reason for ignoring this sample.")).toBeTruthy();
 
     fireEvent.change(ignore, { target: { value: "Provider output is flaky." } });
     expect(
@@ -656,6 +661,10 @@ describe("review application navigation and drafts", () => {
     await waitFor(() =>
       expect(submitted?.target_a.samples[0].ignore).toBe("Provider output is flaky."),
     );
+
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText("Ignore reason")).toBeNull();
+    await waitFor(() => expect(submitted?.target_a.samples[0].ignore).toBeNull());
   });
 
   it("commits human-entered transport time only on Enter", async () => {
@@ -752,7 +761,7 @@ describe("review application navigation and drafts", () => {
       screen.findByLabelText("Expected value"),
       screen.findByLabelText(/Field/),
       screen.findByLabelText("Tolerance"),
-      screen.findByLabelText("Ignore reason optional"),
+      screen.findByLabelText("Ignore this sample"),
       screen.findByLabelText("Comment optional"),
     ]);
     await waitFor(() => expect(controls[1]).toHaveProperty("value", "1"));

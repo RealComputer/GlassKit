@@ -55,7 +55,7 @@ class ConsoleReporter:
             f"@{result.timestamp_s:g}s "
             f"expected={_short(result.expected)} "
             f"observed={_short(result.observed_value)} "
-            f"reason={result.reason}",
+            f"reason={escape(result.reason)}",
             highlight=False,
         )
 
@@ -111,7 +111,7 @@ def print_sample_schedule(
             _short(row["expected"]),
             str(row["mode"] or ""),
             str(row["field"] or ""),
-            str(row["ignore"] or ""),
+            Text(str(row["ignore"] or "")),
             str(row["source"] or ""),
         )
     console.print(table)

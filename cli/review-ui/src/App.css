@@ -1176,9 +1176,43 @@ textarea[aria-invalid="true"] {
 
 .field-help {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.75rem;
   line-height: 1.4;
+}
+
+.field-group > .ignore-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.ignore-toggle input {
+  margin: 0;
+}
+
+.ignore-reason {
+  margin-top: 8px;
+}
+
+.ignore-reason > label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ignore-reason > textarea {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  resize: vertical;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
 }
 
 .timestamp-editor {
