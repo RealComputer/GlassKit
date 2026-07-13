@@ -49,15 +49,16 @@ class ConsoleReporter:
             "passed": "green",
             "ignored": "yellow",
         }.get(result.status, "red")
-        self.console.print(
-            f"    [{style}]{result.status.upper()}[/{style}] "
-            f"{escape(_format_target_name(result.target_id, result.target_label))} "
+        line = Text("    ")
+        line.append(result.status.upper(), style=style)
+        line.append(
+            f" {_format_target_name(result.target_id, result.target_label)} "
             f"@{result.timestamp_s:g}s "
             f"expected={_short(result.expected)} "
             f"observed={_short(result.observed_value)} "
-            f"reason={escape(result.reason)}",
-            highlight=False,
+            f"reason={result.reason}"
         )
+        self.console.print(line, highlight=False)
 
 
 def print_validation_report(

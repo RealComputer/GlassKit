@@ -883,8 +883,6 @@ kbd {
 }
 
 .sample-marker.ignored::before {
-  left: 6px;
-  width: 4px;
   background: repeating-linear-gradient(
     to bottom,
     var(--expect-color, #57606a) 0 3px,

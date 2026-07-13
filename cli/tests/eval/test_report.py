@@ -131,7 +131,7 @@ def test_console_reporter_does_not_auto_highlight_values() -> None:
 
 
 def test_ignore_reasons_render_as_literal_rich_text() -> None:
-    reason = "tracking [/] [bold]flaky[/bold]"
+    reason = "tracking [/] [bold]flaky[/bold] C:\\"
 
     schedule_buffer = StringIO()
     print_sample_schedule(
@@ -146,6 +146,7 @@ def test_ignore_reasons_render_as_literal_rich_text() -> None:
     )
     reporter.on_result(_result(status="ignored", reason=reason))
 
+    assert reason.endswith("\\")
     assert reason in schedule_buffer.getvalue()
     assert f"reason={reason}" in result_buffer.getvalue()
 
