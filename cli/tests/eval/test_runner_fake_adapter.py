@@ -49,7 +49,7 @@ def test_runner_filters_by_target_without_case(tmp_path: Path) -> None:
     asyncio.run(_run_target_filter_without_case_test(tmp_path))
 
 
-def test_runner_filters_multiple_targets_and_their_gates(tmp_path: Path) -> None:
+def test_runner_filters_multiple_targets_and_time_window_gates(tmp_path: Path) -> None:
     asyncio.run(_run_multiple_target_filter_test(tmp_path))
 
 
@@ -673,6 +673,25 @@ def create_evaluator(config):
     assert "case-001_step_2_min_pass_rate" in gate_names
     assert "case-001_step_3_min_pass_rate" not in gate_names
     assert report.success
+
+    windowed_report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            case_filter="case-001",
+            target_filter=("step_1", "step_2"),
+            from_time_s=0.5,
+            until_time_s=1.5,
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    windowed_gate_names = {gate.name for gate in windowed_report.gate_results}
+    assert [result.target_id for result in windowed_report.results] == ["step_2"]
+    assert "eval_step_1_min_pass_rate" not in windowed_gate_names
+    assert "eval_step_2_min_pass_rate" in windowed_gate_names
+    assert "case-001_step_1_min_pass_rate" not in windowed_gate_names
+    assert "case-001_step_2_min_pass_rate" in windowed_gate_names
+    assert windowed_report.success
 
 
 async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:

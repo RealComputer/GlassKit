@@ -560,7 +560,7 @@ Options:
 | `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
-| `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. May be used with or without `--case`. |
+| `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
@@ -577,12 +577,6 @@ Options:
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 `--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
-
-Repeat `--target` to select a subset of multiple targets. Every requested target must exist in the selected case scope; cases containing none of the requested targets are skipped.
-
-```sh
-glasskit eval run --target step_1 --target step_2
-```
 
 To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
@@ -607,7 +601,7 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
 | `--case TEXT` | All cases | Only validate one case by filename or stem. |
-| `--target TEXT` | All targets | Only validate this target id from the selected cases. Repeat the option to validate multiple targets. May be used with or without `--case`. |
+| `--target TEXT` | All targets | Only validate this target id from the selected cases. Repeat the option to validate multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
@@ -627,7 +621,7 @@ Options:
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
-| `--target TEXT` | All targets | Only list this target id from the selected cases. Repeat the option to list multiple targets. May be used with or without `--case`. |
+| `--target TEXT` | All targets | Only list this target id from the selected cases. Repeat the option to list multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
