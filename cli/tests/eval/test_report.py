@@ -53,8 +53,9 @@ def test_print_run_summary_includes_individual_timing_and_throughput() -> None:
     print_run_summary(_report(), console=console)
 
     output = buffer.getvalue()
-    assert "Avg evaluation latency: 1.25s/attempt" in output
-    assert "Throughput: 1.00 attempts/s" in output
+    assert "Avg evaluation latency: 1.25s/sample" in output
+    assert "Throughput: 1.00 samples/s" in output
+    assert "Avg latency" in output
 
 
 def test_print_run_summary_labels_amortized_batch_timing() -> None:
@@ -70,7 +71,25 @@ def test_print_run_summary_labels_amortized_batch_timing() -> None:
     )
 
     output = buffer.getvalue()
-    assert "Avg amortized batch time: 500ms/attempt" in output
+    assert "Avg amortized batch time: 500ms/sample" in output
+    assert "Avg batch/sample" in output
+
+
+def test_single_run_summary_uses_run_vocabulary() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+
+    print_run_summary(_report(), console=console)
+
+    output = buffer.getvalue()
+    assert "Samples: 1 evaluated, 0 passed, 1 failed, 0 errors, 0 ignored" in output
+    assert "Pass rate: 0.0%" in output
+    assert "By target" in output
+    assert "trial" not in output.lower()
+    assert "attempt" not in output.lower()
+    assert "stability" not in output.lower()
+    assert "flaky" not in output.lower()
+    assert "Pass min / mean / max" not in output
 
 
 def test_print_sample_schedule_uses_target_label_with_id() -> None:
@@ -167,7 +186,7 @@ def test_run_summary_counts_ignored_samples_without_listing_them_as_failures() -
     print_run_summary(report, console=console)
 
     output = buffer.getvalue()
-    assert "0 evaluated per trial" in output
+    assert "0 evaluated" in output
     assert "1 ignored" in output
     assert "Unstable and failing samples" not in output
 
@@ -220,7 +239,8 @@ def test_run_summary_prints_only_failed_gates() -> None:
     assert "Failed gates" in output
     assert "eval_min_pass_rate" in output
     assert "0.0% pass rate (gate: >= 95.0%)" in output
-    assert "Trial 1" in output
+    assert "Trial 1" not in output
+    assert "Scope" not in output
     assert "adapter_errors" not in output
 
 
@@ -269,7 +289,10 @@ def test_run_summary_reports_cross_trial_stability() -> None:
 
     output = buffer.getvalue()
     assert "Trials: 3 total, 2 passed gates, 1 failed gates" in output
+    assert "Attempts: 3 evaluated, 2 passed, 1 failed, 0 errors" in output
     assert "Trial pass rate (min / mean / max): 0.0% / 66.7% / 100.0%" in output
+    assert "Avg evaluation latency: 1.25s/attempt" in output
+    assert "Throughput: 1.00 attempts/s" in output
     assert "1 flaky" in output
     assert "P/F/P" in output
     assert "max_flaky_samples" in output
