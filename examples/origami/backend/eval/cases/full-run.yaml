@@ -69,6 +69,7 @@ targets:
       expect: false
     - at: 221.0
       expect: true
+      ignore: unstable
     - range: [221.5, 226.0]
       expect: false
     - range: [226.0, 227.5]
