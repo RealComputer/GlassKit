@@ -185,6 +185,8 @@ Note: `--keep-going` records adapter evaluation errors and comparison errors as 
 
 Goal: run the same selected eval three times and identify samples whose outcomes vary.
 
+With `--repeat N`, GlassKit executes the same selected sample schedule `N` times. Each complete repetition is called a trial, and each evaluation of a sample within a trial is an attempt.
+
 Command:
 
 ```sh
@@ -193,7 +195,7 @@ uv run --env-file .env glasskit eval run --concurrency 2 --repeat 3 --max-flaky-
 
 Expected output: three sequential trial progress sections, a per-trial quality table, minimum/mean/maximum trial pass rates, per-target stability, and a table of flaky or consistently failing samples. The command constructs and closes a fresh evaluator for every trial. `--concurrency 2` still permits at most two individual evaluations in flight because trials themselves are never run concurrently.
 
-`--max-flaky-samples 0` checks only whether sample statuses vary. Combine it with a correctness gate such as `--min-pass-rate 0.9` when both stability and quality should affect the exit code. Repeating an eval multiplies its adapter work and provider cost by the repeat count.
+Every trial uses the same filters and selected schedule. Quality gates such as `--min-pass-rate` apply independently to each trial, and the run fails if any trial fails one; results are never pooled before applying a quality gate. `--max-flaky-samples 0` checks only whether sample statuses vary across trials, so combine it with a correctness gate such as `--min-pass-rate 0.9` when both stability and quality should affect the exit code. Repeating an eval multiplies its adapter work and provider cost by the repeat count.
 
 ### Enforce CI Quality Gates
 
@@ -205,7 +207,7 @@ Command:
 uv run glasskit eval run --min-pass-rate 0.9 --min-target-pass-rate 0.85 --max-failures 3 --output-json eval/runs/results.json
 ```
 
-Expected behavior: the process exits `0` when every trial's quality gates and any configured cross-trial stability gate pass, `1` when the eval completed but one or more gates failed, and `2` for setup or runtime errors that abort the run.
+Expected behavior: the process exits `0` when every configured quality gate passes, `1` when the eval completed but one or more gates failed, and `2` for setup or runtime errors that abort the run.
 
 Note: Threshold defaults are intentionally unset. Without `--min-pass-rate`, `--min-target-pass-rate`, `--max-failures`, or YAML thresholds, failed comparisons are visible in the report but do not fail the command. Always configure a gate for CI.
 
@@ -445,13 +447,13 @@ Implement at least one strategy. If an evaluator implements both methods, `evalu
 
 Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit schedules the remaining samples in case-file declaration order and passes batch samples in that order.
 
-Within each trial, GlassKit keeps one video decoder open per case and produces requested frames on demand. Individual evaluation retains a frame only while its adapter call is in flight, so decoded-image memory is bounded primarily by `--concurrency`. Batch evaluation retains the current target's decoded frames until `evaluate_many` returns. Cases with samples declared out of timestamp order, or with target time ranges that overlap or run backward, may temporarily cache already decoded frames rather than seeking and changing frame-selection behavior.
+GlassKit keeps one video decoder open per case and produces requested frames on demand. Individual evaluation retains a frame only while its adapter call is in flight, so decoded-image memory is bounded primarily by `--concurrency`. Batch evaluation retains the current target's decoded frames until `evaluate_many` returns. Cases with samples declared out of timestamp order, or with target time ranges that overlap or run backward, may temporarily cache already decoded frames rather than seeking and changing frame-selection behavior.
 
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
 Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
 
-The optional `close()` method is called after each trial or adapter validation check and may also be synchronous or asynchronous. Repeated trials create fresh evaluator instances sequentially; one trial is fully closed before the next evaluator factory is called.
+The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous. With `--repeat`, GlassKit creates fresh evaluator instances sequentially and closes each trial before calling the evaluator factory for the next one.
 
 Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
@@ -531,7 +533,7 @@ Commands:
 
 | Command | Description |
 | --- | --- |
-| `run` | Execute one or more trials, compare observations, apply quality and stability gates, and report results. |
+| `run` | Decode selected frames, call the adapter, compare observations, apply gates, and report results. |
 | `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
 | `list-samples` | Print the expanded sample schedule. |
 | `review` | Open the local browser UI for inspecting and correcting timed expectations. |
@@ -563,7 +565,7 @@ Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid
 
 ### `glasskit eval run`
 
-Purpose: execute eval samples in one or more sequential trials and apply quality and stability gates.
+Purpose: execute selected eval samples and apply quality gates, with optional repetition for measuring stability.
 
 ```sh
 glasskit eval run --case task-01 --output-json eval/runs/results.json
@@ -581,19 +583,19 @@ Options:
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
-| `--repeat INTEGER` | `1` | Number of complete sequential trials. A fresh evaluator is constructed and closed for every trial. |
-| `--min-pass-rate FLOAT` | None | Per-trial pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
-| `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate applied independently in every trial. Replaces eval-level `thresholds.per_target` gates. |
-| `--max-failures INTEGER` | None | Per-trial maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
+| `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
+| `--min-pass-rate FLOAT` | None | Pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
+| `--min-target-pass-rate FLOAT` | None | Uniform per-target pass-rate gate for targets present in the selected results. Replaces eval-level `thresholds.per_target` gates. |
+| `--max-failures INTEGER` | None | Maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
 | `--max-flaky-samples INTEGER` | None | Cross-trial maximum number of samples whose status varies. Must be nonnegative and requires `--repeat` of at least `2`. |
 | `--keep-going` | `false` | Record adapter evaluation or comparison errors as sample results and continue. |
 | `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
-| `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written under trial-specific directories below its `failures/` subdirectory; when omitted, the base is `<eval-dir>/runs/`. |
+| `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written below its `failures/` subdirectory; when omitted, the base is `<eval-dir>/runs/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
-`--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Every trial runs the same selected schedule, and quality gates apply independently to each trial's selected results.
+`--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
 To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
@@ -601,7 +603,7 @@ To test one specific sample, first inspect the schedule, then choose a narrow in
 glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
 ```
 
-Exit behavior: exits `0` when every trial's quality gates and all cross-trial gates pass, `1` when the eval completed but one or more gates failed, and `2` when setup or runtime errors abort the run.
+Exit behavior: exits `0` when every configured gate passes, `1` when the eval completed but one or more gates failed, and `2` when setup or runtime errors abort the run.
 
 ### `glasskit eval validate`
 
@@ -656,7 +658,6 @@ Default values at a glance:
 | Eval directory | `eval` from the command's working directory. |
 | `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
 | Individual evaluation concurrency | `1`. Increase with `run --concurrency`. |
-| Trial count | `1`. Increase with `run --repeat`; trials run sequentially with fresh evaluators. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
@@ -666,7 +667,7 @@ Default values at a glance:
 | `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | Empty object unless `--adapter-config` is provided. |
-| Failure artifacts | Saved only with `--save-failures`; default directories are `<eval-dir>/runs/failures/trial-NNN/`. |
+| Failure artifacts | Saved only with `--save-failures`; stored below `<eval-dir>/runs/failures/` by default. |
 
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:
 
@@ -679,18 +680,24 @@ thresholds:
       min_pass_rate: 0.95
 ```
 
-All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. Quality gates are calculated separately for every trial, and the overall run fails if any trial fails one. Results are never pooled before applying a quality gate. If every threshold and `--max-flaky-samples` are omitted, ordinary failed comparisons and flaky samples still appear in the console report and JSON output, but they do not fail `glasskit eval run`. A stable failure satisfies `--max-flaky-samples 0`, so combine stability and quality gates when correctness also matters. Adapter evaluation errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those sample-level errors are recorded as results with status `error`, and the automatic per-trial `adapter_errors` gate makes the completed run fail with exit code `1`. Adapter setup, loading, and close errors still abort the command.
+All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every quality threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate.
+
+With `--repeat`, quality gates are calculated separately for every trial, and the overall run fails if any trial fails one. Results are never pooled before applying a quality gate. Flaky samples do not fail the run unless `--max-flaky-samples` is configured. A stable failure satisfies `--max-flaky-samples 0`, so combine stability and quality gates when correctness also matters.
+
+Adapter evaluation errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those sample-level errors are recorded as results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`. Adapter setup, loading, and close errors still abort the command.
 
 Threshold precedence:
 
 | Source | Applies To | Notes |
 | --- | --- | --- |
-| `--min-pass-rate` | Each trial | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
-| `--max-failures` | Each trial | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
-| `--min-target-pass-rate` | Each trial's selected targets | Adds the same per-target pass-rate gate for each target present in that trial and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
-| `--max-flaky-samples` | Logical samples across all trials | Counts samples with more than one distinct `passed`, `failed`, or `error` status. It does not measure whether stable outcomes are correct. |
-| `<eval-dir>/config.yaml` | Each trial | Applies after CLI overrides. Eval-level per-target gates for targets outside a case, target, or time-window filtered run are skipped. |
-| `cases/<case>.yaml` `thresholds` | That case in each trial | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
+| `--min-pass-rate` | Selected results | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
+| `--max-failures` | Selected results | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
+| `--min-target-pass-rate` | Selected targets | Adds the same per-target pass-rate gate for each target present in the selected results and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
+| `--max-flaky-samples` | Repeated run | Counts logical samples with more than one distinct `passed`, `failed`, or `error` status across trials. It does not measure whether stable outcomes are correct. |
+| `<eval-dir>/config.yaml` | Selected results | Applies after CLI overrides. Eval-level per-target gates for targets outside a case, target, or time-window filtered run are skipped. |
+| `cases/<case>.yaml` `thresholds` | That case | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
+
+With `--repeat`, the quality-gate precedence above is resolved the same way for each trial, then each gate is evaluated independently against that trial's results.
 
 Other precedence rules:
 
@@ -712,9 +719,9 @@ uv run --env-file .env glasskit eval run
 
 ## Output Formats
 
-Human-readable output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout.
+Human-readable output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Each JSON file represents one `glasskit eval run` invocation. By default, it has `repeat_count: 1` and one complete result set in `trials`.
 
-`glasskit eval run --repeat 2 --max-flaky-samples 0 --output-json eval/runs/results.json` writes one report containing trial results and cross-trial stability:
+The following repeated-run example uses `glasskit eval run --repeat 2 --max-flaky-samples 0 --output-json eval/runs/results.json` so the report shows both per-trial results and cross-trial stability:
 
 ```json
 {
@@ -867,16 +874,16 @@ Human-readable output is printed with Rich tables to stdout. JSON output is writ
 }
 ```
 
-Every report uses this trial envelope, including the default single-trial run. Root `gates` contains cross-trial gates, while each trial contains its own quality gates and complete sample results. The `stability` array follows the deterministic result order and records each logical sample's status sequence. Ignored samples appear in every trial with status `ignored`, but root logical-sample counts include each ignored sample only once; attempts, pass rates, timing, throughput, quality gates, and stability gates exclude ignored outcomes.
+The `trials` array is the report's uniform representation for complete executions. A default run has one entry; with `--repeat`, each repetition adds an entry identified by its `trial` number. Root `gates` contains run-wide stability gates, while each entry in `trials` contains its own quality gates and complete sample results. The `stability` array follows the deterministic result order and records each logical sample's status sequence. Ignored samples appear in every result set with status `ignored`, but root logical-sample counts include each ignored sample only once; attempts, pass rates, timing, throughput, quality gates, and stability gates exclude ignored outcomes.
 
-`--save-failures` writes artifacts for every failed or errored sample attempt. By default, files go under `<eval-dir>/runs/failures/trial-NNN/`. When `--artifacts-dir` is provided, failure files go under `<artifacts-dir>/failures/trial-NNN/`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp; the metadata also records its one-based trial number.
+`--save-failures` writes artifacts for every failed or errored sample attempt. To prevent repeated executions from overwriting one another, files are grouped under `<eval-dir>/runs/failures/trial-NNN/` by default or `<artifacts-dir>/failures/trial-NNN/` when `--artifacts-dir` is provided. A run without `--repeat` uses `trial-001`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp; the metadata also records its one-based trial number.
 
 ## Exit Codes
 
 | Code | Meaning | Fix |
 | ---: | --- | --- |
-| `0` | Command succeeded. For `run`, every trial quality gate and cross-trial gate passed. | No action needed. |
-| `1` | Validation failed, or `run` completed but one or more quality or stability gates failed. | Read the validation issues or gate tables, fix the eval, adapter, quality threshold, or unstable sample, then rerun. |
+| `0` | Command succeeded. For `run`, every configured gate passed. | No action needed. |
+| `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate tables, fix the eval, adapter, threshold, or unstable sample, then rerun. |
 | `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the eval directory, and rerun with `--keep-going` if you want sample-level adapter evaluation errors recorded instead of aborting. |
 
 ## Errors and Troubleshooting
