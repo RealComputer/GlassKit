@@ -214,9 +214,8 @@ class GateResult:
 
 
 @dataclass(frozen=True)
-class EvalRunReport:
-    eval_dir: Path
-    case_names: list[str]
+class EvalTrialReport:
+    index: int
     results: list[SampleResult]
     gate_results: list[GateResult]
     duration_s: float
@@ -285,6 +284,184 @@ class EvalRunReport:
 
 
 @dataclass(frozen=True)
+class SampleStability:
+    case_name: str
+    target_id: str
+    target_label: str | None
+    sample_index: int
+    timestamp_s: float
+    expected: Any
+    source: str
+    statuses: tuple[ResultStatus, ...]
+
+    @property
+    def evaluated_count(self) -> int:
+        return sum(status != "ignored" for status in self.statuses)
+
+    @property
+    def passed_count(self) -> int:
+        return self.statuses.count("passed")
+
+    @property
+    def failed_count(self) -> int:
+        return self.statuses.count("failed")
+
+    @property
+    def error_count(self) -> int:
+        return self.statuses.count("error")
+
+    @property
+    def pass_rate(self) -> float | None:
+        if self.evaluated_count == 0:
+            return None
+        return self.passed_count / self.evaluated_count
+
+    @property
+    def ignored(self) -> bool:
+        return all(status == "ignored" for status in self.statuses)
+
+    @property
+    def consistently_passed(self) -> bool:
+        return bool(self.statuses) and all(
+            status == "passed" for status in self.statuses
+        )
+
+    @property
+    def consistently_failed(self) -> bool:
+        return bool(self.statuses) and all(
+            status == "failed" for status in self.statuses
+        )
+
+    @property
+    def flaky(self) -> bool:
+        return not self.ignored and len(set(self.statuses)) > 1
+
+    @property
+    def has_errors(self) -> bool:
+        return self.error_count > 0
+
+
+@dataclass(frozen=True)
+class EvalRunReport:
+    eval_dir: Path
+    case_names: list[str]
+    trials: list[EvalTrialReport]
+    stability: list[SampleStability]
+    gate_results: list[GateResult]
+    duration_s: float
+
+    @property
+    def repeat_count(self) -> int:
+        return len(self.trials)
+
+    @property
+    def successful_trial_count(self) -> int:
+        return sum(trial.success for trial in self.trials)
+
+    @property
+    def evaluated_sample_count(self) -> int:
+        return sum(not sample.ignored for sample in self.stability)
+
+    @property
+    def ignored_sample_count(self) -> int:
+        return sum(sample.ignored for sample in self.stability)
+
+    @property
+    def attempt_results(self) -> list[SampleResult]:
+        return [result for trial in self.trials for result in trial.results]
+
+    @property
+    def evaluated_attempt_count(self) -> int:
+        return sum(trial.evaluated_count for trial in self.trials)
+
+    @property
+    def passed_attempt_count(self) -> int:
+        return sum(trial.passed_count for trial in self.trials)
+
+    @property
+    def failed_attempt_count(self) -> int:
+        return sum(trial.failed_count for trial in self.trials)
+
+    @property
+    def error_attempt_count(self) -> int:
+        return sum(trial.error_count for trial in self.trials)
+
+    @property
+    def attempt_pass_rate(self) -> float:
+        if self.evaluated_attempt_count == 0:
+            return 0.0
+        return self.passed_attempt_count / self.evaluated_attempt_count
+
+    @property
+    def minimum_trial_pass_rate(self) -> float:
+        return min((trial.pass_rate for trial in self.trials), default=0.0)
+
+    @property
+    def mean_trial_pass_rate(self) -> float:
+        if not self.trials:
+            return 0.0
+        return sum(trial.pass_rate for trial in self.trials) / len(self.trials)
+
+    @property
+    def maximum_trial_pass_rate(self) -> float:
+        return max((trial.pass_rate for trial in self.trials), default=0.0)
+
+    @property
+    def consistently_passed_sample_count(self) -> int:
+        return sum(sample.consistently_passed for sample in self.stability)
+
+    @property
+    def consistently_failed_sample_count(self) -> int:
+        return sum(sample.consistently_failed for sample in self.stability)
+
+    @property
+    def flaky_sample_count(self) -> int:
+        return sum(sample.flaky for sample in self.stability)
+
+    @property
+    def error_sample_count(self) -> int:
+        return sum(sample.has_errors for sample in self.stability)
+
+    @property
+    def average_evaluation_duration_s(self) -> float | None:
+        durations = [
+            result.evaluation_duration_s
+            for result in self.attempt_results
+            if result.status != "ignored" and result.evaluation_duration_s is not None
+        ]
+        if not durations:
+            return None
+        return sum(durations) / len(durations)
+
+    @property
+    def evaluation_timing_mode(
+        self,
+    ) -> EvaluationTimingMode | Literal["mixed"] | None:
+        modes = {
+            result.evaluation_timing_mode
+            for result in self.attempt_results
+            if result.status != "ignored" and result.evaluation_timing_mode is not None
+        }
+        if not modes:
+            return None
+        if len(modes) == 1:
+            return next(iter(modes))
+        return "mixed"
+
+    @property
+    def throughput_attempts_per_s(self) -> float:
+        if self.evaluated_attempt_count == 0 or self.duration_s <= 0:
+            return 0.0
+        return self.evaluated_attempt_count / self.duration_s
+
+    @property
+    def success(self) -> bool:
+        return all(trial.success for trial in self.trials) and all(
+            gate.passed for gate in self.gate_results
+        )
+
+
+@dataclass(frozen=True)
 class RunOptions:
     eval_dir: Path
     adapter: str | None = None
@@ -294,9 +471,11 @@ class RunOptions:
     until_time_s: float | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
     concurrency: int = 1
+    repeat: int = 1
     min_pass_rate: float | None = None
     min_target_pass_rate: float | None = None
     max_failures: int | None = None
+    max_flaky_samples: int | None = None
     keep_going: bool = False
     verbose: bool = False
     output_json: Path | None = None

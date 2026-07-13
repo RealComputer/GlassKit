@@ -84,6 +84,32 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     assert "ignored when the adapter uses evaluate_many" in concurrency.help
 
 
+def test_eval_run_defines_single_trial_default_and_stability_gate() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+    options = eval_command.commands["run"].params
+
+    repeat = next(
+        option
+        for option in options
+        if isinstance(option, TyperOption) and "--repeat" in option.opts
+    )
+    max_flaky = next(
+        option
+        for option in options
+        if isinstance(option, TyperOption) and "--max-flaky-samples" in option.opts
+    )
+
+    assert repeat.default == 1
+    assert repeat.help is not None
+    assert "sequential trials" in repeat.help
+    assert max_flaky.default is None
+    assert max_flaky.help is not None
+    assert "varies across trials" in max_flaky.help
+
+
 def test_eval_run_does_not_define_failure_table_limit() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)
@@ -123,6 +149,26 @@ def test_eval_run_rejects_non_positive_concurrency() -> None:
 
     assert result.exit_code == 2
     assert "Invalid value for '--concurrency'" in Text.from_ansi(result.output).plain
+
+
+def test_eval_run_rejects_non_positive_repeat() -> None:
+    result = CliRunner().invoke(app, ["eval", "run", "--repeat", "0"])
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--repeat'" in Text.from_ansi(result.output).plain
+
+
+def test_eval_run_requires_repetition_for_flaky_sample_gate() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["eval", "run", "--max-flaky-samples", "0"],
+    )
+
+    assert result.exit_code == 2
+    assert (
+        "max flaky samples requires at least 2 trials"
+        in Text.from_ansi(result.output).plain
+    )
 
 
 @pytest.mark.parametrize("command", ["run", "list-samples"])

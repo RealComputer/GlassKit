@@ -118,8 +118,8 @@ def create_evaluator(config):
     )
 
     assert report.success
-    assert report.evaluated_count == 4
-    assert report.passed_count == 4
+    assert report.trials[0].evaluated_count == 4
+    assert report.trials[0].passed_count == 4
 
 
 async def _run_time_window_filter_test(tmp_path: Path) -> None:
@@ -176,15 +176,16 @@ def create_evaluator(config):
         )
     )
 
-    assert [result.target_id for result in report.results] == ["late"]
-    assert [result.timestamp_s for result in report.results] == [1.0]
-    assert [result.sample_index for result in report.results] == [2]
-    gate_names = {gate.name for gate in report.gate_results}
+    results = report.trials[0].results
+    assert [result.target_id for result in results] == ["late"]
+    assert [result.timestamp_s for result in results] == [1.0]
+    assert [result.sample_index for result in results] == [2]
+    gate_names = {gate.name for gate in report.trials[0].gate_results}
     assert "case-001_early_min_pass_rate" not in gate_names
     assert "case-001_late_min_pass_rate" in gate_names
     missing_gate = next(
         gate
-        for gate in report.gate_results
+        for gate in report.trials[0].gate_results
         if gate.name == "case-001_misspelled_min_pass_rate"
     )
     assert not missing_gate.passed
@@ -237,18 +238,17 @@ def create_evaluator(config):
     )
 
     assert report.success
-    assert [result.status for result in report.results] == ["ignored", "passed"]
-    assert report.results[0].reason == (
-        "Provider output is flaky for this difficult frame."
-    )
-    assert report.results[0].evaluation_duration_s is None
-    assert report.evaluated_count == 1
-    assert report.ignored_count == 1
-    assert report.pass_rate == 1.0
+    results = report.trials[0].results
+    assert [result.status for result in results] == ["ignored", "passed"]
+    assert results[0].reason == ("Provider output is flaky for this difficult frame.")
+    assert results[0].evaluation_duration_s is None
+    assert report.trials[0].evaluated_count == 1
+    assert report.trials[0].ignored_count == 1
+    assert report.trials[0].pass_rate == 1.0
     written = json.loads(output_path.read_text(encoding="utf-8"))
-    assert written["summary"]["evaluated"] == 1
-    assert written["summary"]["ignored"] == 1
-    assert [result["status"] for result in written["results"]] == [
+    assert written["summary"]["evaluated_samples"] == 1
+    assert written["summary"]["ignored_samples"] == 1
+    assert [result["status"] for result in written["trials"][0]["results"]] == [
         "ignored",
         "passed",
     ]
@@ -284,7 +284,9 @@ def create_evaluator(config):
         )
     )
 
-    failed = [result for result in report.results if result.status == "failed"]
+    failed = [
+        result for result in report.trials[0].results if result.status == "failed"
+    ]
     assert not report.success
     assert len(failed) == 2
     for result in failed:
@@ -324,7 +326,9 @@ def create_evaluator(config):
         )
     )
 
-    failed = [result for result in report.results if result.status == "failed"]
+    failed = [
+        result for result in report.trials[0].results if result.status == "failed"
+    ]
     assert len(failed) == 2
     for result in failed:
         assert result.artifact_image is not None
@@ -376,12 +380,13 @@ def create_evaluator(config):
         )
     )
 
-    assert report.failed_count == 1
-    result = report.results[0]
+    assert report.trials[0].failed_count == 1
+    result = report.trials[0].results[0]
     assert result.artifact_image is not None
     assert result.artifact_json is not None
-    assert Path(result.artifact_image).parent == eval_dir / "runs" / "failures"
-    assert Path(result.artifact_json).parent == eval_dir / "runs" / "failures"
+    expected_dir = eval_dir / "runs" / "failures" / "trial-001"
+    assert Path(result.artifact_image).parent == expected_dir
+    assert Path(result.artifact_json).parent == expected_dir
     assert Path(result.artifact_image).exists()
     assert Path(result.artifact_json).exists()
 
@@ -441,7 +446,9 @@ def create_evaluator(config):
     )
 
     gate = next(
-        gate for gate in report.gate_results if gate.name == "eval_step_2_min_pass_rate"
+        gate
+        for gate in report.trials[0].gate_results
+        if gate.name == "eval_step_2_min_pass_rate"
     )
     assert not gate.passed
     assert not report.success
@@ -488,7 +495,7 @@ def create_evaluator(config):
 
     gate = next(
         gate
-        for gate in report.gate_results
+        for gate in report.trials[0].gate_results
         if gate.name == "case-001_misspelled_min_pass_rate"
     )
     assert not gate.passed
@@ -559,7 +566,7 @@ def create_evaluator(config):
         )
     )
 
-    gate_names = {gate.name for gate in report.gate_results}
+    gate_names = {gate.name for gate in report.trials[0].gate_results}
     assert "eval_step_1_min_pass_rate" in gate_names
     assert "eval_step_2_min_pass_rate" not in gate_names
     assert report.success
@@ -629,9 +636,9 @@ def create_evaluator(config):
         )
     )
 
-    gate_names = {gate.name for gate in report.gate_results}
+    gate_names = {gate.name for gate in report.trials[0].gate_results}
     assert report.case_names == ["case-002"]
-    assert [result.target_id for result in report.results] == ["step_2"]
+    assert [result.target_id for result in report.trials[0].results] == ["step_2"]
     assert "eval_step_1_min_pass_rate" not in gate_names
     assert "eval_step_2_min_pass_rate" in gate_names
     assert report.success
@@ -708,8 +715,11 @@ def create_evaluator(config):
         )
     )
 
-    gate_names = {gate.name for gate in report.gate_results}
-    assert [result.target_id for result in report.results] == ["step_1", "step_2"]
+    gate_names = {gate.name for gate in report.trials[0].gate_results}
+    assert [result.target_id for result in report.trials[0].results] == [
+        "step_1",
+        "step_2",
+    ]
     assert "eval_step_1_min_pass_rate" in gate_names
     assert "eval_step_2_min_pass_rate" in gate_names
     assert "eval_step_3_min_pass_rate" not in gate_names
@@ -729,8 +739,10 @@ def create_evaluator(config):
         )
     )
 
-    windowed_gate_names = {gate.name for gate in windowed_report.gate_results}
-    assert [result.target_id for result in windowed_report.results] == ["step_2"]
+    windowed_gate_names = {gate.name for gate in windowed_report.trials[0].gate_results}
+    assert [result.target_id for result in windowed_report.trials[0].results] == [
+        "step_2"
+    ]
     assert "eval_step_1_min_pass_rate" not in windowed_gate_names
     assert "eval_step_2_min_pass_rate" in windowed_gate_names
     assert "case-001_step_1_min_pass_rate" not in windowed_gate_names
@@ -782,11 +794,12 @@ def create_evaluator(config):
         )
     )
 
-    assert report.error_count == 1
+    assert report.trials[0].error_count == 1
     assert output_json.exists()
     data = json.loads(output_json.read_text(encoding="utf-8"))
-    assert data["results"][0]["status"] == "error"
-    assert "non-JSON observation" in data["results"][0]["reason"]
+    result_data = data["trials"][0]["results"][0]
+    assert result_data["status"] == "error"
+    assert "non-JSON observation" in result_data["reason"]
 
 
 async def _run_duration_report_test(
@@ -812,7 +825,7 @@ def create_evaluator(config):
         encoding="utf-8",
     )
     output_json = tmp_path / "report.json"
-    clock_values = iter([10.0, 20.0, 30.0, 72.25])
+    clock_values = iter([10.0, 20.0, 30.0, 40.0, 72.25, 72.25])
     monkeypatch.setattr("glasskit.eval.runner.perf_counter", lambda: next(clock_values))
 
     report = await run_eval(
@@ -826,19 +839,20 @@ def create_evaluator(config):
     assert report.duration_s == pytest.approx(62.25)
     assert report.evaluation_timing_mode == "batch_amortized"
     assert report.average_evaluation_duration_s == pytest.approx(2.5)
-    assert report.throughput_samples_per_s == pytest.approx(4 / 62.25)
-    assert [result.evaluation_duration_s for result in report.results] == [
+    assert report.throughput_attempts_per_s == pytest.approx(4 / 62.25)
+    assert [result.evaluation_duration_s for result in report.trials[0].results] == [
         pytest.approx(2.5)
     ] * 4
     data = json.loads(output_json.read_text(encoding="utf-8"))
     assert data["summary"]["duration_seconds"] == pytest.approx(62.25)
     assert data["summary"]["evaluation_timing_mode"] == "batch_amortized"
-    assert data["summary"]["average_evaluation_seconds_per_sample"] == pytest.approx(
+    assert data["summary"]["average_evaluation_seconds_per_attempt"] == pytest.approx(
         2.5
     )
-    assert data["summary"]["throughput_samples_per_second"] == pytest.approx(4 / 62.25)
-    assert data["results"][0]["evaluation_timing_mode"] == "batch_amortized"
-    assert data["results"][0]["evaluation_duration_seconds"] == pytest.approx(2.5)
+    assert data["summary"]["throughput_attempts_per_second"] == pytest.approx(4 / 62.25)
+    result_data = data["trials"][0]["results"][0]
+    assert result_data["evaluation_timing_mode"] == "batch_amortized"
+    assert result_data["evaluation_duration_seconds"] == pytest.approx(2.5)
 
 
 async def _run_close_error_masking_test(tmp_path: Path) -> None:
@@ -928,11 +942,12 @@ def create_evaluator(config):
         )
     )
 
-    assert report.error_count == 1
-    assert report.results[0].status == "error"
-    assert report.results[0].evaluation_duration_s is not None
-    assert report.results[0].evaluation_timing_mode == "batch_amortized"
-    assert "adapter failed for target 'step_1'" in report.results[0].reason
+    result = report.trials[0].results[0]
+    assert report.trials[0].error_count == 1
+    assert result.status == "error"
+    assert result.evaluation_duration_s is not None
+    assert result.evaluation_timing_mode == "batch_amortized"
+    assert "adapter failed for target 'step_1'" in result.reason
 
     with pytest.raises(AdapterRuntimeError, match="adapter failed for target 'step_1'"):
         await run_eval(

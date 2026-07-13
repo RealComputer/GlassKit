@@ -46,14 +46,14 @@ def test_runner_bounds_concurrent_evaluation_and_preserves_result_order(
     assert report.success
     assert evaluator.peak_active == 3
     assert evaluator.completed != [0, 1, 2, 3]
-    assert [result.sample_index for result in report.results] == [0, 1, 2, 3]
+    assert [result.sample_index for result in report.trials[0].results] == [0, 1, 2, 3]
     assert report.evaluation_timing_mode == "individual"
     assert report.average_evaluation_duration_s is not None
     assert report.average_evaluation_duration_s > 0
     assert all(
         result.evaluation_timing_mode == "individual"
         and result.evaluation_duration_s is not None
-        for result in report.results
+        for result in report.trials[0].results
     )
     assert evaluator.closed
 
@@ -118,7 +118,10 @@ def test_runner_handles_targets_declared_out_of_timestamp_order(
 
     assert report.success
     assert evaluator.completed == [0, 1]
-    assert [result.target_id for result in report.results] == ["later", "earlier"]
+    assert [result.target_id for result in report.trials[0].results] == [
+        "later",
+        "earlier",
+    ]
 
 
 def test_keep_going_records_only_the_failing_individual_sample(
@@ -135,15 +138,16 @@ def test_keep_going_records_only_the_failing_individual_sample(
         )
     )
 
-    assert [result.status for result in report.results] == [
+    results = report.trials[0].results
+    assert [result.status for result in results] == [
         "passed",
         "error",
         "passed",
         "passed",
     ]
-    assert "case-001/step_1 sample 1 at 0.5s" in report.results[1].reason
-    assert report.results[1].evaluation_timing_mode == "individual"
-    assert report.results[1].evaluation_duration_s is not None
+    assert "case-001/step_1 sample 1 at 0.5s" in results[1].reason
+    assert results[1].evaluation_timing_mode == "individual"
+    assert results[1].evaluation_duration_s is not None
     assert evaluator.closed
 
 

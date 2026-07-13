@@ -21,12 +21,14 @@ from .models import (
     EvalConfigError,
     EvalDirectory,
     EvalRunReport,
+    EvalTrialReport,
     EvaluationTimingMode,
     FrameSample,
     GateResult,
     RunOptions,
     SampleExpectation,
     SampleResult,
+    SampleStability,
     TargetContext,
     Thresholds,
     ValidationIssue,
@@ -36,6 +38,8 @@ from .video import iter_sample_frames, probe_video, validate_sample_times
 
 
 class RunCallbacks(Protocol):
+    def on_trial_start(self, trial_index: int, trial_count: int) -> None: ...
+
     def on_case_start(self, case: EvalCase, sample_count: int) -> None: ...
 
     def on_target_start(
@@ -124,6 +128,13 @@ async def run_eval(
         raise EvalConfigError("glasskit eval run requires --adapter")
     if options.concurrency < 1:
         raise EvalConfigError("concurrency must be greater than 0")
+    if options.repeat < 1:
+        raise EvalConfigError("repeat must be greater than 0")
+    if options.max_flaky_samples is not None:
+        if options.max_flaky_samples < 0:
+            raise EvalConfigError("max flaky samples must be nonnegative")
+        if options.repeat < 2:
+            raise EvalConfigError("max flaky samples requires at least 2 trials")
     started_at = perf_counter()
     eval_directory = load_eval_directory(
         options.eval_dir,
@@ -140,6 +151,43 @@ async def run_eval(
     if error_messages:
         raise EvalConfigError("; ".join(error_messages))
 
+    trials: list[EvalTrialReport] = []
+    for trial_index in range(1, options.repeat + 1):
+        if callbacks is not None:
+            callbacks.on_trial_start(trial_index, options.repeat)
+        trials.append(
+            await _run_trial(
+                eval_directory,
+                options=options,
+                trial_index=trial_index,
+                callbacks=callbacks,
+            )
+        )
+
+    stability = _summarize_stability(trials)
+    report = EvalRunReport(
+        eval_dir=eval_directory.path,
+        case_names=[case.name for case in eval_directory.cases],
+        trials=trials,
+        stability=stability,
+        gate_results=_apply_stability_gates(stability, options),
+        duration_s=max(0.0, perf_counter() - started_at),
+    )
+    if options.output_json is not None:
+        write_json_report(report, options.output_json)
+    return report
+
+
+async def _run_trial(
+    eval_directory: EvalDirectory,
+    *,
+    options: RunOptions,
+    trial_index: int,
+    callbacks: RunCallbacks | None,
+) -> EvalTrialReport:
+    started_at = perf_counter()
+    if options.adapter is None:
+        raise RuntimeError("internal error: trial started without an adapter")
     evaluator = await load_evaluator(
         options.adapter,
         AdapterConfig(
@@ -192,6 +240,7 @@ async def run_eval(
                             context,
                             options=options,
                             eval_dir=eval_directory.path,
+                            trial_index=trial_index,
                         )
                     }
                     for sample in target_samples:
@@ -209,16 +258,12 @@ async def run_eval(
         await _close_evaluator(evaluator)
 
     gate_results = _apply_quality_gates(eval_directory, results, options)
-    report = EvalRunReport(
-        eval_dir=eval_directory.path,
-        case_names=[case.name for case in eval_directory.cases],
+    return EvalTrialReport(
+        index=trial_index,
         results=results,
         gate_results=gate_results,
         duration_s=max(0.0, perf_counter() - started_at),
     )
-    if options.output_json is not None:
-        write_json_report(report, options.output_json)
-    return report
 
 
 def _ignored_result(sample: SampleExpectation) -> SampleResult:
@@ -271,6 +316,7 @@ async def _evaluate_samples(
     *,
     options: RunOptions,
     eval_dir: Path,
+    trial_index: int,
 ) -> list[SampleResult]:
     if not samples:
         return []
@@ -290,6 +336,7 @@ async def _evaluate_samples(
                     frame,
                     options=options,
                     eval_dir=eval_dir,
+                    trial_index=trial_index,
                 )
                 for evaluation, frame in zip(evaluations, frames, strict=True)
             ]
@@ -302,6 +349,7 @@ async def _evaluate_samples(
         target,
         options=options,
         eval_dir=eval_dir,
+        trial_index=trial_index,
     )
 
 
@@ -363,6 +411,7 @@ async def _evaluate_samples_individually(
     *,
     options: RunOptions,
     eval_dir: Path,
+    trial_index: int,
 ) -> list[SampleResult]:
     async def evaluate_index(index: int) -> SampleResult:
         sample = samples[index]
@@ -398,6 +447,7 @@ async def _evaluate_samples_individually(
                 frame,
                 options=options,
                 eval_dir=eval_dir,
+                trial_index=trial_index,
             )
         finally:
             frame.image.close()
@@ -614,6 +664,7 @@ def _result_for_frame(
     *,
     options: RunOptions,
     eval_dir: Path,
+    trial_index: int,
 ) -> SampleResult:
     result = _result_for_evaluation(evaluation, options=options)
     if result.status not in {"failed", "error"} or not options.save_failures:
@@ -623,6 +674,7 @@ def _result_for_frame(
         frame.image,
         options=options,
         eval_dir=eval_dir,
+        trial_index=trial_index,
     )
 
 
@@ -637,9 +689,10 @@ def _save_failure_artifacts(
     *,
     options: RunOptions,
     eval_dir: Path,
+    trial_index: int,
 ) -> SampleResult:
     artifacts_dir = options.artifacts_dir or (eval_dir / "runs")
-    failures_dir = artifacts_dir / "failures"
+    failures_dir = artifacts_dir / "failures" / f"trial-{trial_index:03d}"
     stem = (
         f"{result.case_name}_{result.target_id}_"
         f"{result.sample_index:05d}_{result.timestamp_s:.3f}s"
@@ -649,7 +702,12 @@ def _save_failure_artifacts(
     image_path.parent.mkdir(parents=True, exist_ok=True)
     image.convert("RGB").save(image_path, format="JPEG", quality=90)
     json_path.write_text(
-        json.dumps(_result_to_json(result), ensure_ascii=True, indent=2, sort_keys=True)
+        json.dumps(
+            {"trial": trial_index, **_result_to_json(result)},
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -672,6 +730,69 @@ def _save_failure_artifacts(
         artifact_image=str(image_path),
         artifact_json=str(json_path),
     )
+
+
+def _summarize_stability(
+    trials: list[EvalTrialReport],
+) -> list[SampleStability]:
+    if not trials:
+        raise RuntimeError("internal error: eval run completed without trials")
+    reference_results = trials[0].results
+    for trial in trials[1:]:
+        if len(trial.results) != len(reference_results):
+            raise RuntimeError(
+                "internal error: repeated eval trials produced different result counts"
+            )
+
+    stability: list[SampleStability] = []
+    for result_index, reference in enumerate(reference_results):
+        repeated_results = [trial.results[result_index] for trial in trials]
+        if any(
+            _result_identity(result) != _result_identity(reference)
+            for result in repeated_results[1:]
+        ):
+            raise RuntimeError(
+                "internal error: repeated eval trials produced different sample order"
+            )
+        stability.append(
+            SampleStability(
+                case_name=reference.case_name,
+                target_id=reference.target_id,
+                target_label=reference.target_label,
+                sample_index=reference.sample_index,
+                timestamp_s=reference.timestamp_s,
+                expected=reference.expected,
+                source=reference.source,
+                statuses=tuple(result.status for result in repeated_results),
+            )
+        )
+    return stability
+
+
+def _result_identity(result: SampleResult) -> tuple[str, str, int, float]:
+    return (
+        result.case_name,
+        result.target_id,
+        result.sample_index,
+        result.timestamp_s,
+    )
+
+
+def _apply_stability_gates(
+    stability: list[SampleStability], options: RunOptions
+) -> list[GateResult]:
+    if options.max_flaky_samples is None:
+        return []
+    flaky_count = sum(sample.flaky for sample in stability)
+    threshold = options.max_flaky_samples
+    sample_label = "sample" if flaky_count == 1 else "samples"
+    return [
+        GateResult(
+            name="max_flaky_samples",
+            passed=flaky_count <= threshold,
+            message=f"{flaky_count} flaky {sample_label} (gate: <= {threshold})",
+        )
+    ]
 
 
 def _apply_quality_gates(
@@ -881,25 +1002,84 @@ def _coalesce(primary: Any, fallback: Any) -> Any:
 
 def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
     return {
+        "schema_version": 1,
+        "report_type": "eval_run",
         "eval_dir": str(report.eval_dir),
         "cases": report.case_names,
+        "repeat_count": report.repeat_count,
         "success": report.success,
         "summary": {
-            "evaluated": report.evaluated_count,
-            "passed": report.passed_count,
-            "failed": report.failed_count,
-            "errors": report.error_count,
-            "ignored": report.ignored_count,
-            "pass_rate": report.pass_rate,
+            "trials": report.repeat_count,
+            "successful_trials": report.successful_trial_count,
+            "evaluated_samples": report.evaluated_sample_count,
+            "ignored_samples": report.ignored_sample_count,
+            "evaluated_attempts": report.evaluated_attempt_count,
+            "passed_attempts": report.passed_attempt_count,
+            "failed_attempts": report.failed_attempt_count,
+            "error_attempts": report.error_attempt_count,
+            "attempt_pass_rate": report.attempt_pass_rate,
+            "minimum_trial_pass_rate": report.minimum_trial_pass_rate,
+            "mean_trial_pass_rate": report.mean_trial_pass_rate,
+            "maximum_trial_pass_rate": report.maximum_trial_pass_rate,
+            "consistently_passed_samples": report.consistently_passed_sample_count,
+            "consistently_failed_samples": report.consistently_failed_sample_count,
+            "flaky_samples": report.flaky_sample_count,
+            "error_samples": report.error_sample_count,
             "duration_seconds": report.duration_s,
             "evaluation_timing_mode": report.evaluation_timing_mode,
-            "average_evaluation_seconds_per_sample": (
+            "average_evaluation_seconds_per_attempt": (
                 report.average_evaluation_duration_s
             ),
-            "throughput_samples_per_second": report.throughput_samples_per_s,
+            "throughput_attempts_per_second": report.throughput_attempts_per_s,
         },
         "gates": [gate.__dict__ for gate in report.gate_results],
-        "results": [_result_to_json(result) for result in report.results],
+        "trials": [_trial_to_json(trial) for trial in report.trials],
+        "stability": [_stability_to_json(sample) for sample in report.stability],
+    }
+
+
+def _trial_to_json(trial: EvalTrialReport) -> dict[str, Any]:
+    return {
+        "trial": trial.index,
+        "success": trial.success,
+        "summary": {
+            "evaluated": trial.evaluated_count,
+            "passed": trial.passed_count,
+            "failed": trial.failed_count,
+            "errors": trial.error_count,
+            "ignored": trial.ignored_count,
+            "pass_rate": trial.pass_rate,
+            "duration_seconds": trial.duration_s,
+            "evaluation_timing_mode": trial.evaluation_timing_mode,
+            "average_evaluation_seconds_per_sample": (
+                trial.average_evaluation_duration_s
+            ),
+            "throughput_samples_per_second": trial.throughput_samples_per_s,
+        },
+        "gates": [gate.__dict__ for gate in trial.gate_results],
+        "results": [_result_to_json(result) for result in trial.results],
+    }
+
+
+def _stability_to_json(sample: SampleStability) -> dict[str, Any]:
+    return {
+        "case": sample.case_name,
+        "target": sample.target_id,
+        "target_label": sample.target_label,
+        "sample_index": sample.sample_index,
+        "timestamp_s": sample.timestamp_s,
+        "expected": sample.expected,
+        "source": sample.source,
+        "statuses": list(sample.statuses),
+        "evaluated": sample.evaluated_count,
+        "passed": sample.passed_count,
+        "failed": sample.failed_count,
+        "errors": sample.error_count,
+        "pass_rate": sample.pass_rate,
+        "ignored": sample.ignored,
+        "consistently_passed": sample.consistently_passed,
+        "consistently_failed": sample.consistently_failed,
+        "flaky": sample.flaky,
     }
 
 

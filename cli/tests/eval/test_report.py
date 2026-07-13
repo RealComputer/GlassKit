@@ -10,11 +10,13 @@ from glasskit.eval.models import (
     EvalCase,
     EvalDirectory,
     EvalRunReport,
+    EvalTrialReport,
     EvaluationTimingMode,
     GateResult,
     ResultStatus,
     SampleExpectation,
     SampleResult,
+    SampleStability,
     TargetSpec,
 )
 from glasskit.eval.report import (
@@ -27,13 +29,7 @@ from glasskit.eval.report import (
 def test_print_run_summary_includes_formatted_duration() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
-    report = EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=[],
-        results=[],
-        gate_results=[],
-        duration_s=125.5,
-    )
+    report = _report(results=[], case_names=[], duration_s=125.5)
 
     print_run_summary(report, console=console)
 
@@ -43,13 +39,7 @@ def test_print_run_summary_includes_formatted_duration() -> None:
 def test_print_run_summary_uses_target_label_with_id() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
-    report = EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=["case-001"],
-        results=[_result()],
-        gate_results=[],
-        duration_s=1.0,
-    )
+    report = _report()
 
     print_run_summary(report, console=console)
 
@@ -63,10 +53,8 @@ def test_print_run_summary_includes_individual_timing_and_throughput() -> None:
     print_run_summary(_report(), console=console)
 
     output = buffer.getvalue()
-    assert "Avg evaluation latency: 1.25s/sample" in output
-    assert "Throughput: 1.00 samples/s" in output
-    assert "Avg latency" in output
-    assert "1.25s" in output
+    assert "Avg evaluation latency: 1.25s/attempt" in output
+    assert "Throughput: 1.00 attempts/s" in output
 
 
 def test_print_run_summary_labels_amortized_batch_timing() -> None:
@@ -82,8 +70,7 @@ def test_print_run_summary_labels_amortized_batch_timing() -> None:
     )
 
     output = buffer.getvalue()
-    assert "Avg amortized batch time: 500ms/sample" in output
-    assert "Avg batch/sample" in output
+    assert "Avg amortized batch time: 500ms/attempt" in output
 
 
 def test_print_sample_schedule_uses_target_label_with_id() -> None:
@@ -106,6 +93,21 @@ def test_console_reporter_uses_target_label_with_id() -> None:
     output = buffer.getvalue()
     assert "target Step 1 (step_1): 1 samples" in output
     assert "Step 1 (step_1) @0s" in output
+
+
+def test_console_reporter_labels_repeated_trial_output() -> None:
+    buffer = StringIO()
+    reporter = ConsoleReporter(
+        verbose=True,
+        console=Console(file=buffer, force_terminal=False, width=120),
+    )
+
+    reporter.on_trial_start(2, 3)
+    reporter.on_result(_result())
+
+    output = buffer.getvalue()
+    assert "Trial 2/3" in output
+    assert "[2/3] FAILED" in output
 
 
 def test_console_reporter_does_not_auto_highlight_values() -> None:
@@ -160,44 +162,36 @@ def test_run_summary_counts_ignored_samples_without_listing_them_as_failures() -
         evaluation_duration_s=None,
         evaluation_timing_mode=None,
     )
-    report = EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=["case-001"],
-        results=[ignored],
-        gate_results=[],
-        duration_s=1.0,
-    )
+    report = _report(results=[ignored])
 
     print_run_summary(report, console=console)
 
     output = buffer.getvalue()
-    assert "0 evaluated" in output
+    assert "0 evaluated per trial" in output
     assert "1 ignored" in output
-    assert "Failures" not in output
+    assert "Unstable and failing samples" not in output
 
 
-def test_run_summary_does_not_repeat_failed_samples_or_label_pass_rate() -> None:
+def test_run_summary_lists_consistently_failed_samples() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
-    report = EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=["case-001"],
-        results=[_result()],
-        gate_results=[
+    report = _report(
+        repeat=2,
+        trial_gates=[
             GateResult(
                 name="adapter_errors",
                 passed=True,
                 message="no adapter/comparison errors",
             )
         ],
-        duration_s=1.0,
     )
 
     print_run_summary(report, console=console)
 
     output = buffer.getvalue()
-    assert "Pass rate: 0.0%\n" in output
-    assert "Failures" not in output
+    assert "Trial pass rate (min / mean / max): 0.0% / 0.0% / 0.0%" in output
+    assert "Unstable and failing samples" in output
+    assert "failed every trial" in output
     assert "Failed gates" not in output
     assert "adapter_errors" not in output
 
@@ -205,11 +199,8 @@ def test_run_summary_does_not_repeat_failed_samples_or_label_pass_rate() -> None
 def test_run_summary_prints_only_failed_gates() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)
-    report = EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=["case-001"],
-        results=[_result()],
-        gate_results=[
+    report = _report(
+        trial_gates=[
             GateResult(
                 name="adapter_errors",
                 passed=True,
@@ -220,8 +211,7 @@ def test_run_summary_prints_only_failed_gates() -> None:
                 passed=False,
                 message="0.0% pass rate (gate: >= 95.0%)",
             ),
-        ],
-        duration_s=1.0,
+        ]
     )
 
     print_run_summary(report, console=console)
@@ -230,7 +220,59 @@ def test_run_summary_prints_only_failed_gates() -> None:
     assert "Failed gates" in output
     assert "eval_min_pass_rate" in output
     assert "0.0% pass rate (gate: >= 95.0%)" in output
+    assert "Trial 1" in output
     assert "adapter_errors" not in output
+
+
+def test_run_summary_reports_cross_trial_stability() -> None:
+    buffer = StringIO()
+    passed = _result(status="passed", reason="matched")
+    failed = _result()
+    trial_gate = GateResult(
+        name="eval_min_pass_rate",
+        passed=False,
+        message="0.0% pass rate (gate: >= 100.0%)",
+    )
+    stability_gate = GateResult(
+        name="max_flaky_samples",
+        passed=False,
+        message="1 flaky sample (gate: <= 0)",
+    )
+    report = EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"],
+        trials=[
+            EvalTrialReport(1, [passed], [], 1.0),
+            EvalTrialReport(2, [failed], [trial_gate], 1.0),
+            EvalTrialReport(3, [passed], [], 1.0),
+        ],
+        stability=[
+            SampleStability(
+                case_name="case-001",
+                target_id="step_1",
+                target_label="Step 1",
+                sample_index=0,
+                timestamp_s=0.0,
+                expected=True,
+                source="at",
+                statuses=("passed", "failed", "passed"),
+            )
+        ],
+        gate_results=[stability_gate],
+        duration_s=3.0,
+    )
+
+    print_run_summary(
+        report,
+        console=Console(file=buffer, force_terminal=False, width=160),
+    )
+
+    output = buffer.getvalue()
+    assert "Trials: 3 total, 2 passed gates, 1 failed gates" in output
+    assert "Trial pass rate (min / mean / max): 0.0% / 66.7% / 100.0%" in output
+    assert "1 flaky" in output
+    assert "P/F/P" in output
+    assert "max_flaky_samples" in output
 
 
 def test_table_reports_render_markup_like_target_labels_literally() -> None:
@@ -294,19 +336,49 @@ def _report(
     target_label: str = "Step 1",
     evaluation_duration_s: float = 1.25,
     evaluation_timing_mode: EvaluationTimingMode = "individual",
+    results: list[SampleResult] | None = None,
+    trial_gates: list[GateResult] | None = None,
+    stability_gates: list[GateResult] | None = None,
+    case_names: list[str] | None = None,
+    duration_s: float = 1.0,
+    repeat: int = 1,
 ) -> EvalRunReport:
-    return EvalRunReport(
-        eval_dir=Path("eval"),
-        case_names=["case-001"],
-        results=[
+    if results is None:
+        results = [
             _result(
                 target_label=target_label,
                 evaluation_duration_s=evaluation_duration_s,
                 evaluation_timing_mode=evaluation_timing_mode,
             )
+        ]
+    return EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"] if case_names is None else case_names,
+        trials=[
+            EvalTrialReport(
+                index=index,
+                results=results,
+                gate_results=trial_gates or [],
+                duration_s=duration_s,
+            )
+            for index in range(1, repeat + 1)
         ],
-        gate_results=[],
-        duration_s=1.0,
+        stability=[_stability(result, repeat=repeat) for result in results],
+        gate_results=stability_gates or [],
+        duration_s=duration_s,
+    )
+
+
+def _stability(result: SampleResult, *, repeat: int) -> SampleStability:
+    return SampleStability(
+        case_name=result.case_name,
+        target_id=result.target_id,
+        target_label=result.target_label,
+        sample_index=result.sample_index,
+        timestamp_s=result.timestamp_s,
+        expected=result.expected,
+        source=result.source,
+        statuses=(result.status,) * repeat,
     )
 
 

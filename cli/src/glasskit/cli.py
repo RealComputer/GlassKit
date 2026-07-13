@@ -94,13 +94,21 @@ def eval_run(
             ),
         ),
     ] = 1,
+    repeat: Annotated[
+        int,
+        typer.Option(
+            "--repeat",
+            min=1,
+            help="Run the selected eval this many times as sequential trials.",
+        ),
+    ] = 1,
     min_pass_rate: Annotated[
         float | None,
         typer.Option(
             "--min-pass-rate",
             min=0.0,
             max=1.0,
-            help="Run-level pass-rate gate.",
+            help="Per-trial pass-rate gate.",
         ),
     ] = None,
     min_target_pass_rate: Annotated[
@@ -109,7 +117,7 @@ def eval_run(
             "--min-target-pass-rate",
             min=0.0,
             max=1.0,
-            help="Uniform per-target pass-rate gate.",
+            help="Uniform per-target pass-rate gate applied to every trial.",
         ),
     ] = None,
     max_failures: Annotated[
@@ -117,7 +125,18 @@ def eval_run(
         typer.Option(
             "--max-failures",
             min=0,
-            help="Run-level maximum failed comparisons.",
+            help="Per-trial maximum failed comparisons.",
+        ),
+    ] = None,
+    max_flaky_samples: Annotated[
+        int | None,
+        typer.Option(
+            "--max-flaky-samples",
+            min=0,
+            help=(
+                "Maximum samples whose pass/fail/error status varies across trials; "
+                "requires --repeat of at least 2."
+            ),
         ),
     ] = None,
     keep_going: Annotated[
@@ -141,7 +160,8 @@ def eval_run(
             "--artifacts-dir",
             help=(
                 "Directory for generated artifacts. When omitted, --save-failures "
-                "writes under runs/failures in the eval dir."
+                "writes to trial-specific directories under runs/failures in the "
+                "eval dir."
             ),
         ),
     ] = None,
@@ -149,7 +169,7 @@ def eval_run(
         bool,
         typer.Option(
             "--save-failures",
-            help="Save failed or errored sample frames and per-result JSON.",
+            help="Save failed or errored sample-attempt frames and result JSON.",
         ),
     ] = False,
     allow_empty: Annotated[
@@ -173,9 +193,11 @@ def eval_run(
         until_time_s=until_time,
         adapter_config=_load_config(adapter_config),
         concurrency=concurrency,
+        repeat=repeat,
         min_pass_rate=min_pass_rate,
         min_target_pass_rate=min_target_pass_rate,
         max_failures=max_failures,
+        max_flaky_samples=max_flaky_samples,
         keep_going=keep_going,
         verbose=verbose,
         output_json=output_json,

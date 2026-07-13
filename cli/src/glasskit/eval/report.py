@@ -14,6 +14,7 @@ from .models import (
     EvalDirectory,
     EvalRunReport,
     SampleResult,
+    SampleStability,
     ValidationReport,
 )
 
@@ -24,6 +25,16 @@ class ConsoleReporter:
     ) -> None:
         self.verbose = verbose
         self.console = console or Console()
+        self._trial_index = 1
+        self._trial_count = 1
+
+    def on_trial_start(self, trial_index: int, trial_count: int) -> None:
+        self._trial_index = trial_index
+        self._trial_count = trial_count
+        if trial_count > 1:
+            self.console.print(
+                f"\n[bold]Trial[/bold] {trial_index}/{trial_count}", highlight=False
+            )
 
     def on_case_start(self, case: EvalCase, sample_count: int) -> None:
         self.console.print(
@@ -50,6 +61,8 @@ class ConsoleReporter:
             "ignored": "yellow",
         }.get(result.status, "red")
         line = Text("    ")
+        if self._trial_count > 1:
+            line.append(f"[{self._trial_index}/{self._trial_count}] ")
         line.append(result.status.upper(), style=style)
         line.append(
             f" {_format_target_name(result.target_id, result.target_label)} "
@@ -127,98 +140,200 @@ def print_run_summary(
     console.print(f"\n[bold]Eval[/bold]: {report.eval_dir}", highlight=False)
     console.print(f"Cases: {len(report.case_names)}", highlight=False)
     console.print(
-        "Samples: "
-        f"{report.evaluated_count} evaluated, "
-        f"{report.passed_count} passed, "
-        f"{report.failed_count} failed, "
-        f"{report.error_count} errors, "
-        f"{report.ignored_count} ignored",
+        f"Trials: {report.repeat_count} total, "
+        f"{report.successful_trial_count} passed gates, "
+        f"{report.repeat_count - report.successful_trial_count} failed gates",
         highlight=False,
     )
-    console.print(f"Pass rate: {report.pass_rate:.1%}", highlight=False)
+    console.print(
+        "Samples: "
+        f"{report.evaluated_sample_count} evaluated per trial, "
+        f"{report.ignored_sample_count} ignored",
+        highlight=False,
+    )
+    console.print(
+        "Attempts: "
+        f"{report.evaluated_attempt_count} evaluated, "
+        f"{report.passed_attempt_count} passed, "
+        f"{report.failed_attempt_count} failed, "
+        f"{report.error_attempt_count} errors",
+        highlight=False,
+    )
+    console.print(
+        "Trial pass rate (min / mean / max): "
+        f"{report.minimum_trial_pass_rate:.1%} / "
+        f"{report.mean_trial_pass_rate:.1%} / "
+        f"{report.maximum_trial_pass_rate:.1%}",
+        highlight=False,
+    )
+    console.print(
+        "Stability: "
+        f"{report.consistently_passed_sample_count} consistently passed, "
+        f"{report.consistently_failed_sample_count} consistently failed, "
+        f"{report.flaky_sample_count} flaky, "
+        f"{report.error_sample_count} with errors",
+        highlight=False,
+    )
     console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
     if report.average_evaluation_duration_s is not None:
         timing_label = _summary_timing_label(report.evaluation_timing_mode)
         console.print(
             f"{timing_label}: "
             f"{_format_evaluation_duration(report.average_evaluation_duration_s)}"
-            "/sample",
+            "/attempt",
             highlight=False,
         )
         console.print(
-            f"Throughput: {report.throughput_samples_per_s:.2f} samples/s",
+            f"Throughput: {report.throughput_attempts_per_s:.2f} attempts/s",
             highlight=False,
         )
 
-    failed_gates = [gate for gate in report.gate_results if not gate.passed]
+    if report.repeat_count > 1:
+        trial_table = Table(title="By trial")
+        trial_table.add_column("Trial", justify="right")
+        trial_table.add_column("Pass rate", justify="right")
+        trial_table.add_column("Passed", justify="right")
+        trial_table.add_column("Failed", justify="right")
+        trial_table.add_column("Errors", justify="right")
+        trial_table.add_column("Gates")
+        trial_table.add_column("Duration", justify="right")
+        for trial in report.trials:
+            trial_table.add_row(
+                str(trial.index),
+                f"{trial.pass_rate:.1%}",
+                str(trial.passed_count),
+                str(trial.failed_count),
+                str(trial.error_count),
+                "passed" if trial.success else "failed",
+                _format_duration(trial.duration_s),
+            )
+        console.print(trial_table)
+
+    failed_gates = [
+        (f"Trial {trial.index}", gate)
+        for trial in report.trials
+        for gate in trial.gate_results
+        if not gate.passed
+    ]
+    failed_gates.extend(
+        ("Stability", gate) for gate in report.gate_results if not gate.passed
+    )
     if failed_gates:
         gate_table = Table(title="Failed gates")
+        gate_table.add_column("Scope")
         gate_table.add_column("Gate")
         gate_table.add_column("Detail")
-        for gate in failed_gates:
+        for scope, gate in failed_gates:
             gate_table.add_row(
+                scope,
                 gate.name,
                 gate.message,
             )
         console.print(gate_table)
 
     target_table = Table(title="By target")
-    target_table.add_column("Target")
-    target_table.add_column("Pass rate", justify="right")
-    target_table.add_column("Passed", justify="right")
-    target_table.add_column("Evaluated", justify="right")
-    target_table.add_column("Ignored", justify="right")
-    show_timing = report.average_evaluation_duration_s is not None
-    if show_timing:
-        target_table.add_column(
-            _target_timing_column(report.evaluation_timing_mode), justify="right"
-        )
-    for target_id, target_results in _group_by_target(report.results).items():
-        passed = sum(1 for result in target_results if result.status == "passed")
-        ignored = sum(1 for result in target_results if result.status == "ignored")
-        total = len(target_results) - ignored
-        pass_rate = passed / total if total else 0.0
-        target_label = _first_target_label(target_results)
+    target_table.add_column("Target", no_wrap=True)
+    target_table.add_column("Pass min / mean / max", justify="right")
+    target_table.add_column("Samples", justify="right")
+    target_table.add_column("Pass all", justify="right")
+    target_table.add_column("Fail all", justify="right")
+    target_table.add_column("Flaky", justify="right")
+    target_table.add_column("Errors", justify="right")
+    for target_id, target_stability in _group_stability_by_target(
+        report.stability
+    ).items():
+        pass_rates = _target_trial_pass_rates(report, target_id)
+        evaluated = sum(not sample.ignored for sample in target_stability)
+        target_label = _first_stability_target_label(target_stability)
         row = [
             _format_target_text(target_id, target_label),
-            f"{pass_rate:.1%}",
-            str(passed),
-            str(total),
-            str(ignored),
+            _format_pass_rate_range(pass_rates),
+            str(evaluated),
+            str(sum(sample.consistently_passed for sample in target_stability)),
+            str(sum(sample.consistently_failed for sample in target_stability)),
+            str(sum(sample.flaky for sample in target_stability)),
+            str(sum(sample.has_errors for sample in target_stability)),
         ]
-        if show_timing:
-            average_duration_s = _average_evaluation_duration(target_results)
-            row.append(
-                "n/a"
-                if average_duration_s is None
-                else _format_evaluation_duration(average_duration_s)
-            )
         target_table.add_row(*row)
     console.print(target_table)
 
+    notable_samples = (
+        [
+            sample
+            for sample in report.stability
+            if sample.flaky or sample.consistently_failed or sample.has_errors
+        ]
+        if report.repeat_count > 1
+        else []
+    )
+    if notable_samples:
+        stability_table = Table(title="Unstable and failing samples")
+        stability_table.add_column("Case")
+        stability_table.add_column("Target")
+        stability_table.add_column("Time", justify="right")
+        stability_table.add_column("Outcomes")
+        stability_table.add_column("Finding")
+        for sample in notable_samples:
+            stability_table.add_row(
+                sample.case_name,
+                _format_target_text(sample.target_id, sample.target_label),
+                f"{sample.timestamp_s:g}s",
+                "/".join(_status_abbreviation(status) for status in sample.statuses),
+                _stability_finding(sample),
+            )
+        console.print(stability_table)
 
-def _group_by_target(results: list[SampleResult]) -> dict[str, list[SampleResult]]:
-    grouped: dict[str, list[SampleResult]] = defaultdict(list)
-    for result in results:
-        grouped[result.target_id].append(result)
+
+def _group_stability_by_target(
+    stability: list[SampleStability],
+) -> dict[str, list[SampleStability]]:
+    grouped: dict[str, list[SampleStability]] = defaultdict(list)
+    for sample in stability:
+        grouped[sample.target_id].append(sample)
     return dict(sorted(grouped.items()))
 
 
-def _first_target_label(results: list[SampleResult]) -> str | None:
+def _first_stability_target_label(samples: list[SampleStability]) -> str | None:
     return next(
-        (result.target_label for result in results if result.target_label), None
+        (sample.target_label for sample in samples if sample.target_label), None
     )
 
 
-def _average_evaluation_duration(results: list[SampleResult]) -> float | None:
-    durations = [
-        result.evaluation_duration_s
-        for result in results
-        if result.status != "ignored" and result.evaluation_duration_s is not None
-    ]
-    if not durations:
-        return None
-    return sum(durations) / len(durations)
+def _target_trial_pass_rates(report: EvalRunReport, target_id: str) -> list[float]:
+    pass_rates: list[float] = []
+    for trial in report.trials:
+        results = [result for result in trial.results if result.target_id == target_id]
+        evaluated = [result for result in results if result.status != "ignored"]
+        passed = sum(result.status == "passed" for result in evaluated)
+        pass_rates.append(passed / len(evaluated) if evaluated else 0.0)
+    return pass_rates
+
+
+def _format_pass_rate_range(pass_rates: list[float]) -> str:
+    if not pass_rates:
+        return "n/a"
+    mean = sum(pass_rates) / len(pass_rates)
+    return f"{min(pass_rates) * 100:.1f}/{mean * 100:.1f}/{max(pass_rates) * 100:.1f}%"
+
+
+def _status_abbreviation(status: str) -> str:
+    return {
+        "passed": "P",
+        "failed": "F",
+        "error": "E",
+        "ignored": "I",
+    }[status]
+
+
+def _stability_finding(sample: SampleStability) -> str:
+    findings: list[str] = []
+    if sample.flaky:
+        findings.append("flaky")
+    if sample.consistently_failed:
+        findings.append("failed every trial")
+    if sample.has_errors:
+        findings.append("adapter/comparison errors")
+    return ", ".join(findings)
 
 
 def _summary_timing_label(mode: str | None) -> str:
@@ -227,14 +342,6 @@ def _summary_timing_label(mode: str | None) -> str:
     if mode == "batch_amortized":
         return "Avg amortized batch time"
     return "Avg evaluation time"
-
-
-def _target_timing_column(mode: str | None) -> str:
-    if mode == "individual":
-        return "Avg latency"
-    if mode == "batch_amortized":
-        return "Avg batch/sample"
-    return "Avg eval/sample"
 
 
 def _target_label_for_case(case: EvalCase, target_id: str) -> str | None:
