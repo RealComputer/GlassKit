@@ -11,6 +11,7 @@ from glasskit.eval.models import (
     EvalDirectory,
     EvalRunReport,
     EvaluationTimingMode,
+    GateResult,
     ResultStatus,
     SampleExpectation,
     SampleResult,
@@ -173,6 +174,63 @@ def test_run_summary_counts_ignored_samples_without_listing_them_as_failures() -
     assert "0 evaluated" in output
     assert "1 ignored" in output
     assert "Failures" not in output
+
+
+def test_run_summary_does_not_repeat_failed_samples_or_label_pass_rate() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+    report = EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"],
+        results=[_result()],
+        gate_results=[
+            GateResult(
+                name="adapter_errors",
+                passed=True,
+                message="no adapter/comparison errors",
+            )
+        ],
+        duration_s=1.0,
+    )
+
+    print_run_summary(report, console=console)
+
+    output = buffer.getvalue()
+    assert "Pass rate: 0.0%\n" in output
+    assert "Failures" not in output
+    assert "Failed gates" not in output
+    assert "adapter_errors" not in output
+
+
+def test_run_summary_prints_only_failed_gates() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+    report = EvalRunReport(
+        eval_dir=Path("eval"),
+        case_names=["case-001"],
+        results=[_result()],
+        gate_results=[
+            GateResult(
+                name="adapter_errors",
+                passed=True,
+                message="no adapter/comparison errors",
+            ),
+            GateResult(
+                name="eval_min_pass_rate",
+                passed=False,
+                message="0.0% pass rate (gate: >= 95.0%)",
+            ),
+        ],
+        duration_s=1.0,
+    )
+
+    print_run_summary(report, console=console)
+
+    output = buffer.getvalue()
+    assert "Failed gates" in output
+    assert "eval_min_pass_rate" in output
+    assert "0.0% pass rate (gate: >= 95.0%)" in output
+    assert "adapter_errors" not in output
 
 
 def test_table_reports_render_markup_like_target_labels_literally() -> None:

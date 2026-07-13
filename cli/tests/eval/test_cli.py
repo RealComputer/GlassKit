@@ -84,6 +84,22 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     assert "ignored when the adapter uses evaluate_many" in concurrency.help
 
 
+def test_eval_run_does_not_define_failure_table_limit() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+
+    option_names = {
+        option_name
+        for option in eval_command.commands["run"].params
+        if isinstance(option, TyperOption)
+        for option_name in option.opts
+    }
+
+    assert "--max-failures-to-print" not in option_names
+
+
 def test_eval_run_and_list_samples_define_time_window_filters() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)

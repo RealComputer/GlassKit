@@ -121,11 +121,9 @@ def print_sample_schedule(
 def print_run_summary(
     report: EvalRunReport,
     *,
-    max_failures_to_print: int = 20,
     console: Console | None = None,
 ) -> None:
     console = console or Console()
-    status = "[green]passed[/green]" if report.success else "[red]failed[/red]"
     console.print(f"\n[bold]Eval[/bold]: {report.eval_dir}", highlight=False)
     console.print(f"Cases: {len(report.case_names)}", highlight=False)
     console.print(
@@ -137,7 +135,7 @@ def print_run_summary(
         f"{report.ignored_count} ignored",
         highlight=False,
     )
-    console.print(f"Pass rate: {report.pass_rate:.1%} ({status})", highlight=False)
+    console.print(f"Pass rate: {report.pass_rate:.1%}", highlight=False)
     console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
     if report.average_evaluation_duration_s is not None:
         timing_label = _summary_timing_label(report.evaluation_timing_mode)
@@ -152,15 +150,14 @@ def print_run_summary(
             highlight=False,
         )
 
-    if report.gate_results:
-        gate_table = Table(title="Gates")
+    failed_gates = [gate for gate in report.gate_results if not gate.passed]
+    if failed_gates:
+        gate_table = Table(title="Failed gates")
         gate_table.add_column("Gate")
-        gate_table.add_column("Status")
         gate_table.add_column("Detail")
-        for gate in report.gate_results:
+        for gate in failed_gates:
             gate_table.add_row(
                 gate.name,
-                "passed" if gate.passed else "failed",
                 gate.message,
             )
         console.print(gate_table)
@@ -198,33 +195,6 @@ def print_run_summary(
             )
         target_table.add_row(*row)
     console.print(target_table)
-
-    failures = [
-        result for result in report.results if result.status in {"failed", "error"}
-    ]
-    if failures:
-        failure_table = Table(title=f"Failures (first {max_failures_to_print})")
-        for column in (
-            "Case",
-            "Target",
-            "Time",
-            "Status",
-            "Expected",
-            "Observed",
-            "Reason",
-        ):
-            failure_table.add_column(column)
-        for result in failures[:max_failures_to_print]:
-            failure_table.add_row(
-                result.case_name,
-                _format_target_text(result.target_id, result.target_label),
-                f"{result.timestamp_s:g}s",
-                result.status,
-                _short(result.expected),
-                _short(result.observed_value),
-                result.reason,
-            )
-        console.print(failure_table)
 
 
 def _group_by_target(results: list[SampleResult]) -> dict[str, list[SampleResult]]:

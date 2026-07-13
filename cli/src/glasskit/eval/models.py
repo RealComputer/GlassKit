@@ -302,5 +302,4 @@ class RunOptions:
     output_json: Path | None = None
     artifacts_dir: Path | None = None
     save_failures: bool = False
-    max_failures_to_print: int = 20
     allow_empty: bool = False

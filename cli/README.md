@@ -573,7 +573,6 @@ Options:
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
 | `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written under its `failures/` subdirectory; when omitted, they are written under `<eval-dir>/runs/failures/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
-| `--max-failures-to-print INTEGER` | `20` | Maximum number of failed or errored results printed in the final failures table. Use `0` to hide table rows. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 `--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.

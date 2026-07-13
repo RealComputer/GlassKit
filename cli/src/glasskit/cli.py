@@ -152,14 +152,6 @@ def eval_run(
             help="Save failed or errored sample frames and per-result JSON.",
         ),
     ] = False,
-    max_failures_to_print: Annotated[
-        int,
-        typer.Option(
-            "--max-failures-to-print",
-            min=0,
-            help="Maximum non-passing results printed in the failures table.",
-        ),
-    ] = 20,
     allow_empty: Annotated[
         bool,
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
@@ -189,7 +181,6 @@ def eval_run(
         output_json=output_json,
         artifacts_dir=artifacts_dir,
         save_failures=save_failures,
-        max_failures_to_print=max_failures_to_print,
         allow_empty=allow_empty,
     )
     reporter = ConsoleReporter(verbose=verbose, console=console)
@@ -198,11 +189,7 @@ def eval_run(
     except EvalError as error:
         console.print(f"[red]Eval failed[/red]: {error}")
         raise typer.Exit(2) from error
-    print_run_summary(
-        report,
-        max_failures_to_print=max_failures_to_print,
-        console=console,
-    )
+    print_run_summary(report, console=console)
     raise typer.Exit(0 if report.success else 1)
 
 
