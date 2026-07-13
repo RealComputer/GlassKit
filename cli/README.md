@@ -69,7 +69,7 @@ Run the eval:
 uv run glasskit eval run
 ```
 
-Expected result: `run` prints case progress, a summary, gates, and a per-target table.
+Expected result: `run` prints case progress, a summary, and a per-target table.
 
 ## Core Concepts
 
@@ -177,7 +177,7 @@ Command:
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going --save-failures --output-json eval/runs/results.json --artifacts-dir eval/runs/artifacts
 ```
 
-Expected output: focused case and target progress, every selected sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
+Expected output: focused case and target progress, every selected sample result, a final summary, and a per-target table.
 
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
