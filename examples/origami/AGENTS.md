@@ -60,7 +60,9 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends each composed sampled frame through the shared fold-check/Overshoot chat-completion path without LiveKit. It deliberately implements individual `evaluate` calls so `glasskit eval run --concurrency N` can overlap independent requests.
 - `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the case generator's labeling path.
 - `eval/generate_case.py`: Gemini-backed helper for turning a small label plan into an initial recorded-video eval case YAML.
+- `eval/suggest_criteria.py`: high-thinking Gemini helper for proposing generalizable step criteria from the target reference, neighboring references, and balanced reviewed true/false frames.
 - `eval/test_generate_case.py`: regression coverage for full-case overwrite and selected-target update behavior.
+- `eval/test_suggest_criteria.py`: regression coverage for criteria example selection, ignored-sample handling, and output validation.
 - `assets/origami_steps.json`: seven step definitions and fold-check criteria.
 - `assets/step-imgs/*.png`: backend demo copies of the step guide images, colorized into the green HUD style at render time.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.

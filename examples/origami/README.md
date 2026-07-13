@@ -113,7 +113,9 @@ The eval files live under `backend/eval/`:
 - `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
+- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference and balanced reviewed true/false frames.
 - `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
+- `test_suggest_criteria.py` covers criteria example selection and response validation.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
 
 To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
@@ -174,6 +176,18 @@ The review UI is a convenient data viewer for this workflow: it puts the source 
 For an isolated labeling mistake, edit the sample's expected value in the review UI. A one-off correction usually does not justify changing a prompt that already handles the surrounding samples well.
 
 When the same bad labeling pattern appears repeatedly, fix the labeling rule instead of correcting every expectation by hand. In this example, global comparison and visibility behavior lives in `backend/src/fold_check_prompts.py`, while step-specific shape requirements live in the `criteria` fields of `backend/assets/origami_steps.json`. Prefer the narrowest fix that explains the repeated errors, and check both failing examples and known-good counterexamples so the new rule does not become unnecessarily strict.
+
+The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Samples are spread across label blocks, timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects:
+
+```sh
+cd backend
+uv run --env-file .env python -m eval.suggest_criteria \
+  --case eval/cases/full-run.yaml \
+  --target step_5 \
+  --output eval/runs/suggest-criteria/step_5.json
+```
+
+The JSON report records the selected timestamps for reproducibility, the model's visual analysis and generalization notes, and ready-to-review Markdown criteria. The tool deliberately does not update `origami_steps.json`; compare its proposal with the reference and the full reviewed sample set before applying it, then run the Overshoot eval to measure the effect.
 
 The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to iterate on the prompt:
 
