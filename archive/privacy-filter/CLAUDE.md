@@ -16,7 +16,7 @@ A privacy-preserving video processing system for smart glasses and similar devic
 
 Before committing, run quality checks:
 
-```bash
+```sh
 # Type checking
 uv run basedpyright
 
@@ -107,7 +107,7 @@ The transcription system uses a non-blocking architecture to prevent real-time d
 - Recognized consented faces remain visible with green name labels displayed above them
 - Unrecognized faces are anonymized (blurred or masked) for privacy protection
 
-```bash
+```sh
 # Default: Gaussian blur
 uv run filter/main.py
 
@@ -125,7 +125,7 @@ FastAPI-based REST API for consent management and system control:
 - `DELETE /consents/{id}` - Revoke consent for a person
 
 **Running the API:**
-```bash
+```sh
 uv run fastapi dev api/main.py
 ```
 
@@ -149,7 +149,7 @@ React/TypeScript application showcasing the privacy infrastructure:
 
 Run these commands before committing changes:
 
-```bash
+```sh
 # Build the application
 npm run build
 

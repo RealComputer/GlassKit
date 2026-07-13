@@ -22,7 +22,7 @@ A clap, tap, or obvious UI action at the beginning makes the videos easier to sy
 
 I currently combine one UI capture video and one POV camera video with `ffmpeg`. First, I manually review both recordings, identify the exact timing offset, and trim the inputs so they start in sync. In the example below, those synced inputs are `pov-trim.mp4` and `ui-trim.mp4`.
 
-```bash
+```sh
 ffmpeg -i pov-trim.mp4 -i ui-trim.mp4 -filter_complex "\
 [1:v]pad=iw+4:ih+4:(ow-iw)/2:(oh-ih)/2:color=white,\
 format=yuva444p,\

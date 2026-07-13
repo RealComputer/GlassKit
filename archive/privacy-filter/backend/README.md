@@ -20,14 +20,14 @@ Two core services work together to provide privacy-preserving video processing:
 
 ### 1. Install dependencies
 
-```bash
+```sh
 # Install Python dependencies
 uv sync
 ```
 
 ### 2. Download models
 
-```bash
+```sh
 # Face detection model
 wget -P ./filter https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
 
@@ -40,7 +40,7 @@ hf download lmstudio-community/Phi-3.1-mini-4k-instruct-GGUF Phi-3.1-mini-4k-ins
 
 ### 3. Start services
 
-```bash
+```sh
 # Terminal 1: MediaMTX server
 mediamtx
 
@@ -67,7 +67,7 @@ See `./filter/misc/config.py`.
 
 ## Development
 
-```bash
+```sh
 # Type checking
 uv run basedpyright
 

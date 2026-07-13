@@ -18,7 +18,7 @@ Web application demonstrating the privacy infrastructure capabilities:
 
 ## Installation
 
-```bash
+```sh
 # Install dependencies
 npm install
 
@@ -52,7 +52,7 @@ open http://localhost:5173
 
 ## Development
 
-```bash
+```sh
 npm run build # Build for production
 npm run lint  # Run ESLint
 ```
