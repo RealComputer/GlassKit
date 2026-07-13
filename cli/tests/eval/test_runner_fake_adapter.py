@@ -43,6 +43,10 @@ def test_runner_filters_by_target_without_case(tmp_path: Path) -> None:
     asyncio.run(_run_target_filter_without_case_test(tmp_path))
 
 
+def test_runner_filters_adapter_input_and_gates_by_time_window(tmp_path: Path) -> None:
+    asyncio.run(_run_time_window_filter_test(tmp_path))
+
+
 def test_runner_records_non_json_adapter_observations_with_keep_going(
     tmp_path: Path,
 ) -> None:
@@ -100,6 +104,67 @@ def create_evaluator(config):
     assert report.success
     assert report.evaluated_count == 4
     assert report.passed_count == 4
+
+
+async def _run_time_window_filter_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  early:
+    samples:
+      - at: 0.0
+        expect: true
+  late:
+    samples:
+      - at: [0.5, 1.0, 1.5]
+        expect: true
+thresholds:
+  per_target:
+    early:
+      min_pass_rate: 1.0
+    late:
+      min_pass_rate: 1.0
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    async def evaluate_many(self, samples, target):
+        if target.id != "late":
+            raise RuntimeError("time-filtered target reached the adapter")
+        if [sample.timestamp_s for sample in samples] != [1.0]:
+            raise RuntimeError("unexpected time-filtered batch")
+        return [True]
+
+def create_evaluator(config):
+    return Evaluator()
+        """,
+        encoding="utf-8",
+    )
+
+    report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            case_filter="case-001",
+            from_time_s=1.0,
+            until_time_s=1.5,
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    assert report.success
+    assert [result.target_id for result in report.results] == ["late"]
+    assert [result.timestamp_s for result in report.results] == [1.0]
+    assert [result.sample_index for result in report.results] == [2]
+    gate_names = {gate.name for gate in report.gate_results}
+    assert "case-001_early_min_pass_rate" not in gate_names
+    assert "case-001_late_min_pass_rate" in gate_names
 
 
 async def _run_ignored_sample_test(tmp_path: Path) -> None:

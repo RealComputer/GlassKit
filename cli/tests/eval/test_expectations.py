@@ -727,6 +727,143 @@ def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:
         load_eval_directory(eval_dir, target_filter="")
 
 
+def test_time_window_filter_uses_inclusive_from_and_exclusive_until(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 1.0, 2.0, 3.0]
+                expect: true
+          step_2:
+            samples:
+              - at: 0.5
+                expect: false
+        """,
+    )
+
+    eval_directory = load_eval_directory(
+        eval_dir,
+        case_filter="case-001",
+        from_time_s=1.0,
+        until_time_s=3.0,
+    )
+
+    case = eval_directory.cases[0]
+    assert [target.id for target in case.targets] == ["step_1"]
+    assert [sample.timestamp_s for sample in case.samples] == [1.0, 2.0]
+    assert [sample.sample_index for sample in case.samples] == [1, 2]
+
+
+def test_time_window_filter_supports_one_sided_bounds(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 1.0, 2.0, 3.0]
+                expect: true
+        """,
+    )
+
+    from_directory = load_eval_directory(
+        eval_dir,
+        case_filter="case-001",
+        from_time_s=2.0,
+    )
+    until_directory = load_eval_directory(
+        eval_dir,
+        case_filter="case-001",
+        until_time_s=2.0,
+    )
+
+    assert [sample.timestamp_s for sample in from_directory.samples] == [2.0, 3.0]
+    assert [sample.timestamp_s for sample in until_directory.samples] == [0.0, 1.0]
+
+
+def test_time_window_filter_requires_case(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="--from and --until require --case"):
+        load_eval_directory(eval_dir, from_time_s=0.0)
+
+
+@pytest.mark.parametrize(
+    ("from_time_s", "until_time_s", "message"),
+    [
+        (-1.0, None, "--from must be a finite, nonnegative number"),
+        (float("inf"), None, "--from must be a finite, nonnegative number"),
+        (2.0, 2.0, "--from must be less than --until"),
+        (3.0, 2.0, "--from must be less than --until"),
+    ],
+)
+def test_time_window_filter_rejects_invalid_bounds(
+    tmp_path: Path,
+    from_time_s: float | None,
+    until_time_s: float | None,
+    message: str,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match=message):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            from_time_s=from_time_s,
+            until_time_s=until_time_s,
+        )
+
+
+def test_time_window_filter_rejects_an_empty_selection_even_when_empty_is_allowed(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [0.0, 1.0]
+                expect: true
+        """,
+    )
+
+    with pytest.raises(EvalConfigError, match="no eval samples found at or after 2"):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            from_time_s=2.0,
+            allow_empty=True,
+        )
+
+
 def test_uppercase_file_case_suffix_is_ignored(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

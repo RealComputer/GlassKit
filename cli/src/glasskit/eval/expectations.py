@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
@@ -41,8 +42,15 @@ def load_eval_directory(
     *,
     case_filter: str | None = None,
     target_filter: str | None = None,
+    from_time_s: float | None = None,
+    until_time_s: float | None = None,
     allow_empty: bool = False,
 ) -> EvalDirectory:
+    _validate_time_window(
+        case_filter=case_filter,
+        from_time_s=from_time_s,
+        until_time_s=until_time_s,
+    )
     eval_dir = _resolve_eval_dir(eval_dir)
     thresholds = _load_eval_thresholds(eval_dir)
     case_paths = discover_case_paths(eval_dir, case_filter)
@@ -58,6 +66,15 @@ def load_eval_directory(
     cases = [load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
     if target_id is not None:
         cases = _filter_cases_by_target(cases, target_id)
+    if from_time_s is not None or until_time_s is not None:
+        cases = _filter_cases_by_time(
+            cases,
+            from_time_s=from_time_s,
+            until_time_s=until_time_s,
+        )
+        if not any(case.samples for case in cases):
+            window = _format_time_window(from_time_s, until_time_s)
+            raise EvalConfigError(f"no eval samples found {window}")
     if not allow_empty and not any(case.samples for case in cases):
         raise EvalConfigError("eval has no declared samples")
     return EvalDirectory(path=eval_dir, cases=cases, thresholds=thresholds)
@@ -202,6 +219,79 @@ def _filter_cases_by_target(cases: list[EvalCase], target_id: str) -> list[EvalC
             )
         )
     return filtered
+
+
+def _validate_time_window(
+    *,
+    case_filter: str | None,
+    from_time_s: float | None,
+    until_time_s: float | None,
+) -> None:
+    if from_time_s is None and until_time_s is None:
+        return
+    if case_filter is None:
+        raise EvalConfigError("--from and --until require --case")
+    for option, value in (("--from", from_time_s), ("--until", until_time_s)):
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise EvalConfigError(f"{option} must be a finite, nonnegative number")
+    if (
+        from_time_s is not None
+        and until_time_s is not None
+        and from_time_s >= until_time_s
+    ):
+        raise EvalConfigError("--from must be less than --until")
+
+
+def _filter_cases_by_time(
+    cases: list[EvalCase],
+    *,
+    from_time_s: float | None,
+    until_time_s: float | None,
+) -> list[EvalCase]:
+    filtered_cases: list[EvalCase] = []
+    for case in cases:
+        filtered_targets: list[TargetSpec] = []
+        for target in case.targets:
+            samples = [
+                sample
+                for sample in target.samples
+                if (from_time_s is None or sample.timestamp_s >= from_time_s)
+                and (until_time_s is None or sample.timestamp_s < until_time_s)
+            ]
+            if not samples:
+                continue
+            filtered_targets.append(
+                TargetSpec(
+                    id=target.id,
+                    index=target.index,
+                    label=target.label,
+                    config=target.config,
+                    samples=samples,
+                )
+            )
+        if not filtered_targets:
+            continue
+        filtered_cases.append(
+            EvalCase(
+                name=case.name,
+                path=case.path,
+                video_path=case.video_path,
+                description=case.description,
+                targets=filtered_targets,
+                thresholds=case.thresholds,
+            )
+        )
+    return filtered_cases
+
+
+def _format_time_window(from_time_s: float | None, until_time_s: float | None) -> str:
+    if from_time_s is not None and until_time_s is not None:
+        return f"in time window [{from_time_s:g}, {until_time_s:g}) seconds"
+    if from_time_s is not None:
+        return f"at or after {from_time_s:g} seconds"
+    if until_time_s is None:
+        raise ValueError("time window requires at least one bound")
+    return f"before {until_time_s:g} seconds"
 
 
 def load_case(

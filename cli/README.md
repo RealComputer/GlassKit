@@ -179,6 +179,14 @@ uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going -
 
 Expected output: focused case and target progress, every selected sample result, a final summary, gate results, a per-target table, and a failures table when any sample fails or errors.
 
+To run only expanded samples in part of the case timeline, add an inclusive `--from` bound, an exclusive `--until` bound, or both:
+
+```bash
+uv run glasskit eval run --case task-01 --target step_1 --from 7.4 --until 11.8
+```
+
+Time bounds require `--case`. They filter declared expanded samples rather than creating new timestamps, and configured quality gates apply only to the selected results. Use the same bounds with `list-samples` to preview exactly which samples will run.
+
 Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
 ### Enforce CI Quality Gates
@@ -561,6 +569,8 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run one target id from the selected cases. May be used with or without `--case`. |
+| `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--min-pass-rate FLOAT` | None | Run-level pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -602,7 +612,7 @@ Exit behavior: exits `0` when validation passes and `1` when validation fails.
 Purpose: print expanded sample rows.
 
 ```bash
-glasskit eval list-samples --case task-01
+glasskit eval list-samples --case task-01 --from 7.4 --until 11.8
 ```
 
 Options:
@@ -612,6 +622,8 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
 | `--target TEXT` | All targets | Only list one target id from the selected cases. May be used with or without `--case`. |
+| `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when the samples can be listed and `2` when the eval directory cannot be loaded.
@@ -658,7 +670,7 @@ Threshold precedence:
 | `--min-pass-rate` | Selected run | Overrides eval-level `thresholds.min_pass_rate`. When set, case-level gates are not applied. |
 | `--max-failures` | Selected run | Overrides eval-level `thresholds.max_failures`. When set, case-level gates are not applied. |
 | `--min-target-pass-rate` | Selected run targets | Adds the same per-target pass-rate gate for each target present in the selected results and replaces eval-level `thresholds.per_target` gates. Case-level gates still apply unless `--min-pass-rate` or `--max-failures` is set. |
-| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a `--case` or `--target` filtered run are skipped. |
+| `<eval-dir>/config.yaml` | Selected run | Applies after CLI overrides. Eval-level per-target gates for targets outside a case, target, or time-window filtered run are skipped. |
 | `cases/<case>.yaml` `thresholds` | That case | Applies per case unless `--min-pass-rate` or `--max-failures` is set. |
 
 Other precedence rules:
@@ -770,6 +782,7 @@ Common failures:
 | `cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add case files under `cases/` and reference videos from them. |
 | `no case files found` | No case files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
 | `no eval targets found` | `--target` does not match any target id in the selected cases. | Check the target id in the case file or broaden the case filter. |
+| `no eval samples found` | No expanded timestamps fall within the `--from`/`--until` window. | Inspect the case with `list-samples`, then broaden or correct the time bounds. |
 | `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |

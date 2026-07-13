@@ -102,6 +102,8 @@ async def run_eval(
         options.eval_dir,
         case_filter=options.case_filter,
         target_filter=options.target_filter,
+        from_time_s=options.from_time_s,
+        until_time_s=options.until_time_s,
         allow_empty=options.allow_empty,
     )
     validation_issues = _validate_videos(eval_directory)
@@ -654,18 +656,20 @@ def _apply_quality_gates(
 
     for case in eval_directory.cases:
         case_results = [result for result in results if result.case_name == case.name]
-        gates.extend(_case_gates(case.name, case.thresholds, case_results, options))
+        gates.extend(_case_gates(case, case_results, options))
     return gates
 
 
 def _case_gates(
-    case_name: str,
-    thresholds: Thresholds,
+    case: EvalCase,
     results: list[SampleResult],
     options: RunOptions,
 ) -> list[GateResult]:
     if options.min_pass_rate is not None or options.max_failures is not None:
         return []
+    case_name = case.name
+    thresholds = case.thresholds
+    selected_target_ids = {target.id for target in case.targets}
     gates: list[GateResult] = []
     if thresholds.min_pass_rate is not None:
         gates.append(
@@ -686,7 +690,7 @@ def _case_gates(
             )
         )
     for target_id, threshold in thresholds.per_target.items():
-        if options.target_filter is not None and target_id != options.target_filter:
+        if target_id not in selected_target_ids:
             continue
         if threshold.min_pass_rate is None:
             continue

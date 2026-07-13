@@ -56,6 +56,24 @@ def eval_run(
         str | None,
         typer.Option("--target", help="Only run one target id from selected cases."),
     ] = None,
+    from_time: Annotated[
+        float | None,
+        typer.Option(
+            "--from",
+            min=0.0,
+            help=(
+                "Only run samples at or after this time in seconds; requires --case."
+            ),
+        ),
+    ] = None,
+    until_time: Annotated[
+        float | None,
+        typer.Option(
+            "--until",
+            min=0.0,
+            help=("Only run samples before this time in seconds; requires --case."),
+        ),
+    ] = None,
     adapter_config: Annotated[
         Path | None,
         typer.Option(
@@ -144,6 +162,11 @@ def eval_run(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    _validate_sample_time_options(
+        case=case,
+        from_time=from_time,
+        until_time=until_time,
+    )
     console = Console()
     adapter_target = adapter or _default_adapter_target(eval_dir)
     options = RunOptions(
@@ -151,6 +174,8 @@ def eval_run(
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=target,
+        from_time_s=from_time,
+        until_time_s=until_time,
         adapter_config=_load_config(adapter_config),
         concurrency=concurrency,
         min_pass_rate=min_pass_rate,
@@ -236,16 +261,41 @@ def eval_list_samples(
         str | None,
         typer.Option("--target", help="Only list one target id from selected cases."),
     ] = None,
+    from_time: Annotated[
+        float | None,
+        typer.Option(
+            "--from",
+            min=0.0,
+            help=(
+                "Only list samples at or after this time in seconds; requires --case."
+            ),
+        ),
+    ] = None,
+    until_time: Annotated[
+        float | None,
+        typer.Option(
+            "--until",
+            min=0.0,
+            help=("Only list samples before this time in seconds; requires --case."),
+        ),
+    ] = None,
     allow_empty: Annotated[
         bool,
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    _validate_sample_time_options(
+        case=case,
+        from_time=from_time,
+        until_time=until_time,
+    )
     try:
         loaded = load_eval_directory(
             eval_dir,
             case_filter=case,
             target_filter=target,
+            from_time_s=from_time,
+            until_time_s=until_time,
             allow_empty=allow_empty,
         )
     except EvalError as error:
@@ -358,6 +408,30 @@ def eval_review(
         server.shutdown()
     finally:
         server.server_close()
+
+
+def _validate_sample_time_options(
+    *,
+    case: str | None,
+    from_time: float | None,
+    until_time: float | None,
+) -> None:
+    if (from_time is not None or until_time is not None) and case is None:
+        raise typer.BadParameter(
+            "--from and --until require --case",
+            param_hint="--from/--until",
+        )
+    for option, value in (("--from", from_time), ("--until", until_time)):
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise typer.BadParameter(
+                "must be a finite, nonnegative number",
+                param_hint=option,
+            )
+    if from_time is not None and until_time is not None and from_time >= until_time:
+        raise typer.BadParameter(
+            "must be greater than --from",
+            param_hint="--until",
+        )
 
 
 def _load_config(path: Path | None) -> dict[str, Any]:
