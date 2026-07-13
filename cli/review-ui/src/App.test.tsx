@@ -318,6 +318,63 @@ describe("review application navigation and drafts", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
+  it("selects the sample shown by the tooltip when marker hit areas overlap", async () => {
+    const doc = caseFile([
+      target("target_a", [sample("first", 1, "false"), sample("second", 1.1, "true")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const first = await screen.findByRole("button", {
+      name: "target a, 1.000s, expected false",
+    });
+    const second = screen.getByRole("button", {
+      name: "target a, 1.100s, expected true",
+    });
+    const lane = document.querySelector<HTMLElement>(".lane-track");
+    expect(lane).not.toBeNull();
+    vi.spyOn(lane!, "getBoundingClientRect").mockReturnValue({
+      bottom: 52,
+      height: 52,
+      left: 0,
+      right: 1000,
+      top: 0,
+      width: 1000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(second, { clientX: 110, detail: 1 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
+
+    fireEvent.pointerMove(lane!, { clientX: 104, clientY: 40, pointerId: 1 });
+    expect(screen.getByRole("tooltip").textContent).toBe("1.000s · false");
+    fireEvent.pointerDown(lane!, { button: 0, clientX: 104, pointerId: 1 });
+    fireEvent.pointerUp(lane!, { button: 0, clientX: 104, pointerId: 1 });
+
+    await waitFor(() => expect(first.getAttribute("aria-pressed")).toBe("true"));
+
+    fireEvent.click(second, { clientX: 110, detail: 1 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.pointerMove(lane!, { clientX: 104, clientY: 40, pointerId: 2 });
+    fireEvent.click(second, { clientX: 104, detail: 1 });
+
+    await waitFor(() => expect(first.getAttribute("aria-pressed")).toBe("true"));
+
+    second.focus();
+    fireEvent.click(second, { clientX: 104, detail: 0 });
+    await waitFor(() => expect(second.getAttribute("aria-pressed")).toBe("true"));
+  });
+
   it("omits range context for an individual sample", async () => {
     const doc = caseFile();
     vi.stubGlobal(
