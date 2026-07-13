@@ -99,6 +99,8 @@ The two step-image sets are identical copies kept in both locations because Andr
 - Backend reference images: `backend/assets/ref-imgs/*.jpg`
 - Step config and per-step prompts: `backend/assets/origami_steps.json`
 
+To view the step IDs, reference images, and criteria in HTML, run `cd backend && uv run scripts/render_origami_steps.py`, then open `backend/debug/origami_steps.html`.
+
 ### Recorded-Video Fold-Check Evals
 
 Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
