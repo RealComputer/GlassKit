@@ -464,6 +464,30 @@ describe("review application navigation and drafts", () => {
     await waitFor(() => expect(screen.getByLabelText("Time")).toHaveProperty("value", "3.100"));
   });
 
+  it("clears pointer focus from timeline lane labels", async () => {
+    const doc = caseFile();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const timeline = await screen.findByLabelText("Sample timeline");
+    const laneLabel = within(timeline).getByRole("button", { name: "target a1" });
+    laneLabel.focus();
+    fireEvent.pointerUp(laneLabel);
+
+    expect(document.activeElement).toBe(document.body);
+
+    laneLabel.focus();
+    expect(document.activeElement).toBe(laneLabel);
+  });
+
   it("keeps the fit timeline's final label inside its viewport", async () => {
     const doc = caseFile();
     vi.stubGlobal(

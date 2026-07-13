@@ -315,6 +315,7 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                     className="lane-label"
                     title={target.label ?? target.id}
                     onClick={() => void selectTarget(target.id)}
+                    onPointerUp={(event) => event.currentTarget.blur()}
                   >
                     <span>{target.label ?? target.id}</span>
                     <small>{target.samples.length}</small>
