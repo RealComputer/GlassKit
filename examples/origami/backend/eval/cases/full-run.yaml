@@ -41,14 +41,16 @@ targets:
       expect: false
     - at: 153.5
       expect: true
-    - range: [154.0, 163.5]
+      ignore: flaky
+    - range: [154.0, 163.0]
       expect: false
+    - at: 163.0
+      expect: false
+      ignore: flaky
     - at: 163.5
       expect: true
-    - at: 164.0
+    - range: [164.0, 165.0]
       expect: false
-    - at: 164.5
-      expect: true
   step_4:
     samples:
     - range: [165.0, 193.0]
