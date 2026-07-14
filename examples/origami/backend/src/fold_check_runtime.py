@@ -701,7 +701,6 @@ class FoldCheckRuntime:
         publisher_epoch = session.fold_check.publisher_epoch
         completion = await self._client.chat_completion(
             stream_id=stream_id,
-            session_id=session.session_id,
             prompt=prompt,
             system_prompt=fold_check_system_prompt(
                 has_negative_exemplar=step.negative_reference_path is not None

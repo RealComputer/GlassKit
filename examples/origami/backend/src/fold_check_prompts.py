@@ -106,14 +106,13 @@ FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS = 4
 def fold_check_completion_payload(
     *,
     model: str,
-    thread_id: str,
     prompt: str,
     image_url: str,
     system_prompt: str | None = None,
 ) -> dict[str, Any]:
+    """Build an independent fold-check request without a prompt-cache thread."""
     return {
         "model": model,
-        "thread_id": thread_id,
         "max_completion_tokens": FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS,
         "messages": fold_check_messages(
             prompt=prompt,

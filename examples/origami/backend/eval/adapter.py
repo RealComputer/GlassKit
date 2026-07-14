@@ -84,17 +84,13 @@ class Evaluator:
                 negative_reference.copy() if negative_reference is not None else None
             ),
         )
-        thread_id = (
-            f"glasskit-eval-{sample.case_name}-{target_id}-{sample.sample_index}"
-        )
         completion = await self._client.chat_completion_for_image(
             image_url=fold_check_image_data_url(image, self._jpeg_quality),
-            thread_id=thread_id,
             prompt=step.criteria,
             system_prompt=fold_check_system_prompt(
                 has_negative_exemplar=negative_reference is not None
             ),
-            log_context=f"eval={thread_id}",
+            log_context=f"eval={sample.case_name}/{target_id}/{sample.sample_index}",
         )
         if completion is None:
             raise RuntimeError("Overshoot chat completion failed after retries")

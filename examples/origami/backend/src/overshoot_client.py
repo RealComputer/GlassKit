@@ -185,13 +185,11 @@ class OvershootClient:
         self,
         *,
         stream_id: str,
-        session_id: str,
         prompt: str,
         system_prompt: str | None = None,
     ) -> OvershootCompletionResult | None:
         return await self.chat_completion_for_image(
             image_url=fold_check_stream_image_url(stream_id),
-            thread_id=session_id,
             prompt=prompt,
             system_prompt=system_prompt,
             log_context=f"stream={stream_id}",
@@ -201,14 +199,12 @@ class OvershootClient:
         self,
         *,
         image_url: str,
-        thread_id: str,
         prompt: str,
         system_prompt: str | None = None,
         log_context: str = "fold-check",
     ) -> OvershootCompletionResult | None:
         payload = fold_check_completion_payload(
             model=self._model,
-            thread_id=thread_id,
             prompt=prompt,
             image_url=image_url,
             system_prompt=system_prompt,
