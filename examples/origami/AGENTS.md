@@ -12,7 +12,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - Overshoot only sees backend-composed video, not a direct Rokid stream.
 - Browser `/demo` is a backend-connected viewer/controller. It approximates the wearer's view by reconstructing the Rokid HUD over the latest camera frame, but it is not a separate workflow owner.
 - Turning auto check off stops the fold-check runtime and closes any provider stream while keeping the device and browser media sessions alive. `ORIGAMI_AUTO_CHECK_ENABLED=false` disables provider stream creation for the whole backend process.
-- The Overshoot API uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes video composed from the camera and labeled visual-reference panels into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references. A step may configure an optional negative visual exemplar alongside its target reference; step 6 uses the step-5 reference this way and selects a dedicated system prompt for the target/not-target layout.
+- The Overshoot API uses LiveKit publishing plus explicit chat-completion prompts. The backend creates an Overshoot stream, publishes backend-composed camera/reference video into the returned LiveKit room, polls stream readiness until the first frame is ingested, and then calls `/chat/completions` sequentially with `ovs://streams/<id>?frame_index=-1` image references.
 - The backend records the real camera frames sent into the fold-check path before reference-image composition by default. Recordings are written under `backend/debug/fold-check-inputs` unless `ORIGAMI_FOLD_CHECK_INPUT_RECORDING_DIR` overrides the location, and `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=false` disables this recording.
 
 ## Connection Graph
@@ -27,7 +27,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 1. Rokid shows the start screen.
 2. Double tap opens a backend media session and starts the origami workflow.
 3. The backend enters the first step, publishes HUD state, and starts fold checking when auto check is available.
-4. The backend sends video composed from the camera and the current step's target/optional negative reference panels to the Overshoot LiveKit room.
+4. The backend sends composed camera/reference video to the Overshoot LiveKit room.
 5. The backend prompts the hosted VLM against the latest ingested stream frame, parses the boolean response, and decides whether to advance the step.
 6. Swipe controls send manual navigation commands to the backend, and browser demo controls can start, navigate, toggle auto check, and reset the active workflow.
 7. Completion leaves the HUD on the completed workflow screen until a reset returns it to the start screen.
@@ -48,22 +48,21 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/session_manager.py`: public session manager, session loop, HUD state, and origami workflow state machine.
 - `src/fold_check_runtime.py`: session-scoped fold-check orchestration, worker tasks, LiveKit reconnect recovery, prompt gating, and runtime cleanup.
 - `src/overshoot_client.py`: Overshoot HTTP API client for stream setup/status, keepalive, shared chat-completion requests, retries, and response parsing.
-- `src/fold_check_prompts.py`: hard-coded default and negative-exemplar VLM system prompts plus shared message construction used by live checks and recorded-video evals.
+- `src/fold_check_prompts.py`: hard-coded VLM chat wrapper prompts and message construction used by live checks and recorded-video evals.
 - `src/overshoot_livekit.py`: LiveKit publisher setup, token refresh, track options, and image-to-video-frame capture helpers.
 - `src/fold_check_diagnostics.py`: fold-check debug composite saving and pre-composition input recording lifecycle.
 - `src/fold_check.py`: shared fold-check helpers for reference composition, image reference encoding, step/reference loading, and boolean result parsing.
 - `src/rtc_media.py`: aiortc peer connection helpers and backend-originated video tracks.
 - `src/recording.py`: non-blocking video recording for pre-composition fold-check input frames.
-- `src/rendering.py`: fold-check target/optional negative-reference composition, browser demo composition, and HUD image rendering.
+- `src/rendering.py`: fold-check reference composition, browser demo composition, and HUD image rendering.
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
 - `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends each composed sampled frame through the shared fold-check/Overshoot chat-completion path without LiveKit. It deliberately implements individual `evaluate` calls so `glasskit eval run --concurrency N` can overlap independent requests.
 - `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the case generator's labeling path.
 - `eval/generate_case.py`: Gemini-backed helper for turning a small label plan into an initial recorded-video eval case YAML.
-- `eval/suggest_criteria.py`: high-thinking Gemini helper for proposing generalizable step criteria from the target reference, the step's actual evaluator prompt and layout, neighboring references, balanced reviewed true/false frames, and optional fast-evaluator feedback.
+- `eval/suggest_criteria.py`: high-thinking Gemini helper for proposing generalizable step criteria from the target reference, neighboring references, balanced reviewed true/false frames, and optional fast-evaluator feedback.
 - `eval/test_generate_case.py`: regression coverage for full-case overwrite and selected-target update behavior.
-- `eval/test_negative_reference.py`: regression coverage for optional negative-reference loading, dual-reference composition bounds, step-specific system prompt selection, and criteria-authoring contract selection.
-- `assets/origami_steps.json`: seven step definitions, fold-check criteria, and optional negative-reference image configuration.
+- `assets/origami_steps.json`: seven step definitions and fold-check criteria.
 - `assets/step-imgs/*.png`: backend demo copies of the step guide images, colorized into the green HUD style at render time.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.
 - `.env.example`: required key and optional Overshoot overrides.

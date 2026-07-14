@@ -10,7 +10,7 @@ It uses [Overshoot](https://overshoot.ai/) for live visual understanding.
 
 - Shows a visual reference for each origami folding step on the Rokid HUD
 - Checks the current fold with Overshoot and advances through the fixed workflow
-  - The camera input stream is composed with the target origami state and, when configured, a labeled negative visual exemplar, then sent to a VLM to check whether the fold step is complete.
+  - The camera input stream is composed with a reference origami state image, then sent to a VLM to check whether the fold step is complete.
 - Controls:
   - Supports swiping forward/backward for manual step navigation
   - Uses a double tap to start from the start screen and reset while a session is running or completed
@@ -96,8 +96,8 @@ adb devices # verify the remote connection (you can unplug the cable afterward)
 
 The two step-image sets are identical copies kept in both locations because Android resources and backend demo assets load from separate trees.
 
-- Backend target and optional negative-reference images: `backend/assets/ref-imgs/*.jpg`
-- Step config, per-step criteria, and optional negative-reference selection: `backend/assets/origami_steps.json`
+- Backend reference images: `backend/assets/ref-imgs/*.jpg`
+- Step config and per-step prompts: `backend/assets/origami_steps.json`
 
 To view the step IDs, reference images, and criteria in HTML, run `cd backend && uv run scripts/render_origami_steps.py`, then open `backend/debug/origami_steps.html`.
 
@@ -105,7 +105,7 @@ To view the step IDs, reference images, and criteria in HTML, run `cd backend &&
 
 Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
 
-In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step's target and optional negative-reference panels, sends that composed frame to Overshoot with the matching system prompt, parses the VLM response, and returns `true` or `false`.
+In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step reference image, sends that composed frame to Overshoot, parses the VLM response, and returns `true` or `false`.
 
 The eval files live under `backend/eval/`:
 
@@ -113,9 +113,8 @@ The eval files live under `backend/eval/`:
 - `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
 - `plans/*.yaml` are small label plans used to generate eval cases from recordings.
 - `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
-- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference, the step's actual evaluator prompt and layout, balanced reviewed true/false frames, and optional fast-evaluator feedback.
+- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference, balanced reviewed true/false frames, and optional fast-evaluator feedback.
 - `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
-- `test_negative_reference.py` covers optional negative-reference loading, dual-reference composition bounds, step-specific system prompt selection, and criteria-authoring contract selection.
 - `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
 
 To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
@@ -268,6 +267,6 @@ The Origami adapter implements individual `evaluate` calls because each sampled 
 
 This example uses Overshoot differently from [the drink-making demo](../rokid-overshoot-openai-realtime/README.md).
 
-In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend creates an Overshoot stream, publishes video composed from the camera and the current target/optional negative-reference panels into the returned LiveKit room, prompts chat completions against the latest ingested frame, and uses those results to drive the fixed origami workflow.
+In this origami app, the Rokid client never connects to Overshoot directly. The glasses publish camera video to the FastAPI backend, and the backend creates an Overshoot stream, publishes the composed camera/reference video into the returned LiveKit room, prompts chat completions against the latest ingested frame, and uses those results to drive the fixed origami workflow.
 
 In the drink-making demo, the glasses stream camera video directly to Overshoot after the backend brokers the connection setup. The backend manages Overshoot prompts and results, but it does not sit in the video path or compose frames.

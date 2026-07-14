@@ -21,7 +21,6 @@ from .constants import (
     PHASE_GUIDING,
 )
 from .fold_check import compose_fold_check_image
-from .fold_check_prompts import fold_check_system_prompt
 from .origami_config import OrigamiStep
 from .overshoot_client import OvershootClient, OvershootStreamLease
 from .fold_check_diagnostics import FoldCheckDiagnostics
@@ -50,7 +49,6 @@ class FoldCheckRuntime:
         sessions_lock: asyncio.Lock,
         current_step_for: Callable[[OrigamiSession], OrigamiStep],
         reference_image_for: Callable[[OrigamiStep], Image.Image],
-        negative_reference_image_for: Callable[[OrigamiStep], Image.Image | None],
         save_composites: bool,
         debug_composite_dir: Path,
         record_inputs: bool,
@@ -68,7 +66,6 @@ class FoldCheckRuntime:
         self._sessions_lock = sessions_lock
         self._current_step_for = current_step_for
         self._reference_image_for = reference_image_for
-        self._negative_reference_image_for = negative_reference_image_for
         self._video_source_close_tasks: set[asyncio.Task[None]] = set()
 
     async def close(self) -> None:
@@ -101,12 +98,10 @@ class FoldCheckRuntime:
             return
         step = self._current_step_for(session)
         reference = self._reference_image_for(step)
-        negative_reference = self._negative_reference_image_for(step)
         await self._diagnostics.maybe_save_composite(
             session=session,
             step=step,
             reference=reference,
-            negative_reference=negative_reference,
         )
 
     async def stop(self, session: OrigamiSession) -> None:
@@ -475,12 +470,7 @@ class FoldCheckRuntime:
 
                 step = self._current_step_for(session)
                 reference = self._reference_image_for(step)
-                negative_reference = self._negative_reference_image_for(step)
-                image = compose_fold_check_image(
-                    camera,
-                    reference,
-                    negative_reference=negative_reference,
-                )
+                image = compose_fold_check_image(camera, reference)
                 if image.size != frame_size:
                     image = image.resize(frame_size, Image.Resampling.LANCZOS)
 
@@ -696,15 +686,11 @@ class FoldCheckRuntime:
         runtime_epoch: int,
     ) -> None:
         step_index = session.step_index
-        step = self._current_step_for(session)
-        prompt = step.criteria
+        prompt = self._current_step_for(session).criteria
         publisher_epoch = session.fold_check.publisher_epoch
         completion = await self._client.chat_completion(
             stream_id=stream_id,
             prompt=prompt,
-            system_prompt=fold_check_system_prompt(
-                has_negative_exemplar=step.negative_reference_path is not None
-            ),
         )
         received_at = time.monotonic()
         if completion is None:
