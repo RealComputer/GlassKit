@@ -10,6 +10,10 @@ function response(body: unknown, status = 200): Response {
   });
 }
 
+async function advanceAutosaveDelay(): Promise<void> {
+  await act(async () => vi.advanceTimersByTimeAsync(400));
+}
+
 afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
@@ -691,9 +695,12 @@ describe("review application navigation and drafts", () => {
     render(<App />);
     const field = await screen.findByLabelText(/Field/);
     expect(field.getAttribute("placeholder")).toBeNull();
+
+    vi.useFakeTimers();
     fireEvent.change(field, { target: { value: "   " } });
     fireEvent.blur(field);
-    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    await advanceAutosaveDelay();
+    vi.useRealTimers();
 
     expect(putCount).toBe(0);
   });
@@ -749,7 +756,7 @@ describe("review application navigation and drafts", () => {
     ).toBeTruthy();
     fireEvent.blur(ignore);
 
-    await act(async () => vi.advanceTimersByTimeAsync(400));
+    await advanceAutosaveDelay();
     expect(saves).toHaveLength(1);
     expect(saves[0].targets.target_a.samples[0].ignore).toBe("Provider output is flaky.");
     expect(screen.getByText("Saving")).toBeTruthy();
@@ -814,20 +821,25 @@ describe("review application navigation and drafts", () => {
     fireEvent.click(opener);
     const close = await screen.findByLabelText("Close keyboard shortcuts");
     await waitFor(() => expect(document.activeElement).toBe(close));
+
+    vi.useFakeTimers();
     fireEvent.keyDown(window, { key: "a" });
     fireEvent.keyDown(window, { key: "Tab" });
     expect(document.activeElement).toBe(close);
     fireEvent.click(close);
-    await waitFor(() => expect(document.activeElement).toBe(opener));
+    await act(async () => vi.runOnlyPendingTimersAsync());
+    expect(document.activeElement).toBe(opener);
 
     const sourceOpener = screen.getByText("Case file");
     sourceOpener.focus();
     fireEvent.click(sourceOpener);
-    await screen.findByLabelText("Close source drawer");
+    expect(screen.getByLabelText("Close source drawer")).toBeTruthy();
     fireEvent.keyDown(window, { key: "a" });
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(document.activeElement).toBe(sourceOpener));
-    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    await act(async () => vi.runOnlyPendingTimersAsync());
+    expect(document.activeElement).toBe(sourceOpener);
+    await advanceAutosaveDelay();
+    vi.useRealTimers();
 
     expect(putCount).toBe(0);
   });
@@ -864,11 +876,14 @@ describe("review application navigation and drafts", () => {
       screen.findByLabelText("Comment optional"),
     ]);
     await waitFor(() => expect(controls[1]).toHaveProperty("value", "1"));
+
+    vi.useFakeTimers();
     for (const control of controls) {
       fireEvent.focus(control);
       fireEvent.blur(control);
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    await advanceAutosaveDelay();
+    vi.useRealTimers();
 
     expect(putCount).toBe(0);
   });
@@ -895,9 +910,14 @@ describe("review application navigation and drafts", () => {
     );
     render(<App />);
     const comment = await screen.findByLabelText("Comment optional");
+
+    vi.useFakeTimers();
     fireEvent.change(comment, { target: { value: "Save this first" } });
     fireEvent.blur(comment);
-    await waitFor(() => expect(putStarted).toBe(true));
+    await advanceAutosaveDelay();
+    expect(putStarted).toBe(true);
+    vi.useRealTimers();
+
     const expected = screen.getByLabelText("Expected value");
     fireEvent.change(expected, { target: { value: "-" } });
     const accepted = {
@@ -907,7 +927,7 @@ describe("review application navigation and drafts", () => {
         target("numeric_target", [{ ...sample("first", 1, "1"), comment: "Save this first" }]),
       ],
     };
-    resolvePut(response(accepted));
+    await act(async () => resolvePut(response(accepted)));
     await waitFor(() => expect(screen.getByText("Fix errors")).toBeTruthy());
 
     expect(expected).toHaveProperty("value", "-");
@@ -1001,8 +1021,11 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const comment = await screen.findByLabelText("Comment optional");
+    vi.useFakeTimers();
     fireEvent.change(comment, { target: { value: "Trigger a save" } });
     fireEvent.blur(comment);
+    await advanceAutosaveDelay();
+    vi.useRealTimers();
 
     expect(await screen.findByText("The case file is read-only.")).toBeTruthy();
     expect(screen.getByText("Save failed")).toBeTruthy();
