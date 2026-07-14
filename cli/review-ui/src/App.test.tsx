@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App.tsx";
 import { caseFile, sample, evalDirectory, target } from "./test/fixtures.ts";
@@ -700,7 +700,10 @@ describe("review application navigation and drafts", () => {
 
   it("saves an ignore reason and marks the sample as ignored", async () => {
     const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
-    let submitted: Record<string, { samples: ReturnType<typeof sample>[] }> | null = null;
+    const saves: {
+      targets: Record<string, { samples: ReturnType<typeof sample>[] }>;
+      resolve: () => void;
+    }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -710,14 +713,20 @@ describe("review application navigation and drafts", () => {
           const body = JSON.parse(String(init.body)) as {
             targets: Record<string, { samples: ReturnType<typeof sample>[] }>;
           };
-          submitted = body.targets;
-          return Promise.resolve(
-            response({
-              ...doc,
-              revision: "ignored-sample",
-              targets: [target("target_a", body.targets.target_a.samples)],
-            }),
-          );
+          return new Promise<Response>((resolve) => {
+            const revision = `save-${saves.length + 1}`;
+            saves.push({
+              targets: body.targets,
+              resolve: () =>
+                resolve(
+                  response({
+                    ...doc,
+                    revision,
+                    targets: [target("target_a", body.targets.target_a.samples)],
+                  }),
+                ),
+            });
+          });
         }
         if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
@@ -727,8 +736,9 @@ describe("review application navigation and drafts", () => {
     const toggle = await screen.findByLabelText("Ignore this sample");
     expect(screen.queryByLabelText("Ignore reason")).toBeNull();
 
+    vi.useFakeTimers();
     fireEvent.click(toggle);
-    const ignore = await screen.findByLabelText("Ignore reason");
+    const ignore = screen.getByLabelText("Ignore reason");
     expect(screen.getByText("Enter a reason for ignoring this sample.")).toBeTruthy();
 
     fireEvent.change(ignore, { target: { value: "Provider output is flaky." } });
@@ -739,13 +749,21 @@ describe("review application navigation and drafts", () => {
     ).toBeTruthy();
     fireEvent.blur(ignore);
 
-    await waitFor(() =>
-      expect(submitted?.target_a.samples[0].ignore).toBe("Provider output is flaky."),
-    );
+    await act(async () => vi.advanceTimersByTimeAsync(400));
+    expect(saves).toHaveLength(1);
+    expect(saves[0].targets.target_a.samples[0].ignore).toBe("Provider output is flaky.");
+    expect(screen.getByText("Saving")).toBeTruthy();
+
+    vi.useRealTimers();
+    await act(async () => saves[0].resolve());
+    await screen.findByText("Saved");
 
     fireEvent.click(toggle);
     expect(screen.queryByLabelText("Ignore reason")).toBeNull();
-    await waitFor(() => expect(submitted?.target_a.samples[0].ignore).toBeNull());
+    await waitFor(() => expect(saves).toHaveLength(2));
+    expect(saves[1].targets.target_a.samples[0].ignore).toBeNull();
+    await act(async () => saves[1].resolve());
+    await screen.findByText("Saved");
   });
 
   it("commits human-entered transport time only on Enter", async () => {
