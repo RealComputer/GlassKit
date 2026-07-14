@@ -2,16 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-FOLD_CHECK_SYSTEM_PROMPT = """\
+FOLD_CHECK_REFERENCE_IMAGE_LAYOUT = """\
+- Top: The reference shape.
+- Bottom: A camera frame that may contain the candidate paper model.
+"""
+
+FOLD_CHECK_NEGATIVE_EXEMPLAR_IMAGE_LAYOUT = """\
+- Top left, labeled `TARGET SHAPE`: The shape the candidate must match.
+- Top right, labeled `NOT TARGET`: A visually similar but incorrect shape that must be rejected.
+- Bottom: A camera frame that may contain the candidate paper model.
+"""
+
+FOLD_CHECK_SYSTEM_PROMPT = f"""\
 # Goal
 
 Determine whether the candidate origami model in the provided composite image matches the reference shape.
 
 # Image Layout
 
-- Top: The reference shape.
-- Bottom: A camera frame that may contain the candidate paper model.
-
+{FOLD_CHECK_REFERENCE_IMAGE_LAYOUT}
 # Candidate Selection
 
 - Evaluate only a candidate that is either resting on a surface or being held in a hand.
@@ -44,17 +53,14 @@ When uncertain, return false.
 - Otherwise, return false.
 """
 
-FOLD_CHECK_NEGATIVE_EXEMPLAR_SYSTEM_PROMPT = """\
+FOLD_CHECK_NEGATIVE_EXEMPLAR_SYSTEM_PROMPT = f"""\
 # Goal
 
 Determine whether the candidate origami model in the provided composite image matches the target shape. Use the negative exemplar to resolve the specific visual distinction described by the supplied criteria.
 
 # Image Layout
 
-- Top left, labeled `TARGET SHAPE`: The shape the candidate must match.
-- Top right, labeled `NOT TARGET`: A visually similar but incorrect shape that must be rejected.
-- Bottom: A camera frame that may contain the candidate paper model.
-
+{FOLD_CHECK_NEGATIVE_EXEMPLAR_IMAGE_LAYOUT}
 # Candidate Selection
 
 - Evaluate only a candidate that is either resting on a surface or being held in a hand.
@@ -63,11 +69,13 @@ Determine whether the candidate origami model in the provided composite image ma
 # Comparison Rules
 
 - Compare the selected candidate primarily against `TARGET SHAPE`, using the supplied criteria as visual cues.
-- Use `NOT TARGET` only to understand the target-defining difference described by the supplied criteria. The target and negative exemplar intentionally share most of their crown, body, and overall silhouette.
+- Use `NOT TARGET` only to understand the target-defining difference described by the supplied criteria. The target and negative exemplar may intentionally share most of their overall shape.
 - Do not return false merely because the candidate resembles the negative exemplar overall. Compare the specific distinguishing feature instead.
-- Return false if that target-defining feature is absent or the corresponding candidate feature matches the negative exemplar instead.
-- Different paper colors are acceptable, including a different color on each side.
+- Return false if that target-defining feature is absent or the corresponding candidate feature matches `NOT TARGET` instead.
+- Exact paper colors are irrelevant. Different paper colors are acceptable, including a different color on each side.
+- Minor asymmetry is acceptable when the required shape, edges, folds, and layer relationships remain present.
 - The candidate does not need to match the target orientation exactly, but its orientation should roughly match the target. Modest variations in tilt, perspective, or rotation are acceptable.
+- Interpret positional terms in the supplied criteria, such as top, bottom, left, and right, relative to the candidate's own orientation.
 - Base the decision only on whether the visible candidate matches the target, using the negative exemplar as a contrast for the specified distinguishing feature.
 
 # Visibility Requirements
@@ -151,4 +159,12 @@ def fold_check_system_prompt(*, has_negative_exemplar: bool) -> str:
         FOLD_CHECK_NEGATIVE_EXEMPLAR_SYSTEM_PROMPT
         if has_negative_exemplar
         else FOLD_CHECK_SYSTEM_PROMPT
+    )
+
+
+def fold_check_image_layout_description(*, has_negative_exemplar: bool) -> str:
+    return (
+        FOLD_CHECK_NEGATIVE_EXEMPLAR_IMAGE_LAYOUT
+        if has_negative_exemplar
+        else FOLD_CHECK_REFERENCE_IMAGE_LAYOUT
     )

@@ -25,8 +25,15 @@ from eval.generate_case import (
     _jpeg_base64,
     _time_key,
 )
-from src.fold_check import load_fold_check_reference_images, load_fold_check_steps
-from src.fold_check_prompts import FOLD_CHECK_SYSTEM_PROMPT
+from src.fold_check import (
+    load_fold_check_negative_reference_images,
+    load_fold_check_reference_images,
+    load_fold_check_steps,
+)
+from src.fold_check_prompts import (
+    fold_check_image_layout_description,
+    fold_check_system_prompt,
+)
 from src.origami_config import OrigamiStep
 
 GEMINI_THINKING_LEVEL = "high"
@@ -42,11 +49,15 @@ The target reference drawing is authoritative. Labeled examples only clarify how
 AUTHOR_REQUEST = """\
 # Task
 
-Write improved step-specific evaluation criteria for {target_id} ({target_title}). The fast evaluator will receive the frozen system prompt below, your criteria, and a composite image with the target reference above a camera frame.
+Write improved step-specific evaluation criteria for {target_id} ({target_title}). The fast evaluator will receive the frozen system prompt below, your criteria, and a composite image with the frozen layout below.
 
 # Frozen Evaluator System Prompt
 
 {system_prompt}
+
+# Frozen Evaluator Image Layout
+
+{image_layout}
 
 # Current Step Criteria
 
@@ -63,6 +74,7 @@ Write improved step-specific evaluation criteria for {target_id} ({target_title}
 - Do not require a feature just because it happens to be visible in every positive example unless the reference or fold topology supports it.
 - Do not weaken a requirement just because one negative example superficially resembles the target.
 - Prefer the smallest set of independently visible, discriminative features. Avoid duplicating generic visibility rules already present in the frozen system prompt.
+- The frozen system prompt owns cross-step allowances and rejection rules. Do not restate them in the step criteria. Include only target-specific tolerances or visibility needs.
 - Describe visible evidence only. Do not ask the evaluator to infer hidden paper layers or folding actions.
 
 # Required Response
@@ -71,7 +83,7 @@ Return one JSON object with exactly these fields:
 
 - `visual_analysis`: a clear explanation of the target's defining geometry and layer relationships, including how it differs from the most confusable negative states.
 - `generalization_notes`: a JSON array explaining why the proposed rules should transfer beyond these examples.
-- `criteria`: Markdown containing `## Required Features`, `## Acceptable Variations`, and `## Reject If`. Keep it under 220 words and ready to store directly in `origami_steps.json`.
+- `criteria`: Markdown containing `## Required Features` and `## Reject If`. Include `## Acceptable Variations` only for target-specific allowances not already covered by the frozen system prompt. Keep it under 220 words and ready to store directly in `origami_steps.json`.
 """
 
 _FORBIDDEN_CRITERIA_PATTERNS = (
@@ -261,11 +273,13 @@ def _suggest_criteria(
         )
     )
     references = load_fold_check_reference_images(steps)
+    negative_references = load_fold_check_negative_reference_images(steps)
     inputs = _build_authoring_inputs(
         step=step,
         step_index=step_index,
         steps=steps,
         references=references,
+        negative_reference=negative_references.get(step.id),
         selected=selected,
         images_by_time=images_by_time,
         observations=observations,
@@ -562,24 +576,48 @@ def _build_authoring_inputs(
     step_index: int,
     steps: list[OrigamiStep],
     references: dict[str, Image.Image],
+    negative_reference: Image.Image | None,
     selected: list[CaseExample],
     images_by_time: dict[str, Image.Image],
     observations: dict[str, EvalObservation] | None,
 ) -> list[dict[str, Any]]:
+    has_negative_exemplar = negative_reference is not None
     inputs: list[dict[str, Any]] = [
         {
             "type": "text",
             "text": AUTHOR_REQUEST.format(
                 target_id=step.id,
                 target_title=step.title,
-                system_prompt=FOLD_CHECK_SYSTEM_PROMPT,
+                system_prompt=fold_check_system_prompt(
+                    has_negative_exemplar=has_negative_exemplar
+                ),
+                image_layout=fold_check_image_layout_description(
+                    has_negative_exemplar=has_negative_exemplar
+                ),
                 current_criteria=step.criteria,
             ),
         },
         {"type": "text", "text": "Authoritative TARGET reference drawing:"},
         _image_input(references[step.id]),
     ]
-    if step_index > 0:
+    if negative_reference is not None:
+        inputs.extend(
+            [
+                {
+                    "type": "text",
+                    "text": (
+                        "Authoritative NOT TARGET visual exemplar used in the "
+                        "evaluator's top-right panel:"
+                    ),
+                },
+                _image_input(negative_reference),
+            ]
+        )
+    if step_index > 0 and (
+        step.negative_reference_path is None
+        or steps[step_index - 1].reference_path.resolve()
+        != step.negative_reference_path.resolve()
+    ):
         previous = steps[step_index - 1]
         inputs.extend(
             [
@@ -712,11 +750,7 @@ def _parse_suggestion(response_text: str) -> CriteriaSuggestion:
     if not isinstance(notes_raw, list) or not notes_raw:
         raise RuntimeError("generalization_notes must be a non-empty array")
     notes = [_nonempty_string(note, "generalization_notes item") for note in notes_raw]
-    for section in (
-        "## Required Features",
-        "## Acceptable Variations",
-        "## Reject If",
-    ):
+    for section in ("## Required Features", "## Reject If"):
         if section not in criteria:
             raise RuntimeError(f"criteria is missing {section}")
     if len(criteria.split()) > 220:
