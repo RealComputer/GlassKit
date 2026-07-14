@@ -6,7 +6,12 @@ import pytest
 from PIL import Image
 
 from glasskit.eval.models import ComparisonConfig, SampleExpectation
-from glasskit.eval.video import _stream_duration_s, decode_sample_frames, probe_video
+from glasskit.eval.video import (
+    _stream_duration_s,
+    decode_sample_frames,
+    iter_sample_frames,
+    probe_video,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -74,6 +79,50 @@ def test_decode_sample_frames_stops_after_final_requested_frame(
     assert container.decoded_frame_count == 2
 
 
+def test_iter_sample_frames_decodes_lazily_and_closes_early(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "long-video.mp4"
+    container = _CountingContainer(frame_count=10)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+    frames = iter_sample_frames(
+        video_path,
+        [
+            _sample(timestamp_s=0.0, sample_index=0, video_path=video_path),
+            _sample(timestamp_s=5.0, sample_index=1, video_path=video_path),
+        ],
+        case_name="case",
+    )
+
+    assert container.decoded_frame_count == 0
+    first = next(frames)
+    assert first.sample_index == 0
+    assert container.decoded_frame_count == 1
+    assert not container.closed
+
+    first.image.close()
+    frames.close()
+
+    assert container.decoded_frame_count == 1
+    assert container.closed
+
+
+def test_decode_sample_frames_enables_auto_decoder_threading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    container = _CountingContainer(frame_count=1)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+
+    decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    assert container.streams[0].thread_type == "AUTO"
+
+
 def test_decode_sample_frames_can_stop_on_first_frame(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -112,12 +161,14 @@ class _CountingContainer:
     def __init__(self, *, frame_count: int) -> None:
         self.frame_count = frame_count
         self.decoded_frame_count = 0
+        self.closed = False
         self.streams = [_FakeStream()]
 
     def __enter__(self) -> _CountingContainer:
         return self
 
     def __exit__(self, *args: object) -> None:
+        self.closed = True
         return None
 
     def decode(self, stream: object):
@@ -129,6 +180,7 @@ class _CountingContainer:
 class _FakeStream:
     type = "video"
     average_rate = 1.0
+    thread_type = "SLICE"
 
 
 class _FakeFrame:

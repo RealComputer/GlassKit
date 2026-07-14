@@ -24,6 +24,7 @@ from .constants import (
     PHASE_WAITING,
 )
 from .fold_check import (
+    load_fold_check_negative_reference_images,
     load_fold_check_reference_images,
     load_fold_check_steps,
     parse_fold_check_result,
@@ -82,6 +83,9 @@ class OrigamiSessionManager:
         )
         self._steps = load_fold_check_steps(steps_path)
         self._reference_images = load_fold_check_reference_images(self._steps)
+        self._negative_reference_images = load_fold_check_negative_reference_images(
+            self._steps
+        )
         self._hud_images = self._load_hud_images(self._steps, steps_path.parent)
         self._sessions: dict[str, OrigamiSession] = {}
         self._viewers: dict[str, DemoViewer] = {}
@@ -95,6 +99,7 @@ class OrigamiSessionManager:
             sessions_lock=self._sessions_lock,
             current_step_for=self.current_step_for,
             reference_image_for=self.reference_image_for,
+            negative_reference_image_for=self.negative_reference_image_for,
             save_composites=save_fold_check_composites,
             debug_composite_dir=debug_composite_dir,
             record_inputs=record_fold_check_inputs,
@@ -775,6 +780,10 @@ class OrigamiSessionManager:
 
     def reference_image_for(self, step: OrigamiStep) -> Image.Image:
         return self._reference_images[step.id].copy()
+
+    def negative_reference_image_for(self, step: OrigamiStep) -> Image.Image | None:
+        image = self._negative_reference_images.get(step.id)
+        return image.copy() if image is not None else None
 
     def hud_image_for(self, step: OrigamiStep) -> Image.Image | None:
         image = self._hud_images.get(step.id)

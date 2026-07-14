@@ -630,6 +630,40 @@ def test_target_filter_selects_only_matching_target(tmp_path: Path) -> None:
     assert [sample.sample_index for sample in case.samples] == [1, 2]
 
 
+def test_target_filter_selects_multiple_targets_in_case_file_order(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: false
+          step_2:
+            samples:
+              - at: 1.0
+                expect: true
+          step_3:
+            samples:
+              - at: 2.0
+                expect: true
+        """,
+    )
+
+    eval_directory = load_eval_directory(
+        eval_dir,
+        case_filter="case-001",
+        target_filter=("step_2", "step_1", "step_2"),
+    )
+
+    case = eval_directory.cases[0]
+    assert [target.id for target in case.targets] == ["step_1", "step_2"]
+    assert [sample.target_id for sample in case.samples] == ["step_1", "step_2"]
+
+
 def test_target_filter_without_case_keeps_matching_cases(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
@@ -658,6 +692,52 @@ def test_target_filter_without_case_keeps_matching_cases(tmp_path: Path) -> None
 
     assert [case.name for case in eval_directory.cases] == ["case-002"]
     assert [target.id for target in eval_directory.cases[0].targets] == ["step_2"]
+
+
+def test_multiple_target_filter_without_case_keeps_matching_case_union(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "cases" / "case-002.yaml").write_text(
+        """
+        video: video.mp4
+        targets:
+          step_2:
+            samples:
+              - at: 1.0
+                expect: true
+        """,
+        encoding="utf-8",
+    )
+    (eval_dir / "cases" / "case-003.yaml").write_text(
+        """
+        video: missing.mp4
+        targets:
+          step_3:
+            samples:
+              - at: 2.0
+                expect: true
+        """,
+        encoding="utf-8",
+    )
+
+    eval_directory = load_eval_directory(eval_dir, target_filter=("step_2", "step_1"))
+
+    assert [case.name for case in eval_directory.cases] == ["case-001", "case-002"]
+    assert [target.id for case in eval_directory.cases for target in case.targets] == [
+        "step_1",
+        "step_2",
+    ]
 
 
 def test_target_filter_skips_non_matching_case_before_resolving_video(
@@ -708,6 +788,27 @@ def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
         EvalConfigError, match="no eval targets found matching target 'step_2'"
     ):
         load_eval_directory(eval_dir, target_filter="step_2")
+
+
+def test_multiple_target_filter_errors_when_any_target_is_missing(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError, match="no eval targets found matching target 'step_2'"
+    ):
+        load_eval_directory(eval_dir, target_filter=("step_1", "step_2"))
 
 
 def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:

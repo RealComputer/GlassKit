@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -51,15 +52,24 @@ def validate_sample_times(
 def decode_sample_frames(
     video_path: Path, samples: list[SampleExpectation], *, case_name: str
 ) -> dict[int, FrameSample]:
+    return {
+        sample.sample_index: sample
+        for sample in iter_sample_frames(video_path, samples, case_name=case_name)
+    }
+
+
+def iter_sample_frames(
+    video_path: Path, samples: list[SampleExpectation], *, case_name: str
+) -> Generator[FrameSample, None, None]:
     if not samples:
-        return {}
+        return
     ordered = sorted(
         samples, key=lambda sample: (sample.timestamp_s, sample.sample_index)
     )
-    decoded: dict[int, FrameSample] = {}
     try:
         with av.open(str(video_path)) as container:
             stream = _video_stream(container)
+            stream.thread_type = "AUTO"
             frame_rate = _average_rate(stream)
             pending_index = 0
             frame_index = -1
@@ -79,7 +89,7 @@ def decode_sample_frames(
                     chosen = _nearest_frame(
                         previous, (frame, timestamp_s, frame_index), sample.timestamp_s
                     )
-                    decoded[sample.sample_index] = _frame_sample(
+                    yield _frame_sample(
                         chosen,
                         sample,
                         case_name=case_name,
@@ -94,7 +104,7 @@ def decode_sample_frames(
                 raise EvalConfigError(f"video contains no frames: {video_path}")
             while pending_index < len(ordered):
                 sample = ordered[pending_index]
-                decoded[sample.sample_index] = _frame_sample(
+                yield _frame_sample(
                     previous,
                     sample,
                     case_name=case_name,
@@ -105,7 +115,6 @@ def decode_sample_frames(
         raise EvalConfigError(
             f"could not decode video {video_path}: {error}"
         ) from error
-    return decoded
 
 
 def _frame_sample(

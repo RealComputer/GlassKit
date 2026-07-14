@@ -29,11 +29,42 @@ def test_eval_commands_define_target_filter() -> None:
 
     for command in ("run", "validate", "list-samples"):
         command_options = eval_command.commands[command].params
-
-        assert any(
-            isinstance(option, TyperOption) and "--target" in option.opts
+        target_option = next(
+            option
             for option in command_options
+            if isinstance(option, TyperOption) and "--target" in option.opts
         )
+
+        assert target_option.multiple
+
+
+def test_eval_list_samples_accepts_multiple_target_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_load_eval_directory(eval_dir: Path, **kwargs: object) -> object:
+        captured["eval_dir"] = eval_dir
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("glasskit.cli.load_eval_directory", fake_load_eval_directory)
+    monkeypatch.setattr("glasskit.cli.print_sample_schedule", lambda loaded: None)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            "list-samples",
+            "--target",
+            "step_1",
+            "--target",
+            "step_2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["target_filter"] == ("step_1", "step_2")
 
 
 def test_eval_run_defines_serial_concurrency_default() -> None:
@@ -51,6 +82,48 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     assert concurrency.default == 1
     assert concurrency.help is not None
     assert "ignored when the adapter uses evaluate_many" in concurrency.help
+
+
+def test_eval_run_defines_single_trial_default_and_stability_gate() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+    options = eval_command.commands["run"].params
+
+    repeat = next(
+        option
+        for option in options
+        if isinstance(option, TyperOption) and "--repeat" in option.opts
+    )
+    max_flaky = next(
+        option
+        for option in options
+        if isinstance(option, TyperOption) and "--max-flaky-samples" in option.opts
+    )
+
+    assert repeat.default == 1
+    assert repeat.help is not None
+    assert "sequential trials" in repeat.help
+    assert max_flaky.default is None
+    assert max_flaky.help is not None
+    assert "varies across trials" in max_flaky.help
+
+
+def test_eval_run_does_not_define_failure_table_limit() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+
+    option_names = {
+        option_name
+        for option in eval_command.commands["run"].params
+        if isinstance(option, TyperOption)
+        for option_name in option.opts
+    }
+
+    assert "--max-failures-to-print" not in option_names
 
 
 def test_eval_run_and_list_samples_define_time_window_filters() -> None:
@@ -76,6 +149,26 @@ def test_eval_run_rejects_non_positive_concurrency() -> None:
 
     assert result.exit_code == 2
     assert "Invalid value for '--concurrency'" in Text.from_ansi(result.output).plain
+
+
+def test_eval_run_rejects_non_positive_repeat() -> None:
+    result = CliRunner().invoke(app, ["eval", "run", "--repeat", "0"])
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--repeat'" in Text.from_ansi(result.output).plain
+
+
+def test_eval_run_requires_repetition_for_flaky_sample_gate() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["eval", "run", "--max-flaky-samples", "0"],
+    )
+
+    assert result.exit_code == 2
+    assert (
+        "max flaky samples requires at least 2 trials"
+        in Text.from_ansi(result.output).plain
+    )
 
 
 @pytest.mark.parametrize("command", ["run", "list-samples"])

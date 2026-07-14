@@ -53,8 +53,11 @@ def eval_run(
         typer.Option("--case", help="Only run one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
-        typer.Option("--target", help="Only run one target id from selected cases."),
+        list[str] | None,
+        typer.Option(
+            "--target",
+            help="Only run this target id; repeat to select multiple targets.",
+        ),
     ] = None,
     from_time: Annotated[
         float | None,
@@ -91,13 +94,21 @@ def eval_run(
             ),
         ),
     ] = 1,
+    repeat: Annotated[
+        int,
+        typer.Option(
+            "--repeat",
+            min=1,
+            help="Run the selected eval this many times as sequential trials.",
+        ),
+    ] = 1,
     min_pass_rate: Annotated[
         float | None,
         typer.Option(
             "--min-pass-rate",
             min=0.0,
             max=1.0,
-            help="Run-level pass-rate gate.",
+            help="Per-trial pass-rate gate.",
         ),
     ] = None,
     min_target_pass_rate: Annotated[
@@ -106,7 +117,7 @@ def eval_run(
             "--min-target-pass-rate",
             min=0.0,
             max=1.0,
-            help="Uniform per-target pass-rate gate.",
+            help="Uniform per-target pass-rate gate applied to every trial.",
         ),
     ] = None,
     max_failures: Annotated[
@@ -114,7 +125,18 @@ def eval_run(
         typer.Option(
             "--max-failures",
             min=0,
-            help="Run-level maximum failed comparisons.",
+            help="Per-trial maximum failed comparisons.",
+        ),
+    ] = None,
+    max_flaky_samples: Annotated[
+        int | None,
+        typer.Option(
+            "--max-flaky-samples",
+            min=0,
+            help=(
+                "Maximum samples whose pass/fail/error status varies across trials; "
+                "requires --repeat of at least 2."
+            ),
         ),
     ] = None,
     keep_going: Annotated[
@@ -138,7 +160,8 @@ def eval_run(
             "--artifacts-dir",
             help=(
                 "Directory for generated artifacts. When omitted, --save-failures "
-                "writes under runs/failures in the eval dir."
+                "writes to trial-specific directories under runs/failures in the "
+                "eval dir."
             ),
         ),
     ] = None,
@@ -146,17 +169,9 @@ def eval_run(
         bool,
         typer.Option(
             "--save-failures",
-            help="Save failed or errored sample frames and per-result JSON.",
+            help="Save failed or errored sample-attempt frames and result JSON.",
         ),
     ] = False,
-    max_failures_to_print: Annotated[
-        int,
-        typer.Option(
-            "--max-failures-to-print",
-            min=0,
-            help="Maximum non-passing results printed in the failures table.",
-        ),
-    ] = 20,
     allow_empty: Annotated[
         bool,
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
@@ -173,20 +188,21 @@ def eval_run(
         adapter=adapter_target,
         eval_dir=eval_dir,
         case_filter=case,
-        target_filter=target,
+        target_filter=_target_filter(target),
         from_time_s=from_time,
         until_time_s=until_time,
         adapter_config=_load_config(adapter_config),
         concurrency=concurrency,
+        repeat=repeat,
         min_pass_rate=min_pass_rate,
         min_target_pass_rate=min_target_pass_rate,
         max_failures=max_failures,
+        max_flaky_samples=max_flaky_samples,
         keep_going=keep_going,
         verbose=verbose,
         output_json=output_json,
         artifacts_dir=artifacts_dir,
         save_failures=save_failures,
-        max_failures_to_print=max_failures_to_print,
         allow_empty=allow_empty,
     )
     reporter = ConsoleReporter(verbose=verbose, console=console)
@@ -195,11 +211,7 @@ def eval_run(
     except EvalError as error:
         console.print(f"[red]Eval failed[/red]: {error}")
         raise typer.Exit(2) from error
-    print_run_summary(
-        report,
-        max_failures_to_print=max_failures_to_print,
-        console=console,
-    )
+    print_run_summary(report, console=console)
     raise typer.Exit(0 if report.success else 1)
 
 
@@ -219,9 +231,10 @@ def eval_validate(
         typer.Option("--case", help="Only validate one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
-            "--target", help="Only validate one target id from selected cases."
+            "--target",
+            help="Only validate this target id; repeat to select multiple targets.",
         ),
     ] = None,
     adapter_config: Annotated[
@@ -239,7 +252,7 @@ def eval_validate(
         adapter=adapter,
         eval_dir=eval_dir,
         case_filter=case,
-        target_filter=target,
+        target_filter=_target_filter(target),
         adapter_config=_load_config(adapter_config),
         allow_empty=allow_empty,
     )
@@ -258,8 +271,11 @@ def eval_list_samples(
         typer.Option("--case", help="Only list one case by filename or stem."),
     ] = None,
     target: Annotated[
-        str | None,
-        typer.Option("--target", help="Only list one target id from selected cases."),
+        list[str] | None,
+        typer.Option(
+            "--target",
+            help="Only list this target id; repeat to select multiple targets.",
+        ),
     ] = None,
     from_time: Annotated[
         float | None,
@@ -293,7 +309,7 @@ def eval_list_samples(
         loaded = load_eval_directory(
             eval_dir,
             case_filter=case,
-            target_filter=target,
+            target_filter=_target_filter(target),
             from_time_s=from_time,
             until_time_s=until_time,
             allow_empty=allow_empty,
@@ -458,3 +474,7 @@ def _load_config(path: Path | None) -> dict[str, Any]:
 def _default_adapter_target(eval_dir: Path) -> str:
     adapter_path = eval_dir / "adapter.py"
     return f"{adapter_path.as_posix()}:{DEFAULT_ADAPTER_CALLABLE}"
+
+
+def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
+    return tuple(targets) if targets is not None else None
