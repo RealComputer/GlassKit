@@ -575,7 +575,11 @@ def _running_server(eval_dir: Path, static_dir: Path) -> Iterator[ReviewServer]:
         static_dir=static_dir,
         write_token="write-secret",
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(
+        target=server.serve_forever,
+        kwargs={"poll_interval": 0.01},
+        daemon=True,
+    )
     thread.start()
     try:
         yield server
