@@ -47,6 +47,7 @@ class FoldCheckDiagnostics:
         session: OrigamiSession,
         step: OrigamiStep,
         reference: Image.Image,
+        negative_reference: Image.Image | None,
     ) -> None:
         if not self.save_composites:
             return
@@ -67,7 +68,11 @@ class FoldCheckDiagnostics:
             return
 
         camera = _frame_to_image(camera_item[1], fallback_size=(1024, 768))
-        image = compose_fold_check_image(camera, reference)
+        image = compose_fold_check_image(
+            camera,
+            reference,
+            negative_reference=negative_reference,
+        )
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         path = self._composite_dir / (
             f"{timestamp}_step-{session.step_index + 1:02d}_"

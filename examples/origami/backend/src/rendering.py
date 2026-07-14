@@ -24,15 +24,22 @@ def _compose_reference_image(
     camera: Image.Image,
     reference: Image.Image,
     label: str,
+    *,
+    negative_reference: Image.Image | None = None,
 ) -> Image.Image:
     base = camera.convert("RGB")
     width, height = base.size
     header_height = max(80, height // 4)
+    header = Image.new("RGB", (width, header_height), "white")
+
+    if negative_reference is not None:
+        _draw_reference_comparison_header(header, reference, negative_reference)
+        base.paste(header, (0, 0))
+        return base
+
     reference_size = int(header_height * 0.75)
     margin = max(20, width // 24)
     gap = max(24, width // 20)
-
-    header = Image.new("RGB", (width, header_height), "white")
     draw = ImageDraw.Draw(header)
     max_text_width = width - (2 * margin) - gap - reference_size
     font = _fit_font(draw, label, max_text_width, max(18, header_height // 3))
@@ -59,6 +66,85 @@ def _compose_reference_image(
     header.paste(image_box, (int(image_x), int(image_y)))
     base.paste(header, (0, 0))
     return base
+
+
+def _draw_reference_comparison_header(
+    header: Image.Image,
+    target: Image.Image,
+    negative: Image.Image,
+) -> None:
+    width, height = header.size
+    draw = ImageDraw.Draw(header)
+    margin = max(12, width // 30)
+    gap = max(20, width // 24)
+    panel_width = max(1, (width - 2 * margin - gap) // 2)
+    label_y = max(6, height // 25)
+    label_gap = max(5, height // 40)
+    font = _fit_font(
+        draw,
+        "NOT TARGET",
+        panel_width - 8,
+        max(16, height // 9),
+    )
+    label_bbox = draw.textbbox((0, 0), "NOT TARGET", font=font)
+    label_height = label_bbox[3] - label_bbox[1]
+    image_y = int(label_y + label_height + label_gap)
+    bottom_margin = max(8, height // 25)
+    reference_size = max(
+        1,
+        int(
+            min(
+                int(height * 0.65),
+                panel_width - 8,
+                height - image_y - bottom_margin,
+            )
+        ),
+    )
+    border_width = max(2, height // 100)
+    centers = (
+        margin + panel_width // 2,
+        width - margin - panel_width // 2,
+    )
+
+    for image, text, color, center_x in (
+        (target, "TARGET SHAPE", (0, 112, 48), centers[0]),
+        (negative, "NOT TARGET", (190, 32, 32), centers[1]),
+    ):
+        _draw_centered_text(
+            draw,
+            text,
+            center_x=center_x,
+            y=label_y,
+            font=font,
+            fill=color,
+        )
+        image_box = _reference_image_box(image, reference_size)
+        image_x = center_x - reference_size // 2
+        header.paste(image_box, (image_x, image_y))
+        draw.rectangle(
+            (
+                image_x - border_width,
+                image_y - border_width,
+                image_x + reference_size + border_width - 1,
+                image_y + reference_size + border_width - 1,
+            ),
+            outline=color,
+            width=border_width,
+        )
+
+
+def _reference_image_box(image: Image.Image, size: int) -> Image.Image:
+    fitted = image.copy()
+    fitted.thumbnail((size, size), Image.Resampling.LANCZOS)
+    box = Image.new("RGB", (size, size), "white")
+    box.paste(
+        fitted,
+        (
+            (size - fitted.width) // 2,
+            (size - fitted.height) // 2,
+        ),
+    )
+    return box
 
 
 def _compose_demo_image(

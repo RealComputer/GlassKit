@@ -11,10 +11,12 @@ from src.constants import (
 from src.fold_check import (
     compose_fold_check_image,
     fold_check_image_data_url,
+    load_fold_check_negative_reference_images,
     load_fold_check_reference_images,
     load_fold_check_steps,
     parse_fold_check_result,
 )
+from src.fold_check_prompts import fold_check_system_prompt
 from src.overshoot_client import OvershootClient
 
 
@@ -59,6 +61,9 @@ class Evaluator:
         self._jpeg_quality = jpeg_quality
         self._steps = {step.id: step for step in load_fold_check_steps(steps_path)}
         self._reference_images = load_fold_check_reference_images(self._steps.values())
+        self._negative_reference_images = load_fold_check_negative_reference_images(
+            self._steps.values()
+        )
         self._client = OvershootClient(
             api_key=overshoot_api_key,
             model=overshoot_model,
@@ -71,7 +76,14 @@ class Evaluator:
         if step is None:
             raise RuntimeError(f"unknown origami target id: {target_id}")
         reference = self._reference_images[target_id].copy()
-        image = compose_fold_check_image(sample.image, reference)
+        negative_reference = self._negative_reference_images.get(target_id)
+        image = compose_fold_check_image(
+            sample.image,
+            reference,
+            negative_reference=(
+                negative_reference.copy() if negative_reference is not None else None
+            ),
+        )
         thread_id = (
             f"glasskit-eval-{sample.case_name}-{target_id}-{sample.sample_index}"
         )
@@ -79,6 +91,9 @@ class Evaluator:
             image_url=fold_check_image_data_url(image, self._jpeg_quality),
             thread_id=thread_id,
             prompt=step.criteria,
+            system_prompt=fold_check_system_prompt(
+                has_negative_exemplar=negative_reference is not None
+            ),
             log_context=f"eval={thread_id}",
         )
         if completion is None:

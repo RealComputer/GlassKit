@@ -17,8 +17,15 @@ def compose_fold_check_image(
     camera: Image.Image,
     reference: Image.Image,
     label: str = "Reference shape",
+    *,
+    negative_reference: Image.Image | None = None,
 ) -> Image.Image:
-    return _compose_reference_image(camera, reference, label)
+    return _compose_reference_image(
+        camera,
+        reference,
+        label,
+        negative_reference=negative_reference,
+    )
 
 
 def fold_check_stream_image_url(stream_id: str) -> str:
@@ -47,6 +54,18 @@ def load_fold_check_reference_images(
     images: dict[str, Image.Image] = {}
     for step in steps:
         with Image.open(step.reference_path) as image:
+            images[step.id] = image.convert("RGB")
+    return images
+
+
+def load_fold_check_negative_reference_images(
+    steps: Iterable[OrigamiStep],
+) -> dict[str, Image.Image]:
+    images: dict[str, Image.Image] = {}
+    for step in steps:
+        if step.negative_reference_path is None:
+            continue
+        with Image.open(step.negative_reference_path) as image:
             images[step.id] = image.convert("RGB")
     return images
 

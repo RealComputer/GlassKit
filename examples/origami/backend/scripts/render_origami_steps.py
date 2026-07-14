@@ -33,12 +33,26 @@ def _load_steps(path: Path) -> list[dict[str, str]]:
             key: _required_string(item, key, index)
             for key in ("id", "reference_image", "criteria")
         }
+        negative_reference_image = _optional_string(
+            item, "negative_reference_image", index
+        )
+        if negative_reference_image is not None:
+            step["negative_reference_image"] = negative_reference_image
         steps.append(step)
     return steps
 
 
 def _required_string(item: dict[str, Any], key: str, index: int) -> str:
     value = item.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"step {index} field {key!r} must be a non-empty string")
+    return value.strip()
+
+
+def _optional_string(item: dict[str, Any], key: str, index: int) -> str | None:
+    value = item.get(key)
+    if value is None:
+        return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"step {index} field {key!r} must be a non-empty string")
     return value.strip()
@@ -74,6 +88,9 @@ def _render_page(steps: list[dict[str, str]], output_path: Path) -> str:
       gap: 1.5rem;
       align-items: start;
     }}
+    .references {{ display: grid; gap: 0.75rem; }}
+    figure {{ margin: 0; }}
+    figcaption {{ margin-bottom: 0.25rem; font-weight: 600; }}
     img {{ width: 100%; height: auto; background: white; }}
     pre {{
       margin: 0;
@@ -101,10 +118,26 @@ def _render_step(step: dict[str, str], output_path: Path) -> str:
     image_url = quote(relative_path, safe="/")
     step_id = html.escape(step["id"])
     criteria = html.escape(step["criteria"])
+    references = [
+        f'<figure><figcaption>Target</figcaption><img src="{image_url}" '
+        f'alt="Target reference image for {step_id}"></figure>'
+    ]
+    negative_reference_image = step.get("negative_reference_image")
+    if negative_reference_image is not None:
+        negative_path = STEPS_PATH.parent / negative_reference_image
+        negative_relative_path = Path(
+            os.path.relpath(negative_path, output_path.parent)
+        ).as_posix()
+        negative_url = quote(negative_relative_path, safe="/")
+        references.append(
+            f'<figure><figcaption>Not target</figcaption><img src="{negative_url}" '
+            f'alt="Negative reference image for {step_id}"></figure>'
+        )
+    reference_html = "".join(references)
     return f"""  <article>
     <h2>{step_id}</h2>
     <div class="content">
-      <img src="{image_url}" alt="Reference image for {step_id}">
+      <div class="references">{reference_html}</div>
       <pre>{criteria}</pre>
     </div>
   </article>"""
