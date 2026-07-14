@@ -9,7 +9,12 @@ targets:
       expect: false
     - range: [49.0, 51.5]
       expect: true
-    - range: [51.5, 62.0]
+    - at: 51.5
+      expect: false
+    - at: 52.0
+      expect: false
+      ignore: unstable
+    - range: [52.5, 62.0]
       expect: false
     - at: 62.0
       expect: false
