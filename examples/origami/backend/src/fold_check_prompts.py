@@ -100,8 +100,6 @@ When uncertain, return false.
 
 FOLD_CHECK_CRITERIA_PREFIX = "# Evaluation Criteria\n\n"
 
-FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS = 4
-
 
 def fold_check_completion_payload(
     *,
@@ -113,40 +111,27 @@ def fold_check_completion_payload(
     """Build an independent fold-check request without a prompt-cache thread."""
     return {
         "model": model,
-        "max_completion_tokens": FOLD_CHECK_CHAT_MAX_COMPLETION_TOKENS,
-        "messages": fold_check_messages(
-            prompt=prompt,
-            image_url=image_url,
-            system_prompt=system_prompt,
-        ),
+        "max_completion_tokens": 4,
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt or FOLD_CHECK_SYSTEM_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": fold_check_criteria_text(prompt),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_url},
+                    },
+                ],
+            },
+        ],
     }
-
-
-def fold_check_messages(
-    *,
-    prompt: str,
-    image_url: str,
-    system_prompt: str | None = None,
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "role": "system",
-            "content": system_prompt or FOLD_CHECK_SYSTEM_PROMPT,
-        },
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": fold_check_criteria_text(prompt),
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {"url": image_url},
-                },
-            ],
-        },
-    ]
 
 
 def fold_check_criteria_text(prompt: str) -> str:
