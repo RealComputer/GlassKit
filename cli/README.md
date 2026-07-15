@@ -432,7 +432,7 @@ class Evaluator:
         await close_model_client()
 ```
 
-Adapter factories may be synchronous or asynchronous. No-argument factories are supported, but they do not receive `AdapterConfig`. If the factory needs `--adapter-config`, `--artifacts-dir`, `--verbose`, or the eval directory, define it with one required argument.
+Adapter factories may be synchronous or asynchronous. No-argument factories are supported, but they do not receive the factory config object. If the factory needs `--adapter-config`, `--artifacts-dir`, `--verbose`, or the eval directory, define it with one required argument.
 
 ### Individual and Batch Evaluation
 
@@ -447,7 +447,7 @@ Implement at least one strategy. If an evaluator implements both methods, `evalu
 
 Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit schedules the remaining samples in case-file declaration order and passes batch samples in that order.
 
-Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds the concurrency, supports both async methods and synchronous methods run through worker threads, and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
+Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
 Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
 
@@ -480,7 +480,7 @@ Sample fields passed to the evaluator:
 | `video_path` | Source video path as a string. |
 | `case_name` | Case filename stem. |
 
-Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, `glasskit eval` uses each decoded frame's presentation time when available; if a video lacks frame timestamps, it falls back to `frame_index / average_rate`.
+Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, `glasskit eval` uses each frame's media timestamp when available; if a video lacks frame timestamps, it estimates them from the frame index and average frame rate.
 
 Target fields passed to the evaluator:
 
@@ -559,7 +559,7 @@ Because edits are saved directly to the case file, commit or copy case files bef
 
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
 
-Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, missing packaged assets, or bind failure. Failure to open the browser is nonfatal because the printed URL remains usable.
+Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, or failure to load or start the review UI. Failure to open the browser is nonfatal because the printed URL remains usable.
 
 ### `glasskit eval run`
 
@@ -579,7 +579,7 @@ Options:
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory as `AdapterConfig.config`. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory in the config object's `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
 | `--min-pass-rate FLOAT` | None | Pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -587,7 +587,7 @@ Options:
 | `--max-failures INTEGER` | None | Maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
 | `--max-flaky-samples INTEGER` | None | Cross-trial maximum number of samples whose status varies. Must be nonnegative and requires `--repeat` of at least `2`. |
 | `--keep-going` | `false` | Record adapter evaluation or comparison errors as sample results and continue. |
-| `--verbose` | `false` | Print every sample result and set `AdapterConfig.verbose`. |
+| `--verbose` | `false` | Print every sample result and set the factory config object's `verbose` field. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
 | `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written below its `failures/` subdirectory; when omitted, the base is `<eval-dir>/runs/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
@@ -911,11 +911,11 @@ Common failures:
 | `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
-| `could not open video` or `could not decode video` | PyAV cannot read the file. | Check that the file is a real video and can be decoded locally. |
+| `could not open video` or `could not decode video` | GlassKit cannot open or decode the file. | Check that the file is a real video and can be decoded locally. |
 | `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
 | `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled samples. |
 | `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 samples. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
-| Browser preview is unavailable | The browser cannot play the source container or codec, even though PyAV may be able to probe it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
+| Browser preview is unavailable | The browser cannot play the source container or codec, even when `glasskit eval run` can decode it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
 | `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
 | `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
 | `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |
