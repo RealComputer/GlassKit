@@ -395,6 +395,8 @@ By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. 
 
 Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.step_checker`.
 
+Keep the adapter thin by reusing as much of the app's runtime logic as practical and adding only the wrappers needed for recorded-video evaluation.
+
 The recommended adapter shape is a factory that accepts one config argument and returns an evaluator object:
 
 ```python
