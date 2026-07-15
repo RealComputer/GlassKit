@@ -143,7 +143,7 @@ uv run glasskit eval list-samples --case task-01
 uv run glasskit eval list-samples --case task-01 --target step_1
 ```
 
-Expected output: a Rich table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
+Expected output: a table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
 
 Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
 
@@ -717,7 +717,7 @@ uv run --env-file .env glasskit eval run
 
 ## Output Formats
 
-Human-readable output is printed with Rich tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Each JSON file represents one `glasskit eval run` invocation. By default, it has `repeat_count: 1` and one complete result set in `trials`.
+Human-readable output is printed as tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Each JSON file represents one `glasskit eval run` invocation. By default, it has `repeat_count: 1` and one complete result set in `trials`.
 
 The following repeated-run example uses `glasskit eval run --repeat 2 --max-flaky-samples 0 --output-json eval/runs/results.json` so the report shows both per-trial results and cross-trial stability:
 
