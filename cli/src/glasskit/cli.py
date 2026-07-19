@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 import typer
 import yaml
 from rich.console import Console
+from rich.text import Text
 
 from .eval.expectations import load_eval_directory
 from .eval.models import EvalError, RunOptions
@@ -227,7 +228,7 @@ def eval_run(
     try:
         report = asyncio.run(run_eval(options, callbacks=reporter))
     except EvalError as error:
-        console.print(f"[red]Eval failed[/red]: {error}")
+        _print_labeled_message(console, "Eval failed", str(error), style="red")
         raise typer.Exit(2) from error
     print_run_summary(report, console=console)
     raise typer.Exit(0 if report.success else 1)
@@ -345,7 +346,9 @@ def eval_list_samples(
             allow_empty=allow_empty,
         )
     except EvalError as error:
-        Console().print(f"[red]Could not list samples[/red]: {error}")
+        _print_labeled_message(
+            Console(), "Could not list samples", str(error), style="red"
+        )
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
 
@@ -424,7 +427,9 @@ def eval_review(
             repository=repository,
         )
     except (EvalError, OSError, ValueError) as error:
-        console.print(f"[red]Could not start review UI[/red]: {error}")
+        _print_labeled_message(
+            console, "Could not start review UI", str(error), style="red"
+        )
         raise typer.Exit(2) from error
 
     query: dict[str, str | float] = {}
@@ -441,7 +446,9 @@ def eval_review(
         try:
             opened = webbrowser.open(url)
         except Exception as error:  # Browser launch is intentionally nonfatal.
-            console.print(f"[yellow]Could not open browser[/yellow]: {error}")
+            _print_labeled_message(
+                console, "Could not open browser", str(error), style="yellow"
+            )
         else:
             if not opened:
                 console.print(
@@ -508,3 +515,13 @@ def _default_adapter_target(eval_dir: Path) -> str:
 
 def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
     return tuple(targets) if targets is not None else None
+
+
+def _print_labeled_message(
+    console: Console, label: str, message: str, *, style: str
+) -> None:
+    text = Text()
+    text.append(label, style=style)
+    text.append(": ")
+    text.append(message)
+    console.print(text, highlight=False)

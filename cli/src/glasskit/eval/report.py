@@ -89,16 +89,18 @@ def print_validation_report(
             if report.eval_directory is not None
             else 0
         )
-        console.print(
-            f"[green]Validation passed[/green]: {eval_directory_name} "
-            f"({sample_count} samples)",
-            highlight=False,
-        )
+        message = Text()
+        message.append("Validation passed", style="green")
+        message.append(f": {eval_directory_name} ({sample_count} samples)")
+        console.print(message, highlight=False)
         return
-    console.print("[red]Validation failed[/red]", highlight=False)
+    console.print(Text("Validation failed", style="red"), highlight=False)
     for issue in report.issues:
-        location = f"{issue.path}: " if issue.path else ""
-        console.print(f"- {location}{issue.message}", highlight=False)
+        message = Text("- ")
+        if issue.path:
+            message.append(f"{issue.path}: ")
+        message.append(issue.message)
+        console.print(message, highlight=False)
 
 
 def print_sample_schedule(

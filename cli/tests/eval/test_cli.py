@@ -69,6 +69,46 @@ def test_eval_list_samples_accepts_multiple_target_options(
     assert captured["target_filter"] == ("step_1", "step_2")
 
 
+@pytest.mark.parametrize(
+    ("command", "expected_exit_code"),
+    [("run", 2), ("validate", 1), ("list-samples", 2)],
+)
+def test_eval_target_errors_render_rich_markup_as_literal_text(
+    tmp_path: Path, command: str, expected_exit_code: int
+) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case.yaml").write_text(
+        """
+video: video.mp4
+targets:
+  "[/]":
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            command,
+            "--eval-dir",
+            str(eval_dir),
+            "--target",
+            "missing",
+        ],
+    )
+
+    assert result.exit_code == expected_exit_code
+    output = Text.from_ansi(result.output).plain
+    assert "requested eval target not found" in output
+    assert "available targets: '[/]'" in output
+
+
 def test_eval_run_defines_serial_concurrency_default() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)
