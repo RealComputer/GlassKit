@@ -92,6 +92,50 @@ targets:
     ]
 
 
+def test_seed_reconstructs_ranges_before_adjacent_sample_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+sampling:
+  every_s: 0.5
+targets:
+  state:
+    samples:
+      - range: [0.0, 0.7]
+      - at: 0.8
+        """,
+    )
+
+    async def evaluate(_sample: Any, _target: Any) -> bool:
+        return True
+
+    _use_evaluator(monkeypatch, evaluate=evaluate)
+
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+            )
+        )
+    )
+
+    assert report.seeded_count == 3
+    raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
+    assert raw["targets"]["state"]["samples"] == [
+        {"range": [0.0, 0.8], "expect": True},
+        {"at": 0.8, "expect": True},
+    ]
+    assert [sample.timestamp_s for sample in load_eval_directory(eval_dir).samples] == [
+        0.0,
+        0.5,
+        0.8,
+    ]
+
+
 def test_seed_replace_and_filters_only_relabel_the_selected_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
