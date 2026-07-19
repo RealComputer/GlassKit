@@ -61,13 +61,13 @@ def create_evaluator(config):
     return Evaluator()
 ```
 
-Run the hand-written expectation:
+Run the eval:
 
 ```sh
 uv run glasskit eval run
 ```
 
-Expected result: `run` validates the selected case, video, and sample times, then reports passing samples because the adapter returned the expected value, `true`. To inspect the labels alongside the video, run `uv run glasskit eval review --case task-01`.
+Expected result: `run` prints case progress, a summary, and a per-target table.
 
 ## Core Concepts
 
@@ -89,7 +89,7 @@ A gate is a quality bar, such as a minimum pass rate or maximum failure count, t
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and hand-label a runnable case file in `eval/` from an existing recording.
+Goal: create the required directory structure and a case file in `eval/` from an existing recording.
 
 Commands:
 
@@ -143,7 +143,7 @@ To jump directly to a failure reported by a separate eval run, include its case,
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
-The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete samples. Partially seeded cases remain reviewable: omitted expectations are shown as drafts, and choosing a type turns a draft into an explicit expectation, including a distinct explicit `null`. Changes are saved automatically to the case file.
+The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete samples. Changes are saved automatically to the case file.
 
 ### Run One Case While Debugging
 
@@ -963,28 +963,6 @@ Human-readable output is printed as tables to stdout. JSON output is written to 
 | `0` | Command succeeded. For `run`, every configured gate passed. | No action needed. |
 | `1` | Validation failed, or `run` completed but one or more gates failed. | Read the validation issues or gate tables, fix the eval, adapter, threshold, or unstable sample, then rerun. |
 | `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message, validate the eval directory, and rerun with `--keep-going` if you want sample-level adapter evaluation errors recorded instead of aborting. |
-
-## Errors and Troubleshooting
-
-Commands validate the selected inputs they need before doing their main work. Start by reading the error from the command that failed. To isolate eval structure, video, or sample-time problems without loading or calling an adapter, run:
-
-```sh
-uv run glasskit eval validate
-```
-
-If validation reports samples without `expect`, seed and review those draft expectations first:
-
-```sh
-uv run glasskit eval seed --case task-01
-uv run glasskit eval review --case task-01
-```
-
-When ranges or time filters do not select the samples you expected, inspect the expanded schedule. Then run one focused case and target:
-
-```sh
-uv run glasskit eval list-samples --case task-01
-uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
-```
 
 ## Support
 
