@@ -1,17 +1,17 @@
 # GlassKit
 
-**GlassKit is an open-source toolkit for building smart-glasses AI apps.** Your AI coding agent can use the skill, docs, and runnable examples to build apps that understand what wearers see and hear, then guide them in real time.
+**Build and test AI apps for smart glasses.** GlassKit is an open-source toolkit with an agent skill, development guides, runnable examples, and vision evals for apps that understand what wearers see and hear, then guide them in real time.
 
-GlassKit currently focuses on Rokid Glasses. The long-term goal is a developer platform for building, hosting, and shipping smart-glasses apps across more devices, making it easier for anyone to create useful AI apps for glasses.
-
-GlassKit is used by developers building glasses apps for real-world tasks, from manufacturing workflows to field support.
+GlassKit's device integrations and examples currently focus on Rokid Glasses. [GlassKit Eval](cli/README.md) works across smart-glasses platforms, helping teams catch vision regressions and improve prompts, models, and app logic without repeatedly performing physical workflows.
 
 <p align="center">
-  https://glasskit.ai/docs
+  <a href="#quick-start">Quick Start</a>
   &nbsp;&middot;&nbsp;
-  https://x.com/GlassKit_ai
+  <a href="https://glasskit.ai/docs">Docs</a>
   &nbsp;&middot;&nbsp;
-  https://discord.gg/v5ayGKhPNP
+  <a href="https://discord.gg/v5ayGKhPNP">Discord</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://x.com/GlassKit_ai">X</a>
 </p>
 
 ## Demos
@@ -161,12 +161,20 @@ git -C GlassKit archive HEAD:examples/rokid-feature-demo | tar -x -C my-glasses-
 
 Then follow that example's README.
 
+## Test Your App with GlassKit Eval
+
+Small prompt, model, or app-logic changes can alter how vision AI behaves. Testing only by wearing the glasses makes iteration slow and regressions easy to miss.
+
+GlassKit Eval gives teams a repeatable way to measure the vision behavior users depend on. Use it to compare changes confidently, catch regressions before release, and enforce quality bars locally or in CI, regardless of the smart-glasses platform.
+
+[Get started with GlassKit Eval](cli/README.md).
+
 ## Repository Map
 
 | Path | What it contains |
 | --- | --- |
 | [`skills/glasskit/`](skills/glasskit/SKILL.md) | Agent skill, Rokid Glasses starter, and smart-glasses app references for coding agents and human developers. |
-| [`cli/`](cli/README.md) | GlassKit command-line tools, including recorded-video evals for apps. |
+| [`cli/`](cli/README.md) | GlassKit Eval CLI for cross-platform vision quality, regression testing, and CI gates. |
 | [`docs/`](docs) | Hardware setup, Rokid Glasses device notes, and demo-recording workflow. |
 | [`examples/`](examples) | Runnable Rokid Glasses examples you can copy or adapt. |
 
