@@ -126,8 +126,6 @@ uv run glasskit eval review --case task-02
 
 `seed` uses the same adapter as `run` by default, fills only omitted expectations, and preserves existing labels. Use `--adapter` or `--adapter-command` to label with a different adapter, and use `--case` or `--target` to narrow the work. Treat generated values as proposals and review them before relying on the eval.
 
-On interactive terminals, `seed` and `run` show a transient per-target spinner with the completed count and elapsed time. The line disappears before the final summary, while `--verbose` continues to control whether every result is printed.
-
 ### Validate Before a Run
 
 Goal: catch YAML, video, timestamp, and optional adapter setup problems before calling a paid or slow model backend.
