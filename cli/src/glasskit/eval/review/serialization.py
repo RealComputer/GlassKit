@@ -54,6 +54,7 @@ class ParsedSample:
     id: str
     tick: int
     timestamp_s: float
+    has_expectation: bool
     expect_type: ExpectType
     expected: Any
     field: str | None
@@ -200,9 +201,13 @@ def parse_samples(
                 ],
             )
         seen_ids.add(sample.id)
-        expected = strict_json_value(sample.expect_json, path=f"{path}.expect_json")
+        expected = (
+            strict_json_value(sample.expect_json, path=f"{path}.expect_json")
+            if sample.has_expectation
+            else None
+        )
         actual_type = expectation_type(expected)
-        if actual_type != sample.expect_type:
+        if sample.has_expectation and actual_type != sample.expect_type:
             raise ReviewAPIError(
                 422,
                 "invalid_samples",
@@ -237,6 +242,7 @@ def parse_samples(
                 id=sample.id,
                 tick=tick,
                 timestamp_s=timestamp_s,
+                has_expectation=sample.has_expectation,
                 expect_type=actual_type,
                 expected=expected,
                 field=sample.field,
@@ -580,7 +586,8 @@ def _payload_block(sample: ParsedSample) -> dict[str, Any]:
     result: dict[str, Any] = {}
     if sample.field is not None:
         result["field"] = sample.field
-    result["expect"] = sample.expected
+    if sample.has_expectation:
+        result["expect"] = sample.expected
     if sample.mode is not None or sample.tolerance is not None:
         compare: dict[str, Any] = {}
         if sample.mode is not None:
@@ -597,7 +604,8 @@ def _payload_block(sample: ParsedSample) -> dict[str, Any]:
 
 def _same_payload(left: ParsedSample, right: ParsedSample) -> bool:
     return (
-        structurally_equal(left.expected, right.expected)
+        left.has_expectation == right.has_expectation
+        and structurally_equal(left.expected, right.expected)
         and left.field == right.field
         and left.mode == right.mode
         and _same_optional_number(left.tolerance, right.tolerance)

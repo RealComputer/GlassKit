@@ -15,6 +15,7 @@ export function formatSeconds(seconds: number): string {
 }
 
 export function expectationSummary(sample: ReviewSample, maxLength = 46): string {
+  if (!sample.has_expectation) return "Draft";
   let text = sample.expect_json;
   if (sample.expect_type === "string") {
     try {
@@ -28,6 +29,7 @@ export function expectationSummary(sample: ReviewSample, maxLength = 46): string
 }
 
 export function effectiveCompare(sample: ReviewSample): string {
+  if (!sample.has_expectation) return "—";
   if (sample.compare.mode) return sample.compare.mode;
   return sample.expect_type === "number" ? "numeric (auto)" : "exact (auto)";
 }

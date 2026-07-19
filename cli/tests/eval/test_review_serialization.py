@@ -147,6 +147,31 @@ def test_reconstruction_splits_payload_changes_and_rejects_near_duplicates() -> 
     assert "within 1e-9" in duplicate.value.details[0].message
 
 
+def test_reconstruction_preserves_draft_and_explicit_null_as_distinct_values() -> None:
+    draft = _sample(
+        "draft",
+        0.0,
+        expect_json="null",
+        expect_type="null",
+        has_expectation=False,
+    )
+    explicit_null = _sample(
+        "null",
+        0.5,
+        expect_json="null",
+        expect_type="null",
+    )
+
+    reconstructed = reconstruct_target(
+        "state", [draft, explicit_null], default_every_s=0.5
+    )
+
+    assert reconstructed.blocks == [
+        {"at": 0.0},
+        {"at": 0.5, "expect": None},
+    ]
+
+
 def test_sample_rejects_present_blank_optional_text() -> None:
     with pytest.raises(ValidationError, match="use null"):
         _sample("a", 0.0, field="   ")
@@ -268,6 +293,7 @@ def _sample(
     *,
     expect_json: str = "true",
     expect_type: str = "boolean",
+    has_expectation: bool = True,
     field: str | None = None,
     comment: str | None = None,
     ignore: str | None = None,
@@ -277,6 +303,7 @@ def _sample(
         {
             "id": sample_id,
             "timestamp_s": timestamp_s,
+            "has_expectation": has_expectation,
             "expect_type": expect_type,
             "expect_json": expect_json,
             "field": field,

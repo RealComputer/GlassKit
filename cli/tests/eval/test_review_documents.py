@@ -77,6 +77,67 @@ def test_video_probe_failure_retains_normalized_targets(tmp_path: Path) -> None:
     assert document.video.duration_s is None
 
 
+def test_partially_seeded_case_is_reviewable_and_preserves_draft_expectations(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "partial.yaml"
+    path.write_text(
+        """video: ../../../videos/two-state-64x64.mp4
+targets:
+  seeded:
+    samples:
+      - at: 0.0
+        expect: true
+  draft:
+    samples:
+      - at: 1.0
+""",
+        encoding="utf-8",
+    )
+    repository = ReviewRepository(eval_dir)
+
+    summary = next(
+        case
+        for case in repository.eval_directory_document(write_token="secret").cases
+        if case.id == "partial.yaml"
+    )
+    document = repository.case_file_document("partial.yaml")
+
+    assert summary.status == "ready"
+    assert document.status == "ready"
+    assert document.editing_enabled
+    expectation_presence = [
+        sample.has_expectation
+        for target in document.targets
+        for sample in target.samples
+    ]
+    assert expectation_presence == [
+        True,
+        False,
+    ]
+    assert [issue.code for issue in document.validation_issues] == [
+        "draft_expectations"
+    ]
+
+    seeded = document.targets[0]
+    seeded_samples = list(seeded.samples)
+    seeded_samples[0] = seeded_samples[0].model_copy(
+        update={"comment": "Reviewed seeded value."}
+    )
+    accepted = repository.replace_samples(
+        "partial.yaml",
+        ReplaceSamplesRequest(
+            targets={seeded.id: TargetReplacement(samples=seeded_samples)}
+        ),
+    )
+
+    assert accepted.status == "ready"
+    written = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert written["targets"]["seeded"]["samples"][0]["expect"] is True
+    assert "expect" not in written["targets"]["draft"]["samples"][0]
+
+
 def test_surrogate_source_text_is_isolated_as_a_blocked_case(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "surrogate.yaml"

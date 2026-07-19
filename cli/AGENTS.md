@@ -10,7 +10,7 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - Python and process adapters share one evaluator boundary, keeping execution, concurrency, batching, validation, and cleanup app-agnostic.
 - App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repository.
 - Runs and seeds share the same adapter execution path. Runs isolate trials for stability analysis, while seeds turn observations into validated expectation edits.
-- The review system pairs a local API with a packaged browser application and uses the same case model to reconstruct YAML edits deterministically.
+- The review system pairs a local API with a packaged browser application, represents omitted draft expectations distinctly from explicit `null`, and uses the same case model to reconstruct YAML edits deterministically.
 
 ## Key Files
 

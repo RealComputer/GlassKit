@@ -27,15 +27,19 @@ export function createSampleAt(
   const duplicate = findSampleAt(target, playheadTime);
   if (duplicate) return { sample: duplicate, duplicate: true };
   const source = closestSample(target, timestamp);
+  const sourceExpectation = source?.has_expectation ? source : null;
   return {
     duplicate: false,
     sample: {
       id,
       timestamp_s: timestamp,
-      expect_type: source?.expect_type ?? "boolean",
-      expect_json: source?.expect_json ?? "false",
+      has_expectation: true,
+      expect_type: sourceExpectation?.expect_type ?? "boolean",
+      expect_json: sourceExpectation?.expect_json ?? "false",
       field: source?.field ?? null,
-      compare: source ? { ...source.compare } : { mode: null, tolerance: null },
+      compare: sourceExpectation
+        ? { ...sourceExpectation.compare }
+        : { mode: null, tolerance: null },
       comment: null,
       ignore: null,
       origin: null,

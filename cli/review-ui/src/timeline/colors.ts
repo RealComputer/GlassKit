@@ -32,6 +32,7 @@ function normalizeJson(value: unknown): unknown {
 }
 
 export function expectationColorKey(sample: ReviewSample): string {
+  if (!sample.has_expectation) return "draft";
   try {
     return `${sample.expect_type}:${JSON.stringify(normalizeJson(JSON.parse(sample.expect_json)))}`;
   } catch {
@@ -49,6 +50,7 @@ function hashText(text: string): number {
 }
 
 export function expectationColor(sample: ReviewSample): string {
+  if (!sample.has_expectation) return "#9a6700";
   if (sample.expect_type === "boolean" && sample.expect_json in BOOLEAN_COLORS) {
     return BOOLEAN_COLORS[sample.expect_json as "false" | "true"];
   }

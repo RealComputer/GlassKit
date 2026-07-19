@@ -36,6 +36,7 @@ function defaultJson(type: ExpectType): string {
 }
 
 function editorText(sample: ReviewSample): string {
+  if (!sample.has_expectation) return "";
   if (sample.expect_type !== "string") return sample.expect_json;
   try {
     return JSON.parse(sample.expect_json) as string;
@@ -192,7 +193,12 @@ export function Inspector() {
     setTolerance(compare.tolerance === null ? "" : String(compare.tolerance));
     setError("expect", null);
     setError("tolerance", null);
-    updateSample(target.id, sample.id, { expect_type: type, expect_json, compare }, true);
+    updateSample(
+      target.id,
+      sample.id,
+      { has_expectation: true, expect_type: type, expect_json, compare },
+      true,
+    );
     if (!modeCompatible || sample.compare.tolerance !== compare.tolerance) {
       dispatch({
         type: "SET_TOAST",
@@ -239,7 +245,7 @@ export function Inspector() {
           <h2>Inspector</h2>
           <span className="mono muted">{formatSeconds(sample.timestamp_s)}</span>
         </div>
-        <span className="type-chip">{sample.expect_type}</span>
+        <span className="type-chip">{sample.has_expectation ? sample.expect_type : "draft"}</span>
       </div>
       <fieldset disabled={editingDisabled}>
         <div className="field-group">
@@ -287,9 +293,14 @@ export function Inspector() {
           <label htmlFor="expect-type">Expectation type</label>
           <select
             id="expect-type"
-            value={sample.expect_type}
+            value={sample.has_expectation ? sample.expect_type : ""}
             onChange={(event) => changeType(event.target.value as ExpectType)}
           >
+            {!sample.has_expectation && (
+              <option value="" disabled>
+                Draft (missing)
+              </option>
+            )}
             <option value="null">Null</option>
             <option value="boolean">Boolean</option>
             <option value="number">Number</option>
@@ -307,7 +318,9 @@ export function Inspector() {
           ) : (
             <label htmlFor="expect-value">Expected value</label>
           )}
-          {sample.expect_type === "null" ? (
+          {!sample.has_expectation ? (
+            <div className="draft-expectation">Choose a type to set this draft expectation.</div>
+          ) : sample.expect_type === "null" ? (
             <div className="null-value mono" aria-labelledby="expect-value-label">
               null
             </div>
@@ -322,7 +335,14 @@ export function Inspector() {
                 ref={expectationRef as RefObject<HTMLButtonElement>}
                 className={sample.expect_json === "true" ? "selected" : ""}
                 aria-pressed={sample.expect_json === "true"}
-                onClick={() => updateSample(target.id, sample.id, { expect_json: "true" }, true)}
+                onClick={() =>
+                  updateSample(
+                    target.id,
+                    sample.id,
+                    { has_expectation: true, expect_json: "true" },
+                    true,
+                  )
+                }
               >
                 True
               </button>
@@ -330,7 +350,14 @@ export function Inspector() {
                 type="button"
                 className={sample.expect_json === "false" ? "selected" : ""}
                 aria-pressed={sample.expect_json === "false"}
-                onClick={() => updateSample(target.id, sample.id, { expect_json: "false" }, true)}
+                onClick={() =>
+                  updateSample(
+                    target.id,
+                    sample.id,
+                    { has_expectation: true, expect_json: "false" },
+                    true,
+                  )
+                }
               >
                 False
               </button>

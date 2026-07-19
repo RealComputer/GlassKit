@@ -6,6 +6,7 @@ function sample(expect_type: ReviewSample["expect_type"], expect_json: string): 
   return {
     id: "sample",
     timestamp_s: 1,
+    has_expectation: true,
     expect_type,
     expect_json,
     field: null,
@@ -38,5 +39,12 @@ describe("timeline expectation colors", () => {
     expect(expectationColorKey(sample("object", '{"é":1,"é":2}'))).toBe(
       expectationColorKey(sample("object", '{"é":2,"é":1}')),
     );
+  });
+
+  it("gives every draft the same distinct color", () => {
+    const draft = { ...sample("null", "null"), has_expectation: false };
+
+    expect(expectationColorKey(draft)).toBe("draft");
+    expect(expectationColor(draft)).toBe("#9a6700");
   });
 });
