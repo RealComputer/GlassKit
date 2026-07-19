@@ -249,6 +249,71 @@ async def _run_process_cancellation_test() -> None:
         sample.image.close()
 
 
+def test_process_adapter_aborts_blocked_write_when_request_is_cancelled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+    asyncio.run(_run_blocked_write_cancellation_test(tmp_path))
+
+
+async def _run_blocked_write_cancellation_test(tmp_path: Path) -> None:
+    blocked_marker = tmp_path / "adapter-stopped-reading"
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(
+            eval_dir=TWO_STATE_EVAL,
+            config={
+                "blockStdinAfterEvaluateMarker": str(blocked_marker),
+                "delayS": 30,
+            },
+        ),
+    )
+    samples = [_sample(0), _sample(1)]
+    first_evaluation = asyncio.create_task(
+        evaluator.evaluate(samples[0], TargetContext(id="step", index=0))
+    )
+    await _wait_for_path(blocked_marker)
+    blocked_evaluation = asyncio.create_task(
+        evaluator.evaluate(
+            samples[1],
+            TargetContext(
+                id="step",
+                index=0,
+                config={"largePayload": "x" * (2 * 1024 * 1024)},
+            ),
+        )
+    )
+    await asyncio.sleep(0.1)
+    assert not blocked_evaluation.done()
+    blocked_evaluation.cancel()
+    done, _ = await asyncio.wait({blocked_evaluation}, timeout=1)
+
+    try:
+        if blocked_evaluation not in done:
+            with pytest.raises(AdapterRuntimeError):
+                await evaluator.close()
+            await asyncio.gather(blocked_evaluation, return_exceptions=True)
+            pytest.fail("evaluation cancellation stayed blocked in the stdin write")
+        with pytest.raises(asyncio.CancelledError):
+            await blocked_evaluation
+        first_result = await asyncio.wait_for(
+            asyncio.gather(first_evaluation, return_exceptions=True),
+            timeout=1,
+        )
+        assert isinstance(first_result[0], AdapterRuntimeError)
+        await asyncio.wait_for(evaluator.close(), timeout=1)
+    finally:
+        for sample in samples:
+            sample.image.close()
+        for evaluation in (first_evaluation, blocked_evaluation):
+            if not evaluation.done():
+                evaluation.cancel()
+        await asyncio.gather(
+            first_evaluation, blocked_evaluation, return_exceptions=True
+        )
+
+
 @pytest.mark.parametrize("mode", ["hangOnClose", "inheritPipesAfterClose"])
 def test_process_adapter_bounds_entire_shutdown_sequence(
     mode: str, monkeypatch: pytest.MonkeyPatch
@@ -535,6 +600,12 @@ def _shorten_shutdown_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(process_adapters, "GRACEFUL_EXIT_TIMEOUT_S", 0.15)
     monkeypatch.setattr(process_adapters, "TERMINATE_TIMEOUT_S", 0.15)
     monkeypatch.setattr(process_adapters, "EXIT_STATUS_TIMEOUT_S", 0.05)
+
+
+async def _wait_for_path(path: Path) -> None:
+    async with asyncio.timeout(1):
+        while not path.exists():
+            await asyncio.sleep(0.01)
 
 
 def _sample(index: int) -> FrameSample:

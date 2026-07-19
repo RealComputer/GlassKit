@@ -197,6 +197,9 @@ def main() -> None:
                 os._exit(10)
         elif method in {"evaluate", "evaluateMany"}:
             _start_evaluation(request)
+            if marker := _adapter_config.get("blockStdinAfterEvaluateMarker"):
+                Path(marker).touch()
+                time.sleep(30)
         elif method == "cancel":
             _cancel(request["params"]["id"])
         elif method == "close":

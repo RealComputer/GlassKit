@@ -223,6 +223,17 @@ class _ProcessAdapter:
                 )
                 future.cancel()
                 raise
+            if not write_task.done():
+                self._closing = True
+                write_completion_task.cancel()
+                write_task.cancel()
+                future.cancel()
+                self._pending.pop(request_id, None)
+                await asyncio.gather(
+                    write_completion_task, write_task, return_exceptions=True
+                )
+                await self.abort()
+                raise
             await _drain_task(write_completion_task)
             if not write_task.cancelled() and write_task.exception() is None:
                 await self._cancel_request(request_id)
