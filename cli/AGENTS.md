@@ -43,7 +43,7 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 
 ## Notes
 
-- `README.md` and `JSON_OUTPUT.md` are user-facing. Keep them detailed and friendly, but include only content that helps users operate the CLI. Do not expose internal implementation details there.
+- `README.md` and `JSON_OUTPUT.md` are user-facing. Keep them friendly and useful, but include only content that helps users operate this tool. Do not expose internal implementation details there.
 - Keep default pytest offline by using synthetic videos and fake adapters.
 - Command-adapter transport tests use the standard-library fixture under `tests/fixtures/adapters/` so ordinary Python test runs do not require another adapter runtime.
 - Keep committed video fixtures reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs must not require a system `ffmpeg` executable.

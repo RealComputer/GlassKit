@@ -143,7 +143,7 @@ To jump directly to a failure reported by a separate eval run, include its case,
 uv run glasskit eval review --eval-dir eval --case task-01 --target step_1 --time 7.4
 ```
 
-The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete samples. With Follow playhead enabled, playback selects the most recently crossed sample for the active target so its expectation stays visible in the inspector. Changes are saved automatically to the case file.
+The command opens a local browser UI where you can compare labeled moments with their source video and add, move, edit, or delete samples. Changes are saved automatically to the case file.
 
 ### Run One Case While Debugging
 
