@@ -541,7 +541,9 @@ Command-adapter samples contain the same information as Python samples, using lo
 
 Targets use the `id`, `index`, `label`, and `config` fields described above. GlassKit-owned fields use lower camel case; keys inside the user-provided factory and target `config` objects are preserved unchanged. `glasskit eval validate --adapter-command ...` constructs and closes the adapter without evaluating samples.
 
-In this dependency-free `eval/adapter.js`, replace `createAppClient` and its methods with thin calls into the app, then keep the marked protocol function unchanged. Application clients stay in the factory's closure, and supported methods are detected automatically. The example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+In this `eval/adapter.js`, replace `createAppClient` and its methods with thin calls into the app, then keep the marked protocol function unchanged. Application clients stay in the factory's closure, and supported methods are detected automatically. The example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+
+For adapters in other languages, use the JavaScript implementation below as an executable protocol reference.
 
 ```js
 // Application code: replace these calls with the app's imports and logic.
@@ -559,8 +561,8 @@ await runGlassKitAdapter(async (context) => {
       });
     },
 
-    // Implement evaluateMany({ samples, target, signal }) instead when the
-    // app has a real multi-input API. If both exist, evaluateMany wins.
+    // If the app has a real multi-input API, implement
+    // evaluateMany({ samples, target, signal }) instead.
 
     async close() {
       await app.close();
@@ -568,7 +570,7 @@ await runGlassKitAdapter(async (context) => {
   };
 });
 
-// ---- GlassKit Eval protocol boilerplate: copy unchanged below this line. ----
+// ---- GlassKit Eval protocol ----
 async function runGlassKitAdapter(createEvaluator) {
   const { createInterface } = await import("node:readline");
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -709,8 +711,6 @@ async function runGlassKitAdapter(createEvaluator) {
   await outputTail;
 }
 ```
-
-Application code should interact only with the factory context and the returned handlers. Keep `runGlassKitAdapter` unchanged when using JavaScript; for another language, use that function as the executable protocol reference.
 
 ## Command Reference
 
