@@ -11,7 +11,12 @@ import yaml
 
 from glasskit.eval.adapters import LoadedEvaluator
 from glasskit.eval.expectations import load_eval_directory
-from glasskit.eval.models import AdapterRuntimeError, EvalConfigError, SeedOptions
+from glasskit.eval.models import (
+    AdapterRuntimeError,
+    CaseWriteError,
+    EvalConfigError,
+    SeedOptions,
+)
 from glasskit.eval.seeding import seed_eval
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -276,6 +281,45 @@ targets:
         )
 
     assert case_path.read_text(encoding="utf-8").endswith("# edited concurrently\n")
+
+
+def test_seed_wraps_case_write_failures_with_the_affected_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        """,
+    )
+    before = case_path.read_text(encoding="utf-8")
+
+    async def evaluate(_sample: Any, _target: Any) -> bool:
+        return True
+
+    def fail_write(_path: Path, _source: str) -> bool:
+        raise OSError("read-only file system")
+
+    _use_evaluator(monkeypatch, evaluate=evaluate)
+    monkeypatch.setattr("glasskit.eval.seeding.atomic_replace_text", fail_write)
+
+    with pytest.raises(CaseWriteError) as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                )
+            )
+        )
+
+    assert str(case_path) in str(raised.value)
+    assert "read-only file system" in str(raised.value)
+    assert case_path.read_text(encoding="utf-8") == before
 
 
 def test_seed_supports_process_labeling_adapters(tmp_path: Path) -> None:

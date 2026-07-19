@@ -10,7 +10,7 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
-from glasskit.eval.models import RunOptions, SeedOptions, SeedReport
+from glasskit.eval.models import CaseWriteError, RunOptions, SeedOptions, SeedReport
 
 
 def test_eval_help_lists_current_commands() -> None:
@@ -261,6 +261,22 @@ def test_eval_seed_uses_default_adapter_and_passes_filters(
     assert options.target_filter == ("step_1", "step_2")
     assert options.replace
     assert options.concurrency == 3
+
+
+def test_eval_seed_reports_case_write_failures_as_user_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_seed_eval(options: object, callbacks: object) -> SeedReport:
+        raise CaseWriteError("could not write seeded case file eval/cases/case.yaml")
+
+    monkeypatch.setattr("glasskit.cli.seed_eval", fake_seed_eval)
+
+    result = CliRunner().invoke(app, ["eval", "seed"])
+
+    assert result.exit_code == 2
+    output = Text.from_ansi(result.output).plain
+    assert "Could not seed expectations" in output
+    assert "eval/cases/case.yaml" in output
 
 
 def test_eval_run_does_not_define_failure_table_limit() -> None:

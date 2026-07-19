@@ -42,6 +42,10 @@ class AdapterRuntimeError(EvalError):
     """Raised when an adapter fails while evaluating samples."""
 
 
+class CaseWriteError(EvalError):
+    """Raised when an eval case cannot be persisted."""
+
+
 @dataclass(frozen=True)
 class AdapterConfig:
     eval_dir: Path

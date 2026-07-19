@@ -25,6 +25,7 @@ from .expectations import (
 from .models import (
     AdapterConfig,
     AdapterRuntimeError,
+    CaseWriteError,
     EvalCase,
     EvalConfigError,
     SampleExpectation,
@@ -217,7 +218,13 @@ async def seed_eval(
                 f"case changed while expectations were being seeded; refusing to "
                 f"overwrite: {path}"
             )
-        if atomic_replace_text(path, candidate_source):
+        try:
+            directory_sync_failed = atomic_replace_text(path, candidate_source)
+        except OSError as error:
+            raise CaseWriteError(
+                f"could not write seeded case file {path}: {error}"
+            ) from error
+        if directory_sync_failed:
             sync_warnings.append(path)
 
     return SeedReport(
