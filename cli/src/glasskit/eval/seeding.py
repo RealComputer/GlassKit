@@ -416,6 +416,7 @@ def _reconstruct_seeded_target(
                 range_end_bound_s=(
                     raw_block.range_[1] if raw_block.range_ is not None else None
                 ),
+                allow_range_reconstruction=raw_block.range_ is not None,
             ).blocks
         )
         sample_offset += len(timestamps)

@@ -282,6 +282,7 @@ def reconstruct_target(
     *,
     default_every_s: float,
     range_end_bound_s: float | None = None,
+    allow_range_reconstruction: bool = True,
 ) -> ReconstructedTarget:
     parsed = parse_samples(target_id, samples)
     if not parsed:
@@ -309,6 +310,7 @@ def reconstruct_target(
             run_end,
             default_every_s=default_every_s,
             range_end_bound_tick=range_end_bound_tick,
+            allow_range_reconstruction=allow_range_reconstruction,
             blocks=blocks,
             grouped_samples=grouped_samples,
             group_specs=group_specs,
@@ -503,6 +505,7 @@ def _reconstruct_payload_run(
     *,
     default_every_s: float,
     range_end_bound_tick: int | None,
+    allow_range_reconstruction: bool,
     blocks: list[dict[str, Any]],
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
@@ -524,9 +527,12 @@ def _reconstruct_payload_run(
         ):
             candidate_end += 1
         candidate = all_samples[index:candidate_end]
-        range_eligible = len(candidate) >= 3 or (
-            len(candidate) == 2
-            and _two_sample_range_eligible(candidate, cadence_tick, default_every_s)
+        range_eligible = allow_range_reconstruction and (
+            len(candidate) >= 3
+            or (
+                len(candidate) == 2
+                and _two_sample_range_eligible(candidate, cadence_tick, default_every_s)
+            )
         )
         if not range_eligible:
             pending_at.append(all_samples[index])
