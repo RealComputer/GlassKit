@@ -61,14 +61,13 @@ def create_evaluator(config):
     return Evaluator()
 ```
 
-Validate the hand-written expectation and run the eval:
+Run the hand-written expectation:
 
 ```sh
-uv run glasskit eval validate
 uv run glasskit eval run
 ```
 
-Expected result: validation succeeds, and `run` reports passing samples because the adapter returned the expected value, `true`. To inspect the labels alongside the video, run `uv run glasskit eval review --case task-01`.
+Expected result: `run` validates the selected case, video, and sample times, then reports passing samples because the adapter returned the expected value, `true`. To inspect the labels alongside the video, run `uv run glasskit eval review --case task-01`.
 
 ## Core Concepts
 
@@ -125,39 +124,6 @@ uv run glasskit eval review --case task-02
 ```
 
 `seed` uses the same adapter as `run` by default, fills only omitted expectations, and preserves existing labels. Use `--adapter` or `--adapter-command` to label with a different adapter, and use `--case` or `--target` to narrow the work. Treat generated values as proposals and review them before relying on the eval.
-
-### Validate Before a Run
-
-Goal: catch YAML, video, timestamp, and optional adapter setup problems before calling a paid or slow model backend.
-
-Command:
-
-```sh
-uv run glasskit eval validate
-```
-
-Expected output:
-
-```text
-Validation passed: /absolute/path/to/eval (12 samples)
-```
-
-Note: Validation checks the eval directory, videos, and sample timestamps. When `--adapter` or `--adapter-command` is provided, it also verifies that the adapter can be used, without evaluating any samples.
-
-### Inspect the Expanded Sample Schedule
-
-Goal: confirm that ranges, `at` lists, fields, and compare modes expand as intended.
-
-Command:
-
-```sh
-uv run glasskit eval list-samples --case task-01
-uv run glasskit eval list-samples --case task-01 --target step_1
-```
-
-Expected output: a table with `Case`, `Target`, `Time`, `Expected`, `Mode`, `Field`, and `Source` columns.
-
-Note: Range blocks are half-open intervals. For example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
 
 ### Review and Correct Expectations in the Browser
 
@@ -764,11 +730,11 @@ Commands:
 
 | Command | Description |
 | --- | --- |
-| `seed` | Run a labeling adapter and write proposed expectations into selected draft samples. |
 | `run` | Decode selected frames, call the adapter, compare observations, apply gates, and report results. |
-| `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
-| `list-samples` | Print the expanded sample schedule. |
+| `seed` | Run a labeling adapter and write proposed expectations into selected draft samples. |
 | `review` | Open the local browser UI for inspecting and correcting timed expectations. |
+| `validate` | Check eval structure, videos, sample times, and optional adapter construction without running samples. |
+| `list-samples` | Print the expanded sample schedule for inspection or debugging. |
 
 ### `glasskit eval seed`
 
@@ -866,7 +832,7 @@ Exit behavior: exits `0` when every configured gate passes, `1` when the eval co
 
 ### `glasskit eval validate`
 
-Purpose: validate an eval directory without evaluating sample observations.
+Purpose: check an eval directory without evaluating sample observations. A normal `run` performs the same eval structure, video, and sample-time checks before calling the adapter, so a separate validation step is not required. Use `validate` when you want an inexpensive standalone check, such as in a configuration-only CI job or before using a slow or paid adapter.
 
 ```sh
 glasskit eval validate --adapter eval/adapter.py:create_evaluator
@@ -884,11 +850,13 @@ Options:
 | `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter during validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
+When `--adapter` or `--adapter-command` is provided, validation also constructs and closes that adapter. It does not evaluate a sample or verify the adapter's observations. Without either option, validation checks only the eval directory and selected cases.
+
 Exit behavior: exits `0` when validation passes and `1` when validation fails.
 
 ### `glasskit eval list-samples`
 
-Purpose: print expanded sample rows.
+Purpose: inspect the expanded sample schedule when debugging ranges, timestamp filters, fields, or comparison modes.
 
 ```sh
 glasskit eval list-samples --case task-01
@@ -904,6 +872,8 @@ Options:
 | `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
+
+The table includes each sample's case, target, timestamp, expectation, comparison mode, field, and source. Range blocks are half-open: for example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
 
 Exit behavior: exits `0` when the samples can be listed and `2` when the eval directory cannot be loaded.
 
@@ -996,7 +966,7 @@ Human-readable output is printed as tables to stdout. JSON output is written to 
 
 ## Errors and Troubleshooting
 
-Start with validation:
+Commands validate the selected inputs they need before doing their main work. Start by reading the error from the command that failed. To isolate eval structure, video, or sample-time problems without loading or calling an adapter, run:
 
 ```sh
 uv run glasskit eval validate
@@ -1009,7 +979,7 @@ uv run glasskit eval seed --case task-01
 uv run glasskit eval review --case task-01
 ```
 
-Then inspect samples and run one case:
+When ranges or time filters do not select the samples you expected, inspect the expanded schedule. Then run one focused case and target:
 
 ```sh
 uv run glasskit eval list-samples --case task-01
