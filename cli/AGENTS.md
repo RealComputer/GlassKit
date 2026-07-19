@@ -20,10 +20,10 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
 - `src/glasskit/eval/execution.py`: shared adapter construction and cleanup, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, JSON observation validation, and cancellation draining.
 - `src/glasskit/eval/seeding.py`: draft expectation selection, adapter-backed labeling, field extraction, deterministic target reconstruction, candidate validation, concurrent-edit protection, and atomic case updates.
-- `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles through the shared executor, sample comparison, stability aggregation, reports, trial-scoped artifacts, and quality gates.
+- `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles through the shared executor, completion-time result callbacks, sample comparison, stability aggregation, reports, trial-scoped artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading, individual-versus-batch strategy detection, and sync/async normalization for simple functions, factories, and evaluator objects.
 - `src/glasskit/eval/process_adapters.py`: command parsing, process startup and teardown, NDJSON protocol transport, PNG sample serialization, request multiplexing and cancellation, stderr diagnostics, and command-adapter capability negotiation.
-- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
+- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, Rich output, and transient interactive progress.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.
 - `review-ui/`: React, TypeScript, Vite, and Vitest contributor workspace for the review application. See [`review-ui/AGENTS.md`](review-ui/AGENTS.md) for its features, architecture, and frontend-specific invariants.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.

@@ -10,7 +10,13 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
-from glasskit.eval.models import CaseWriteError, RunOptions, SeedOptions, SeedReport
+from glasskit.eval.models import (
+    AdapterRuntimeError,
+    CaseWriteError,
+    RunOptions,
+    SeedOptions,
+    SeedReport,
+)
 
 
 def test_eval_help_lists_current_commands() -> None:
@@ -277,6 +283,39 @@ def test_eval_seed_reports_case_write_failures_as_user_errors(
     output = Text.from_ansi(result.output).plain
     assert "Could not seed expectations" in output
     assert "eval/cases/case.yaml" in output
+
+
+@pytest.mark.parametrize(
+    ("command", "execution_name", "reporter_name"),
+    [
+        ("run", "run_eval", "ConsoleReporter"),
+        ("seed", "seed_eval", "ConsoleSeedReporter"),
+    ],
+)
+def test_eval_commands_close_progress_when_execution_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    execution_name: str,
+    reporter_name: str,
+) -> None:
+    class Reporter:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    reporter = Reporter()
+
+    async def fail(*args: object, **kwargs: object) -> object:
+        raise AdapterRuntimeError("adapter failed")
+
+    monkeypatch.setattr(f"glasskit.cli.{execution_name}", fail)
+    monkeypatch.setattr(f"glasskit.cli.{reporter_name}", lambda **kwargs: reporter)
+
+    result = CliRunner().invoke(app, ["eval", command])
+
+    assert result.exit_code == 2
+    assert reporter.closed
 
 
 def test_eval_run_does_not_define_failure_table_limit() -> None:

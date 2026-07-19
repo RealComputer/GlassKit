@@ -216,24 +216,26 @@ async def _run_trial(
                             context,
                             concurrency=options.concurrency,
                             keep_going=options.keep_going,
-                            transform=lambda evaluation, frame: _result_for_frame(
-                                evaluation,
-                                frame,
-                                options=options,
-                                eval_dir=eval_directory.path,
-                                trial_index=trial_index,
+                            transform=lambda evaluation, frame: _report_result(
+                                _result_for_frame(
+                                    evaluation,
+                                    frame,
+                                    options=options,
+                                    eval_dir=eval_directory.path,
+                                    trial_index=trial_index,
+                                ),
+                                callbacks=callbacks,
                             ),
                         )
                     }
                     for sample in target_samples:
-                        result = (
-                            _ignored_result(sample)
-                            if sample.ignore is not None
-                            else evaluated_results[sample.sample_index]
-                        )
+                        if sample.ignore is not None:
+                            result = _report_result(
+                                _ignored_result(sample), callbacks=callbacks
+                            )
+                        else:
+                            result = evaluated_results[sample.sample_index]
                         results.append(result)
-                        if callbacks is not None:
-                            callbacks.on_result(result)
             finally:
                 frame_cursor.close()
     finally:
@@ -266,6 +268,14 @@ def _ignored_result(sample: SampleExpectation) -> SampleResult:
         reason=sample.ignore,
         source=sample.source,
     )
+
+
+def _report_result(
+    result: SampleResult, *, callbacks: RunCallbacks | None
+) -> SampleResult:
+    if callbacks is not None:
+        callbacks.on_result(result)
+    return result
 
 
 def write_json_report(report: EvalRunReport, path: Path) -> None:

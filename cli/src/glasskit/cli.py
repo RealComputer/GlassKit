@@ -133,6 +133,8 @@ def eval_seed(
             console, "Could not seed expectations", str(error), style="red"
         )
         raise typer.Exit(2) from error
+    finally:
+        reporter.close()
     print_seed_summary(report, console=console)
 
 
@@ -335,6 +337,8 @@ def eval_run(
     except EvalError as error:
         _print_labeled_message(console, "Eval failed", str(error), style="red")
         raise typer.Exit(2) from error
+    finally:
+        reporter.close()
     print_run_summary(report, console=console)
     raise typer.Exit(0 if report.success else 1)
 
