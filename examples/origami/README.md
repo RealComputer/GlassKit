@@ -103,13 +103,19 @@ To view the step IDs, reference images, and criteria in HTML, run `cd backend &&
 
 ### Recorded-Video Fold-Check Evals
 
-Recorded-video evals make prompt and model changes repeatable without performing every fold again. This project uses [`glasskit eval`](../../cli/README.md) to ask whether each sampled camera frame satisfies an origami step.
+Testing fold checks only by wearing the glasses is slow: every prompt, model, or workflow change can require performing the same physical folds again. Recorded-video evals preserve real camera input so the same visual evidence can be replayed while the evaluator changes. This makes regressions easier to identify and shortens the prompt-improvement loop.
 
-The eval suite lives under `backend/eval/`. `adapter.py` is the default adapter for `glasskit eval run` and reuses the live Overshoot fold-check path. `label_adapter.py` uses Gemini to propose draft expectations, while `suggest_criteria.py` and `check_image.py` help investigate and refine step criteria. See the [GlassKit Eval README](../../cli/README.md) for case syntax, command behavior, review controls, filtering, and quality gates.
+Each sample in this project asks whether the current origami step should be considered complete. The default run adapter reuses the live app's reference composition, prompts, Overshoot chat completion, and boolean parsing, but applies them to recorded frames instead of a LiveKit stream. The eval therefore exercises the important production decision path without requiring a live session.
 
-To use the suite in this project, record a fold-check input video with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, add or update a case under `backend/eval/cases/`, and point the case at the recording. `backend/eval/cases/full-run.yaml` is the current full-workflow case.
+The eval suite lives under `backend/eval/`. `adapter.py` is the default adapter for `glasskit eval run`, `label_adapter.py` uses Gemini to propose draft expectations, and `suggest_criteria.py` and `check_image.py` help investigate and refine step criteria. See the [GlassKit Eval README](../../cli/README.md) for case syntax, command behavior, review controls, filtering, and quality gates.
 
-To propose missing expectations with Gemini, set `GEMINI_API_KEY` in `backend/.env` and explicitly select the labeling adapter:
+The project workflow is: capture a representative run, seed draft labels, review them into fixed ground truth, run the production-like evaluator, diagnose recurring failures, revise the narrowest relevant prompt or criteria, and rerun the fixed suite.
+
+#### Create and Review an Eval
+
+First capture a representative fold-check input recording with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. These recordings contain the camera frames before reference-image composition, so they can be replayed against later evaluator versions. Add or update a case under `backend/eval/cases/` and point it at the recording; `backend/eval/cases/full-run.yaml` is the current full-workflow case.
+
+Draft labeling is outside the wearer interaction loop, so it can use a stronger, slower model than the latency-sensitive live evaluator. To propose missing expectations with Gemini, set `GEMINI_API_KEY` in `backend/.env` and explicitly select the labeling adapter:
 
 ```sh
 cd backend
@@ -119,7 +125,7 @@ uv run --with-editable ../../../cli --env-file .env \
   --concurrency 8
 ```
 
-Review the proposed expectations before treating them as ground truth:
+Model-proposed labels are a starting point, not ground truth. Review them against the recording and correct ambiguous or wrong expectations before using the case to measure the evaluator:
 
 ```sh
 cd backend
@@ -136,11 +142,13 @@ uv run --with-editable ../../../cli --env-file .env \
   glasskit eval run --concurrency 2
 ```
 
-Keep reviewed expectations fixed while changing prompts or criteria. Correct an expectation only when human review shows that the label itself is wrong.
+Once reviewed, keep the expectations fixed while changing prompts, criteria, or models. Otherwise the benchmark moves with the system it is intended to measure. Correct an expectation only when human review shows that the label itself is wrong.
 
-#### Refine Step Criteria
+#### Improve the Evaluator
 
-Repeated errors may call for a shared prompt change in `backend/src/fold_check_prompts.py` or a step-specific criteria change in `backend/assets/origami_steps.json`. The project-specific criteria suggester can propose a revision from the target references and reviewed labels:
+Start by separating labeling errors from evaluator errors. Fix an isolated bad expectation in the reviewed case. When the same evaluator mistake appears across several correctly labeled frames, look for the narrowest rule that explains both the failures and nearby passing counterexamples. Shared comparison or visibility behavior belongs in `backend/src/fold_check_prompts.py`; step geometry and fold-specific evidence belong in the `criteria` fields of `backend/assets/origami_steps.json`.
+
+The project-specific criteria suggester can propose a revision from the target reference, neighboring references, and a balanced set of reviewed true and false frames:
 
 ```sh
 cd backend
@@ -168,7 +176,11 @@ uv run --env-file .env python -m eval.suggest_criteria \
   --output eval/runs/suggest-criteria/step_5-feedback.json
 ```
 
-To investigate individual frames with the same Gemini labeling path used for seeding:
+Treat each suggestion as an analyst's proposal. Apply one logical change at a time, rerun the complete target, and inspect false positives, false negatives, and passing counterexamples. Once a target improves, run the broader suite to catch regressions in shared prompt behavior.
+
+Avoid making criteria increasingly specific to one recording. Add recordings from different people, viewpoints, lighting conditions, paper colors, and imperfect intermediate states over time. Promote a repeated rule into the shared prompt only when it has the same meaning across steps; keep fold-specific geometry in the step criteria.
+
+To investigate an individual failure, use a frame downloaded from the review UI with the same Gemini labeling path used for seeding:
 
 ```sh
 cd backend
