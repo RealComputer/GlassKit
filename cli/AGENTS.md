@@ -1,8 +1,8 @@
-# GlassKit CLI Development
+# GlassKit Eval CLI Development
 
-This package provides the `glasskit` command. Its current command group is recorded-video evaluation through `glasskit eval`.
+This package currently provides GlassKit Eval through the `glasskit eval` command group.
 
-`glasskit eval` turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling an app-provided adapter, comparing JSON-like observations, reporting quality gates for local and CI runs, and reviewing timed expectations in a local browser UI.
+GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sampling labeled video moments, calling an app-provided adapter, comparing JSON-like observations, reporting quality gates for local and CI runs, and reviewing timed expectations in a local browser UI.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ This package provides the `glasskit` command. Its current command group is recor
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
 - `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, sample stability aggregation, reports, trial-scoped artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading, individual-versus-batch strategy detection, and sync/async normalization for simple functions, factories, and evaluator objects.
-- `src/glasskit/eval/process_adapters.py`: command parsing, process startup and teardown, protocol v1 NDJSON transport, PNG sample serialization, request multiplexing and cancellation, stderr diagnostics, and command-adapter capability negotiation.
+- `src/glasskit/eval/process_adapters.py`: command parsing, process startup and teardown, NDJSON protocol transport, PNG sample serialization, request multiplexing and cancellation, stderr diagnostics, and command-adapter capability negotiation.
 - `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.
 - `review-ui/`: React, TypeScript, Vite, and Vitest contributor workspace for the review application. See [`review-ui/AGENTS.md`](review-ui/AGENTS.md) for its features, architecture, and frontend-specific invariants.

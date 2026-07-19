@@ -1,4 +1,4 @@
-# Publishing GlassKit CLI
+# Publishing GlassKit Eval
 
 The PyPI project is `glasskit.ai`, and the installed command is `glasskit`. PyPI releases are tag-driven from GitHub Actions using PyPI Trusted Publishing, so no PyPI token should be stored in GitHub.
 

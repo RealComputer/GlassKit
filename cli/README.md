@@ -1,10 +1,8 @@
-# `glasskit eval`
+# GlassKit Eval
 
-`glasskit eval` helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a small Python adapter, and rerun the same checks locally or in CI.
+GlassKit Eval helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a language-agnostic adapter, and rerun the same checks locally or in CI.
 
-This is the user manual for the `glasskit` command. For contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
-
-The current command group is `glasskit eval`.
+Use GlassKit Eval through the `glasskit eval` command group. This is its user manual; for contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
 ## Why Use This?
 
@@ -185,7 +183,7 @@ Note: `--keep-going` records adapter evaluation errors and comparison errors as 
 
 Goal: run the same selected eval three times and identify samples whose outcomes vary.
 
-With `--repeat N`, GlassKit executes the same selected sample schedule `N` times. Each complete repetition is called a trial, and each evaluation of a sample within a trial is an attempt.
+With `--repeat N`, GlassKit Eval executes the same selected sample schedule `N` times. Each complete repetition is called a trial, and each evaluation of a sample within a trial is an attempt.
 
 Command:
 
@@ -391,7 +389,7 @@ targets:
 
 ## Adapter Reference
 
-GlassKit supports in-process Python adapters and language-neutral command adapters. Both expose the same individual or batch evaluation behavior to the runner. Use a Python adapter when the app logic is importable by Python, or `--adapter-command` when the adapter should run in its own process, such as a JavaScript or TypeScript backend.
+GlassKit Eval supports in-process Python adapters and language-neutral command adapters. Both expose the same individual or batch evaluation behavior to the runner. Use a Python adapter when the app logic is importable by Python, or `--adapter-command` when the adapter should run in its own process, such as a JavaScript or TypeScript backend.
 
 ### Python Adapters
 
@@ -444,20 +442,20 @@ Adapter factories may be synchronous or asynchronous. No-argument factories are 
 
 An evaluator chooses one of two execution strategies by implementing `evaluate` or `evaluate_many`. Both methods may be synchronous or asynchronous.
 
-| Strategy | Adapter method | GlassKit execution | Use when |
+| Strategy | Adapter method | GlassKit Eval execution | Use when |
 | --- | --- | --- | --- |
 | Individual | `evaluate(sample, target)` | Calls the method once per sample, with at most `--concurrency` calls in flight for the current target. | Each sample maps to an independent request or local operation. This is the recommended default for ordinary model APIs. |
-| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
+| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit Eval does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
 
-Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit schedules the remaining samples in case-file declaration order and passes batch samples in that order.
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit Eval schedules the remaining samples in case-file declaration order and passes batch samples in that order.
 
-Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
+Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit Eval bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
-Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
+Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit Eval cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
 
-The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous. With `--repeat`, GlassKit creates fresh evaluator instances sequentially and closes each trial before calling the evaluator factory for the next one.
+The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous. With `--repeat`, GlassKit Eval creates fresh evaluator instances sequentially and closes each trial before calling the evaluator factory for the next one.
 
 Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
@@ -507,9 +505,9 @@ Use `--adapter-command` to launch an adapter in any language that can exchange n
 glasskit eval run --adapter-command "node eval/adapter.js"
 ```
 
-GlassKit parses the command with POSIX shell-style argument quoting and starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are not supported. The command inherits GlassKit's working directory and environment, so it can import the app normally and read secrets from environment variables. GlassKit starts one process for each trial, sends `initialize`, sends evaluation requests, sends `close`, and waits for the process to exit. The close response, adapter leader exit, and stdout and stderr drain share a five-second grace period; GlassKit terminates the process tree and reports an adapter error if that complete shutdown sequence does not finish. `glasskit eval validate --adapter-command ...` starts, initializes, closes, and waits for the same process without evaluating frames.
+GlassKit Eval parses the command with POSIX shell-style argument quoting and starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are not supported. The command inherits the working directory and environment, so it can import the app normally and read secrets from environment variables. GlassKit Eval starts one process for each trial, sends `initialize`, sends evaluation requests, sends `close`, and waits for the process to exit. The close response, adapter leader exit, and stdout and stderr drain share a five-second grace period; GlassKit Eval terminates the process tree and reports an adapter error if that complete shutdown sequence does not finish. `glasskit eval validate --adapter-command ...` starts, initializes, closes, and waits for the same process without evaluating frames.
 
-The adapter reads one JSON request per line from stdin and writes one JSON response per line to stdout. Stdout is reserved for protocol messages; write all application and dependency logs to stderr, using `console.error()` in JavaScript. Each message has a 256 MiB limit. Requests have integer ids, and concurrent `evaluate` responses may be returned in any order. GlassKit correlates them by id and restores case-file order in the report.
+The adapter reads one JSON request per line from stdin and writes one JSON response per line to stdout. Stdout is reserved for protocol messages; write all application and dependency logs to stderr, using `console.error()` in JavaScript. Each message has a 256 MiB limit. Requests have integer ids, and concurrent `evaluate` responses may be returned in any order. GlassKit Eval correlates them by id and restores case-file order in the report.
 
 The command must answer these protocol methods:
 
@@ -523,7 +521,7 @@ The command must answer these protocol methods:
 
 A successful response contains `id` and `result`. A failed request contains the same `id` and an `error` object with a string `message`; an optional `stack` is useful when inspecting the adapter directly. Process startup, initialization, protocol, and shutdown failures abort the eval. An `evaluate` or `evaluateMany` error follows the ordinary adapter error and `--keep-going` behavior.
 
-GlassKit sends adapter configuration with camel-case fields:
+GlassKit Eval sends adapter configuration with camel-case fields:
 
 | Field | Description |
 | --- | --- |
@@ -532,7 +530,7 @@ GlassKit sends adapter configuration with camel-case fields:
 | `artifactsDir` | Absolute path from `--artifacts-dir`, or `null`. |
 | `verbose` | Boolean from `--verbose`. |
 
-Command-adapter samples use the same metadata as Python samples, with camel-case names. The image is a lossless PNG represented as `{mimeType, dataBase64, width, height}` on the wire. The JavaScript boilerplate below converts `dataBase64` to `image.bytes`, a Node.js `Buffer`, before calling app code. GlassKit remains responsible for selecting the exact decoded frame; the command should not decode `videoPath` again.
+Command-adapter samples use the same metadata as Python samples, with camel-case names. The image is a lossless PNG represented as `{mimeType, dataBase64, width, height}` on the wire. The JavaScript boilerplate below converts `dataBase64` to `image.bytes`, a Node.js `Buffer`, before calling app code. GlassKit Eval remains responsible for selecting the exact decoded frame; the command should not decode `videoPath` again.
 
 The following complete, dependency-free `eval/adapter.js` is a starting point. Replace `createEvaluator` with app imports and evaluation logic, and retain the protocol section below it. This example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
 
@@ -561,7 +559,7 @@ async function createEvaluator(config) {
   };
 }
 
-// GlassKit process-adapter protocol v1. Keep stdout protocol-only.
+// GlassKit Eval process-adapter protocol. Keep stdout protocol-only.
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const active = new Map();
 let evaluator;
@@ -645,7 +643,7 @@ function startEvaluation(request) {
     () => active.delete(request.id),
     (error) => {
       active.delete(request.id);
-      console.error("Could not write GlassKit adapter response:", error);
+      console.error("Could not write GlassKit Eval adapter response:", error);
       process.exitCode = 1;
     },
   );
@@ -667,7 +665,7 @@ for await (const line of lines) {
   try {
     request = JSON.parse(line);
   } catch (error) {
-    console.error("Invalid GlassKit protocol request:", error);
+    console.error("Invalid GlassKit Eval protocol request:", error);
     process.exitCode = 1;
     break;
   }
@@ -915,7 +913,7 @@ Other precedence rules:
 
 `glasskit eval` defines no CLI-specific environment variables and does not read user input from stdin.
 
-Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Command adapters inherit GlassKit's environment, and GlassKit reserves their stdin and stdout for the process protocol. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
+Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Command adapters inherit the GlassKit Eval process environment, and GlassKit Eval reserves their stdin and stdout for the process protocol. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
 ```sh
 uv run --env-file .env glasskit eval run
@@ -1117,7 +1115,7 @@ Common failures:
 | `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
 | `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
 | `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
-| `could not open video` or `could not decode video` | GlassKit cannot open or decode the file. | Check that the file is a real video and can be decoded locally. |
+| `could not open video` or `could not decode video` | GlassKit Eval cannot open or decode the file. | Check that the file is a real video and can be decoded locally. |
 | `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
 | `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled samples. |
 | `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 samples. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
