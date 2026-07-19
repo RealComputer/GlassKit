@@ -167,9 +167,12 @@ class _ProcessAdapter:
             raise
 
         if forced:
+            termination_scope = (
+                "process tree" if os.name == "posix" else "adapter process"
+            )
             shutdown_error = AdapterRuntimeError(
                 f"adapter command {self._command} did not complete close within "
-                f"{GRACEFUL_EXIT_TIMEOUT_S:g}s; the process tree was terminated"
+                f"{GRACEFUL_EXIT_TIMEOUT_S:g}s; the {termination_scope} was terminated"
             )
             self._set_failure(shutdown_error)
             await self._run_forced_shutdown()
@@ -502,13 +505,51 @@ class _ProcessAdapter:
 
 
 def _parse_adapter_command(adapter_command: str) -> list[str]:
+    if not adapter_command.strip():
+        raise AdapterLoadError("adapter command must not be empty")
     try:
-        argv = shlex.split(adapter_command, posix=True)
-    except ValueError as error:
+        argv = (
+            _split_windows_command(adapter_command)
+            if os.name == "nt"
+            else shlex.split(adapter_command, posix=True)
+        )
+    except (OSError, ValueError) as error:
         raise AdapterLoadError(f"invalid adapter command: {error}") from error
     if not argv:
         raise AdapterLoadError("adapter command must not be empty")
     return argv
+
+
+def _split_windows_command(adapter_command: str) -> list[str]:
+    import ctypes
+    from ctypes import wintypes
+
+    windows_ctypes: Any = ctypes
+    win_dll = windows_ctypes.WinDLL
+    shell32 = win_dll("shell32", use_last_error=True)
+    command_line_to_argv = shell32.CommandLineToArgvW
+    command_line_to_argv.argtypes = [
+        wintypes.LPCWSTR,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    command_line_to_argv.restype = ctypes.POINTER(wintypes.LPWSTR)
+
+    argument_count = ctypes.c_int()
+    arguments = command_line_to_argv(
+        adapter_command.lstrip(), ctypes.byref(argument_count)
+    )
+    if not arguments:
+        get_last_error = windows_ctypes.get_last_error
+        raise OSError(get_last_error(), "could not parse Windows command line")
+
+    try:
+        return [arguments[index] for index in range(argument_count.value)]
+    finally:
+        kernel32 = win_dll("kernel32", use_last_error=True)
+        local_free = kernel32.LocalFree
+        local_free.argtypes = [wintypes.HLOCAL]
+        local_free.restype = wintypes.HLOCAL
+        local_free(arguments)
 
 
 def _command_label(argv: list[str]) -> str:
