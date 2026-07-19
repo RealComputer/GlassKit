@@ -9,6 +9,7 @@ export function sample(id: string, timestamp_s: number, expect_json = "false"): 
   return {
     id,
     timestamp_s,
+    has_expectation: true,
     expect_type: expect_json === "true" || expect_json === "false" ? "boolean" : "number",
     expect_json,
     field: null,

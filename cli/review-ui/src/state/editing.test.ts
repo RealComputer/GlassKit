@@ -30,6 +30,16 @@ describe("sample editing helpers", () => {
     expect(created).toEqual({ sample: existing, duplicate: true });
   });
 
+  it("uses a real default expectation when the nearest sample is still a draft", () => {
+    const draft = { ...sample("draft", 1, "null"), has_expectation: false };
+
+    const created = createSampleAt(target("status", [draft]), 2, "created");
+
+    expect(created.sample.has_expectation).toBe(true);
+    expect(created.sample.expect_type).toBe("boolean");
+    expect(created.sample.expect_json).toBe("false");
+  });
+
   it("protects the accepted last sample but permits cancelling an unsaved first sample", () => {
     const draft = target("status", [sample("only", 1)]);
     expect(canDeleteFromTarget(draft, target("status", [sample("disk", 1)]), "only")).toBe(false);

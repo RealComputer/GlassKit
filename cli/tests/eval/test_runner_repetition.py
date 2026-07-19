@@ -65,7 +65,7 @@ def test_runner_validates_repetition_options(
 
 async def _run_varying_trials(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     lifecycle = _Lifecycle()
-    monkeypatch.setattr("glasskit.eval.runner.load_evaluator", lifecycle.load)
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", lifecycle.load)
     output_json = tmp_path / "repeated.json"
 
     report = await run_eval(
@@ -121,7 +121,7 @@ async def _run_repeated_failure_artifacts(
             close=evaluator.close,
         )
 
-    monkeypatch.setattr("glasskit.eval.runner.load_evaluator", load_evaluator)
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", load_evaluator)
 
     report = await run_eval(
         RunOptions(

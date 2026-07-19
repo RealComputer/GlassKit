@@ -17,12 +17,16 @@ from glasskit.eval.models import (
     SampleExpectation,
     SampleResult,
     SampleStability,
+    SeededExpectation,
+    SeedReport,
     TargetSpec,
 )
 from glasskit.eval.report import (
     ConsoleReporter,
+    ConsoleSeedReporter,
     print_run_summary,
     print_sample_schedule,
+    print_seed_summary,
 )
 
 
@@ -129,6 +133,72 @@ def test_console_reporter_labels_repeated_trial_output() -> None:
     assert "[2/3] FAILED" in output
 
 
+def test_seed_reporter_and_summary_use_provisional_labeling_vocabulary() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=160)
+    sample = _case().samples[0]
+    seeded = SeededExpectation(
+        sample=sample,
+        expected={"matches": True},
+        evaluation_duration_s=0.25,
+        evaluation_timing_mode="individual",
+    )
+    reporter = ConsoleSeedReporter(verbose=True, console=console)
+
+    reporter.on_case_start(_case(), 1)
+    reporter.on_target_start(_case(), "step_1", 1)
+    reporter.on_result(seeded)
+    print_seed_summary(
+        SeedReport(
+            eval_dir=Path("custom eval"),
+            case_names=["case-001"],
+            seeded=[seeded],
+            preserved_count=2,
+            duration_s=1.0,
+        ),
+        console=console,
+    )
+
+    output = buffer.getvalue()
+    assert "SEEDED Step 1 (step_1) @0s" in output
+    assert "1 proposed, 2 preserved" in output
+    assert "review --eval-dir 'custom eval' --case case-001" in output
+
+
+def test_console_reporters_show_transient_target_progress_in_terminals() -> None:
+    run_buffer = StringIO()
+    run_reporter = ConsoleReporter(
+        console=Console(file=run_buffer, force_terminal=True, width=120)
+    )
+    run_reporter.on_target_start(_case(), "step_1", 1)
+    run_reporter.on_result(_result(status="passed"))
+    run_reporter.close()
+
+    seed_buffer = StringIO()
+    seed_reporter = ConsoleSeedReporter(
+        console=Console(file=seed_buffer, force_terminal=True, width=120)
+    )
+    seed_reporter.on_target_start(_case(), "step_1", 1)
+    seed_reporter.on_result(
+        SeededExpectation(
+            sample=_case().samples[0],
+            expected=True,
+            evaluation_duration_s=0.25,
+            evaluation_timing_mode="individual",
+        )
+    )
+    seed_reporter.close()
+
+    run_output = run_buffer.getvalue()
+    seed_output = seed_buffer.getvalue()
+    assert "0/1 samples" in run_output
+    assert "1/1 samples" in run_output
+    assert "0/1 expectations" in seed_output
+    assert "1/1 expectations" in seed_output
+    assert "elapsed" in run_output
+    assert "elapsed" in seed_output
+
+
 def test_console_reporter_does_not_auto_highlight_values() -> None:
     buffer = StringIO()
     console = Console(
@@ -138,7 +208,7 @@ def test_console_reporter_does_not_auto_highlight_values() -> None:
         no_color=False,
         width=120,
     )
-    reporter = ConsoleReporter(verbose=True, console=console)
+    reporter = ConsoleReporter(verbose=True, console=console, show_progress=False)
 
     reporter.on_case_start(_case(), 513)
     reporter.on_target_start(_case(), "step_1", 102)

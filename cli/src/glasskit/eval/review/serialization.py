@@ -54,6 +54,7 @@ class ParsedSample:
     id: str
     tick: int
     timestamp_s: float
+    has_expectation: bool
     expect_type: ExpectType
     expected: Any
     field: str | None
@@ -200,9 +201,13 @@ def parse_samples(
                 ],
             )
         seen_ids.add(sample.id)
-        expected = strict_json_value(sample.expect_json, path=f"{path}.expect_json")
+        expected = (
+            strict_json_value(sample.expect_json, path=f"{path}.expect_json")
+            if sample.has_expectation
+            else None
+        )
         actual_type = expectation_type(expected)
-        if actual_type != sample.expect_type:
+        if sample.has_expectation and actual_type != sample.expect_type:
             raise ReviewAPIError(
                 422,
                 "invalid_samples",
@@ -237,6 +242,7 @@ def parse_samples(
                 id=sample.id,
                 tick=tick,
                 timestamp_s=timestamp_s,
+                has_expectation=sample.has_expectation,
                 expect_type=actual_type,
                 expected=expected,
                 field=sample.field,
@@ -275,11 +281,18 @@ def reconstruct_target(
     samples: Sequence[ReviewSample],
     *,
     default_every_s: float,
+    range_end_bound_s: float | None = None,
+    allow_range_reconstruction: bool = True,
 ) -> ReconstructedTarget:
     parsed = parse_samples(target_id, samples)
     if not parsed:
         return ReconstructedTarget(blocks=[], groups=[], samples=[])
 
+    range_end_bound_tick = (
+        canonical_timestamp(range_end_bound_s)[1]
+        if range_end_bound_s is not None
+        else None
+    )
     blocks: list[dict[str, Any]] = []
     grouped_samples: list[list[ParsedSample]] = []
     group_specs: list[tuple[GroupKind, int | None, int | None]] = []
@@ -296,6 +309,8 @@ def reconstruct_target(
             run_start,
             run_end,
             default_every_s=default_every_s,
+            range_end_bound_tick=range_end_bound_tick,
+            allow_range_reconstruction=allow_range_reconstruction,
             blocks=blocks,
             grouped_samples=grouped_samples,
             group_specs=group_specs,
@@ -489,10 +504,16 @@ def _reconstruct_payload_run(
     end: int,
     *,
     default_every_s: float,
+    range_end_bound_tick: int | None,
+    allow_range_reconstruction: bool,
     blocks: list[dict[str, Any]],
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
 ) -> None:
+    if not allow_range_reconstruction:
+        _flush_at(all_samples[start:end], blocks, grouped_samples, group_specs)
+        return
+
     pending_at: list[ParsedSample] = []
     index = start
     while index < end:
@@ -525,10 +546,10 @@ def _reconstruct_payload_run(
             if candidate_end < len(all_samples)
             else None
         )
-        end_tick = (
-            min(natural_end_tick, next_tick)
-            if next_tick is not None
-            else natural_end_tick
+        end_tick = min(
+            tick
+            for tick in (natural_end_tick, next_tick, range_end_bound_tick)
+            if tick is not None
         )
         if not _range_expands_with_every(
             candidate, end_tick, _seconds_from_tick(cadence_tick)
@@ -580,7 +601,8 @@ def _payload_block(sample: ParsedSample) -> dict[str, Any]:
     result: dict[str, Any] = {}
     if sample.field is not None:
         result["field"] = sample.field
-    result["expect"] = sample.expected
+    if sample.has_expectation:
+        result["expect"] = sample.expected
     if sample.mode is not None or sample.tolerance is not None:
         compare: dict[str, Any] = {}
         if sample.mode is not None:
@@ -597,7 +619,8 @@ def _payload_block(sample: ParsedSample) -> dict[str, Any]:
 
 def _same_payload(left: ParsedSample, right: ParsedSample) -> bool:
     return (
-        structurally_equal(left.expected, right.expected)
+        left.has_expectation == right.has_expectation
+        and structurally_equal(left.expected, right.expected)
         and left.field == right.field
         and left.mode == right.mode
         and _same_optional_number(left.tolerance, right.tolerance)

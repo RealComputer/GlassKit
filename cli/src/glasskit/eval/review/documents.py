@@ -110,6 +110,7 @@ class ReviewRepository:
                 loaded = load_case(
                     path,
                     allow_empty=False,
+                    allow_draft=True,
                     raw_case=candidate_raw,
                     resolve_video=True,
                 )
@@ -121,7 +122,7 @@ class ReviewRepository:
                 raise ReviewAPIError(
                     422,
                     "invalid_samples",
-                    "The edited case file is not valid for normal eval loading.",
+                    "The edited case file is not a valid eval case.",
                     [
                         # Existing eval errors already carry the target/sample context.
                         # Keep the transport path at the batch root when no narrower
@@ -204,7 +205,11 @@ class ReviewRepository:
             _mapping, raw = _parse_case_file_source(source, path)
             description = raw.description
             loaded = load_case(
-                path, allow_empty=True, raw_case=raw, resolve_video=False
+                path,
+                allow_empty=True,
+                allow_draft=True,
+                raw_case=raw,
+                resolve_video=False,
             )
         except UnicodeDecodeError as error:
             return CaseFileSummary(
@@ -282,6 +287,7 @@ class ReviewRepository:
             loaded = load_case(
                 path,
                 allow_empty=True,
+                allow_draft=True,
                 raw_case=raw_case,
                 resolve_video=False,
             )
@@ -332,6 +338,21 @@ class ReviewRepository:
                         path=f"targets.{target.id}.samples",
                         severity="error",
                         repairable=True,
+                    )
+                )
+            draft_count = sum(not sample.has_expectation for sample in target.samples)
+            if draft_count:
+                noun = "sample" if draft_count == 1 else "samples"
+                issues.append(
+                    ValidationIssue(
+                        code="draft_expectations",
+                        message=(
+                            f"Target {target.id!r} has {draft_count} draft {noun} "
+                            "with no expectation."
+                        ),
+                        path=f"targets.{target.id}.samples",
+                        severity="warning",
+                        repairable=False,
                     )
                 )
         for target_id, samples in target_samples.items():
@@ -502,6 +523,7 @@ def _samples_for_target(
                 ReviewSample(
                     id=sample_id,
                     timestamp_s=sample.timestamp_s,
+                    has_expectation=sample.has_expectation,
                     expect_type=expectation_type(sample.expected),
                     expect_json=compact_json(sample.expected),
                     field=sample.field,

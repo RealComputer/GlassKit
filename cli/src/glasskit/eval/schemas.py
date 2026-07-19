@@ -67,7 +67,7 @@ class RawSampling(_SchemaModel):
 class RawSampleBlock(_SchemaModel):
     range_: list[float] | None = Field(default=None, alias="range")
     at: float | list[float] | None = None
-    expect: Any
+    expect: Any = None
     every_s: float | None = None
     field: str | None = None
     compare: RawCompare | None = None
@@ -139,6 +139,10 @@ class RawSampleBlock(_SchemaModel):
         if (self.range_ is None) == (self.at is None):
             raise ValueError("must contain exactly one of range or at")
         return self
+
+    @property
+    def has_expectation(self) -> bool:
+        return "expect" in self.model_fields_set
 
 
 class RawTarget(_SchemaModel):

@@ -6,11 +6,11 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 
 ## Architecture
 
-- `src/glasskit/cli.py` wires the Typer app and exposes `glasskit eval run`, `validate`, `list-samples`, and `review`.
-- The eval pipeline is app-agnostic. `expectations.py` discovers eval directories and case files, loads the eval config file, expands and filters case sample blocks, and resolves case videos. `schemas.py` owns Pydantic validation for YAML shape. `video.py` probes videos and streams requested frames from a single PyAV decoder per case and trial. `adapters.py` imports Python adapter targets from `module:callable` or `file.py:callable`, distinguishes individual `evaluate` adapters from native `evaluate_many` batch adapters, and normalizes sync and async calls. `process_adapters.py` launches language-neutral adapter commands, transports versioned NDJSON over standard streams, sends lossless PNG samples, multiplexes individual requests, captures process failures, and normalizes the process lifecycle to the same evaluator interface. `compare.py` evaluates JSON-like observations, and `runner.py` coordinates validation, sequential isolated trials, on-demand frame consumption, bounded per-target concurrency, adapter execution, cross-trial stability, failure artifacts, deterministic JSON output, and quality gates. App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repo.
-- `src/glasskit/eval/review/` owns the local review API, lossless sample transport, deterministic range reconstruction, atomic YAML writes, byte-range video responses, and packaged static application. The contributor frontend lives in `review-ui/`; `hatch_build.py` builds its ignored Vite output and embeds it in wheel and sdist artifacts so installed packages do not need Node.js.
-- `README.md` and `JSON_OUTPUT.md` are user-facing. Keep them detailed and friendly. This file is for developers changing CLI internals, tests, packaging, or the adapter contract.
-- Default pytest must stay offline. Use synthetic videos and fake adapters for tests. Command-adapter transport tests use the standard-library fixture under `tests/fixtures/adapters/` so ordinary Python test runs do not require Node.js or another external adapter runtime. Committed video fixtures live under `tests/fixtures/videos/`; keep them reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs should not require a system `ffmpeg` executable. If a video edge case needs default coverage, add a committed synthetic fixture for it.
+- The core data flow is `eval config and case files -> sampled video frames -> app adapter -> JSON-like observations -> comparisons and quality gates`.
+- Python and process adapters share one evaluator boundary, keeping execution, concurrency, batching, validation, and cleanup app-agnostic.
+- App-specific clients, prompts, parsers, workflow helpers, and secrets belong in adapters or the target app repository.
+- Runs and seeds share the same adapter execution path. Runs isolate trials for stability analysis, while seeds turn observations into validated expectation edits.
+- The review system pairs a local API with a packaged browser application, represents omitted draft expectations distinctly from explicit `null`, and uses the same case model to reconstruct YAML edits deterministically.
 
 ## Key Files
 
@@ -18,10 +18,12 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - `src/glasskit/cli.py`: Typer command definitions and CLI exit-code handling.
 - `src/glasskit/eval/models.py`: dataclasses, protocols, JSON value aliases, result types, and eval errors.
 - `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
-- `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, sample stability aggregation, reports, trial-scoped artifacts, and quality gates.
+- `src/glasskit/eval/execution.py`: shared adapter construction and cleanup, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, JSON observation validation, and cancellation draining.
+- `src/glasskit/eval/seeding.py`: draft expectation selection, adapter-backed labeling, field extraction, deterministic target reconstruction, candidate validation, concurrent-edit protection, and atomic case updates.
+- `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles through the shared executor, completion-time result callbacks, sample comparison, stability aggregation, reports, trial-scoped artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading, individual-versus-batch strategy detection, and sync/async normalization for simple functions, factories, and evaluator objects.
 - `src/glasskit/eval/process_adapters.py`: command parsing, process startup and teardown, NDJSON protocol transport, PNG sample serialization, request multiplexing and cancellation, stderr diagnostics, and command-adapter capability negotiation.
-- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, and Rich output.
+- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, Rich output, and transient interactive progress.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.
 - `review-ui/`: React, TypeScript, Vite, and Vitest contributor workspace for the review application. See [`review-ui/AGENTS.md`](review-ui/AGENTS.md) for its features, architecture, and frontend-specific invariants.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.
@@ -40,4 +42,10 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - For local testing against the Origami backend, run the CLI from the app backend directory so local adapter imports resolve naturally: `cd REPO-ROOT/examples/origami/backend && uv run --with-editable ../../../cli --env-file .env glasskit eval run --concurrency 2`.
 
 ## Notes
+
+- `README.md` and `JSON_OUTPUT.md` are user-facing. Keep them detailed and friendly, but include only content that helps users operate the CLI. Do not expose internal implementation details there.
+- Keep default pytest offline by using synthetic videos and fake adapters.
+- Command-adapter transport tests use the standard-library fixture under `tests/fixtures/adapters/` so ordinary Python test runs do not require another adapter runtime.
+- Keep committed video fixtures reproducible with `tests/fixtures/generate-videos.sh`. Ordinary pytest runs must not require a system `ffmpeg` executable.
+- Add a committed synthetic fixture when a video edge case needs default test coverage.
 - Commit messages for changes under this directory should start with `cli: `.

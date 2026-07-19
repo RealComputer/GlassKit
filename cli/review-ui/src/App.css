@@ -1123,6 +1123,15 @@ tbody tr.selected {
   font-weight: 400;
 }
 
+.draft-expectation {
+  padding: 8px;
+  color: #6e4b00;
+  background: #fff8c5;
+  border: 1px solid #d4a72c;
+  border-radius: var(--radius);
+  font-size: 11px;
+}
+
 .field-group > input,
 .field-group > select,
 .field-group > textarea,

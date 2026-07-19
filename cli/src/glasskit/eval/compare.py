@@ -8,7 +8,7 @@ from .models import SUPPORTED_COMPARE_MODES, CompareOutcome, SampleExpectation
 
 
 def compare_observation(observation: Any, sample: SampleExpectation) -> CompareOutcome:
-    observed_value, field_error = _extract_field(observation, sample.field)
+    observed_value, field_error = extract_observation_field(observation, sample.field)
     mode = _comparison_mode(sample)
     if field_error is not None:
         return CompareOutcome(False, field_error, None, mode)
@@ -61,7 +61,9 @@ def _comparison_mode(sample: SampleExpectation) -> str:
     return "exact"
 
 
-def _extract_field(observation: Any, field: str | None) -> tuple[Any, str | None]:
+def extract_observation_field(
+    observation: Any, field: str | None
+) -> tuple[Any, str | None]:
     if not field:
         return observation, None
     current = observation

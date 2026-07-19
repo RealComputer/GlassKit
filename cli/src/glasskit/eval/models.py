@@ -42,6 +42,10 @@ class AdapterRuntimeError(EvalError):
     """Raised when an adapter fails while evaluating samples."""
 
 
+class CaseWriteError(EvalError):
+    """Raised when an eval case cannot be persisted."""
+
+
 @dataclass(frozen=True)
 class AdapterConfig:
     eval_dir: Path
@@ -110,6 +114,7 @@ class SampleExpectation:
     timestamp_s: float
     sample_index: int
     expected: Any
+    has_expectation: bool = True
     field: str | None = None
     compare: ComparisonConfig = dc_field(default_factory=ComparisonConfig)
     source: str = ""
@@ -175,6 +180,28 @@ class ValidationReport:
     @property
     def ok(self) -> bool:
         return not any(issue.severity == "error" for issue in self.issues)
+
+
+@dataclass(frozen=True)
+class SeededExpectation:
+    sample: SampleExpectation
+    expected: Any
+    evaluation_duration_s: float
+    evaluation_timing_mode: EvaluationTimingMode
+
+
+@dataclass(frozen=True)
+class SeedReport:
+    eval_dir: Path
+    case_names: list[str]
+    seeded: list[SeededExpectation]
+    preserved_count: int
+    duration_s: float
+    directory_sync_warnings: tuple[Path, ...] = ()
+
+    @property
+    def seeded_count(self) -> int:
+        return len(self.seeded)
 
 
 @dataclass(frozen=True)
@@ -483,3 +510,16 @@ class RunOptions:
     artifacts_dir: Path | None = None
     save_failures: bool = False
     allow_empty: bool = False
+
+
+@dataclass(frozen=True)
+class SeedOptions:
+    eval_dir: Path
+    adapter: str | None = None
+    adapter_command: str | None = None
+    case_filter: str | None = None
+    target_filter: str | tuple[str, ...] | None = None
+    adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
+    concurrency: int = 1
+    replace: bool = False
+    verbose: bool = False

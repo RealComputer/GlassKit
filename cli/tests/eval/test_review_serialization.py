@@ -9,7 +9,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from glasskit.eval.expectations import load_case
+from glasskit.eval.expectations import MAX_EXPANDED_SAMPLES_PER_CASE, load_case
 from glasskit.eval.review.models import (
     ReviewAPIError,
     ReviewSample,
@@ -147,6 +147,31 @@ def test_reconstruction_splits_payload_changes_and_rejects_near_duplicates() -> 
     assert "within 1e-9" in duplicate.value.details[0].message
 
 
+def test_reconstruction_preserves_draft_and_explicit_null_as_distinct_values() -> None:
+    draft = _sample(
+        "draft",
+        0.0,
+        expect_json="null",
+        expect_type="null",
+        has_expectation=False,
+    )
+    explicit_null = _sample(
+        "null",
+        0.5,
+        expect_json="null",
+        expect_type="null",
+    )
+
+    reconstructed = reconstruct_target(
+        "state", [draft, explicit_null], default_every_s=0.5
+    )
+
+    assert reconstructed.blocks == [
+        {"at": 0.0},
+        {"at": 0.5, "expect": None},
+    ]
+
+
 def test_sample_rejects_present_blank_optional_text() -> None:
     with pytest.raises(ValidationError, match="use null"):
         _sample("a", 0.0, field="   ")
@@ -169,6 +194,24 @@ def test_reconstruction_preserves_ignore_reason_and_splits_active_samples() -> N
 
     assert [block["at"] for block in reconstructed.blocks] == [0.0, 0.5, 1.0]
     assert reconstructed.blocks[1]["ignore"] == "Known flaky observation."
+
+
+def test_reconstruction_retains_maximum_regular_at_run_without_ranges() -> None:
+    timestamps = [index / 2 for index in range(MAX_EXPANDED_SAMPLES_PER_CASE)]
+
+    reconstructed = reconstruct_target(
+        "state",
+        [
+            _sample(f"sample-{index}", timestamp)
+            for index, timestamp in enumerate(timestamps)
+        ],
+        default_every_s=0.5,
+        allow_range_reconstruction=False,
+    )
+
+    assert reconstructed.blocks == [{"at": timestamps, "expect": True}]
+    assert reconstructed.groups[0].kind == "at"
+    assert len(reconstructed.groups[0].sample_ids) == MAX_EXPANDED_SAMPLES_PER_CASE
 
 
 def test_atomic_replace_preserves_mode_and_removes_temporary_file(
@@ -268,6 +311,7 @@ def _sample(
     *,
     expect_json: str = "true",
     expect_type: str = "boolean",
+    has_expectation: bool = True,
     field: str | None = None,
     comment: str | None = None,
     ignore: str | None = None,
@@ -277,6 +321,7 @@ def _sample(
         {
             "id": sample_id,
             "timestamp_s": timestamp_s,
+            "has_expectation": has_expectation,
             "expect_type": expect_type,
             "expect_json": expect_json,
             "field": field,

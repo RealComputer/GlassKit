@@ -128,6 +128,7 @@ class SampleOrigin(TransportModel):
 class ReviewSample(TransportModel):
     id: str
     timestamp_s: float
+    has_expectation: bool = True
     expect_type: ExpectType
     expect_json: str
     field: str | None = None

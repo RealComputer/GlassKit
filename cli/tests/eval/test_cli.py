@@ -10,7 +10,13 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
-from glasskit.eval.models import RunOptions
+from glasskit.eval.models import (
+    AdapterRuntimeError,
+    CaseWriteError,
+    RunOptions,
+    SeedOptions,
+    SeedReport,
+)
 
 
 def test_eval_help_lists_current_commands() -> None:
@@ -18,6 +24,7 @@ def test_eval_help_lists_current_commands() -> None:
 
     assert result.exit_code == 0
     assert "run" in result.output
+    assert "seed" in result.output
     assert "validate" in result.output
     assert "list-samples" in result.output
     assert "init-case" not in result.output
@@ -29,7 +36,7 @@ def test_eval_commands_define_target_filter() -> None:
     eval_command = root_command.commands["eval"]
     assert isinstance(eval_command, TyperGroup)
 
-    for command in ("run", "validate", "list-samples"):
+    for command in ("seed", "run", "validate", "list-samples"):
         command_options = eval_command.commands[command].params
         target_option = next(
             option
@@ -71,7 +78,7 @@ def test_eval_list_samples_accepts_multiple_target_options(
 
 @pytest.mark.parametrize(
     ("command", "expected_exit_code"),
-    [("run", 2), ("validate", 1), ("list-samples", 2)],
+    [("seed", 2), ("run", 2), ("validate", 1), ("list-samples", 2)],
 )
 def test_eval_target_errors_render_rich_markup_as_literal_text(
     tmp_path: Path, command: str, expected_exit_code: int
@@ -126,13 +133,13 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     assert "ignored when the adapter uses evaluate_many" in concurrency.help
 
 
-def test_eval_run_and_validate_define_adapter_command() -> None:
+def test_eval_adapter_commands_define_adapter_command() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)
     eval_command = root_command.commands["eval"]
     assert isinstance(eval_command, TyperGroup)
 
-    for command in ("run", "validate"):
+    for command in ("seed", "run", "validate"):
         option_names = {
             option_name
             for option in eval_command.commands[command].params
@@ -166,7 +173,7 @@ def test_eval_run_passes_adapter_command_without_python_default(
     assert options.adapter_command == "node eval/adapter.js"
 
 
-@pytest.mark.parametrize("command", ["run", "validate"])
+@pytest.mark.parametrize("command", ["seed", "run", "validate"])
 def test_eval_commands_reject_python_and_process_adapters_together(
     command: str,
 ) -> None:
@@ -212,6 +219,103 @@ def test_eval_run_defines_single_trial_default_and_stability_gate() -> None:
     assert max_flaky.default is None
     assert max_flaky.help is not None
     assert "varies across trials" in max_flaky.help
+
+
+def test_eval_seed_uses_default_adapter_and_passes_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_seed_eval(options: object, callbacks: object) -> SeedReport:
+        captured["options"] = options
+        captured["callbacks"] = callbacks
+        return SeedReport(
+            eval_dir=Path("custom-eval"),
+            case_names=[],
+            seeded=[],
+            preserved_count=0,
+            duration_s=0.0,
+        )
+
+    monkeypatch.setattr("glasskit.cli.seed_eval", fake_seed_eval)
+    monkeypatch.setattr("glasskit.cli.print_seed_summary", lambda *args, **kwargs: None)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            "seed",
+            "--eval-dir",
+            "custom-eval",
+            "--case",
+            "case-001",
+            "--target",
+            "step_1",
+            "--target",
+            "step_2",
+            "--replace",
+            "--concurrency",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0
+    options = captured["options"]
+    assert isinstance(options, SeedOptions)
+    assert options.adapter == "custom-eval/adapter.py:create_evaluator"
+    assert options.case_filter == "case-001"
+    assert options.target_filter == ("step_1", "step_2")
+    assert options.replace
+    assert options.concurrency == 3
+
+
+def test_eval_seed_reports_case_write_failures_as_user_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_seed_eval(options: object, callbacks: object) -> SeedReport:
+        raise CaseWriteError("could not write seeded case file eval/cases/case.yaml")
+
+    monkeypatch.setattr("glasskit.cli.seed_eval", fake_seed_eval)
+
+    result = CliRunner().invoke(app, ["eval", "seed"])
+
+    assert result.exit_code == 2
+    output = Text.from_ansi(result.output).plain
+    assert "Could not seed expectations" in output
+    assert "eval/cases/case.yaml" in output
+
+
+@pytest.mark.parametrize(
+    ("command", "execution_name", "reporter_name"),
+    [
+        ("run", "run_eval", "ConsoleReporter"),
+        ("seed", "seed_eval", "ConsoleSeedReporter"),
+    ],
+)
+def test_eval_commands_close_progress_when_execution_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    execution_name: str,
+    reporter_name: str,
+) -> None:
+    class Reporter:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    reporter = Reporter()
+
+    async def fail(*args: object, **kwargs: object) -> object:
+        raise AdapterRuntimeError("adapter failed")
+
+    monkeypatch.setattr(f"glasskit.cli.{execution_name}", fail)
+    monkeypatch.setattr(f"glasskit.cli.{reporter_name}", lambda **kwargs: reporter)
+
+    result = CliRunner().invoke(app, ["eval", command])
+
+    assert result.exit_code == 2
+    assert reporter.closed
 
 
 def test_eval_run_does_not_define_failure_table_limit() -> None:

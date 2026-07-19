@@ -9,6 +9,7 @@ function sampleSettingsKey(sample: ReviewSample): string {
   // Keep the backend JSON opaque: parsing it in JavaScript would round integers
   // beyond Number.MAX_SAFE_INTEGER and could merge distinct expectations.
   return JSON.stringify([
+    sample.has_expectation,
     sample.expect_type,
     sample.expect_json,
     sample.field,

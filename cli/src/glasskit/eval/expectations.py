@@ -45,6 +45,7 @@ def load_eval_directory(
     from_time_s: float | None = None,
     until_time_s: float | None = None,
     allow_empty: bool = False,
+    allow_draft: bool = False,
 ) -> EvalDirectory:
     _validate_time_window(
         case_filter=case_filter,
@@ -53,13 +54,18 @@ def load_eval_directory(
     )
     eval_dir = _resolve_eval_dir(eval_dir)
     thresholds = _load_eval_thresholds(eval_dir)
-    case_paths = discover_case_paths(eval_dir, case_filter)
     target_ids = (
         normalize_target_filters(target_filter) if target_filter is not None else None
     )
-    if target_ids is not None:
-        case_paths = _filter_case_paths_by_targets(case_paths, target_ids)
-    cases = [load_case(case_path, allow_empty=allow_empty) for case_path in case_paths]
+    case_paths = discover_case_paths(
+        eval_dir,
+        case_filter,
+        target_filter=target_ids,
+    )
+    cases = [
+        load_case(case_path, allow_empty=allow_empty, allow_draft=True)
+        for case_path in case_paths
+    ]
     if target_ids is not None:
         cases = _filter_cases_by_targets(cases, target_ids)
     if from_time_s is not None or until_time_s is not None:
@@ -73,6 +79,8 @@ def load_eval_directory(
             raise EvalConfigError(f"no eval samples found {window}")
     if not allow_empty and not any(case.samples for case in cases):
         raise EvalConfigError("eval has no declared samples")
+    if not allow_draft:
+        _require_expectations(cases)
     return EvalDirectory(path=eval_dir, cases=cases, thresholds=thresholds)
 
 
@@ -123,7 +131,12 @@ def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
     return _thresholds_from_raw(raw.thresholds)
 
 
-def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[Path]:
+def discover_case_paths(
+    eval_dir: Path,
+    case_filter: str | None = None,
+    *,
+    target_filter: str | Sequence[str] | None = None,
+) -> list[Path]:
     """Discover unambiguous case files using the normal eval path rules."""
     eval_dir = _resolve_eval_dir(eval_dir)
     cases_dir = eval_dir / CASES_DIR_NAME
@@ -146,6 +159,10 @@ def discover_case_paths(eval_dir: Path, case_filter: str | None = None) -> list[
         suffix = f" matching case {case_filter!r}" if case_filter else ""
         raise EvalConfigError(f"no case files found under {cases_dir}{suffix}")
     _validate_unique_case_stems(candidates)
+    if target_filter is not None:
+        candidates = _filter_case_paths_by_targets(
+            candidates, normalize_target_filters(target_filter)
+        )
     return candidates
 
 
@@ -337,6 +354,7 @@ def load_case(
     allow_empty: bool = False,
     raw_case: RawCaseFile | None = None,
     resolve_video: bool = True,
+    allow_draft: bool = False,
 ) -> EvalCase:
     """Load one case, optionally expanding an already-parsed in-memory candidate.
 
@@ -406,7 +424,7 @@ def load_case(
     if not allow_empty and not any(target.samples for target in targets):
         raise EvalConfigError(f"{case_path}: case has no samples")
 
-    return EvalCase(
+    case = EvalCase(
         name=case_path.stem,
         path=case_path,
         video_path=video_path,
@@ -414,6 +432,9 @@ def load_case(
         targets=targets,
         thresholds=_thresholds_from_raw(raw.thresholds),
     )
+    if not allow_draft:
+        _require_expectations([case])
+    return case
 
 
 def load_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -525,6 +546,7 @@ def _expand_sample_block(
             timestamp_s=timestamp,
             sample_index=next_sample_index + offset,
             expected=raw_block.expect,
+            has_expectation=raw_block.has_expectation,
             field=raw_block.field,
             compare=compare,
             source=source,
@@ -533,6 +555,19 @@ def _expand_sample_block(
         )
         for offset, timestamp in enumerate(timestamps)
     ]
+
+
+def _require_expectations(cases: Sequence[EvalCase]) -> None:
+    for case in cases:
+        missing = [sample for sample in case.samples if not sample.has_expectation]
+        if not missing:
+            continue
+        count = len(missing)
+        label = "sample" if count == 1 else "samples"
+        raise EvalConfigError(
+            f"{case.path}: {count} {label} have no expect value in the selected "
+            "scope; run glasskit eval seed to propose expectations"
+        )
 
 
 def _compare_from_raw(raw_compare: RawCompare | None) -> ComparisonConfig:

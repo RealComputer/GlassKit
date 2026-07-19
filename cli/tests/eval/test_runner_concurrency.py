@@ -58,6 +58,27 @@ def test_runner_bounds_concurrent_evaluation_and_preserves_result_order(
     assert evaluator.closed
 
 
+def test_runner_reports_individual_results_as_they_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evaluator = AsyncTrackingEvaluator(reverse_completion_order=True)
+    callbacks = RecordingCallbacks()
+
+    report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            evaluator,
+            concurrency=3,
+            callbacks=callbacks,
+        )
+    )
+
+    result_order = [result.sample_index for result in report.trials[0].results]
+    assert callbacks.completed == evaluator.completed
+    assert callbacks.completed != result_order
+    assert result_order == [0, 1, 2, 3]
+
+
 def test_runner_runs_sync_individual_evaluators_concurrently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -80,14 +101,22 @@ def test_runner_uses_native_batch_instead_of_individual_concurrency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evaluator = BatchEvaluator()
+    callbacks = RecordingCallbacks()
 
     report = asyncio.run(
-        _run_with_evaluator(monkeypatch, evaluator, concurrency=4, batch=True)
+        _run_with_evaluator(
+            monkeypatch,
+            evaluator,
+            concurrency=4,
+            batch=True,
+            callbacks=callbacks,
+        )
     )
 
     assert report.success
     assert evaluator.batch_calls == 1
     assert evaluator.batch_sizes == [4]
+    assert callbacks.completed == [0, 1, 2, 3]
 
 
 def test_runner_buffers_only_the_current_batch_target(
@@ -307,6 +336,7 @@ async def _run_with_evaluator(
     concurrency: int = 1,
     keep_going: bool = False,
     batch: bool = False,
+    callbacks: Any = None,
 ) -> Any:
     loaded = LoadedEvaluator(
         evaluate=getattr(evaluator, "evaluate", None),
@@ -317,14 +347,15 @@ async def _run_with_evaluator(
     async def load_evaluator(*args: Any, **kwargs: Any) -> LoadedEvaluator:
         return loaded
 
-    monkeypatch.setattr("glasskit.eval.runner.load_evaluator", load_evaluator)
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", load_evaluator)
     return await run_eval(
         RunOptions(
             eval_dir=eval_dir,
             adapter="unused:create_evaluator",
             concurrency=concurrency,
             keep_going=keep_going,
-        )
+        ),
+        callbacks=callbacks,
     )
 
 
@@ -564,6 +595,23 @@ class AsyncTrackingEvaluator:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class RecordingCallbacks:
+    def __init__(self) -> None:
+        self.completed: list[int] = []
+
+    def on_trial_start(self, trial_index: int, trial_count: int) -> None:
+        return None
+
+    def on_case_start(self, case: Any, sample_count: int) -> None:
+        return None
+
+    def on_target_start(self, case: Any, target_id: str, sample_count: int) -> None:
+        return None
+
+    def on_result(self, result: Any) -> None:
+        self.completed.append(result.sample_index)
 
 
 class BlockingAsyncEvaluator:

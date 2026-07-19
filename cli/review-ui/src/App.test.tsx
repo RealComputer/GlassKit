@@ -705,6 +705,57 @@ describe("review application navigation and drafts", () => {
     expect(putCount).toBe(0);
   });
 
+  it("shows draft expectations and saves an explicit null distinctly", async () => {
+    const draft = {
+      ...sample("draft", 1, "null"),
+      has_expectation: false,
+      expect_type: "null" as const,
+    };
+    const doc = caseFile([target("draft_target", [draft])]);
+    const savedSamples: (typeof draft)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body)) as {
+            targets: Record<string, { samples: (typeof draft)[] }>;
+          };
+          savedSamples.push(body.targets.draft_target.samples[0]);
+          return Promise.resolve(
+            response({
+              ...doc,
+              revision: "saved-draft",
+              targets: [target("draft_target", body.targets.draft_target.samples)],
+              validation_issues: [],
+            }),
+          );
+        }
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", {
+        name: "draft target, 1s, expected Draft",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("Choose a type to set this draft expectation.")).toBeTruthy();
+    const type = screen.getByLabelText("Expectation type");
+    expect(type).toHaveProperty("value", "");
+
+    fireEvent.change(type, { target: { value: "null" } });
+
+    await waitFor(() => expect(savedSamples).toHaveLength(1));
+    expect(savedSamples[0].has_expectation).toBe(true);
+    expect(savedSamples[0].expect_type).toBe("null");
+    expect(savedSamples[0].expect_json).toBe("null");
+    await screen.findByText("Saved");
+  });
+
   it("saves an ignore reason and marks the sample as ignored", async () => {
     const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     const saves: {

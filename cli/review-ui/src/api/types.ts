@@ -22,6 +22,7 @@ export interface SampleComparison {
 export interface ReviewSample {
   id: string;
   timestamp_s: number;
+  has_expectation: boolean;
   expect_type: ExpectType;
   expect_json: string;
   field: string | null;

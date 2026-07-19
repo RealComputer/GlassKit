@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import shlex
 from collections import defaultdict
 from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 from rich.text import Text
 
@@ -15,20 +23,74 @@ from .models import (
     EvalRunReport,
     SampleResult,
     SampleStability,
+    SeededExpectation,
+    SeedReport,
     ValidationReport,
 )
 
 
+class _TargetProgress:
+    def __init__(
+        self, *, console: Console, unit: str, show_progress: bool = True
+    ) -> None:
+        self.console = console
+        self.unit = unit
+        self.enabled = (
+            show_progress and console.is_terminal and not console.is_dumb_terminal
+        )
+        self._progress: Progress | None = None
+        self._task_id: TaskID | None = None
+
+    def start(self, total: int) -> None:
+        self.stop()
+        if not self.enabled or total <= 0:
+            return
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("{task.completed:.0f}/{task.total:.0f} " + self.unit),
+            TextColumn("·"),
+            TimeElapsedColumn(),
+            TextColumn("elapsed"),
+            console=self.console,
+            refresh_per_second=4,
+            transient=True,
+        )
+        task_id = progress.add_task("", total=total)
+        self._progress = progress
+        self._task_id = task_id
+        progress.start()
+
+    def advance(self) -> None:
+        if self._progress is not None and self._task_id is not None:
+            self._progress.advance(self._task_id)
+
+    def stop(self) -> None:
+        if self._progress is not None:
+            self._progress.stop()
+        self._progress = None
+        self._task_id = None
+
+
 class ConsoleReporter:
     def __init__(
-        self, *, verbose: bool = False, console: Console | None = None
+        self,
+        *,
+        verbose: bool = False,
+        console: Console | None = None,
+        show_progress: bool = True,
     ) -> None:
         self.verbose = verbose
         self.console = console or Console()
         self._trial_index = 1
         self._trial_count = 1
+        self._target_progress = _TargetProgress(
+            console=self.console,
+            unit="samples",
+            show_progress=show_progress,
+        )
 
     def on_trial_start(self, trial_index: int, trial_count: int) -> None:
+        self._target_progress.stop()
         self._trial_index = trial_index
         self._trial_count = trial_count
         if trial_count > 1:
@@ -37,6 +99,7 @@ class ConsoleReporter:
             )
 
     def on_case_start(self, case: EvalCase, sample_count: int) -> None:
+        self._target_progress.stop()
         self.console.print(
             f"[bold]Case[/bold] {case.name} "
             f"({sample_count} samples, video={case.video_path.name})",
@@ -46,14 +109,17 @@ class ConsoleReporter:
     def on_target_start(
         self, case: EvalCase, target_id: str, sample_count: int
     ) -> None:
+        self._target_progress.stop()
         target_label = _target_label_for_case(case, target_id)
         target_name = escape(_format_target_name(target_id, target_label))
         self.console.print(
             f"  target {target_name}: {sample_count} samples",
             highlight=False,
         )
+        self._target_progress.start(sample_count)
 
     def on_result(self, result: SampleResult) -> None:
+        self._target_progress.advance()
         if result.status == "passed" and not self.verbose:
             return
         style = {
@@ -72,6 +138,96 @@ class ConsoleReporter:
             f"reason={result.reason}"
         )
         self.console.print(line, highlight=False)
+
+    def close(self) -> None:
+        self._target_progress.stop()
+
+
+class ConsoleSeedReporter:
+    def __init__(
+        self,
+        *,
+        verbose: bool = False,
+        console: Console | None = None,
+        show_progress: bool = True,
+    ) -> None:
+        self.verbose = verbose
+        self.console = console or Console()
+        self._target_progress = _TargetProgress(
+            console=self.console,
+            unit="expectations",
+            show_progress=show_progress,
+        )
+
+    def on_case_start(self, case: EvalCase, sample_count: int) -> None:
+        self._target_progress.stop()
+        self.console.print(
+            f"[bold]Case[/bold] {case.name} "
+            f"({sample_count} expectations, video={case.video_path.name})",
+            highlight=False,
+        )
+
+    def on_target_start(
+        self, case: EvalCase, target_id: str, sample_count: int
+    ) -> None:
+        self._target_progress.stop()
+        target_label = _target_label_for_case(case, target_id)
+        target_name = escape(_format_target_name(target_id, target_label))
+        self.console.print(
+            f"  target {target_name}: {sample_count} expectations",
+            highlight=False,
+        )
+        self._target_progress.start(sample_count)
+
+    def on_result(self, result: SeededExpectation) -> None:
+        self._target_progress.advance()
+        if not self.verbose:
+            return
+        sample = result.sample
+        line = Text("    ")
+        line.append("SEEDED", style="green")
+        line.append(
+            f" {_format_target_name(sample.target_id, sample.target_label)} "
+            f"@{sample.timestamp_s:g}s expect={_short(result.expected)}"
+        )
+        self.console.print(line, highlight=False)
+
+    def close(self) -> None:
+        self._target_progress.stop()
+
+
+def print_seed_summary(report: SeedReport, *, console: Console | None = None) -> None:
+    console = console or Console()
+    console.print(f"\n[bold]Seed[/bold]: {report.eval_dir}", highlight=False)
+    if report.seeded_count == 0:
+        console.print(
+            f"Nothing to seed; {report.preserved_count} existing expectations "
+            "were preserved.",
+            highlight=False,
+        )
+        return
+    console.print(f"Cases updated: {len(report.case_names)}", highlight=False)
+    console.print(
+        f"Expectations: {report.seeded_count} proposed, "
+        f"{report.preserved_count} preserved",
+        highlight=False,
+    )
+    console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
+    for path in report.directory_sync_warnings:
+        console.print(
+            f"[yellow]Warning:[/yellow] replaced {path}, but syncing its directory "
+            "failed.",
+            highlight=False,
+        )
+    review_command = "glasskit eval review --eval-dir " + shlex.quote(
+        str(report.eval_dir)
+    )
+    if len(report.case_names) == 1:
+        review_command += " --case " + shlex.quote(report.case_names[0])
+    console.print(
+        f"Review the proposed expectations with `{review_command}`.",
+        highlight=False,
+    )
 
 
 def print_validation_report(

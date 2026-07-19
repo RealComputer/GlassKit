@@ -422,6 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const nextSample = { ...currentSample, ...normalizedUpdate };
       const unchanged =
         nextSample.timestamp_s === currentSample.timestamp_s &&
+        nextSample.has_expectation === currentSample.has_expectation &&
         nextSample.expect_type === currentSample.expect_type &&
         nextSample.expect_json === currentSample.expect_json &&
         nextSample.field === currentSample.field &&
