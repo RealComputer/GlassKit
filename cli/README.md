@@ -499,29 +499,17 @@ Adapter return values must be JSON-like: `None`, boolean, finite number, string,
 
 ### Command Adapters
 
-Use `--adapter-command` to launch an adapter in any language that can exchange newline-delimited JSON over standard streams:
+Use `--adapter-command` when the app is easier to call from its own runtime, such as a JavaScript or TypeScript backend:
 
 ```sh
 glasskit eval run --adapter-command "node eval/adapter.js"
 ```
 
-GlassKit Eval parses the command with POSIX shell-style argument quoting and starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are not supported. The command inherits the working directory and environment, so it can import the app normally and read secrets from environment variables. GlassKit Eval starts one process for each trial, sends `initialize`, sends evaluation requests, sends `close`, and waits for the process to exit. The close response, adapter leader exit, and stdout and stderr drain share a five-second grace period; GlassKit Eval terminates the process tree and reports an adapter error if that complete shutdown sequence does not finish. `glasskit eval validate --adapter-command ...` starts, initializes, closes, and waits for the same process without evaluating frames.
+GlassKit Eval parses the command using shell-style argument quoting but starts it directly, without a shell. Pipes, redirects, variable expansion, and command substitution are therefore unavailable. The command inherits the current working directory and environment, so it can import the app normally and read the same secrets and configuration.
 
-The adapter reads one JSON request per line from stdin and writes one JSON response per line to stdout. Stdout is reserved for protocol messages; write all application and dependency logs to stderr, using `console.error()` in JavaScript. Each message has a 256 MiB limit. Requests have integer ids, and concurrent `evaluate` responses may be returned in any order. GlassKit Eval correlates them by id and restores case-file order in the report.
+Start from the complete JavaScript file below. Its editable application section passes a factory to `runGlassKitAdapter`; the protocol function handles communication with GlassKit Eval. Stdout belongs to that function, so write application and dependency logs to stderr with `console.error()`.
 
-The command must answer these protocol methods:
-
-| Method | Purpose | Response result |
-| --- | --- | --- |
-| `initialize` | Construct app clients and declare protocol version `1` plus supported methods. | `{protocolVersion: 1, capabilities: {evaluate, evaluateMany}}` |
-| `evaluate` | Evaluate one sample. Sent only when `evaluate` was advertised. | One JSON-like observation. |
-| `evaluateMany` | Evaluate every non-ignored sample for one target. Sent when advertised and preferred when both strategies exist. | One JSON-like observation per sample, in order. |
-| `cancel` | Best-effort notification that an in-flight request was cancelled. It has no request id and receives no response. | None. |
-| `close` | Drain active work, close app clients, acknowledge the request, and exit. | `null`. |
-
-A successful response contains `id` and `result`. A failed request contains the same `id` and an `error` object with a string `message`; an optional `stack` is useful when inspecting the adapter directly. Process startup, initialization, protocol, and shutdown failures abort the eval. An `evaluate` or `evaluateMany` error follows the ordinary adapter error and `--keep-going` behavior.
-
-GlassKit Eval sends adapter configuration with camel-case fields:
+The factory runs once per eval trial and receives this context:
 
 | Field | Description |
 | --- | --- |
@@ -530,9 +518,30 @@ GlassKit Eval sends adapter configuration with camel-case fields:
 | `artifactsDir` | Absolute path from `--artifacts-dir`, or `null`. |
 | `verbose` | Boolean from `--verbose`. |
 
-Command-adapter samples use the same metadata as Python samples, with camel-case names. The image is a lossless PNG represented as `{mimeType, dataBase64, width, height}` on the wire. The JavaScript boilerplate below converts `dataBase64` to `image.bytes`, a Node.js `Buffer`, before calling app code. GlassKit Eval remains responsible for selecting the exact decoded frame; the command should not decode `videoPath` again.
+Return an object with at least one evaluation method:
 
-The following complete, dependency-free `eval/adapter.js` is a starting point. The application section at the top is the part to edit: replace `createAppClient` and its methods with thin calls into the app. The factory receives the initialization fields above and returns the supported evaluation methods plus an optional `close`. Application clients stay in the factory's closure, and GlassKit Eval infers capabilities from the returned methods. Keep the marked protocol function unchanged. This example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+| Method | Purpose |
+| --- | --- |
+| `evaluate({sample, target, signal})` | Evaluate one sample. Use this for ordinary independent backend calls. |
+| `evaluateMany({samples, target, signal})` | Evaluate one target's samples as a real batch and return one observation per sample in the same order. If both evaluation methods exist, this one takes precedence. |
+| `close()` | Optional cleanup for app clients and other resources. |
+
+The individual and batch scheduling behavior is the same as described above. Multiple `evaluate` calls can be active at once according to `--concurrency`, so shared app clients and mutable state must support that. Pass the provided `AbortSignal` through to backend calls when possible. Throw an error to report a failed call; otherwise return a JSON-compatible observation.
+
+Command-adapter samples contain the same information as Python samples, using lower camel case for field names:
+
+| Field | Description |
+| --- | --- |
+| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the lossless PNG. |
+| `timestampS` | Requested sample timestamp in seconds. |
+| `frameIndex` | Zero-based decoded video frame index selected for that timestamp. |
+| `sampleIndex` | Case-local sample index. |
+| `videoPath` | Source video path as a string. Do not decode it again; `image` is already the selected frame. |
+| `caseName` | Case filename stem. |
+
+Targets use the `id`, `index`, `label`, and `config` fields described above. GlassKit-owned fields use lower camel case; keys inside the user-provided factory and target `config` objects are preserved unchanged. `glasskit eval validate --adapter-command ...` constructs and closes the adapter without evaluating samples.
+
+In this dependency-free `eval/adapter.js`, replace `createAppClient` and its methods with thin calls into the app, then keep the marked protocol function unchanged. Application clients stay in the factory's closure, and supported methods are detected automatically. The example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
 
 ```js
 // Application code: replace these calls with the app's imports and logic.
@@ -701,7 +710,7 @@ async function runGlassKitAdapter(createEvaluator) {
 }
 ```
 
-`runGlassKitAdapter` contains the complete protocol boundary, including its state and helpers, so only that one function name shares the module with application code. Its input loop deliberately does not await individual evaluation promises, allowing `--concurrency` requests to overlap. It serializes complete response lines through `outputTail`, so concurrent completions cannot interleave bytes on stdout. A `cancel` notification aborts the request's signal when the app passes that signal through to its backend client. `close` waits for active response handling before releasing resources.
+Application code should interact only with the factory context and the returned handlers. Keep `runGlassKitAdapter` unchanged when using JavaScript; for another language, use that function as the executable protocol reference.
 
 ## Command Reference
 
