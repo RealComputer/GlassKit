@@ -18,7 +18,7 @@ export function Header() {
   const phase = workspace?.savePhase ?? "saved";
   return (
     <header className="app-header">
-      <div className="brand">GlassKit Eval Review</div>
+      <div className="brand">Eval Review</div>
       <div className="header-center">
         <div className="header-context" aria-live="polite">
           {currentCase ? (
