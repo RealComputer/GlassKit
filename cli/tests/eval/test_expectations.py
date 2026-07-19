@@ -547,6 +547,29 @@ def test_public_case_helpers_support_review_loading_without_a_video(
         load_case(case_path, raw_case=raw_case)
 
 
+def test_unsupported_video_error_lists_supported_suffixes(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.avi
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                expect: true
+        """,
+    )
+    (eval_dir / "cases" / "video.avi").write_bytes(b"placeholder")
+
+    with pytest.raises(EvalConfigError) as exc_info:
+        load_eval_directory(eval_dir)
+
+    message = str(exc_info.value)
+    assert "unsupported video file type" in message
+    for suffix in (".m4v", ".mkv", ".mov", ".mp4", ".webm"):
+        assert suffix in message
+
+
 def test_case_filter_matches_yml_case_file(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
@@ -784,10 +807,13 @@ def test_target_filter_errors_when_target_is_missing(tmp_path: Path) -> None:
         """,
     )
 
-    with pytest.raises(
-        EvalConfigError, match="no eval targets found matching target 'step_2'"
-    ):
+    with pytest.raises(EvalConfigError) as exc_info:
         load_eval_directory(eval_dir, target_filter="step_2")
+
+    assert str(exc_info.value) == (
+        "requested eval target not found in the selected cases: 'step_2'; "
+        "available targets: 'step_1'"
+    )
 
 
 def test_multiple_target_filter_errors_when_any_target_is_missing(
@@ -805,10 +831,13 @@ def test_multiple_target_filter_errors_when_any_target_is_missing(
         """,
     )
 
-    with pytest.raises(
-        EvalConfigError, match="no eval targets found matching target 'step_2'"
-    ):
+    with pytest.raises(EvalConfigError) as exc_info:
         load_eval_directory(eval_dir, target_filter=("step_1", "step_2"))
+
+    assert str(exc_info.value) == (
+        "requested eval target not found in the selected cases: 'step_2'; "
+        "available targets: 'step_1'"
+    )
 
 
 def test_target_filter_rejects_empty_target_id(tmp_path: Path) -> None:

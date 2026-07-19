@@ -230,7 +230,7 @@ def test_eval_run_requires_repetition_for_flaky_sample_gate() -> None:
 
     assert result.exit_code == 2
     assert (
-        "max flaky samples requires at least 2 trials"
+        "--max-flaky-samples requires --repeat to be at least 2"
         in Text.from_ansi(result.output).plain
     )
 

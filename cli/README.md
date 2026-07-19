@@ -759,7 +759,7 @@ Options:
 
 Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved.
 
-The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
+The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview. The review command does not transcode video, so if the preview is unavailable, continue inspecting and editing the case source without playback or convert a copy to a codec supported by your browser.
 
 Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, or failure to load or start the review UI. Failure to open the browser is nonfatal because the printed URL remains usable.
 
@@ -947,39 +947,6 @@ Then inspect samples and run one case:
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
 ```
-
-Common failures:
-
-| Message or Symptom | Likely Cause | Fix |
-| --- | --- | --- |
-| `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
-| `cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add case files under `cases/` and reference videos from them. |
-| `no case files found` | No case files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
-| `no eval targets found` | At least one requested `--target` does not match a target id in the selected cases. | Check every target id in the case files or broaden the case filter. |
-| `no eval samples found` | No expanded timestamps fall within the `--from`/`--until` window. | Inspect the case with `list-samples`, then broaden or correct the time bounds. |
-| `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
-| `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
-| `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
-| `could not open video` or `could not decode video` | GlassKit Eval cannot open or decode the file. | Check that the file is a real video and can be decoded locally. |
-| `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
-| `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled samples. |
-| `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 samples. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
-| Browser preview is unavailable | The browser cannot play the source container or codec, even when `glasskit eval run` can decode it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
-| `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
-| `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
-| `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |
-| `adapter target not found` | The module imported, but the callable path does not exist. | Check the function, class, or nested attribute name after `:`. |
-| `adapter ... did not return an object with evaluate(...) or evaluate_many(...)` | The factory returned the wrong shape. | Return an object implementing an individual or batch evaluation strategy, or use a supported simple function adapter. |
-| `could not start adapter command` | The executable in `--adapter-command` is missing or the command could not be launched. | Install the runtime, correct the command, and run it from the app directory. |
-| `adapter command ... failed to initialize` | The process exited, rejected `initialize`, advertised an incompatible protocol version, or did not advertise an evaluation method. | Run the command directly, inspect stderr, and verify the protocol v1 initialization response. |
-| `adapter command protocol error` | The process wrote a log or malformed response to stdout, reused an id, or exceeded the protocol limit. | Keep stdout protocol-only, send logs to stderr, and use the documented NDJSON envelopes. |
-| `adapter returned non-JSON observation` | The adapter returned a dataclass, SDK object, image, bytes, infinite number, or other non-JSON value. | Return only JSON-like values. |
-| `adapter returned N observations for M samples` | `evaluate_many` returned the wrong number of observations. | Return exactly one observation per input sample in order. |
-| `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |
-| `invalid_observation: adapter returned null` | The adapter returned `None` for a sample expecting a non-null value. | Return a JSON value matching the expected shape, or set `expect: null`. |
-| Failed comparisons but exit code `0` | No quality gate was configured. | Add `--min-pass-rate`, `--max-failures`, `--min-target-pass-rate`, or YAML thresholds. |
-| Flaky samples but exit code `0` | Repetition measured variation, but no stability gate was configured. | Add `--max-flaky-samples 0` or another acceptable count. |
-| `max flaky samples requires at least 2 trials` | `--max-flaky-samples` was used with the default single trial. | Add `--repeat 2` or greater, or remove the stability gate. |
 
 ## Support
 

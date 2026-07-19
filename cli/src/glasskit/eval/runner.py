@@ -145,7 +145,9 @@ async def run_eval(
         if options.max_flaky_samples < 0:
             raise EvalConfigError("max flaky samples must be nonnegative")
         if options.repeat < 2:
-            raise EvalConfigError("max flaky samples requires at least 2 trials")
+            raise EvalConfigError(
+                "--max-flaky-samples requires --repeat to be at least 2"
+            )
     started_at = perf_counter()
     eval_directory = load_eval_directory(
         options.eval_dir,

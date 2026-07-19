@@ -8,7 +8,12 @@ import pytest
 from PIL import Image
 
 from glasskit.eval.adapters import load_evaluator
-from glasskit.eval.models import AdapterConfig, FrameSample, TargetContext
+from glasskit.eval.models import (
+    AdapterConfig,
+    AdapterLoadError,
+    FrameSample,
+    TargetContext,
+)
 
 
 def test_loads_simple_file_function_adapter(tmp_path: Path) -> None:
@@ -54,6 +59,63 @@ def test_file_adapter_path_may_contain_colons(tmp_path: Path) -> None:
 
 def test_detects_native_batch_evaluator(tmp_path: Path) -> None:
     asyncio.run(_run_native_batch_evaluator_test(tmp_path))
+
+
+def test_missing_adapter_callable_error_distinguishes_it_from_eval_targets(
+    tmp_path: Path,
+) -> None:
+    adapter_path = tmp_path / "adapter.py"
+    adapter_path.write_text("def existing(): pass\n", encoding="utf-8")
+
+    with pytest.raises(
+        AdapterLoadError,
+        match=r"adapter callable 'missing' was not found in .*adapter\.py",
+    ):
+        asyncio.run(
+            load_evaluator(
+                f"{adapter_path}:missing",
+                AdapterConfig(eval_dir=tmp_path),
+            )
+        )
+
+
+def test_invalid_factory_result_error_lists_supported_shapes(tmp_path: Path) -> None:
+    adapter_path = tmp_path / "adapter.py"
+    adapter_path.write_text(
+        "def create_evaluator(): return object()\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AdapterLoadError) as exc_info:
+        asyncio.run(
+            load_evaluator(
+                f"{adapter_path}:create_evaluator",
+                AdapterConfig(eval_dir=tmp_path),
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "evaluate(...) or evaluate_many(...)" in message
+    assert "(image, target_id) or (sample, target)" in message
+
+
+def test_non_callable_adapter_attribute_error_identifies_the_attribute(
+    tmp_path: Path,
+) -> None:
+    adapter_path = tmp_path / "adapter.py"
+    adapter_path.write_text("evaluator = None\n", encoding="utf-8")
+
+    with pytest.raises(AdapterLoadError) as exc_info:
+        asyncio.run(
+            load_evaluator(
+                f"{adapter_path}:evaluator",
+                AdapterConfig(eval_dir=tmp_path),
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "adapter attribute 'evaluator'" in message
+    assert "is not callable" in message
 
 
 async def _run_import_path_factory_adapter_test(
