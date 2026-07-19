@@ -532,16 +532,16 @@ GlassKit Eval sends adapter configuration with camel-case fields:
 
 Command-adapter samples use the same metadata as Python samples, with camel-case names. The image is a lossless PNG represented as `{mimeType, dataBase64, width, height}` on the wire. The JavaScript boilerplate below converts `dataBase64` to `image.bytes`, a Node.js `Buffer`, before calling app code. GlassKit Eval remains responsible for selecting the exact decoded frame; the command should not decode `videoPath` again.
 
-The following complete, dependency-free `eval/adapter.js` is a starting point. Replace `createEvaluator` with app imports and evaluation logic, and retain the protocol section below it. This example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+The following complete, dependency-free `eval/adapter.js` is a starting point. The application section at the top is the part to edit: replace `createAppClient` and its methods with thin calls into the app. The factory receives the initialization fields above and returns the supported evaluation methods plus an optional `close`. Application clients stay in the factory's closure, and GlassKit Eval infers capabilities from the returned methods. Keep the marked protocol function unchanged. This example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
 
 ```js
-import { createInterface } from "node:readline";
+// Application code: replace these calls with the app's imports and logic.
+await runGlassKitAdapter(async (context) => {
+  const app = await createAppClient(context.config);
 
-// Replace this function with thin wrappers around your app's existing logic.
-async function createEvaluator(config) {
   return {
-    async evaluate(sample, target, { signal }) {
-      return await evaluateFrameInApp({
+    async evaluate({ sample, target, signal }) {
+      return await app.evaluateFrame({
         image: sample.image.bytes,
         mimeType: sample.image.mimeType,
         promptId: target.config.promptId ?? target.id,
@@ -550,150 +550,158 @@ async function createEvaluator(config) {
       });
     },
 
-    // Implement evaluateMany(samples, target, { signal }) instead when the
-    // backend has a real multi-input API. If both exist, evaluateMany wins.
+    // Implement evaluateMany({ samples, target, signal }) instead when the
+    // app has a real multi-input API. If both exist, evaluateMany wins.
 
     async close() {
-      await closeAppClients();
+      await app.close();
     },
   };
-}
+});
 
-// GlassKit Eval process-adapter protocol. Keep stdout protocol-only.
-const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-const active = new Map();
-let evaluator;
-let closing = false;
-let outputTail = Promise.resolve();
+// ---- GlassKit Eval protocol boilerplate: copy unchanged below this line. ----
+async function runGlassKitAdapter(createEvaluator) {
+  const { createInterface } = await import("node:readline");
+  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+  const active = new Map();
+  let evaluator;
+  let closing = false;
+  let outputTail = Promise.resolve();
 
-function send(message) {
-  const line = `${JSON.stringify(message)}\n`;
-  outputTail = outputTail.then(
-    () =>
-      new Promise((resolve, reject) => {
-        process.stdout.write(line, "utf8", (error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      }),
-  );
-  return outputTail;
-}
-
-function errorPayload(error) {
-  return {
-    message: error instanceof Error ? error.message : String(error),
-    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-  };
-}
-
-function sampleForApp(sample) {
-  const { dataBase64, ...image } = sample.image;
-  return {
-    ...sample,
-    image: { ...image, bytes: Buffer.from(dataBase64, "base64") },
-  };
-}
-
-async function respond(request, operation) {
-  try {
-    await send({ id: request.id, result: await operation() });
-  } catch (error) {
-    await send({ id: request.id, error: errorPayload(error) });
-  }
-}
-
-async function initialize(request) {
-  await respond(request, async () => {
-    if (request.params.protocolVersion !== 1) {
-      throw new Error(`unsupported protocol version: ${request.params.protocolVersion}`);
-    }
-    evaluator = await createEvaluator(request.params.config);
-    const capabilities = {
-      evaluate: typeof evaluator?.evaluate === "function",
-      evaluateMany: typeof evaluator?.evaluateMany === "function",
-    };
-    if (!capabilities.evaluate && !capabilities.evaluateMany) {
-      throw new Error("adapter must implement evaluate or evaluateMany");
-    }
-    return { protocolVersion: 1, capabilities };
-  });
-}
-
-function startEvaluation(request) {
-  const controller = new AbortController();
-  const operation = async () => {
-    if (!evaluator) throw new Error("adapter is not initialized");
-    if (request.method === "evaluate") {
-      return await evaluator.evaluate(
-        sampleForApp(request.params.sample),
-        request.params.target,
-        { signal: controller.signal },
-      );
-    }
-    return await evaluator.evaluateMany(
-      request.params.samples.map(sampleForApp),
-      request.params.target,
-      { signal: controller.signal },
+  function send(message) {
+    const line = `${JSON.stringify(message)}\n`;
+    outputTail = outputTail.then(
+      () =>
+        new Promise((resolve, reject) => {
+          process.stdout.write(line, "utf8", (error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        }),
     );
-  };
-  const promise = respond(request, operation);
-  active.set(request.id, { controller, promise });
-  promise.then(
-    () => active.delete(request.id),
-    (error) => {
-      active.delete(request.id);
-      console.error("Could not write GlassKit Eval adapter response:", error);
-      process.exitCode = 1;
-    },
-  );
-}
-
-async function close(request) {
-  closing = true;
-  await Promise.allSettled([...active.values()].map(({ promise }) => promise));
-  await respond(request, async () => {
-    if (typeof evaluator?.close === "function") await evaluator.close();
-    return null;
-  });
-  lines.close();
-  process.stdin.pause();
-}
-
-for await (const line of lines) {
-  let request;
-  try {
-    request = JSON.parse(line);
-  } catch (error) {
-    console.error("Invalid GlassKit Eval protocol request:", error);
-    process.exitCode = 1;
-    break;
+    return outputTail;
   }
-  if (request.method === "cancel") {
-    active.get(request.params.id)?.controller.abort();
-  } else if (request.method === "initialize") {
-    await initialize(request);
-  } else if (request.method === "evaluate" || request.method === "evaluateMany") {
-    startEvaluation(request);
-  } else if (request.method === "close") {
-    await close(request);
-  } else {
-    await send({
-      id: request.id,
-      error: { message: `unknown method: ${request.method}` },
+
+  function errorPayload(error) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+    };
+  }
+
+  function sampleForApp(sample) {
+    const { dataBase64, ...image } = sample.image;
+    return {
+      ...sample,
+      image: { ...image, bytes: Buffer.from(dataBase64, "base64") },
+    };
+  }
+
+  async function respond(request, operation) {
+    try {
+      await send({ id: request.id, result: await operation() });
+    } catch (error) {
+      await send({ id: request.id, error: errorPayload(error) });
+    }
+  }
+
+  async function initialize(request) {
+    await respond(request, async () => {
+      if (request.params.protocolVersion !== 1) {
+        throw new Error(
+          `unsupported protocol version: ${request.params.protocolVersion}`,
+        );
+      }
+      evaluator = await createEvaluator(request.params.config);
+      const capabilities = {
+        evaluate: typeof evaluator?.evaluate === "function",
+        evaluateMany: typeof evaluator?.evaluateMany === "function",
+      };
+      if (!capabilities.evaluate && !capabilities.evaluateMany) {
+        throw new Error("adapter must implement evaluate or evaluateMany");
+      }
+      return { protocolVersion: 1, capabilities };
     });
   }
-}
 
-if (!closing) {
-  for (const { controller } of active.values()) controller.abort();
-  await Promise.allSettled([...active.values()].map(({ promise }) => promise));
-  if (typeof evaluator?.close === "function") await evaluator.close();
+  function startEvaluation(request) {
+    const controller = new AbortController();
+    const operation = async () => {
+      if (!evaluator) throw new Error("adapter is not initialized");
+      if (request.method === "evaluate") {
+        return await evaluator.evaluate({
+          sample: sampleForApp(request.params.sample),
+          target: request.params.target,
+          signal: controller.signal,
+        });
+      }
+      return await evaluator.evaluateMany({
+        samples: request.params.samples.map(sampleForApp),
+        target: request.params.target,
+        signal: controller.signal,
+      });
+    };
+    const promise = respond(request, operation);
+    active.set(request.id, { controller, promise });
+    promise.then(
+      () => active.delete(request.id),
+      (error) => {
+        active.delete(request.id);
+        console.error("Could not write GlassKit Eval adapter response:", error);
+        process.exitCode = 1;
+      },
+    );
+  }
+
+  async function close(request) {
+    closing = true;
+    await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+    await respond(request, async () => {
+      if (typeof evaluator?.close === "function") await evaluator.close();
+      return null;
+    });
+    lines.close();
+    process.stdin.pause();
+  }
+
+  for await (const line of lines) {
+    let request;
+    try {
+      request = JSON.parse(line);
+    } catch (error) {
+      console.error("Invalid GlassKit Eval protocol request:", error);
+      process.exitCode = 1;
+      break;
+    }
+    if (request.method === "cancel") {
+      active.get(request.params.id)?.controller.abort();
+    } else if (request.method === "initialize") {
+      await initialize(request);
+    } else if (
+      request.method === "evaluate" ||
+      request.method === "evaluateMany"
+    ) {
+      startEvaluation(request);
+    } else if (request.method === "close") {
+      await close(request);
+    } else {
+      await send({
+        id: request.id,
+        error: { message: `unknown method: ${request.method}` },
+      });
+    }
+  }
+
+  if (!closing) {
+    for (const { controller } of active.values()) controller.abort();
+    await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+    if (typeof evaluator?.close === "function") await evaluator.close();
+  }
+  await outputTail;
 }
-await outputTail;
 ```
 
-The input loop deliberately does not await individual evaluation promises, allowing `--concurrency` requests to overlap. It serializes complete response lines through `outputTail`, so concurrent completions cannot interleave bytes on stdout. A `cancel` notification aborts the request's signal when the app passes that signal through to its backend client. `close` waits for active response handling before releasing resources.
+`runGlassKitAdapter` contains the complete protocol boundary, including its state and helpers, so only that one function name shares the module with application code. Its input loop deliberately does not await individual evaluation promises, allowing `--concurrency` requests to overlap. It serializes complete response lines through `outputTail`, so concurrent completions cannot interleave bytes on stdout. A `cancel` notification aborts the request's signal when the app passes that signal through to its backend client. `close` waits for active response handling before releasing resources.
 
 ## Command Reference
 
