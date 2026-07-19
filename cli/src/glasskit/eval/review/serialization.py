@@ -281,11 +281,17 @@ def reconstruct_target(
     samples: Sequence[ReviewSample],
     *,
     default_every_s: float,
+    range_end_bound_s: float | None = None,
 ) -> ReconstructedTarget:
     parsed = parse_samples(target_id, samples)
     if not parsed:
         return ReconstructedTarget(blocks=[], groups=[], samples=[])
 
+    range_end_bound_tick = (
+        canonical_timestamp(range_end_bound_s)[1]
+        if range_end_bound_s is not None
+        else None
+    )
     blocks: list[dict[str, Any]] = []
     grouped_samples: list[list[ParsedSample]] = []
     group_specs: list[tuple[GroupKind, int | None, int | None]] = []
@@ -302,6 +308,7 @@ def reconstruct_target(
             run_start,
             run_end,
             default_every_s=default_every_s,
+            range_end_bound_tick=range_end_bound_tick,
             blocks=blocks,
             grouped_samples=grouped_samples,
             group_specs=group_specs,
@@ -495,6 +502,7 @@ def _reconstruct_payload_run(
     end: int,
     *,
     default_every_s: float,
+    range_end_bound_tick: int | None,
     blocks: list[dict[str, Any]],
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
@@ -531,10 +539,10 @@ def _reconstruct_payload_run(
             if candidate_end < len(all_samples)
             else None
         )
-        end_tick = (
-            min(natural_end_tick, next_tick)
-            if next_tick is not None
-            else natural_end_tick
+        end_tick = min(
+            tick
+            for tick in (natural_end_tick, next_tick, range_end_bound_tick)
+            if tick is not None
         )
         if not _range_expands_with_every(
             candidate, end_tick, _seconds_from_tick(cadence_tick)

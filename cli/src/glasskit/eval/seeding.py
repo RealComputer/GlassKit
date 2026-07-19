@@ -358,7 +358,7 @@ def _reconstruct_seeded_target(
     seeded: Mapping[int, SeededExpectation],
 ) -> list[dict[str, Any]]:
     raw_target = raw_case.targets[target.id]
-    review_samples: list[ReviewSample] = []
+    reconstructed_blocks: list[dict[str, Any]] = []
     sample_offset = 0
     for block_index, raw_block in enumerate(raw_target.samples, start=1):
         timestamps = expand_sample_timestamps(
@@ -380,6 +380,7 @@ def _reconstruct_seeded_target(
             if raw_block.every_s is not None
             else raw_case.sampling.every_s
         )
+        review_samples: list[ReviewSample] = []
         for sample in block_samples:
             generated = seeded.get(sample.sample_index)
             if generated is None and not sample.has_expectation:
@@ -407,16 +408,22 @@ def _reconstruct_seeded_target(
                     ),
                 )
             )
+        reconstructed_blocks.extend(
+            reconstruct_target(
+                target.id,
+                review_samples,
+                default_every_s=raw_case.sampling.every_s,
+                range_end_bound_s=(
+                    raw_block.range_[1] if raw_block.range_ is not None else None
+                ),
+            ).blocks
+        )
         sample_offset += len(timestamps)
     if sample_offset != len(target.samples):
         raise EvalConfigError(
             f"{case.path}: target {target.id!r} sample schedule changed while seeding"
         )
-    return reconstruct_target(
-        target.id,
-        review_samples,
-        default_every_s=raw_case.sampling.every_s,
-    ).blocks
+    return reconstructed_blocks
 
 
 def _validate_candidate_case(path: Path, source: str) -> None:

@@ -127,7 +127,7 @@ targets:
     assert report.seeded_count == 3
     raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
     assert raw["targets"]["state"]["samples"] == [
-        {"range": [0.0, 0.8], "expect": True},
+        {"range": [0.0, 0.7], "expect": True},
         {"at": 0.8, "expect": True},
     ]
     assert [sample.timestamp_s for sample in load_eval_directory(eval_dir).samples] == [
@@ -135,6 +135,51 @@ targets:
         0.5,
         0.8,
     ]
+
+
+def test_seed_preserves_out_of_time_order_sample_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+sampling:
+  every_s: 0.5
+targets:
+  state:
+    samples:
+      - at: 1.5
+      - range: [0.0, 0.7]
+        """,
+    )
+    calls: list[list[float]] = []
+
+    async def evaluate_many(samples: list[Any], _target: Any) -> list[bool]:
+        calls.append([sample.timestamp_s for sample in samples])
+        return [True] * len(samples)
+
+    _use_evaluator(monkeypatch, evaluate_many=evaluate_many)
+
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+            )
+        )
+    )
+
+    assert report.seeded_count == 3
+    assert calls == [[1.5, 0.0, 0.5]]
+    raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
+    assert raw["targets"]["state"]["samples"] == [
+        {"at": 1.5, "expect": True},
+        {"range": [0.0, 0.7], "expect": True},
+    ]
+    reloaded = load_eval_directory(eval_dir).samples
+    assert [sample.timestamp_s for sample in reloaded] == [1.5, 0.0, 0.5]
+    assert [sample.sample_index for sample in reloaded] == [0, 1, 2]
 
 
 def test_seed_replace_and_filters_only_relabel_the_selected_scope(
