@@ -62,7 +62,7 @@ class _TargetProgress:
 
     def advance(self) -> None:
         if self._progress is not None and self._task_id is not None:
-            self._progress.update(self._task_id, advance=1, refresh=True)
+            self._progress.advance(self._task_id)
 
     def stop(self) -> None:
         if self._progress is not None:
