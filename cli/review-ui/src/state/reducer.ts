@@ -35,6 +35,7 @@ export interface AppState {
   selectedCaseId: string | null;
   selectedTargetId: string | null;
   selectedSampleId: string | null;
+  selectedSampleFromPlayback: boolean;
   lastTargetByCase: Record<string, string>;
   caseFileWorkspaces: Record<string, CaseFileWorkspace>;
   loadingCaseFiles: Record<string, boolean>;
@@ -57,6 +58,7 @@ export const initialState: AppState = {
   selectedCaseId: null,
   selectedTargetId: null,
   selectedSampleId: null,
+  selectedSampleFromPlayback: false,
   lastTargetByCase: {},
   caseFileWorkspaces: {},
   loadingCaseFiles: {},
@@ -265,6 +267,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...cachedState,
         selectedTargetId: targetId,
         selectedSampleId: sample?.id ?? null,
+        selectedSampleFromPlayback: false,
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,
@@ -295,6 +298,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedCaseId: action.caseId,
         selectedTargetId: targetId,
         selectedSampleId: sample?.id ?? null,
+        selectedSampleFromPlayback: false,
         targetFilter: "",
         sourceDrawer: null,
         video: videoAtSample(baseVideo, sample),
@@ -311,6 +315,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selectedTargetId: action.targetId,
         selectedSampleId: sample?.id ?? null,
+        selectedSampleFromPlayback: false,
         lastTargetByCase: state.selectedCaseId
           ? {
               ...state.lastTargetByCase,
@@ -325,6 +330,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selectedTargetId: action.targetId,
         selectedSampleId: action.sampleId,
+        selectedSampleFromPlayback: false,
         lastTargetByCase: state.selectedCaseId
           ? {
               ...state.lastTargetByCase,
@@ -354,7 +360,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ? state.caseFileWorkspaces[state.selectedCaseId]
         : null;
       if (workspace && Object.keys(workspace.formErrors).length > 0) return state;
-      return { ...state, selectedSampleId: action.sampleId };
+      return {
+        ...state,
+        selectedSampleId: action.sampleId,
+        selectedSampleFromPlayback: true,
+      };
     }
     case "REPLACE_TARGET_SAMPLES": {
       const workspace = state.caseFileWorkspaces[action.caseId];
@@ -403,6 +413,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selectedSampleId: null,
+        selectedSampleFromPlayback: false,
         caseFileWorkspaces: {
           ...state.caseFileWorkspaces,
           [action.caseId]: {
@@ -601,6 +612,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...cachedState,
         selectedTargetId: targetId,
         selectedSampleId,
+        selectedSampleFromPlayback: false,
         lastTargetByCase: targetId
           ? { ...state.lastTargetByCase, [action.document.id]: targetId }
           : state.lastTargetByCase,

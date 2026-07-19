@@ -128,7 +128,7 @@ describe("review application navigation and drafts", () => {
     expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1");
   });
 
-  it("does not pause playback when following programmatically focuses an unsaved sample", async () => {
+  it("does not focus an unsaved sample selected by playback following", async () => {
     const unsaved = { ...sample("unsaved", 1, "true"), origin: null };
     const doc = caseFile([target("target_a", [sample("first", 0, "false"), unsaved])]);
     vi.stubGlobal(
@@ -153,10 +153,11 @@ describe("review application navigation and drafts", () => {
     fireEvent.timeUpdate(video!, { target: { currentTime: 1.1 } });
 
     await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1"));
-    await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "True" })),
-    );
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "True" }));
     expect(pause).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.body, { key: " " });
+    expect(pause).toHaveBeenCalledOnce();
   });
 
   it("pauses active playback when an inspector editor receives focus", async () => {

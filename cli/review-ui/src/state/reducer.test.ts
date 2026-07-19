@@ -99,7 +99,16 @@ describe("appReducer save ordering", () => {
     });
 
     expect(state.selectedSampleId).toBe("followed");
+    expect(state.selectedSampleFromPlayback).toBe(true);
     expect(state.video).toBe(video);
+
+    state = appReducer(state, {
+      type: "SELECT_SAMPLE",
+      targetId: "target_a",
+      sampleId: "followed",
+      timestamp: 2,
+    });
+    expect(state.selectedSampleFromPlayback).toBe(false);
   });
 
   it("reloads retained selection at its sample and refreshes the media element", () => {
