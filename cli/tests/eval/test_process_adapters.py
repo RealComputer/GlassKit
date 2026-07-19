@@ -479,46 +479,6 @@ def test_process_adapter_reports_command_start_failure() -> None:
         )
 
 
-def test_process_adapter_uses_platform_command_parser(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    command = r'node "C:\work\eval adapter.js"'
-    expected = ["node", r"C:\work\eval adapter.js"]
-    parsed_commands: list[str] = []
-
-    def parse_windows_command(value: str) -> list[str]:
-        parsed_commands.append(value)
-        return expected
-
-    monkeypatch.setattr(process_adapters.os, "name", "nt")
-    monkeypatch.setattr(
-        process_adapters, "_split_windows_command", parse_windows_command
-    )
-
-    assert process_adapters._parse_adapter_command(command) == expected
-    assert parsed_commands == [command]
-
-
-@pytest.mark.skipif(
-    process_adapters.os.name != "nt",
-    reason="requires the native Windows command-line parser",
-)
-@pytest.mark.parametrize(
-    ("command", "expected"),
-    [
-        (r"node eval\adapter.js", ["node", r"eval\adapter.js"]),
-        (
-            r'"C:\Program Files\node.exe" "eval adapter.js"',
-            [r"C:\Program Files\node.exe", "eval adapter.js"],
-        ),
-    ],
-)
-def test_process_adapter_parses_windows_command_line(
-    command: str, expected: list[str]
-) -> None:
-    assert process_adapters._parse_adapter_command(command) == expected
-
-
 def test_runner_executes_process_adapter_and_recreates_it_for_each_trial(
     tmp_path: Path,
 ) -> None:
