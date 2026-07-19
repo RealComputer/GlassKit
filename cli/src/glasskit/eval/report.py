@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from collections import defaultdict
 from typing import Any
 
@@ -15,6 +16,8 @@ from .models import (
     EvalRunReport,
     SampleResult,
     SampleStability,
+    SeededExpectation,
+    SeedReport,
     ValidationReport,
 )
 
@@ -72,6 +75,77 @@ class ConsoleReporter:
             f"reason={result.reason}"
         )
         self.console.print(line, highlight=False)
+
+
+class ConsoleSeedReporter:
+    def __init__(
+        self, *, verbose: bool = False, console: Console | None = None
+    ) -> None:
+        self.verbose = verbose
+        self.console = console or Console()
+
+    def on_case_start(self, case: EvalCase, sample_count: int) -> None:
+        self.console.print(
+            f"[bold]Case[/bold] {case.name} "
+            f"({sample_count} expectations, video={case.video_path.name})",
+            highlight=False,
+        )
+
+    def on_target_start(
+        self, case: EvalCase, target_id: str, sample_count: int
+    ) -> None:
+        target_label = _target_label_for_case(case, target_id)
+        target_name = escape(_format_target_name(target_id, target_label))
+        self.console.print(
+            f"  target {target_name}: {sample_count} expectations",
+            highlight=False,
+        )
+
+    def on_result(self, result: SeededExpectation) -> None:
+        if not self.verbose:
+            return
+        sample = result.sample
+        line = Text("    ")
+        line.append("SEEDED", style="green")
+        line.append(
+            f" {_format_target_name(sample.target_id, sample.target_label)} "
+            f"@{sample.timestamp_s:g}s expect={_short(result.expected)}"
+        )
+        self.console.print(line, highlight=False)
+
+
+def print_seed_summary(report: SeedReport, *, console: Console | None = None) -> None:
+    console = console or Console()
+    console.print(f"\n[bold]Seed[/bold]: {report.eval_dir}", highlight=False)
+    if report.seeded_count == 0:
+        console.print(
+            f"Nothing to seed; {report.preserved_count} existing expectations "
+            "were preserved.",
+            highlight=False,
+        )
+        return
+    console.print(f"Cases updated: {len(report.case_names)}", highlight=False)
+    console.print(
+        f"Expectations: {report.seeded_count} proposed, "
+        f"{report.preserved_count} preserved",
+        highlight=False,
+    )
+    console.print(f"Duration: {_format_duration(report.duration_s)}", highlight=False)
+    for path in report.directory_sync_warnings:
+        console.print(
+            f"[yellow]Warning:[/yellow] replaced {path}, but syncing its directory "
+            "failed.",
+            highlight=False,
+        )
+    review_command = "glasskit eval review --eval-dir " + shlex.quote(
+        str(report.eval_dir)
+    )
+    if len(report.case_names) == 1:
+        review_command += " --case " + shlex.quote(report.case_names[0])
+    console.print(
+        f"Review the proposed expectations with `{review_command}`.",
+        highlight=False,
+    )
 
 
 def print_validation_report(

@@ -17,12 +17,16 @@ from glasskit.eval.models import (
     SampleExpectation,
     SampleResult,
     SampleStability,
+    SeededExpectation,
+    SeedReport,
     TargetSpec,
 )
 from glasskit.eval.report import (
     ConsoleReporter,
+    ConsoleSeedReporter,
     print_run_summary,
     print_sample_schedule,
+    print_seed_summary,
 )
 
 
@@ -127,6 +131,38 @@ def test_console_reporter_labels_repeated_trial_output() -> None:
     output = buffer.getvalue()
     assert "Trial 2/3" in output
     assert "[2/3] FAILED" in output
+
+
+def test_seed_reporter_and_summary_use_provisional_labeling_vocabulary() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=160)
+    sample = _case().samples[0]
+    seeded = SeededExpectation(
+        sample=sample,
+        expected={"matches": True},
+        evaluation_duration_s=0.25,
+        evaluation_timing_mode="individual",
+    )
+    reporter = ConsoleSeedReporter(verbose=True, console=console)
+
+    reporter.on_case_start(_case(), 1)
+    reporter.on_target_start(_case(), "step_1", 1)
+    reporter.on_result(seeded)
+    print_seed_summary(
+        SeedReport(
+            eval_dir=Path("custom eval"),
+            case_names=["case-001"],
+            seeded=[seeded],
+            preserved_count=2,
+            duration_s=1.0,
+        ),
+        console=console,
+    )
+
+    output = buffer.getvalue()
+    assert "SEEDED Step 1 (step_1) @0s" in output
+    assert "1 proposed, 2 preserved" in output
+    assert "review --eval-dir 'custom eval' --case case-001" in output
 
 
 def test_console_reporter_does_not_auto_highlight_values() -> None:

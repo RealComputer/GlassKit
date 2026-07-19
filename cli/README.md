@@ -45,7 +45,6 @@ targets:
   step_1:
     samples:
     - range: [0.0, 3.0]
-      expect: true
 YAML
 ```
 
@@ -61,17 +60,19 @@ def create_evaluator(config):
     return Evaluator()
 ```
 
-Run the eval:
+Seed the draft expectation from the adapter, review it, and run the eval:
 
 ```sh
+uv run glasskit eval seed --case task-01
+uv run glasskit eval review --case task-01
 uv run glasskit eval run
 ```
 
-Expected result: `run` prints case progress, a summary, and a per-target table.
+Expected result: `seed` writes `expect: true` into the case, `review` opens the proposed expectation for correction, and `run` prints case progress, a summary, and a per-target table.
 
 ## Core Concepts
 
-An eval directory is the runnable test set. By default, `glasskit eval` uses `eval/` in the current working directory.
+An eval directory is a collection of draft or runnable cases. By default, `glasskit eval` uses `eval/` in the current working directory.
 
 A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem.
 
@@ -79,7 +80,7 @@ A video is declared by each case with `video:`. The path is resolved relative to
 
 A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
 
-A sample is one labeled timestamp, or one timestamp expanded from a range. Each sample has an expected JSON-like value.
+A sample is one timestamp, or one timestamp expanded from a range. A runnable sample has an expected JSON-like value. A draft sample omits `expect` until `glasskit eval seed` proposes one or you add one manually; `expect: null` is a real expectation and is not a draft.
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
@@ -89,7 +90,7 @@ A gate is a quality bar, such as a minimum pass rate or maximum failure count, t
 
 ### Create a New Eval Case
 
-Goal: create the required directory structure and a case file in `eval/` from an existing recording.
+Goal: create the required directory structure and a draft case file in `eval/` from an existing recording.
 
 Commands:
 
@@ -103,14 +104,40 @@ sampling:
 targets:
   step_2:
     samples:
-    - at: 0.0
-      expect: false
+    - range: [0.0, 12.0]
 YAML
 ```
 
-Expected result: `eval/cases/task-02.yaml` points to `task-02.mov` in the sibling `recordings/` directory, and the case is ready for timestamp and expectation edits.
+Expected result: `eval/cases/task-02.yaml` points to `task-02.mov` in the sibling `recordings/` directory and declares the frames that need expectations.
 
 Note: If you prefer colocated fixtures, put the recording in `eval/cases/` and set `video:` to the filename, such as `task-02.mov`.
+
+### Seed Draft Expectations
+
+Goal: use the app's normal implementation, or a separate stronger labeling adapter, to create proposed expectations that are easier to correct than writing labels from scratch.
+
+The shortest command uses the same default adapter as `run` and fills only samples where `expect` is omitted:
+
+```sh
+uv run --env-file .env glasskit eval seed --case task-02
+```
+
+Use any other Python or process adapter when a different implementation should propose the labels:
+
+```sh
+uv run --env-file .env glasskit eval seed --case task-02 --adapter eval/strong_labeler.py:create_evaluator --concurrency 4
+uv run glasskit eval seed --case task-02 --adapter-command "node eval/labeler.js"
+```
+
+The adapter contract is identical to `run`: targets receive the same merged config, individual and native batch evaluation are both supported, and `field` extracts the value that becomes `expect`. Existing expectations are preserved unless `--replace` is set. `--case` and repeatable `--target` filters narrow both the adapter work and the case content that may change.
+
+`seed` evaluates the exact frames used by `run`, validates every JSON-like observation, compacts adjacent equal expectations back into ranges, validates the candidate case, and atomically replaces each changed file only after all adapter work succeeds. If a case changes on disk during evaluation, `seed` refuses to overwrite it. Saving may reformat YAML and remove ordinary YAML comments; `comment` and `ignore` fields are preserved.
+
+Generated expectations are proposals, not ground truth. Review and correct them before relying on the eval:
+
+```sh
+uv run glasskit eval review --case task-02
+```
 
 ### Validate Before a Run
 
@@ -333,7 +360,7 @@ Sample block fields:
 | --- | ---: | --- |
 | `range` | Conditionally | Two-element `[start, end]` interval in seconds. Exactly one of `range` or `at` is required. The interval is half-open. |
 | `at` | Conditionally | One timestamp or a list of timestamps in seconds. Exactly one of `range` or `at` is required. Lists are sorted during expansion. |
-| `expect` | Yes | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. |
+| `expect` | For runnable samples | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. Omit it to create a draft sample for `seed`; explicit `null` is a labeled expectation. |
 | `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
@@ -393,7 +420,7 @@ GlassKit Eval supports in-process Python adapters and language-neutral command a
 
 ### Python Adapters
 
-By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
+By default, `glasskit eval seed` and `glasskit eval run` load `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
 
 Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.step_checker`.
 
@@ -750,10 +777,37 @@ Commands:
 
 | Command | Description |
 | --- | --- |
+| `seed` | Run a labeling adapter and write proposed expectations into selected draft samples. |
 | `run` | Decode selected frames, call the adapter, compare observations, apply gates, and report results. |
 | `validate` | Validate eval structure, videos, sample times, and optional adapter construction. |
 | `list-samples` | Print the expanded sample schedule. |
 | `review` | Open the local browser UI for inspecting and correcting timed expectations. |
+
+### `glasskit eval seed`
+
+Purpose: fill missing expectations in selected draft cases using an adapter, or explicitly replace existing expectations in the selected scope.
+
+```sh
+glasskit eval seed --case task-01 --target step_1
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Labeling adapter target in `<module-or-file>:<callable>` form. It uses the same contract as the run adapter. |
+| `--adapter-command TEXT` | None | NDJSON process labeling adapter command. Mutually exclusive with `--adapter`; when set, the Python adapter default is not loaded. |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--case TEXT` | All cases | Only seed one case by filename or stem. |
+| `--target TEXT` | All targets | Only seed this target id from the selected cases. Repeat the option to seed multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter in its `config` field. |
+| `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
+| `--replace` | `false` | Evaluate and replace existing expectations in the selected scope as well as filling missing ones. |
+| `--verbose` | `false` | Print every proposed expectation and set the factory config object's `verbose` field. |
+
+When `field` is present on a sample block, `seed` extracts that path from the adapter's observation and writes the extracted value as `expect`; otherwise it writes the complete observation. Existing expectations outside the selected filters, and inside the filters without `--replace`, are preserved. Missing expectations outside the selected filters may remain draft; `run`, `validate`, and `list-samples` reject draft samples only when they fall inside those commands' selected scope.
+
+Exit behavior: exits `0` after seeding or when the selected scope has nothing to seed, and `2` when setup, validation, adapter evaluation, field extraction, candidate reconstruction, or safe writing fails.
 
 ### `glasskit eval review`
 
@@ -875,8 +929,9 @@ Default values at a glance:
 | Area | Default When Omitted |
 | --- | --- |
 | Eval directory | `eval` from the command's working directory. |
+| `seed` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | `run` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
-| Individual evaluation concurrency | `1`. Increase with `run --concurrency`. |
+| Individual evaluation concurrency | `1`. Increase with `seed --concurrency` or `run --concurrency`. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
@@ -904,6 +959,8 @@ All threshold keys default to unset. `glasskit eval` does not treat a missing `m
 With `--repeat`, quality gates are calculated separately for every trial, and the overall run fails if any trial fails one. Results are never pooled before applying a quality gate. Flaky samples do not fail the run unless `--max-flaky-samples` is configured. A stable failure satisfies `--max-flaky-samples 0`, so combine stability and quality gates when correctness also matters.
 
 Adapter evaluation errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. With `--keep-going`, those sample-level errors are recorded as results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`. Adapter setup, loading, and close errors still abort the command.
+
+Validation, listing, and running require `expect` on every sample in their selected scope. If one of those commands reports draft samples, use `glasskit eval seed` to propose their expectations or label them manually. Filters are applied before this check, so a focused command can operate on a ready target while another target in the same case remains draft.
 
 Threshold precedence:
 
@@ -956,6 +1013,13 @@ Start with validation:
 
 ```sh
 uv run glasskit eval validate
+```
+
+If validation reports samples without `expect`, seed and review those draft expectations first:
+
+```sh
+uv run glasskit eval seed --case task-01
+uv run glasskit eval review --case task-01
 ```
 
 Then inspect samples and run one case:

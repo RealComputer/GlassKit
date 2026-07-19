@@ -482,6 +482,57 @@ def test_non_json_expected_value_is_invalid(tmp_path: Path) -> None:
         load_eval_directory(eval_dir)
 
 
+def test_draft_expectation_is_distinct_from_explicit_null(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          draft:
+            samples:
+              - at: 0.0
+          ready:
+            samples:
+              - at: 0.0
+                expect: null
+        """,
+    )
+
+    draft = load_eval_directory(
+        eval_dir, target_filter="draft", allow_draft=True
+    ).samples[0]
+    ready = load_eval_directory(eval_dir, target_filter="ready").samples[0]
+
+    assert not draft.has_expectation
+    assert ready.has_expectation
+    assert ready.expected is None
+    with pytest.raises(EvalConfigError, match=r"1 sample.*no expect.*eval seed"):
+        load_eval_directory(eval_dir, target_filter="draft")
+
+
+def test_target_filter_excludes_other_draft_targets_from_runnable_validation(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          draft:
+            samples:
+              - at: 0.0
+          ready:
+            samples:
+              - at: 1.0
+                expect: true
+        """,
+    )
+
+    loaded = load_eval_directory(eval_dir, target_filter="ready")
+
+    assert [target.id for target in loaded.cases[0].targets] == ["ready"]
+
+
 def test_video_field_is_required(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

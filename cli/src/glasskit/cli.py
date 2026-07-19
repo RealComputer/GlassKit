@@ -14,16 +14,19 @@ from rich.console import Console
 from rich.text import Text
 
 from .eval.expectations import load_eval_directory
-from .eval.models import EvalError, RunOptions
+from .eval.models import EvalError, RunOptions, SeedOptions
 from .eval.report import (
     ConsoleReporter,
+    ConsoleSeedReporter,
     print_run_summary,
     print_sample_schedule,
+    print_seed_summary,
     print_validation_report,
 )
 from .eval.review.documents import ReviewRepository
 from .eval.review.server import create_review_server
 from .eval.runner import run_eval, validate_eval_directory
+from .eval.seeding import seed_eval
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
@@ -31,6 +34,106 @@ app.add_typer(eval_app, name="eval")
 
 DEFAULT_EVAL_DIR = Path("eval")
 DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
+
+
+@eval_app.command("seed")
+def eval_seed(
+    adapter: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter",
+            help=(
+                "Labeling adapter in module/file:callable form. Defaults to "
+                "adapter.py with create_evaluator in the eval dir."
+            ),
+        ),
+    ] = None,
+    adapter_command: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter-command",
+            help=(
+                "Command for an NDJSON labeling adapter, such as "
+                "'node eval/adapter.js'."
+            ),
+        ),
+    ] = None,
+    eval_dir: Annotated[
+        Path,
+        typer.Option("--eval-dir", help="Eval directory."),
+    ] = DEFAULT_EVAL_DIR,
+    case: Annotated[
+        str | None,
+        typer.Option("--case", help="Only seed one case by filename or stem."),
+    ] = None,
+    target: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--target",
+            help="Only seed this target id; repeat to select multiple targets.",
+        ),
+    ] = None,
+    adapter_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--adapter-config", help="YAML or JSON config passed to the adapter."
+        ),
+    ] = None,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            "--concurrency",
+            min=1,
+            help=(
+                "Maximum concurrent per-sample evaluate calls; ignored when the "
+                "adapter uses evaluate_many."
+            ),
+        ),
+    ] = 1,
+    replace: Annotated[
+        bool,
+        typer.Option(
+            "--replace",
+            help="Replace existing expectations in the selected scope too.",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", help="Print every proposed expectation."),
+    ] = False,
+) -> None:
+    """Propose expectations for selected draft samples with an adapter."""
+
+    if adapter is not None and adapter_command is not None:
+        raise typer.BadParameter(
+            "cannot be used with --adapter", param_hint="--adapter-command"
+        )
+    console = Console()
+    adapter_target = (
+        None
+        if adapter_command is not None
+        else adapter or _default_adapter_target(eval_dir)
+    )
+    options = SeedOptions(
+        eval_dir=eval_dir,
+        adapter=adapter_target,
+        adapter_command=adapter_command,
+        case_filter=case,
+        target_filter=_target_filter(target),
+        adapter_config=_load_config(adapter_config),
+        concurrency=concurrency,
+        replace=replace,
+        verbose=verbose,
+    )
+    reporter = ConsoleSeedReporter(verbose=verbose, console=console)
+    try:
+        report = asyncio.run(seed_eval(options, callbacks=reporter))
+    except EvalError as error:
+        _print_labeled_message(
+            console, "Could not seed expectations", str(error), style="red"
+        )
+        raise typer.Exit(2) from error
+    print_seed_summary(report, console=console)
 
 
 @eval_app.command("run")
@@ -187,6 +290,8 @@ def eval_run(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    """Run selected samples and apply quality gates."""
+
     _validate_sample_time_options(
         case=case,
         from_time=from_time,
@@ -274,6 +379,8 @@ def eval_validate(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    """Validate selected eval structure without evaluating samples."""
+
     if adapter is not None and adapter_command is not None:
         raise typer.BadParameter(
             "cannot be used with --adapter", param_hint="--adapter-command"
@@ -331,6 +438,8 @@ def eval_list_samples(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    """List the expanded selected sample schedule."""
+
     _validate_sample_time_options(
         case=case,
         from_time=from_time,
