@@ -91,6 +91,16 @@ async def seed_eval(
         target_filter=options.target_filter,
         allow_draft=True,
     )
+    loaded_paths = {case.path for case in eval_directory.cases}
+    snapshot_paths = set(source_snapshot)
+    if loaded_paths != snapshot_paths:
+        changed_paths = ", ".join(
+            str(path) for path in sorted(loaded_paths ^ snapshot_paths)
+        )
+        raise EvalConfigError(
+            "case selection changed while its draft was being loaded; retry "
+            f"seeding: {changed_paths}"
+        )
     sources = {case.path: source_snapshot[case.path] for case in eval_directory.cases}
     for path, source in sources.items():
         if _read_text(path) != source.text:

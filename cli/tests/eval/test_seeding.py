@@ -15,6 +15,7 @@ from glasskit.eval.models import (
     AdapterRuntimeError,
     CaseWriteError,
     EvalConfigError,
+    EvalDirectory,
     SeedOptions,
 )
 from glasskit.eval.seeding import seed_eval
@@ -225,6 +226,52 @@ targets:
     assert report.seeded_count == 1
     raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
     assert raw["targets"]["state"]["samples"] == [{"at": 0.0, "expect": True}]
+
+
+def test_seed_rejects_case_membership_changes_during_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        """,
+    )
+    before = case_path.read_text(encoding="utf-8")
+    added_path = eval_dir / "cases" / "added.yaml"
+
+    def load_after_case_added(eval_path: Path, **kwargs: Any) -> EvalDirectory:
+        added_path.write_text(
+            f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 1.0
+            """,
+            encoding="utf-8",
+        )
+        return load_eval_directory(eval_path, **kwargs)
+
+    monkeypatch.setattr(
+        "glasskit.eval.seeding.load_eval_directory", load_after_case_added
+    )
+
+    with pytest.raises(EvalConfigError, match="case selection changed.*retry seeding"):
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                )
+            )
+        )
+
+    assert case_path.read_text(encoding="utf-8") == before
 
 
 def test_seed_with_no_missing_expectations_does_not_construct_adapter(
