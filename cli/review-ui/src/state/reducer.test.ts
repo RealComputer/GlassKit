@@ -271,11 +271,12 @@ describe("appReducer save ordering", () => {
 
   it("updates and clamps the requested playhead even without playable media", () => {
     const state = appReducer(
-      { ...initialState, video: { ...initialState.video, duration: 10 } },
+      { ...initialState, video: { ...initialState.video, duration: 10, paused: false } },
       { type: "REQUEST_SEEK", time: 12 },
     );
     expect(state.video.currentTime).toBe(10);
     expect(state.video.seekRequest.time).toBe(10);
+    expect(state.video.paused).toBe(true);
   });
 
   it("keeps a failed queue stopped while newer edits remain retryable", () => {

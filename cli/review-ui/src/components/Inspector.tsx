@@ -78,6 +78,7 @@ export function Inspector() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const expectationRef = useRef<HTMLTextAreaElement | HTMLInputElement | HTMLButtonElement>(null);
   const ignoreRef = useRef<HTMLTextAreaElement>(null);
+  const autoFocusInProgressRef = useRef(false);
 
   useEffect(() => {
     const selected = sampleRef.current;
@@ -113,9 +114,18 @@ export function Inspector() {
   }, [selectionKey, workspace?.acceptedCaseFile]);
 
   useEffect(() => {
-    if (sample?.origin === null) {
-      requestAnimationFrame(() => expectationRef.current?.focus());
-    }
+    if (sample?.origin !== null) return;
+    const frame = requestAnimationFrame(() => {
+      const editor = expectationRef.current;
+      if (!editor) return;
+      autoFocusInProgressRef.current = true;
+      try {
+        editor.focus();
+      } finally {
+        autoFocusInProgressRef.current = false;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [sample?.id, sample?.origin]);
 
   const errorKey = (name: string) => `${target?.id}:${sample?.id}:${name}`;
@@ -223,6 +233,7 @@ export function Inspector() {
 
   const editingDisabled = !workspace?.document.editing_enabled;
   const pauseForEditing = () => {
+    if (autoFocusInProgressRef.current) return;
     const video = globalThis.document.querySelector("video");
     if (video && !video.paused) video.pause();
   };

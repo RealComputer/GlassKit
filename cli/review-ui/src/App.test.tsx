@@ -99,6 +99,66 @@ describe("review application navigation and drafts", () => {
     expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2");
   });
 
+  it("does not follow a programmatic seek started during playback", async () => {
+    const doc = caseFile([
+      target("target_a", [sample("selected", 1, "false"), sample("crossed", 1.05, "true")]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1"));
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    Object.defineProperty(video!, "paused", { configurable: true, value: false });
+    const pause = vi.spyOn(video!, "pause");
+    pause.mockClear();
+
+    fireEvent.play(video!);
+    fireEvent.click(screen.getByRole("button", { name: "Move video time forward 0.1 seconds" }));
+
+    await waitFor(() => expect(pause).toHaveBeenCalled());
+    expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1");
+  });
+
+  it("does not pause playback when following programmatically focuses an unsaved sample", async () => {
+    const unsaved = { ...sample("unsaved", 1, "true"), origin: null };
+    const doc = caseFile([target("target_a", [sample("first", 0, "false"), unsaved])]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "0"));
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    Object.defineProperty(video!, "paused", { configurable: true, value: false });
+    const pause = vi.spyOn(video!, "pause");
+    pause.mockClear();
+
+    fireEvent.play(video!);
+    fireEvent.timeUpdate(video!, { target: { currentTime: 1.1 } });
+
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1"));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "True" })),
+    );
+    expect(pause).not.toHaveBeenCalled();
+  });
+
   it("pauses active playback when an inspector editor receives focus", async () => {
     const doc = caseFile();
     vi.stubGlobal(

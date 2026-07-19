@@ -633,6 +633,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         video: {
           ...state.video,
           currentTime,
+          paused: true,
           seekRequest: {
             generation: state.video.seekRequest.generation + 1,
             time: currentTime,
