@@ -209,15 +209,21 @@ class _ProcessAdapter:
         future = asyncio.get_running_loop().create_future()
         self._pending[request_id] = _PendingRequest(method=method, future=future)
         write_task = asyncio.create_task(self._write_message(message))
+        write_completion_task = asyncio.create_task(
+            _wait_for_write_or_response(write_task, future)
+        )
         try:
-            await asyncio.shield(write_task)
+            await asyncio.shield(write_completion_task)
         except asyncio.CancelledError:
             if method == "close":
+                write_completion_task.cancel()
                 write_task.cancel()
-                await asyncio.gather(write_task, return_exceptions=True)
+                await asyncio.gather(
+                    write_completion_task, write_task, return_exceptions=True
+                )
                 future.cancel()
                 raise
-            await _drain_task(write_task)
+            await _drain_task(write_completion_task)
             if not write_task.cancelled() and write_task.exception() is None:
                 await self._cancel_request(request_id)
             future.cancel()
@@ -572,6 +578,22 @@ async def _drain_task(task: asyncio.Task[Any]) -> None:
             continue
         except BaseException:
             return
+
+
+async def _wait_for_write_or_response(
+    write_task: asyncio.Task[None], response_future: asyncio.Future[Any]
+) -> None:
+    done, _ = await asyncio.wait(
+        {write_task, response_future},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if write_task in done:
+        await write_task
+        return
+
+    write_task.cancel()
+    await asyncio.gather(write_task, return_exceptions=True)
+    await response_future
 
 
 def _signal_process(process: Process, fallback: Any, process_signal: int) -> None:

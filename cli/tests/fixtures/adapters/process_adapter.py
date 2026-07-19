@@ -186,6 +186,15 @@ def main() -> None:
                     },
                 }
             )
+            if marker := _adapter_config.get("exitWhileRequestWritesMarker"):
+                subprocess.Popen(
+                    [sys.executable, "-c", "import time; time.sleep(30)"],
+                )
+                while not Path(marker).exists():
+                    time.sleep(0.01)
+                sys.stderr.write("fixture leader exited while request was writing\n")
+                sys.stderr.flush()
+                os._exit(10)
         elif method in {"evaluate", "evaluateMany"}:
             _start_evaluation(request)
         elif method == "cancel":

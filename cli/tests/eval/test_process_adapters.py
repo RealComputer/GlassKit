@@ -319,6 +319,57 @@ def test_process_adapter_detects_leader_exit_during_initialize(
     assert "fixture leader exited during initialize" in str(exc_info.value)
 
 
+def test_process_adapter_unblocks_request_write_when_leader_exits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+    asyncio.run(_run_exit_during_request_write_test(tmp_path))
+
+
+async def _run_exit_during_request_write_test(tmp_path: Path) -> None:
+    exit_marker = tmp_path / "exit-adapter"
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(
+            eval_dir=TWO_STATE_EVAL,
+            config={"exitWhileRequestWritesMarker": str(exit_marker)},
+        ),
+    )
+    sample = _sample(0)
+    evaluation = asyncio.create_task(
+        evaluator.evaluate(
+            sample,
+            TargetContext(
+                id="step",
+                index=0,
+                config={"largePayload": "x" * (2 * 1024 * 1024)},
+            ),
+        )
+    )
+    await asyncio.sleep(0.1)
+    exit_marker.touch()
+    done, _ = await asyncio.wait({evaluation}, timeout=1)
+
+    try:
+        if evaluation not in done:
+            with pytest.raises(AdapterRuntimeError):
+                await evaluator.close()
+            await asyncio.gather(evaluation, return_exceptions=True)
+            pytest.fail(
+                "evaluation stayed blocked in the stdin write after leader exit"
+            )
+        with pytest.raises(AdapterRuntimeError) as exc_info:
+            await evaluation
+        assert "exit code 10" in str(exc_info.value)
+        assert "fixture leader exited while request was writing" in str(exc_info.value)
+    finally:
+        sample.image.close()
+        if evaluation in done:
+            with pytest.raises(AdapterRuntimeError):
+                await evaluator.close()
+
+
 def test_process_adapter_rejects_protocol_corruption_after_close_ack() -> None:
     asyncio.run(_run_late_protocol_corruption_test())
 
