@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from glasskit.eval import process_adapters
 from glasskit.eval.models import (
     AdapterConfig,
     AdapterLoadError,
@@ -248,6 +249,95 @@ async def _run_process_cancellation_test() -> None:
         sample.image.close()
 
 
+@pytest.mark.parametrize("mode", ["hangOnClose", "inheritPipesAfterClose"])
+def test_process_adapter_bounds_entire_shutdown_sequence(
+    mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+    asyncio.run(_run_bounded_shutdown_test(mode))
+
+
+async def _run_bounded_shutdown_test(mode: str) -> None:
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(eval_dir=TWO_STATE_EVAL, config={mode: True}),
+    )
+
+    with pytest.raises(AdapterRuntimeError, match="did not complete close within"):
+        await asyncio.wait_for(evaluator.close(), timeout=1)
+
+
+def test_process_adapter_detects_leader_exit_while_child_holds_pipes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+    asyncio.run(_run_inherited_pipe_exit_test())
+
+
+async def _run_inherited_pipe_exit_test() -> None:
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(
+            eval_dir=TWO_STATE_EVAL,
+            config={"exitWithInheritedPipes": True},
+        ),
+    )
+    sample = _sample(0)
+    try:
+        with pytest.raises(AdapterRuntimeError) as exc_info:
+            await asyncio.wait_for(
+                evaluator.evaluate(sample, TargetContext(id="step", index=0)),
+                timeout=1,
+            )
+        assert "exit code 9" in str(exc_info.value)
+        assert "fixture leader exited with inherited pipes" in str(exc_info.value)
+    finally:
+        sample.image.close()
+        with pytest.raises(AdapterRuntimeError):
+            await asyncio.wait_for(evaluator.close(), timeout=1)
+
+
+def test_process_adapter_detects_leader_exit_during_initialize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+
+    with pytest.raises(AdapterLoadError) as exc_info:
+        asyncio.run(
+            asyncio.wait_for(
+                load_process_evaluator(
+                    _adapter_command(),
+                    AdapterConfig(
+                        eval_dir=TWO_STATE_EVAL,
+                        config={"exitWithInheritedPipesOnInitialize": True},
+                    ),
+                ),
+                timeout=1,
+            )
+        )
+    assert "exit code 8" in str(exc_info.value)
+    assert "fixture leader exited during initialize" in str(exc_info.value)
+
+
+def test_process_adapter_rejects_protocol_corruption_after_close_ack() -> None:
+    asyncio.run(_run_late_protocol_corruption_test())
+
+
+async def _run_late_protocol_corruption_test() -> None:
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(
+            eval_dir=TWO_STATE_EVAL,
+            config={"invalidStdoutAfterClose": True},
+        ),
+    )
+
+    with pytest.raises(AdapterRuntimeError) as exc_info:
+        await evaluator.close()
+    assert "invalid JSON on stdout" in str(exc_info.value)
+    assert "late stdout corruption" in str(exc_info.value)
+
+
 def test_process_adapter_rejects_incompatible_protocol_version() -> None:
     with pytest.raises(
         AdapterLoadError, match="initialize result must declare protocolVersion 1"
@@ -342,6 +432,28 @@ def test_validate_constructs_and_closes_process_adapter(tmp_path: Path) -> None:
     ]
 
 
+def test_validate_bounds_hung_process_adapter_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+
+    report = asyncio.run(
+        asyncio.wait_for(
+            validate_eval_directory(
+                RunOptions(
+                    eval_dir=TWO_STATE_EVAL,
+                    adapter_command=_adapter_command(),
+                    adapter_config={"hangOnClose": True},
+                )
+            ),
+            timeout=1,
+        )
+    )
+
+    assert not report.ok
+    assert "did not complete close within" in report.issues[-1].message
+
+
 @pytest.mark.parametrize("validate", [False, True])
 def test_runner_rejects_python_and_process_adapter_together(validate: bool) -> None:
     options = RunOptions(
@@ -366,6 +478,12 @@ def test_runner_rejects_python_and_process_adapter_together(validate: bool) -> N
 
 def _adapter_command() -> str:
     return shlex.join([sys.executable, str(PROCESS_ADAPTER)])
+
+
+def _shorten_shutdown_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_adapters, "GRACEFUL_EXIT_TIMEOUT_S", 0.15)
+    monkeypatch.setattr(process_adapters, "TERMINATE_TIMEOUT_S", 0.15)
+    monkeypatch.setattr(process_adapters, "EXIT_STATUS_TIMEOUT_S", 0.05)
 
 
 def _sample(index: int) -> FrameSample:

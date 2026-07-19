@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -73,6 +74,13 @@ def _evaluate(request: dict[str, Any], cancelled: threading.Event) -> None:
             sys.stderr.write("fixture process exited during evaluate\n")
             sys.stderr.flush()
             os._exit(7)
+        if _adapter_config.get("exitWithInheritedPipes"):
+            subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+            )
+            sys.stderr.write("fixture leader exited with inherited pipes\n")
+            sys.stderr.flush()
+            os._exit(9)
         if _adapter_config.get("invalidStdout"):
             sys.stdout.write("this log accidentally used stdout\n")
             sys.stdout.flush()
@@ -119,6 +127,8 @@ def _cancel(request_id: int) -> None:
 
 
 def _close(request_id: int) -> None:
+    if _adapter_config.get("hangOnClose"):
+        time.sleep(30)
     while True:
         with _active_lock:
             threads = [thread for thread, _ in _active.values()]
@@ -127,7 +137,14 @@ def _close(request_id: int) -> None:
         for thread in threads:
             thread.join()
     _append_lifecycle("close")
+    if _adapter_config.get("inheritPipesAfterClose"):
+        subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+        )
     _send({"id": request_id, "result": None})
+    if _adapter_config.get("invalidStdoutAfterClose"):
+        sys.stdout.write("late stdout corruption\n")
+        sys.stdout.flush()
 
 
 def main() -> None:
@@ -143,6 +160,13 @@ def main() -> None:
             if message := _adapter_config.get("stderrMessage"):
                 sys.stderr.write(str(message) + "\n")
                 sys.stderr.flush()
+            if _adapter_config.get("exitWithInheritedPipesOnInitialize"):
+                subprocess.Popen(
+                    [sys.executable, "-c", "import time; time.sleep(30)"],
+                )
+                sys.stderr.write("fixture leader exited during initialize\n")
+                sys.stderr.flush()
+                os._exit(8)
             _append_lifecycle("initialize")
             strategy = _adapter_config.get("strategy", "individual")
             protocol_version = (

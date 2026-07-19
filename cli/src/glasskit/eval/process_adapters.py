@@ -27,6 +27,7 @@ STDERR_TAIL_BYTES = 64 * 1024
 GRACEFUL_EXIT_TIMEOUT_S = 5.0
 TERMINATE_TIMEOUT_S = 2.0
 EXIT_STATUS_TIMEOUT_S = 0.25
+LEADER_EXIT_POLL_INTERVAL_S = 0.02
 
 
 async def load_process_evaluator(
@@ -96,8 +97,10 @@ class _ProcessAdapter:
         self._closing = False
         self._closed = False
         self._stderr_tail = bytearray()
+        self._process_wait_task = asyncio.create_task(self._process.wait())
         self._stderr_task = asyncio.create_task(self._read_stderr())
         self._reader_task = asyncio.create_task(self._read_responses())
+        self._exit_monitor_task = asyncio.create_task(self._monitor_process_exit())
 
     async def initialize(self, config: AdapterConfig) -> _Capabilities:
         result = await self._request(
@@ -140,30 +143,47 @@ class _ProcessAdapter:
         if self._closed:
             return
         self._closing = True
+        if self._failure is not None:
+            failure = self._failure
+            await self._run_forced_shutdown()
+            self._closed = True
+            raise failure
+
         close_error: BaseException | None = None
+        forced = False
         try:
-            if self._failure is not None:
-                close_error = self._failure
-            else:
+            async with asyncio.timeout(GRACEFUL_EXIT_TIMEOUT_S):
                 try:
                     await self._request("close", {})
-                except BaseException as error:
+                except Exception as error:
                     close_error = error
-        finally:
-            await self._close_stdin()
-            forced = not await self._wait_for_exit(GRACEFUL_EXIT_TIMEOUT_S)
-            if forced:
-                await self._terminate()
-            await self._finish_reader_tasks()
+                await self._close_stdin()
+                await self._wait_for_transport_completion()
+        except TimeoutError:
+            forced = True
+        except BaseException:
+            await self._run_forced_shutdown()
             self._closed = True
+            raise
+
+        if forced:
+            shutdown_error = AdapterRuntimeError(
+                f"adapter command {self._command} did not complete close within "
+                f"{GRACEFUL_EXIT_TIMEOUT_S:g}s; the process tree was terminated"
+            )
+            self._set_failure(shutdown_error)
+            await self._run_forced_shutdown()
+            self._closed = True
+            raise shutdown_error
+
+        self._closed = True
+        if self._failure is not None:
+            if close_error is not None and close_error is not self._failure:
+                self._failure.add_note(f"adapter close also failed: {close_error}")
+            raise self._failure
 
         if close_error is not None:
             raise close_error
-        if forced:
-            raise AdapterRuntimeError(
-                f"adapter command {self._command} did not exit after close; "
-                "the process was terminated"
-            )
         if self._process.returncode != 0:
             raise AdapterRuntimeError(self._exit_message("exited after close"))
 
@@ -171,10 +191,7 @@ class _ProcessAdapter:
         if self._closed:
             return
         self._closing = True
-        await self._close_stdin()
-        if self._process.returncode is None:
-            await self._terminate()
-        await self._finish_reader_tasks()
+        await self._run_forced_shutdown()
         self._closed = True
 
     async def _request(self, method: str, params: dict[str, Any]) -> Any:
@@ -195,6 +212,11 @@ class _ProcessAdapter:
         try:
             await asyncio.shield(write_task)
         except asyncio.CancelledError:
+            if method == "close":
+                write_task.cancel()
+                await asyncio.gather(write_task, return_exceptions=True)
+                future.cancel()
+                raise
             await _drain_task(write_task)
             if not write_task.cancelled() and write_task.exception() is None:
                 await self._cancel_request(request_id)
@@ -209,7 +231,8 @@ class _ProcessAdapter:
             return await future
         except asyncio.CancelledError:
             future.cancel()
-            await self._cancel_request(request_id)
+            if method != "close":
+                await self._cancel_request(request_id)
             raise
 
     async def _cancel_request(self, request_id: int) -> None:
@@ -335,12 +358,42 @@ class _ProcessAdapter:
                 del self._stderr_tail[:-STDERR_TAIL_BYTES]
             _forward_stderr(chunk)
 
+    async def _monitor_process_exit(self) -> None:
+        while self._process.returncode is None:
+            await asyncio.sleep(LEADER_EXIT_POLL_INTERVAL_S)
+        await self._wait_for_stderr_tail()
+        await self._allow_buffered_close_response()
+        if not self._closing or self._pending:
+            self._set_failure(
+                AdapterRuntimeError(self._exit_message("exited unexpectedly"))
+            )
+
+    async def _allow_buffered_close_response(self) -> None:
+        if not self._closing or not self._pending:
+            return
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + EXIT_STATUS_TIMEOUT_S
+        while self._pending and loop.time() < deadline:
+            await asyncio.sleep(LEADER_EXIT_POLL_INTERVAL_S)
+
     async def _collect_exit_details(self) -> None:
         try:
-            await asyncio.wait_for(self._process.wait(), timeout=EXIT_STATUS_TIMEOUT_S)
+            await asyncio.wait_for(
+                asyncio.shield(self._process_wait_task),
+                timeout=EXIT_STATUS_TIMEOUT_S,
+            )
         except TimeoutError:
             return
-        await self._stderr_task
+        await self._wait_for_stderr_tail()
+
+    async def _wait_for_stderr_tail(self) -> None:
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(self._stderr_task),
+                timeout=EXIT_STATUS_TIMEOUT_S,
+            )
+        except TimeoutError:
+            pass
 
     def _set_failure(self, error: AdapterRuntimeError) -> None:
         if self._failure is not None:
@@ -380,29 +433,55 @@ class _ProcessAdapter:
         except (BrokenPipeError, ConnectionError, OSError):
             pass
 
-    async def _wait_for_exit(self, timeout_s: float) -> bool:
-        try:
-            await asyncio.wait_for(self._process.wait(), timeout=timeout_s)
-        except TimeoutError:
-            return False
-        return True
+    async def _wait_for_transport_completion(self) -> None:
+        await asyncio.shield(self._process_wait_task)
+        tasks = {
+            self._reader_task,
+            self._stderr_task,
+            self._exit_monitor_task,
+        }
+        await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _terminate(self) -> None:
-        if self._process.returncode is not None:
-            return
+    async def _run_forced_shutdown(self) -> None:
+        cleanup_task = asyncio.create_task(self._force_shutdown())
+        await _drain_task(cleanup_task)
+
+    async def _force_shutdown(self) -> None:
+        if not self._stdin.is_closing():
+            self._stdin.close()
         _signal_process(self._process, self._process.terminate, signal.SIGTERM)
-        if await self._wait_for_exit(TERMINATE_TIMEOUT_S):
+        if await self._wait_for_transport_tasks(TERMINATE_TIMEOUT_S):
             return
         kill_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
         _signal_process(self._process, self._process.kill, kill_signal)
-        await self._process.wait()
+        await self._wait_for_transport_tasks(TERMINATE_TIMEOUT_S)
+        await self._cancel_transport_tasks()
 
-    async def _finish_reader_tasks(self) -> None:
-        await asyncio.gather(
+    async def _wait_for_transport_tasks(self, timeout_s: float) -> bool:
+        tasks = {
+            self._process_wait_task,
             self._reader_task,
             self._stderr_task,
-            return_exceptions=True,
-        )
+            self._exit_monitor_task,
+        }
+        _, pending = await asyncio.wait(tasks, timeout=timeout_s)
+        if not pending:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            return True
+        return False
+
+    async def _cancel_transport_tasks(self) -> None:
+        tasks = {
+            self._process_wait_task,
+            self._reader_task,
+            self._stderr_task,
+            self._exit_monitor_task,
+        }
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def _parse_adapter_command(adapter_command: str) -> list[str]:
