@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from rich.text import Text
@@ -9,6 +10,7 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 from glasskit.cli import _default_adapter_target, app
+from glasskit.eval.models import RunOptions
 
 
 def test_eval_help_lists_current_commands() -> None:
@@ -82,6 +84,68 @@ def test_eval_run_defines_serial_concurrency_default() -> None:
     assert concurrency.default == 1
     assert concurrency.help is not None
     assert "ignored when the adapter uses evaluate_many" in concurrency.help
+
+
+def test_eval_run_and_validate_define_adapter_command() -> None:
+    root_command = get_command(app)
+    assert isinstance(root_command, TyperGroup)
+    eval_command = root_command.commands["eval"]
+    assert isinstance(eval_command, TyperGroup)
+
+    for command in ("run", "validate"):
+        option_names = {
+            option_name
+            for option in eval_command.commands[command].params
+            if isinstance(option, TyperOption)
+            for option_name in option.opts
+        }
+        assert "--adapter-command" in option_names
+
+
+def test_eval_run_passes_adapter_command_without_python_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_run_eval(options: object, callbacks: object) -> object:
+        captured["options"] = options
+        return SimpleNamespace(success=True)
+
+    monkeypatch.setattr("glasskit.cli.run_eval", fake_run_eval)
+    monkeypatch.setattr("glasskit.cli.print_run_summary", lambda *args, **kwargs: None)
+
+    result = CliRunner().invoke(
+        app,
+        ["eval", "run", "--adapter-command", "node eval/adapter.js"],
+    )
+
+    assert result.exit_code == 0
+    options = captured["options"]
+    assert isinstance(options, RunOptions)
+    assert options.adapter is None
+    assert options.adapter_command == "node eval/adapter.js"
+
+
+@pytest.mark.parametrize("command", ["run", "validate"])
+def test_eval_commands_reject_python_and_process_adapters_together(
+    command: str,
+) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            command,
+            "--adapter",
+            "eval/adapter.py:create_evaluator",
+            "--adapter-command",
+            "node eval/adapter.js",
+        ],
+    )
+
+    assert result.exit_code == 2
+    output = Text.from_ansi(result.output).plain
+    assert "--adapter-command" in output
+    assert "cannot be used with --adapter" in output
 
 
 def test_eval_run_defines_single_trial_default_and_stability_gate() -> None:

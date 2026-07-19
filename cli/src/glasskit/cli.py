@@ -44,6 +44,15 @@ def eval_run(
             ),
         ),
     ] = None,
+    adapter_command: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter-command",
+            help=(
+                "Command for an NDJSON process adapter, such as 'node eval/adapter.js'."
+            ),
+        ),
+    ] = None,
     eval_dir: Annotated[
         Path,
         typer.Option("--eval-dir", help="Eval directory."),
@@ -182,10 +191,19 @@ def eval_run(
         from_time=from_time,
         until_time=until_time,
     )
+    if adapter is not None and adapter_command is not None:
+        raise typer.BadParameter(
+            "cannot be used with --adapter", param_hint="--adapter-command"
+        )
     console = Console()
-    adapter_target = adapter or _default_adapter_target(eval_dir)
+    adapter_target = (
+        None
+        if adapter_command is not None
+        else adapter or _default_adapter_target(eval_dir)
+    )
     options = RunOptions(
         adapter=adapter_target,
+        adapter_command=adapter_command,
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=_target_filter(target),
@@ -226,6 +244,13 @@ def eval_validate(
             "--adapter", help="Optional adapter target to import and construct."
         ),
     ] = None,
+    adapter_command: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter-command",
+            help="Optional NDJSON process adapter command to start and validate.",
+        ),
+    ] = None,
     case: Annotated[
         str | None,
         typer.Option("--case", help="Only validate one case by filename or stem."),
@@ -248,8 +273,13 @@ def eval_validate(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    if adapter is not None and adapter_command is not None:
+        raise typer.BadParameter(
+            "cannot be used with --adapter", param_hint="--adapter-command"
+        )
     options = RunOptions(
         adapter=adapter,
+        adapter_command=adapter_command,
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=_target_filter(target),

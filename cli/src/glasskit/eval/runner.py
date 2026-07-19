@@ -34,6 +34,7 @@ from .models import (
     ValidationIssue,
     ValidationReport,
 )
+from .process_adapters import load_process_evaluator
 from .video import iter_sample_frames, probe_video, validate_sample_times
 
 
@@ -102,10 +103,16 @@ async def validate_eval_directory(options: RunOptions) -> ValidationReport:
         )
 
     issues.extend(_validate_videos(eval_directory))
-    if options.adapter is not None:
+    if options.adapter is not None and options.adapter_command is not None:
+        issues.append(
+            ValidationIssue(
+                message="adapter and adapter command are mutually exclusive"
+            )
+        )
+    elif options.adapter is not None or options.adapter_command is not None:
         try:
-            evaluator = await load_evaluator(
-                options.adapter,
+            evaluator = await _load_configured_evaluator(
+                options,
                 AdapterConfig(
                     eval_dir=eval_directory.path,
                     config=options.adapter_config,
@@ -124,8 +131,12 @@ async def validate_eval_directory(options: RunOptions) -> ValidationReport:
 async def run_eval(
     options: RunOptions, callbacks: RunCallbacks | None = None
 ) -> EvalRunReport:
-    if options.adapter is None:
-        raise EvalConfigError("glasskit eval run requires --adapter")
+    if options.adapter is not None and options.adapter_command is not None:
+        raise EvalConfigError("adapter and adapter command are mutually exclusive")
+    if options.adapter is None and options.adapter_command is None:
+        raise EvalConfigError(
+            "glasskit eval run requires --adapter or --adapter-command"
+        )
     if options.concurrency < 1:
         raise EvalConfigError("concurrency must be greater than 0")
     if options.repeat < 1:
@@ -186,10 +197,10 @@ async def _run_trial(
     callbacks: RunCallbacks | None,
 ) -> EvalTrialReport:
     started_at = perf_counter()
-    if options.adapter is None:
+    if options.adapter is None and options.adapter_command is None:
         raise RuntimeError("internal error: trial started without an adapter")
-    evaluator = await load_evaluator(
-        options.adapter,
+    evaluator = await _load_configured_evaluator(
+        options,
         AdapterConfig(
             eval_dir=eval_directory.path,
             config=options.adapter_config,
@@ -263,6 +274,16 @@ async def _run_trial(
         gate_results=gate_results,
         duration_s=max(0.0, perf_counter() - started_at),
     )
+
+
+async def _load_configured_evaluator(
+    options: RunOptions, config: AdapterConfig
+) -> LoadedEvaluator:
+    if options.adapter_command is not None:
+        return await load_process_evaluator(options.adapter_command, config)
+    if options.adapter is not None:
+        return await load_evaluator(options.adapter, config)
+    raise RuntimeError("internal error: evaluator requested without an adapter")
 
 
 def _ignored_result(sample: SampleExpectation) -> SampleResult:

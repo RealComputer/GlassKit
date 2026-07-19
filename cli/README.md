@@ -130,7 +130,7 @@ Expected output:
 Validation passed: /absolute/path/to/eval (12 samples)
 ```
 
-Note: Validation loads the eval directory, probes videos, checks sample timestamps against video duration, and imports, constructs, and closes the adapter when `--adapter` is provided. It does not call `evaluate` or `evaluate_many`.
+Note: Validation loads the eval directory, probes videos, checks sample timestamps against video duration, and constructs and closes the selected adapter when `--adapter` or `--adapter-command` is provided. It does not evaluate frames.
 
 ### Inspect the Expanded Sample Schedule
 
@@ -391,6 +391,10 @@ targets:
 
 ## Adapter Reference
 
+GlassKit supports in-process Python adapters and language-neutral command adapters. Both expose the same individual or batch evaluation behavior to the runner. Use a Python adapter when the app logic is importable by Python, or `--adapter-command` when the adapter should run in its own process, such as a JavaScript or TypeScript backend.
+
+### Python Adapters
+
 By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
 
 Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.step_checker`.
@@ -495,6 +499,204 @@ Target fields passed to the evaluator:
 
 Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys.
 
+### Command Adapters
+
+Use `--adapter-command` to launch an adapter in any language that can exchange newline-delimited JSON over standard streams:
+
+```sh
+glasskit eval run --adapter-command "node eval/adapter.js"
+```
+
+GlassKit parses the command with POSIX shell-style argument quoting and starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are not supported. The command inherits GlassKit's working directory and environment, so it can import the app normally and read secrets from environment variables. GlassKit starts one process for each trial, sends `initialize`, sends evaluation requests, sends `close`, and waits for the process to exit. `glasskit eval validate --adapter-command ...` starts, initializes, closes, and waits for the same process without evaluating frames.
+
+The adapter reads one JSON request per line from stdin and writes one JSON response per line to stdout. Stdout is reserved for protocol messages; write all application and dependency logs to stderr, using `console.error()` in JavaScript. Each message has a 256 MiB limit. Requests have integer ids, and concurrent `evaluate` responses may be returned in any order. GlassKit correlates them by id and restores case-file order in the report.
+
+The command must answer these protocol methods:
+
+| Method | Purpose | Response result |
+| --- | --- | --- |
+| `initialize` | Construct app clients and declare protocol version `1` plus supported methods. | `{protocolVersion: 1, capabilities: {evaluate, evaluateMany}}` |
+| `evaluate` | Evaluate one sample. Sent only when `evaluate` was advertised. | One JSON-like observation. |
+| `evaluateMany` | Evaluate every non-ignored sample for one target. Sent when advertised and preferred when both strategies exist. | One JSON-like observation per sample, in order. |
+| `cancel` | Best-effort notification that an in-flight request was cancelled. It has no request id and receives no response. | None. |
+| `close` | Drain active work, close app clients, acknowledge the request, and exit. | `null`. |
+
+A successful response contains `id` and `result`. A failed request contains the same `id` and an `error` object with a string `message`; an optional `stack` is useful when inspecting the adapter directly. Process startup, initialization, protocol, and shutdown failures abort the eval. An `evaluate` or `evaluateMany` error follows the ordinary adapter error and `--keep-going` behavior.
+
+GlassKit sends adapter configuration with camel-case fields:
+
+| Field | Description |
+| --- | --- |
+| `evalDir` | Absolute eval directory path. |
+| `config` | Object loaded from `--adapter-config`, or an empty object. |
+| `artifactsDir` | Absolute path from `--artifacts-dir`, or `null`. |
+| `verbose` | Boolean from `--verbose`. |
+
+Command-adapter samples use the same metadata as Python samples, with camel-case names. The image is a lossless PNG represented as `{mimeType, dataBase64, width, height}` on the wire. The JavaScript boilerplate below converts `dataBase64` to `image.bytes`, a Node.js `Buffer`, before calling app code. GlassKit remains responsible for selecting the exact decoded frame; the command should not decode `videoPath` again.
+
+The following complete, dependency-free `eval/adapter.js` is a starting point. Replace `createEvaluator` with app imports and evaluation logic, and retain the protocol section below it. This example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+
+```js
+import { createInterface } from "node:readline";
+
+// Replace this function with thin wrappers around your app's existing logic.
+async function createEvaluator(config) {
+  return {
+    async evaluate(sample, target, { signal }) {
+      return await evaluateFrameInApp({
+        image: sample.image.bytes,
+        mimeType: sample.image.mimeType,
+        promptId: target.config.promptId ?? target.id,
+        timestampS: sample.timestampS,
+        signal,
+      });
+    },
+
+    // Implement evaluateMany(samples, target, { signal }) instead when the
+    // backend has a real multi-input API. If both exist, evaluateMany wins.
+
+    async close() {
+      await closeAppClients();
+    },
+  };
+}
+
+// GlassKit process-adapter protocol v1. Keep stdout protocol-only.
+const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+const active = new Map();
+let evaluator;
+let closing = false;
+let outputTail = Promise.resolve();
+
+function send(message) {
+  const line = `${JSON.stringify(message)}\n`;
+  outputTail = outputTail.then(
+    () =>
+      new Promise((resolve, reject) => {
+        process.stdout.write(line, "utf8", (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      }),
+  );
+  return outputTail;
+}
+
+function errorPayload(error) {
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+  };
+}
+
+function sampleForApp(sample) {
+  const { dataBase64, ...image } = sample.image;
+  return {
+    ...sample,
+    image: { ...image, bytes: Buffer.from(dataBase64, "base64") },
+  };
+}
+
+async function respond(request, operation) {
+  try {
+    await send({ id: request.id, result: await operation() });
+  } catch (error) {
+    await send({ id: request.id, error: errorPayload(error) });
+  }
+}
+
+async function initialize(request) {
+  await respond(request, async () => {
+    if (request.params.protocolVersion !== 1) {
+      throw new Error(`unsupported protocol version: ${request.params.protocolVersion}`);
+    }
+    evaluator = await createEvaluator(request.params.config);
+    const capabilities = {
+      evaluate: typeof evaluator?.evaluate === "function",
+      evaluateMany: typeof evaluator?.evaluateMany === "function",
+    };
+    if (!capabilities.evaluate && !capabilities.evaluateMany) {
+      throw new Error("adapter must implement evaluate or evaluateMany");
+    }
+    return { protocolVersion: 1, capabilities };
+  });
+}
+
+function startEvaluation(request) {
+  const controller = new AbortController();
+  const operation = async () => {
+    if (!evaluator) throw new Error("adapter is not initialized");
+    if (request.method === "evaluate") {
+      return await evaluator.evaluate(
+        sampleForApp(request.params.sample),
+        request.params.target,
+        { signal: controller.signal },
+      );
+    }
+    return await evaluator.evaluateMany(
+      request.params.samples.map(sampleForApp),
+      request.params.target,
+      { signal: controller.signal },
+    );
+  };
+  const promise = respond(request, operation);
+  active.set(request.id, { controller, promise });
+  promise.then(
+    () => active.delete(request.id),
+    (error) => {
+      active.delete(request.id);
+      console.error("Could not write GlassKit adapter response:", error);
+      process.exitCode = 1;
+    },
+  );
+}
+
+async function close(request) {
+  closing = true;
+  await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+  await respond(request, async () => {
+    if (typeof evaluator?.close === "function") await evaluator.close();
+    return null;
+  });
+  lines.close();
+  process.stdin.pause();
+}
+
+for await (const line of lines) {
+  let request;
+  try {
+    request = JSON.parse(line);
+  } catch (error) {
+    console.error("Invalid GlassKit protocol request:", error);
+    process.exitCode = 1;
+    break;
+  }
+  if (request.method === "cancel") {
+    active.get(request.params.id)?.controller.abort();
+  } else if (request.method === "initialize") {
+    await initialize(request);
+  } else if (request.method === "evaluate" || request.method === "evaluateMany") {
+    startEvaluation(request);
+  } else if (request.method === "close") {
+    await close(request);
+  } else {
+    await send({
+      id: request.id,
+      error: { message: `unknown method: ${request.method}` },
+    });
+  }
+}
+
+if (!closing) {
+  for (const { controller } of active.values()) controller.abort();
+  await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+  if (typeof evaluator?.close === "function") await evaluator.close();
+}
+await outputTail;
+```
+
+The input loop deliberately does not await individual evaluation promises, allowing `--concurrency` requests to overlap. It serializes complete response lines through `outputTail`, so concurrent completions cannot interleave bytes on stdout. A `cancel` notification aborts the request's signal when the app passes that signal through to its backend client. `close` waits for active response handling before releasing resources.
+
 ## Command Reference
 
 Every command supports `--help`.
@@ -576,12 +778,13 @@ Options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
+| `--adapter-command TEXT` | None | NDJSON process adapter command. Mutually exclusive with `--adapter`; when set, the Python adapter default is not loaded. |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory in the config object's `config` field. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter in its `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
 | `--min-pass-rate FLOAT` | None | Pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -619,9 +822,10 @@ Options:
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
+| `--adapter-command TEXT` | None | Optional NDJSON process adapter command to start, initialize, close, and wait for. Mutually exclusive with `--adapter`. |
 | `--case TEXT` | All cases | Only validate one case by filename or stem. |
 | `--target TEXT` | All targets | Only validate this target id from the selected cases. Repeat the option to validate multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter during validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when validation passes and `1` when validation fails.
@@ -656,7 +860,7 @@ Default values at a glance:
 | Area | Default When Omitted |
 | --- | --- |
 | Eval directory | `eval` from the command's working directory. |
-| `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
+| `run` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | Individual evaluation concurrency | `1`. Increase with `run --concurrency`. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
@@ -705,13 +909,13 @@ Other precedence rules:
 | --- | --- |
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
 | Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
-| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the adapter factory. |
+| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the selected adapter. |
 
 ## Environment Variables
 
-`glasskit eval` defines no CLI-specific environment variables and does not read from stdin.
+`glasskit eval` defines no CLI-specific environment variables and does not read user input from stdin.
 
-Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
+Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Command adapters inherit GlassKit's environment, and GlassKit reserves their stdin and stdout for the process protocol. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
 ```sh
 uv run --env-file .env glasskit eval run
@@ -923,6 +1127,9 @@ Common failures:
 | `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |
 | `adapter target not found` | The module imported, but the callable path does not exist. | Check the function, class, or nested attribute name after `:`. |
 | `adapter ... did not return an object with evaluate(...) or evaluate_many(...)` | The factory returned the wrong shape. | Return an object implementing an individual or batch evaluation strategy, or use a supported simple function adapter. |
+| `could not start adapter command` | The executable in `--adapter-command` is missing or the command could not be launched. | Install the runtime, correct the command, and run it from the app directory. |
+| `adapter command ... failed to initialize` | The process exited, rejected `initialize`, advertised an incompatible protocol version, or did not advertise an evaluation method. | Run the command directly, inspect stderr, and verify the protocol v1 initialization response. |
+| `adapter command protocol error` | The process wrote a log or malformed response to stdout, reused an id, or exceeded the protocol limit. | Keep stdout protocol-only, send logs to stderr, and use the documented NDJSON envelopes. |
 | `adapter returned non-JSON observation` | The adapter returned a dataclass, SDK object, image, bytes, infinite number, or other non-JSON value. | Return only JSON-like values. |
 | `adapter returned N observations for M samples` | `evaluate_many` returned the wrong number of observations. | Return exactly one observation per input sample in order. |
 | `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |
