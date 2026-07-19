@@ -104,7 +104,7 @@ targets:
     )
 
     assert result.exit_code == expected_exit_code
-    output = Text.from_ansi(result.output).plain
+    output = " ".join(Text.from_ansi(result.output).plain.split())
     assert "requested eval target not found" in output
     assert "available targets: '[/]'" in output
 
