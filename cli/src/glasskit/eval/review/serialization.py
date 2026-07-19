@@ -510,6 +510,10 @@ def _reconstruct_payload_run(
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
 ) -> None:
+    if not allow_range_reconstruction:
+        _flush_at(all_samples[start:end], blocks, grouped_samples, group_specs)
+        return
+
     pending_at: list[ParsedSample] = []
     index = start
     while index < end:
@@ -527,12 +531,9 @@ def _reconstruct_payload_run(
         ):
             candidate_end += 1
         candidate = all_samples[index:candidate_end]
-        range_eligible = allow_range_reconstruction and (
-            len(candidate) >= 3
-            or (
-                len(candidate) == 2
-                and _two_sample_range_eligible(candidate, cadence_tick, default_every_s)
-            )
+        range_eligible = len(candidate) >= 3 or (
+            len(candidate) == 2
+            and _two_sample_range_eligible(candidate, cadence_tick, default_every_s)
         )
         if not range_eligible:
             pending_at.append(all_samples[index])
