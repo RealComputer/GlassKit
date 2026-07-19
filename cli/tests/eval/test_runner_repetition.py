@@ -35,7 +35,7 @@ def test_runner_names_repeated_failure_artifacts_without_collisions(
         (
             1,
             0,
-            "max flaky samples requires at least 2 trials",
+            "--max-flaky-samples requires --repeat to be at least 2",
         ),
         (
             2,

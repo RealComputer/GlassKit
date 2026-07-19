@@ -209,12 +209,15 @@ def _filter_case_paths_by_targets(
         target_id for target_id in target_ids if target_id not in declared_target_ids
     ]
     if missing_target_ids:
-        if len(missing_target_ids) == 1:
-            raise EvalConfigError(
-                f"no eval targets found matching target {missing_target_ids[0]!r}"
-            )
         missing = ", ".join(repr(target_id) for target_id in missing_target_ids)
-        raise EvalConfigError(f"no eval targets found matching targets: {missing}")
+        available = ", ".join(
+            repr(target_id) for target_id in sorted(declared_target_ids)
+        )
+        label = "target" if len(missing_target_ids) == 1 else "targets"
+        raise EvalConfigError(
+            f"requested eval {label} not found in the selected cases: {missing}; "
+            f"available targets: {available or 'none'}"
+        )
 
     selected_target_ids = set(target_ids)
     return [
@@ -436,7 +439,10 @@ def resolve_video_path(case_path: Path, raw_video: Any) -> Path:
     if not path.is_file():
         raise EvalConfigError(f"video path is not a file: {path}")
     if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
-        raise EvalConfigError(f"unsupported video file type: {path}")
+        supported = ", ".join(sorted(SUPPORTED_VIDEO_SUFFIXES))
+        raise EvalConfigError(
+            f"unsupported video file type for {path}; supported suffixes: {supported}"
+        )
     return path
 
 

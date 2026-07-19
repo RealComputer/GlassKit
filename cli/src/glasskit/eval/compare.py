@@ -14,7 +14,10 @@ def compare_observation(observation: Any, sample: SampleExpectation) -> CompareO
         return CompareOutcome(False, field_error, None, mode)
     if observation is None and sample.expected is not None:
         return CompareOutcome(
-            False, "invalid_observation: adapter returned null", None, mode
+            False,
+            "adapter returned null but the sample expects a non-null value",
+            None,
+            mode,
         )
     if mode not in SUPPORTED_COMPARE_MODES:
         return CompareOutcome(
@@ -65,19 +68,23 @@ def _extract_field(observation: Any, field: str | None) -> tuple[Any, str | None
     for part in field.split("."):
         if isinstance(current, Mapping):
             if part not in current:
-                return None, f"missing field: {field}"
+                return None, _missing_field_reason(field)
             current = current[part]
             continue
         if isinstance(current, Sequence) and not isinstance(current, str | bytes):
             if not part.isdecimal():
-                return None, f"missing field: {field}"
+                return None, _missing_field_reason(field)
             try:
                 current = current[int(part)]
             except (ValueError, IndexError):
-                return None, f"missing field: {field}"
+                return None, _missing_field_reason(field)
             continue
-        return None, f"missing field: {field}"
+        return None, _missing_field_reason(field)
     return current, None
+
+
+def _missing_field_reason(field: str) -> str:
+    return f"adapter observation is missing configured field: {field}"
 
 
 def _compare_numeric(

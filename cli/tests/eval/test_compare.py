@@ -32,7 +32,18 @@ def test_missing_field_fails_clearly() -> None:
     outcome = compare_observation({"result": {}}, sample)
 
     assert not outcome.passed
-    assert outcome.reason == "missing field: result.matches"
+    assert outcome.reason == (
+        "adapter observation is missing configured field: result.matches"
+    )
+
+
+def test_null_observation_failure_explains_non_null_expectation() -> None:
+    outcome = compare_observation(None, _sample(expected=True))
+
+    assert not outcome.passed
+    assert outcome.reason == (
+        "adapter returned null but the sample expects a non-null value"
+    )
 
 
 def test_json_subset() -> None:
@@ -69,7 +80,7 @@ def test_negative_list_indexes_are_missing_fields() -> None:
     outcome = compare_observation({"items": ["first", "last"]}, sample)
 
     assert not outcome.passed
-    assert outcome.reason == "missing field: items.-1"
+    assert outcome.reason == "adapter observation is missing configured field: items.-1"
 
 
 def _sample(

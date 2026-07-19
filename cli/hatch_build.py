@@ -38,7 +38,7 @@ def _build_frontend(frontend: Path) -> None:
     npm = shutil.which("npm")
     if npm is None:
         raise RuntimeError(
-            "Building GlassKit from a source checkout requires Node.js and npm."
+            "Building GlassKit Eval from a source checkout requires Node.js and npm."
         )
     subprocess.run([npm, "ci"], cwd=frontend, check=True)
     subprocess.run([npm, "run", "build"], cwd=frontend, check=True)
@@ -48,12 +48,15 @@ def _verify_static_bundle(static: Path) -> None:
     index = static / "index.html"
     if not index.is_file():
         raise RuntimeError(
-            "The GlassKit review UI bundle is missing. Build from the source checkout "
+            "The GlassKit Eval review UI bundle is missing. "
+            "Build from the source checkout "
             "or use an intact source distribution."
         )
     references = _ASSET_REFERENCE.findall(index.read_text(encoding="utf-8"))
     if not references:
-        raise RuntimeError("The GlassKit review UI index references no bundled assets.")
+        raise RuntimeError(
+            "The GlassKit Eval review UI index references no bundled assets."
+        )
     missing = [
         reference
         for reference in references
@@ -61,7 +64,8 @@ def _verify_static_bundle(static: Path) -> None:
     ]
     if missing:
         raise RuntimeError(
-            "The GlassKit review UI bundle has missing assets: " + ", ".join(missing)
+            "The GlassKit Eval review UI bundle has missing assets: "
+            + ", ".join(missing)
         )
 
 

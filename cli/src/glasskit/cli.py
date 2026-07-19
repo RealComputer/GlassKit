@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 import typer
 import yaml
 from rich.console import Console
+from rich.text import Text
 
 from .eval.expectations import load_eval_directory
 from .eval.models import EvalError, RunOptions
@@ -41,6 +42,15 @@ def eval_run(
             help=(
                 "Adapter target in module/file:callable form. Defaults to "
                 "adapter.py with create_evaluator in the eval dir."
+            ),
+        ),
+    ] = None,
+    adapter_command: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter-command",
+            help=(
+                "Command for an NDJSON process adapter, such as 'node eval/adapter.js'."
             ),
         ),
     ] = None,
@@ -182,10 +192,19 @@ def eval_run(
         from_time=from_time,
         until_time=until_time,
     )
+    if adapter is not None and adapter_command is not None:
+        raise typer.BadParameter(
+            "cannot be used with --adapter", param_hint="--adapter-command"
+        )
     console = Console()
-    adapter_target = adapter or _default_adapter_target(eval_dir)
+    adapter_target = (
+        None
+        if adapter_command is not None
+        else adapter or _default_adapter_target(eval_dir)
+    )
     options = RunOptions(
         adapter=adapter_target,
+        adapter_command=adapter_command,
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=_target_filter(target),
@@ -209,7 +228,7 @@ def eval_run(
     try:
         report = asyncio.run(run_eval(options, callbacks=reporter))
     except EvalError as error:
-        console.print(f"[red]Eval failed[/red]: {error}")
+        _print_labeled_message(console, "Eval failed", str(error), style="red")
         raise typer.Exit(2) from error
     print_run_summary(report, console=console)
     raise typer.Exit(0 if report.success else 1)
@@ -224,6 +243,13 @@ def eval_validate(
         str | None,
         typer.Option(
             "--adapter", help="Optional adapter target to import and construct."
+        ),
+    ] = None,
+    adapter_command: Annotated[
+        str | None,
+        typer.Option(
+            "--adapter-command",
+            help="Optional NDJSON process adapter command to start and validate.",
         ),
     ] = None,
     case: Annotated[
@@ -248,8 +274,13 @@ def eval_validate(
         typer.Option("--allow-empty", help="Allow evals or cases with no samples."),
     ] = False,
 ) -> None:
+    if adapter is not None and adapter_command is not None:
+        raise typer.BadParameter(
+            "cannot be used with --adapter", param_hint="--adapter-command"
+        )
     options = RunOptions(
         adapter=adapter,
+        adapter_command=adapter_command,
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=_target_filter(target),
@@ -315,7 +346,9 @@ def eval_list_samples(
             allow_empty=allow_empty,
         )
     except EvalError as error:
-        Console().print(f"[red]Could not list samples[/red]: {error}")
+        _print_labeled_message(
+            Console(), "Could not list samples", str(error), style="red"
+        )
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
 
@@ -394,7 +427,9 @@ def eval_review(
             repository=repository,
         )
     except (EvalError, OSError, ValueError) as error:
-        console.print(f"[red]Could not start review UI[/red]: {error}")
+        _print_labeled_message(
+            console, "Could not start review UI", str(error), style="red"
+        )
         raise typer.Exit(2) from error
 
     query: dict[str, str | float] = {}
@@ -411,7 +446,9 @@ def eval_review(
         try:
             opened = webbrowser.open(url)
         except Exception as error:  # Browser launch is intentionally nonfatal.
-            console.print(f"[yellow]Could not open browser[/yellow]: {error}")
+            _print_labeled_message(
+                console, "Could not open browser", str(error), style="yellow"
+            )
         else:
             if not opened:
                 console.print(
@@ -478,3 +515,13 @@ def _default_adapter_target(eval_dir: Path) -> str:
 
 def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
     return tuple(targets) if targets is not None else None
+
+
+def _print_labeled_message(
+    console: Console, label: str, message: str, *, style: str
+) -> None:
+    text = Text()
+    text.append(label, style=style)
+    text.append(": ")
+    text.append(message)
+    console.print(text, highlight=False)

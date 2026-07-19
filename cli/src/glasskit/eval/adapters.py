@@ -38,8 +38,9 @@ async def load_evaluator(adapter_target: str, config: AdapterConfig) -> LoadedEv
     if callable(evaluator) and _looks_like_frame_function(evaluator):
         return _function_evaluator(evaluator)
     raise AdapterLoadError(
-        f"adapter {adapter_target!r} did not return an object with "
-        "evaluate(...) or evaluate_many(...)"
+        f"adapter factory {adapter_target!r} must return an object with "
+        "evaluate(...) or evaluate_many(...), or a function whose first two "
+        "parameters are (image, target_id) or (sample, target)"
     )
 
 
@@ -106,10 +107,14 @@ def _load_target(
     value: Any = module
     for part in object_ref.split("."):
         if not hasattr(value, part):
-            raise AdapterLoadError(f"adapter target not found: {adapter_target}")
+            raise AdapterLoadError(
+                f"adapter callable {object_ref!r} was not found in {module_ref!r}"
+            )
         value = getattr(value, part)
     if not callable(value):
-        raise AdapterLoadError(f"adapter target is not callable: {adapter_target}")
+        raise AdapterLoadError(
+            f"adapter attribute {object_ref!r} in {module_ref!r} is not callable"
+        )
     return value
 
 

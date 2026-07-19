@@ -1,10 +1,8 @@
-# `glasskit eval`
+# GlassKit Eval
 
-`glasskit eval` helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a small Python adapter, and rerun the same checks locally or in CI.
+GlassKit Eval helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a language-agnostic adapter, and rerun the same checks locally or in CI.
 
-This is the user manual for the `glasskit` command. For contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
-
-The current command group is `glasskit eval`.
+Use GlassKit Eval through the `glasskit eval` command group. This is its user manual; for contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
 ## Why Use This?
 
@@ -130,7 +128,7 @@ Expected output:
 Validation passed: /absolute/path/to/eval (12 samples)
 ```
 
-Note: Validation loads the eval directory, probes videos, checks sample timestamps against video duration, and imports, constructs, and closes the adapter when `--adapter` is provided. It does not call `evaluate` or `evaluate_many`.
+Note: Validation loads the eval directory, probes videos, checks sample timestamps against video duration, and constructs and closes the selected adapter when `--adapter` or `--adapter-command` is provided. It does not evaluate frames.
 
 ### Inspect the Expanded Sample Schedule
 
@@ -185,7 +183,7 @@ Note: `--keep-going` records adapter evaluation errors and comparison errors as 
 
 Goal: run the same selected eval three times and identify samples whose outcomes vary.
 
-With `--repeat N`, GlassKit executes the same selected sample schedule `N` times. Each complete repetition is called a trial, and each evaluation of a sample within a trial is an attempt.
+With `--repeat N`, GlassKit Eval executes the same selected sample schedule `N` times. Each complete repetition is called a trial, and each evaluation of a sample within a trial is an attempt.
 
 Command:
 
@@ -391,6 +389,10 @@ targets:
 
 ## Adapter Reference
 
+GlassKit Eval supports in-process Python adapters and language-neutral command adapters. Both expose the same individual or batch evaluation behavior to the runner. Use a Python adapter when the app logic is importable by Python, or `--adapter-command` when the adapter should run in its own process, such as a JavaScript or TypeScript backend.
+
+### Python Adapters
+
 By default, `glasskit eval run` loads `<eval-dir>/adapter.py:create_evaluator`. With the default eval directory, that is `eval/adapter.py:create_evaluator`.
 
 Use `--adapter <module-or-file>:<callable>` to choose another adapter target. The module side can be an import path such as `my_app.eval_adapter` or a file path such as `eval/adapter.py`. The callable side can name a function, class, or nested attribute such as `create_evaluator` or `EvalAdapters.step_checker`.
@@ -440,20 +442,20 @@ Adapter factories may be synchronous or asynchronous. No-argument factories are 
 
 An evaluator chooses one of two execution strategies by implementing `evaluate` or `evaluate_many`. Both methods may be synchronous or asynchronous.
 
-| Strategy | Adapter method | GlassKit execution | Use when |
+| Strategy | Adapter method | GlassKit Eval execution | Use when |
 | --- | --- | --- | --- |
 | Individual | `evaluate(sample, target)` | Calls the method once per sample, with at most `--concurrency` calls in flight for the current target. | Each sample maps to an independent request or local operation. This is the recommended default for ordinary model APIs. |
-| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
+| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit Eval does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
 
-Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit schedules the remaining samples in case-file declaration order and passes batch samples in that order.
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit Eval schedules the remaining samples in case-file declaration order and passes batch samples in that order.
 
-Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
+Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit Eval bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
-Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
+Use `evaluate_many` only for actual batch behavior. If a batch call fails, GlassKit Eval cannot attribute the failure to one input, so `--keep-going` records an error for every sample in that target batch.
 
-The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous. With `--repeat`, GlassKit creates fresh evaluator instances sequentially and closes each trial before calling the evaluator factory for the next one.
+The optional `close()` method is called after the run or adapter validation check and may also be synchronous or asynchronous. With `--repeat`, GlassKit Eval creates fresh evaluator instances sequentially and closes each trial before calling the evaluator factory for the next one.
 
 Simple function adapters are also supported when the first two positional argument names are either `image, target_id` or `sample, target`:
 
@@ -494,6 +496,221 @@ Target fields passed to the evaluator:
 | `config` | Adapter-specific target metadata from `targets.<id>.config`, plus any matching optional metadata from `workflow.targets`. |
 
 Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys.
+
+### Command Adapters
+
+Use `--adapter-command` when the app is easier to call from its own runtime, such as a JavaScript or TypeScript backend:
+
+```sh
+glasskit eval run --adapter-command "node eval/adapter.js"
+```
+
+GlassKit Eval parses the command using shell-style argument quoting but starts it directly, without a shell. Pipes, redirects, variable expansion, and command substitution are therefore unavailable. The command inherits the current working directory and environment, so it can import the app normally and read the same secrets and configuration.
+
+Start from the complete JavaScript file below. Its editable application section passes a factory to `runGlassKitAdapter`; the protocol function handles communication with GlassKit Eval. Stdout belongs to that function, so write application and dependency logs to stderr with `console.error()`.
+
+The factory runs once per eval trial and receives this context:
+
+| Field | Description |
+| --- | --- |
+| `evalDir` | Absolute eval directory path. |
+| `config` | Object loaded from `--adapter-config`, or an empty object. |
+| `artifactsDir` | Absolute path from `--artifacts-dir`, or `null`. |
+| `verbose` | Boolean from `--verbose`. |
+
+Return an object with at least one evaluation method:
+
+| Method | Purpose |
+| --- | --- |
+| `evaluate({sample, target, signal})` | Evaluate one sample. Use this for ordinary independent backend calls. |
+| `evaluateMany({samples, target, signal})` | Evaluate one target's samples as a real batch and return one observation per sample in the same order. If both evaluation methods exist, this one takes precedence. |
+| `close()` | Optional cleanup for app clients and other resources. |
+
+The individual and batch scheduling behavior is the same as described above. Multiple `evaluate` calls can be active at once according to `--concurrency`, so shared app clients and mutable state must support that. Pass the provided `AbortSignal` through to backend calls when possible. Throw an error to report a failed call; otherwise return a JSON-compatible observation.
+
+Command-adapter samples contain the same information as Python samples, using lower camel case for field names:
+
+| Field | Description |
+| --- | --- |
+| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the lossless PNG. |
+| `timestampS` | Requested sample timestamp in seconds. |
+| `frameIndex` | Zero-based decoded video frame index selected for that timestamp. |
+| `sampleIndex` | Case-local sample index. |
+| `videoPath` | Source video path as a string. Do not decode it again; `image` is already the selected frame. |
+| `caseName` | Case filename stem. |
+
+Targets use the `id`, `index`, `label`, and `config` fields described above. GlassKit-owned fields use lower camel case; keys inside the user-provided factory and target `config` objects are preserved unchanged. `glasskit eval validate --adapter-command ...` constructs and closes the adapter without evaluating samples.
+
+In this `eval/adapter.js`, replace `createAppClient` and its methods with thin calls into the app, then keep the marked protocol function unchanged. Application clients stay in the factory's closure, and supported methods are detected automatically. The example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
+
+For adapters in other languages, use the JavaScript implementation below as an executable protocol reference.
+
+```js
+// Application code: replace these calls with the app's imports and logic.
+await runGlassKitAdapter(async (context) => {
+  const app = await createAppClient(context.config);
+
+  return {
+    async evaluate({ sample, target, signal }) {
+      return await app.evaluateFrame({
+        image: sample.image.bytes,
+        mimeType: sample.image.mimeType,
+        promptId: target.config.promptId ?? target.id,
+        timestampS: sample.timestampS,
+        signal,
+      });
+    },
+
+    // If the app has a real multi-input API, implement
+    // evaluateMany({ samples, target, signal }) instead.
+
+    async close() {
+      await app.close();
+    },
+  };
+});
+
+// ---- GlassKit Eval protocol ----
+async function runGlassKitAdapter(createEvaluator) {
+  const { createInterface } = await import("node:readline");
+  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+  const active = new Map();
+  let evaluator;
+  let closing = false;
+  let outputTail = Promise.resolve();
+
+  function send(message) {
+    const line = `${JSON.stringify(message)}\n`;
+    outputTail = outputTail.then(
+      () =>
+        new Promise((resolve, reject) => {
+          process.stdout.write(line, "utf8", (error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        }),
+    );
+    return outputTail;
+  }
+
+  function errorPayload(error) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+    };
+  }
+
+  function sampleForApp(sample) {
+    const { dataBase64, ...image } = sample.image;
+    return {
+      ...sample,
+      image: { ...image, bytes: Buffer.from(dataBase64, "base64") },
+    };
+  }
+
+  async function respond(request, operation) {
+    try {
+      await send({ id: request.id, result: await operation() });
+    } catch (error) {
+      await send({ id: request.id, error: errorPayload(error) });
+    }
+  }
+
+  async function initialize(request) {
+    await respond(request, async () => {
+      if (request.params.protocolVersion !== 1) {
+        throw new Error(
+          `unsupported protocol version: ${request.params.protocolVersion}`,
+        );
+      }
+      evaluator = await createEvaluator(request.params.config);
+      const capabilities = {
+        evaluate: typeof evaluator?.evaluate === "function",
+        evaluateMany: typeof evaluator?.evaluateMany === "function",
+      };
+      if (!capabilities.evaluate && !capabilities.evaluateMany) {
+        throw new Error("adapter must implement evaluate or evaluateMany");
+      }
+      return { protocolVersion: 1, capabilities };
+    });
+  }
+
+  function startEvaluation(request) {
+    const controller = new AbortController();
+    const operation = async () => {
+      if (!evaluator) throw new Error("adapter is not initialized");
+      if (request.method === "evaluate") {
+        return await evaluator.evaluate({
+          sample: sampleForApp(request.params.sample),
+          target: request.params.target,
+          signal: controller.signal,
+        });
+      }
+      return await evaluator.evaluateMany({
+        samples: request.params.samples.map(sampleForApp),
+        target: request.params.target,
+        signal: controller.signal,
+      });
+    };
+    const promise = respond(request, operation);
+    active.set(request.id, { controller, promise });
+    promise.then(
+      () => active.delete(request.id),
+      (error) => {
+        active.delete(request.id);
+        console.error("Could not write GlassKit Eval adapter response:", error);
+        process.exitCode = 1;
+      },
+    );
+  }
+
+  async function close(request) {
+    closing = true;
+    await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+    await respond(request, async () => {
+      if (typeof evaluator?.close === "function") await evaluator.close();
+      return null;
+    });
+    lines.close();
+    process.stdin.pause();
+  }
+
+  for await (const line of lines) {
+    let request;
+    try {
+      request = JSON.parse(line);
+    } catch (error) {
+      console.error("Invalid GlassKit Eval protocol request:", error);
+      process.exitCode = 1;
+      break;
+    }
+    if (request.method === "cancel") {
+      active.get(request.params.id)?.controller.abort();
+    } else if (request.method === "initialize") {
+      await initialize(request);
+    } else if (
+      request.method === "evaluate" ||
+      request.method === "evaluateMany"
+    ) {
+      startEvaluation(request);
+    } else if (request.method === "close") {
+      await close(request);
+    } else {
+      await send({
+        id: request.id,
+        error: { message: `unknown method: ${request.method}` },
+      });
+    }
+  }
+
+  if (!closing) {
+    for (const { controller } of active.values()) controller.abort();
+    await Promise.allSettled([...active.values()].map(({ promise }) => promise));
+    if (typeof evaluator?.close === "function") await evaluator.close();
+  }
+  await outputTail;
+}
+```
 
 ## Command Reference
 
@@ -559,7 +776,7 @@ Options:
 
 Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved.
 
-The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview.
+The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview. The review command does not transcode video, so if the preview is unavailable, continue inspecting and editing the case source without playback or convert a copy to a codec supported by your browser.
 
 Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, or failure to load or start the review UI. Failure to open the browser is nonfatal because the printed URL remains usable.
 
@@ -576,12 +793,13 @@ Options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `--adapter TEXT` | `<eval-dir>/adapter.py:create_evaluator` | Adapter target in `<module-or-file>:<callable>` form. |
+| `--adapter-command TEXT` | None | NDJSON process adapter command. Mutually exclusive with `--adapter`; when set, the Python adapter default is not loaded. |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory in the config object's `config` field. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter in its `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
 | `--min-pass-rate FLOAT` | None | Pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -619,9 +837,10 @@ Options:
 | --- | --- | --- |
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--adapter TEXT` | None | Optional adapter target to import, construct, and close. |
+| `--adapter-command TEXT` | None | Optional NDJSON process adapter command to start, initialize, close, and wait for. Mutually exclusive with `--adapter`. |
 | `--case TEXT` | All cases | Only validate one case by filename or stem. |
 | `--target TEXT` | All targets | Only validate this target id from the selected cases. Repeat the option to validate multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the adapter factory during adapter validation. |
+| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter during validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 Exit behavior: exits `0` when validation passes and `1` when validation fails.
@@ -656,7 +875,7 @@ Default values at a glance:
 | Area | Default When Omitted |
 | --- | --- |
 | Eval directory | `eval` from the command's working directory. |
-| `run` adapter target | `<eval-dir>/adapter.py:create_evaluator`. |
+| `run` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | Individual evaluation concurrency | `1`. Increase with `run --concurrency`. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
@@ -705,13 +924,13 @@ Other precedence rules:
 | --- | --- |
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
 | Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
-| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the adapter factory. |
+| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the selected adapter. |
 
 ## Environment Variables
 
-`glasskit eval` defines no CLI-specific environment variables and does not read from stdin.
+`glasskit eval` defines no CLI-specific environment variables and does not read user input from stdin.
 
-Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
+Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Command adapters inherit the GlassKit Eval process environment, and GlassKit Eval reserves their stdin and stdout for the process protocol. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
 ```sh
 uv run --env-file .env glasskit eval run
@@ -719,162 +938,7 @@ uv run --env-file .env glasskit eval run
 
 ## Output Formats
 
-Human-readable output is printed as tables to stdout. JSON output is written only when `--output-json` is provided; it is written to the requested file, not stdout. Each JSON file represents one `glasskit eval run` invocation. By default, it has `repeat_count: 1` and one complete result set in `trials`.
-
-The following repeated-run example uses `glasskit eval run --repeat 2 --max-flaky-samples 0 --output-json eval/runs/results.json` so the report shows both per-trial results and cross-trial stability:
-
-```json
-{
-  "schema_version": 1,
-  "report_type": "eval_run",
-  "eval_dir": "/absolute/path/to/eval",
-  "cases": ["task-01"],
-  "repeat_count": 2,
-  "success": false,
-  "summary": {
-    "trials": 2,
-    "successful_trials": 2,
-    "evaluated_samples": 1,
-    "ignored_samples": 0,
-    "evaluated_attempts": 2,
-    "passed_attempts": 1,
-    "failed_attempts": 1,
-    "error_attempts": 0,
-    "attempt_pass_rate": 0.5,
-    "minimum_trial_pass_rate": 0.0,
-    "mean_trial_pass_rate": 0.5,
-    "maximum_trial_pass_rate": 1.0,
-    "consistently_passed_samples": 0,
-    "consistently_failed_samples": 0,
-    "flaky_samples": 1,
-    "error_samples": 0,
-    "duration_seconds": 0.84,
-    "evaluation_timing_mode": "individual",
-    "average_evaluation_seconds_per_attempt": 0.3,
-    "throughput_attempts_per_second": 2.38
-  },
-  "gates": [
-    {
-      "name": "max_flaky_samples",
-      "passed": false,
-      "message": "1 flaky sample (gate: <= 0)"
-    }
-  ],
-  "trials": [
-    {
-      "trial": 1,
-      "success": true,
-      "summary": {
-        "evaluated": 1,
-        "passed": 1,
-        "failed": 0,
-        "errors": 0,
-        "ignored": 0,
-        "pass_rate": 1.0,
-        "duration_seconds": 0.4,
-        "evaluation_timing_mode": "individual",
-        "average_evaluation_seconds_per_sample": 0.3,
-        "throughput_samples_per_second": 2.5
-      },
-      "gates": [
-        {
-          "name": "adapter_errors",
-          "passed": true,
-          "message": "no adapter/comparison errors"
-        }
-      ],
-      "results": [
-        {
-          "case": "task-01",
-          "target": "step_1",
-          "target_label": "Step 1",
-          "sample_index": 0,
-          "timestamp_s": 0.0,
-          "status": "passed",
-          "expected": true,
-          "observed": {"matches": true},
-          "observed_value": true,
-          "compare_mode": "exact",
-          "field": "matches",
-          "reason": "matched",
-          "source": "at",
-          "evaluation_duration_seconds": 0.3,
-          "evaluation_timing_mode": "individual",
-          "artifact_image": null,
-          "artifact_json": null
-        }
-      ]
-    },
-    {
-      "trial": 2,
-      "success": true,
-      "summary": {
-        "evaluated": 1,
-        "passed": 0,
-        "failed": 1,
-        "errors": 0,
-        "ignored": 0,
-        "pass_rate": 0.0,
-        "duration_seconds": 0.4,
-        "evaluation_timing_mode": "individual",
-        "average_evaluation_seconds_per_sample": 0.3,
-        "throughput_samples_per_second": 2.5
-      },
-      "gates": [
-        {
-          "name": "adapter_errors",
-          "passed": true,
-          "message": "no adapter/comparison errors"
-        }
-      ],
-      "results": [
-        {
-          "case": "task-01",
-          "target": "step_1",
-          "target_label": "Step 1",
-          "sample_index": 0,
-          "timestamp_s": 0.0,
-          "status": "failed",
-          "expected": true,
-          "observed": {"matches": false},
-          "observed_value": false,
-          "compare_mode": "exact",
-          "field": "matches",
-          "reason": "expected exact match",
-          "source": "at",
-          "evaluation_duration_seconds": 0.3,
-          "evaluation_timing_mode": "individual",
-          "artifact_image": null,
-          "artifact_json": null
-        }
-      ]
-    }
-  ],
-  "stability": [
-    {
-      "case": "task-01",
-      "target": "step_1",
-      "target_label": "Step 1",
-      "sample_index": 0,
-      "timestamp_s": 0.0,
-      "expected": true,
-      "source": "at",
-      "statuses": ["passed", "failed"],
-      "evaluated": 2,
-      "passed": 1,
-      "failed": 1,
-      "errors": 0,
-      "pass_rate": 0.5,
-      "ignored": false,
-      "consistently_passed": false,
-      "consistently_failed": false,
-      "flaky": true
-    }
-  ]
-}
-```
-
-The `trials` array is the report's uniform representation for complete executions. A default run has one entry; with `--repeat`, each repetition adds an entry identified by its `trial` number. Root `gates` contains run-wide stability gates, while each entry in `trials` contains its own quality gates and complete sample results. The `stability` array follows the deterministic result order and records each logical sample's status sequence. Ignored samples appear in every result set with status `ignored`, but root logical-sample counts include each ignored sample only once; attempts, pass rates, timing, throughput, quality gates, and stability gates exclude ignored outcomes.
+Human-readable output is printed as tables to stdout. JSON output is written to a file when `--output-json` is provided. See the [JSON output reference](https://github.com/RealComputer/GlassKit/blob/main/cli/JSON_OUTPUT.md) for the complete report format, a repeated-run example, and result-structure semantics.
 
 `--save-failures` writes artifacts for every failed or errored sample attempt. To prevent repeated executions from overwriting one another, files are grouped under `<eval-dir>/runs/failures/trial-NNN/` by default or `<artifacts-dir>/failures/trial-NNN/` when `--artifacts-dir` is provided. A run without `--repeat` uses `trial-001`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp; the metadata also records its one-based trial number.
 
@@ -900,36 +964,6 @@ Then inspect samples and run one case:
 uv run glasskit eval list-samples --case task-01
 uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going
 ```
-
-Common failures:
-
-| Message or Symptom | Likely Cause | Fix |
-| --- | --- | --- |
-| `eval directory does not exist` | `--eval-dir` points at the wrong path. | Run from the app repo or pass the correct `--eval-dir`. |
-| `cases directory does not exist` | `<eval-dir>/cases/` is missing. | Add case files under `cases/` and reference videos from them. |
-| `no case files found` | No case files exist under `cases/`, or `--case` does not match a case filename or stem. | Check the case filename or stem. |
-| `no eval targets found` | At least one requested `--target` does not match a target id in the selected cases. | Check every target id in the case files or broaden the case filter. |
-| `no eval samples found` | No expanded timestamps fall within the `--from`/`--until` window. | Inspect the case with `list-samples`, then broaden or correct the time bounds. |
-| `invalid schema` | A YAML field name, type, value, or structure is invalid. | Compare the file against the Case File Reference. Extra fields are rejected except extra metadata inside `workflow.targets` items. |
-| `video file does not exist` | The case `video:` path is wrong. | Resolve it relative to the case file's directory, not the shell working directory. |
-| `unsupported video file type` | Video suffix is not one of `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv`. | Convert or rename to a supported container type. |
-| `could not open video` or `could not decode video` | GlassKit cannot open or decode the file. | Check that the file is a real video and can be decoded locally. |
-| `sample ... exceeds video duration` | A timestamp is beyond the readable video duration. | Fix the timestamp units or shorten the sampled range. |
-| `overlaps` or `duplicates` | Sample blocks for one target overlap. | Adjust ranges and `at` timestamps so each target has distinct labeled samples. |
-| `exceeds the per-case expansion limit` | A range cadence or total schedule would expand beyond 10,000 samples. | Increase the cadence, shorten the range, or split the workflow into separate cases. |
-| Browser preview is unavailable | The browser cannot play the source container or codec, even when `glasskit eval run` can decode it. | Use source inspection and editing when enabled, or convert a copy to a browser-supported codec; the review command does not transcode. |
-| `adapter must be '<module-or-file>:<callable>'` | `--adapter` is not in target form. | Use a value such as `eval/adapter.py:create_evaluator`. |
-| `adapter file does not exist` | The adapter file path is wrong. | Check the path from the command working directory. |
-| `adapter import failed` | Adapter dependencies or app imports are unavailable. | Run from the app repo, install dependencies, set `PYTHONPATH`, or pass environment variables needed during import. |
-| `adapter target not found` | The module imported, but the callable path does not exist. | Check the function, class, or nested attribute name after `:`. |
-| `adapter ... did not return an object with evaluate(...) or evaluate_many(...)` | The factory returned the wrong shape. | Return an object implementing an individual or batch evaluation strategy, or use a supported simple function adapter. |
-| `adapter returned non-JSON observation` | The adapter returned a dataclass, SDK object, image, bytes, infinite number, or other non-JSON value. | Return only JSON-like values. |
-| `adapter returned N observations for M samples` | `evaluate_many` returned the wrong number of observations. | Return exactly one observation per input sample in order. |
-| `missing field: result.matches` | `field` does not exist in the adapter observation. | Update the adapter output or the sample `field`. |
-| `invalid_observation: adapter returned null` | The adapter returned `None` for a sample expecting a non-null value. | Return a JSON value matching the expected shape, or set `expect: null`. |
-| Failed comparisons but exit code `0` | No quality gate was configured. | Add `--min-pass-rate`, `--max-failures`, `--min-target-pass-rate`, or YAML thresholds. |
-| Flaky samples but exit code `0` | Repetition measured variation, but no stability gate was configured. | Add `--max-flaky-samples 0` or another acceptable count. |
-| `max flaky samples requires at least 2 trials` | `--max-flaky-samples` was used with the default single trial. | Add `--repeat 2` or greater, or remove the stability gate. |
 
 ## Support
 
