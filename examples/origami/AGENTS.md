@@ -58,10 +58,11 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
 - `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends each composed sampled frame through the shared fold-check/Overshoot chat-completion path without LiveKit. It deliberately implements individual `evaluate` calls so `glasskit eval run --concurrency N` can overlap independent requests.
-- `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the case generator's labeling path.
-- `eval/generate_case.py`: Gemini-backed helper for turning a small label plan into an initial recorded-video eval case YAML.
+- `eval/label_adapter.py`: stronger Gemini-backed labeling adapter for proposing draft case expectations through `glasskit eval seed`.
+- `eval/gemini.py`: shared Gemini fold-labeling, image encoding, and sampled-video helpers used by the eval utilities.
+- `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the seed adapter's labeling path.
 - `eval/suggest_criteria.py`: high-thinking Gemini helper for proposing generalizable step criteria from the target reference, neighboring references, balanced reviewed true/false frames, and optional fast-evaluator feedback.
-- `eval/test_generate_case.py`: regression coverage for full-case overwrite and selected-target update behavior.
+- `eval/test_label_adapter.py`: regression coverage for the Gemini seed adapter's target and reference routing.
 - `assets/origami_steps.json`: seven step definitions and fold-check criteria.
 - `assets/step-imgs/*.png`: backend demo copies of the step guide images, colorized into the green HUD style at render time.
 - `assets/ref-imgs/*.jpg`: active step reference images used for fold-check composition.
@@ -81,5 +82,6 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 
 - `uv run ty check && uv run ruff check --fix && uv run ruff format`: Always run after backend changes
 - `uv run --env-file .env fastapi dev src/main.py --host 0.0.0.0`: start server with env loaded
+- `uv run --with-editable ../../../cli --env-file .env glasskit eval seed --adapter eval/label_adapter.py:create_evaluator --concurrency 8`: propose missing draft expectations with Gemini before reviewing them
 - `uv run --with-editable ../../../cli --env-file .env glasskit eval run --concurrency 2`: run a local recorded-video eval suite with this repo's current CLI checkout and bounded parallel Overshoot requests
 - `uv add <package>`: add a package

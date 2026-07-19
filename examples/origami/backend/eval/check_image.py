@@ -6,7 +6,7 @@ from pathlib import Path
 from google import genai
 from PIL import Image
 
-from eval.generate_case import BACKEND_DIR, label_camera_image
+from eval.gemini import BACKEND_DIR, label_camera_image
 from src.fold_check import load_fold_check_reference_images, load_fold_check_steps
 
 

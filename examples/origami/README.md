@@ -110,58 +110,62 @@ In this project, the eval answers one question for each sampled video frame: sho
 The eval files live under `backend/eval/`:
 
 - `adapter.py` connects `glasskit eval` to the origami fold-check logic.
-- `check_image.py` checks one or more camera images against an origami step with the same Gemini labeling path as case generation.
-- `plans/*.yaml` are small label plans used to generate eval cases from recordings.
-- `generate_case.py` asks Gemini to pre-label planned timestamp ranges with a smarter model and writes the first draft of a case.
+- `label_adapter.py` connects `glasskit eval seed` to the stronger Gemini labeling path used to propose draft expectations.
+- `gemini.py` contains the shared Gemini request, image encoding, and sampled-video helpers used by the labeling and criteria-authoring tools.
+- `check_image.py` checks one or more camera images against an origami step with the same Gemini path as the seed adapter.
 - `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference, balanced reviewed true/false frames, and optional fast-evaluator feedback.
-- `test_generate_case.py` covers full-case overwrite and selected-target update behavior.
-- `cases/*.yaml` are the runnable eval cases. Each case points to a recording, chooses timestamps or ranges to sample, and declares the expected result for each step.
+- `test_label_adapter.py` covers the Gemini seed adapter's target and reference routing.
+- `cases/*.yaml` are draft or runnable eval cases. Each case points to a recording and chooses timestamps or ranges to sample; runnable samples also declare the expected result for each step.
 
 To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
 
-You can write the case YAML by hand, but generating a draft with a larger VLM is convenient. This works because the live app needs a fast model so the wearer gets instant feedback, but case generation is not in the user loop; it can spend more time per frame and use a smarter, slower model to draft labels. Start with a label plan that names the recording, sampling interval, and timestamp ranges to label for each target. For example, `backend/eval/plans/full-run.yaml`:
+Create a draft case that names the recording, sampling interval, and timestamp ranges to label for each target. Omit `expect` from draft sample blocks. This works well with a larger labeling VLM because the live app needs a fast model so the wearer gets instant feedback, while draft labeling is outside the user loop and can spend more time per frame. For example, `backend/eval/cases/full-run.yaml` can begin as:
 
 ```yaml
 video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
+description: Full origami workflow recording
 sampling:
   every_s: 0.5
 targets:
   step_1:
-    range: [0.0, 51.0]
+    samples:
+    - range: [0.0, 64.0]
   step_2:
-    ranges:
-    - [52.0, 64.0]
-    - [70.0, 82.5]
+    samples:
+    - range: [64.0, 117.0]
 ```
 
-The plan's `video:` path is resolved relative to the plan YAML file. Before running the generator, add `GEMINI_API_KEY` to `backend/.env`.
+The `video:` path is resolved relative to the case YAML file. Before seeding with Gemini, add `GEMINI_API_KEY` to `backend/.env`.
 
-Generate a new case YAML:
+Seed the omitted expectations with the stronger Gemini adapter introduced for this example:
 
 ```sh
 cd backend
-uv run --env-file .env python -m eval.generate_case \
-  --plan eval/plans/full-run.yaml \
-  --output eval/cases/full-run.yaml
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval seed --case full-run \
+  --adapter eval/label_adapter.py:create_evaluator \
+  --concurrency 8
 ```
 
-The generator calls Gemini with the same fold-check prompt shape used by the runtime path and samples frames from the requested ranges. It creates or overwrites the case YAML at `--output`. Treat this generated case as a draft: the reviewed case file is what `glasskit eval` runs and what should be committed.
+`glasskit eval seed` decodes the same frames that `run` will use, calls Gemini with the runtime fold-check prompt shape, writes the proposed expectations into the case, and compacts adjacent equal values back into ranges. It fills only samples where `expect` is omitted by default. Treat seeded expectations as proposals: review them before using the case as ground truth.
 
-To regenerate only selected targets in an existing case, repeat `--target` as needed:
+To deliberately relabel selected existing targets, repeat `--target` and add `--replace`:
 
 ```sh
-uv run --env-file .env python -m eval.generate_case \
-  --plan eval/plans/full-run.yaml \
-  --output eval/cases/full-run.yaml \
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval seed --case full-run \
+  --adapter eval/label_adapter.py:create_evaluator \
   --target step_1 \
-  --target step_3
+  --target step_3 \
+  --replace \
+  --concurrency 8
 ```
 
-The generator replaces only those target blocks and preserves the other reviewed targets and top-level case fields. It rejects a targeted update when the existing case has a different video or sampling interval. Without `--target`, an existing output is replaced in full. Output replacement is atomic, so a failed or interrupted generation leaves the previous case intact.
+The seed command preserves expectations outside the selected scope and, without `--replace`, preserves existing expectations inside it as well. It validates the reconstructed case, refuses to overwrite a case changed during evaluation, and uses atomic file replacement. Do not use `--replace` merely because criteria changed; reviewed expectations are ground truth for measuring those criteria.
 
-#### Review and Refine Generated Labels
+#### Review and Refine Seeded Labels
 
-Review the generated expectations with the `glasskit eval` browser UI:
+Review the seeded expectations with the `glasskit eval` browser UI:
 
 ```sh
 cd backend
@@ -170,7 +174,7 @@ uv run --with-editable ../../../cli glasskit eval review \
   --case full-run
 ```
 
-The review UI is a convenient data viewer for this workflow: it puts the source video, expanded per-target sample schedule, timestamps, and expected values in one place. You can focus a target, move through its samples, and compare each expectation with the corresponding video moment. Add options such as `--target step_5 --time 202.5` to open directly at a target and timestamp. Edits are saved directly to the case YAML, so commit the generated case first or use Git to inspect and undo review changes.
+The review UI is a convenient data viewer for this workflow: it puts the source video, expanded per-target sample schedule, timestamps, and expected values in one place. You can focus a target, move through its samples, and compare each expectation with the corresponding video moment. Add options such as `--target step_5 --time 202.5` to open directly at a target and timestamp. Edits are saved directly to the case YAML, so commit the seeded case first or use Git to inspect and undo review changes.
 
 For an isolated labeling mistake, edit the sample's expected value in the review UI. A one-off correction usually does not justify changing a prompt that already handles the surrounding samples well.
 
@@ -234,7 +238,7 @@ uv run --env-file .env python -m eval.check_image \
   /path/to/frame-41.500s.png
 ```
 
-The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as case generation. It is useful for investigating generated labels, but it is not a substitute for the fast Overshoot eval. Do not regenerate a reviewed target after changing its criteria: that would change the ground truth while measuring the prompt. Keep the reviewed case fixed, rerun `glasskit eval`, and edit expectations only when human review shows that a label itself is wrong.
+The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as the seed adapter. It is useful for investigating proposed labels, but it is not a substitute for the fast Overshoot eval. Do not reseed a reviewed target after changing its criteria: that would change the ground truth while measuring the prompt. Keep the reviewed case fixed, rerun `glasskit eval`, and edit expectations only when human review shows that a label itself is wrong.
 
 Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
 

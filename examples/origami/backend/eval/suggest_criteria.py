@@ -16,14 +16,14 @@ import yaml
 from google import genai
 from PIL import Image
 
-from eval.generate_case import (
+from eval.gemini import (
     BACKEND_DIR,
     GEMINI_IMAGE_RESOLUTION,
     GEMINI_MODEL,
     GEMINI_SERVICE_TIER,
-    _decode_sample_images,
-    _jpeg_base64,
-    _time_key,
+    decode_sample_images,
+    jpeg_base64,
+    time_key,
 )
 from src.fold_check import load_fold_check_reference_images, load_fold_check_steps
 from src.fold_check_prompts import FOLD_CHECK_SYSTEM_PROMPT
@@ -255,7 +255,7 @@ def _suggest_criteria(
         )
 
     images_by_time = dict(
-        _decode_sample_images(
+        decode_sample_images(
             loaded_case.video_path,
             [example.timestamp_s for example in selected],
         )
@@ -296,7 +296,7 @@ def _suggest_criteria(
                 }
                 for example in selected
                 if observations is not None
-                and (observation := observations.get(_time_key(example.timestamp_s)))
+                and (observation := observations.get(time_key(example.timestamp_s)))
                 is not None
             ]
             if observations is not None
@@ -432,7 +432,7 @@ def _load_eval_observations(
         status = raw_result.get("status")
         if not isinstance(status, str) or not status.strip():
             raise RuntimeError("eval result status must be a non-empty string")
-        key = _time_key(timestamp_s)
+        key = time_key(timestamp_s)
         if key in observations:
             raise RuntimeError(
                 f"duplicate eval result for {target_id} at {timestamp_s:g}s"
@@ -468,7 +468,7 @@ def _select_examples(
             misclassified = [
                 example
                 for example in class_examples
-                if (observation := observations.get(_time_key(example.timestamp_s)))
+                if (observation := observations.get(time_key(example.timestamp_s)))
                 is not None
                 and observation.expected is expected
                 and observation.observed is not expected
@@ -607,12 +607,12 @@ def _build_authoring_inputs(
         counts[example.expected] += 1
         prefix = "P" if example.expected else "N"
         label = "POSITIVE" if example.expected else "NEGATIVE"
-        image = images_by_time.get(_time_key(example.timestamp_s))
+        image = images_by_time.get(time_key(example.timestamp_s))
         if image is None:
             raise RuntimeError(f"video decoder missed a selected {label.lower()} frame")
         feedback = ""
         if observations is not None:
-            observation = observations.get(_time_key(example.timestamp_s))
+            observation = observations.get(time_key(example.timestamp_s))
             if observation is None:
                 raise RuntimeError("eval results are missing a selected camera example")
             if observation.expected is not example.expected:
@@ -644,7 +644,7 @@ def _build_authoring_inputs(
 def _image_input(image: Image.Image) -> dict[str, Any]:
     return {
         "type": "image",
-        "data": _jpeg_base64(image),
+        "data": jpeg_base64(image),
         "mime_type": "image/jpeg",
         "resolution": GEMINI_IMAGE_RESOLUTION,
     }
