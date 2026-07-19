@@ -314,6 +314,98 @@ async def _run_blocked_write_cancellation_test(tmp_path: Path) -> None:
         )
 
 
+def test_process_adapter_shields_blocked_write_cleanup_from_repeated_cancellation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shorten_shutdown_timeouts(monkeypatch)
+    asyncio.run(_run_repeated_blocked_write_cancellation_test(tmp_path, monkeypatch))
+
+
+async def _run_repeated_blocked_write_cancellation_test(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocked_marker = tmp_path / "adapter-stopped-reading"
+    evaluator = await load_process_evaluator(
+        _adapter_command(),
+        AdapterConfig(
+            eval_dir=TWO_STATE_EVAL,
+            config={
+                "blockStdinAfterEvaluateMarker": str(blocked_marker),
+                "delayS": 30,
+            },
+        ),
+    )
+    original_write_message = process_adapters._ProcessAdapter._write_message
+    write_cancellation_started = asyncio.Event()
+    release_write_cancellation = asyncio.Event()
+
+    async def delay_write_cancellation(
+        adapter: process_adapters._ProcessAdapter,
+        message: bytes,
+    ) -> None:
+        try:
+            await original_write_message(adapter, message)
+        except asyncio.CancelledError:
+            write_cancellation_started.set()
+            await release_write_cancellation.wait()
+            raise
+
+    monkeypatch.setattr(
+        process_adapters._ProcessAdapter,
+        "_write_message",
+        delay_write_cancellation,
+    )
+    samples = [_sample(0), _sample(1)]
+    first_evaluation = asyncio.create_task(
+        evaluator.evaluate(samples[0], TargetContext(id="step", index=0))
+    )
+    await _wait_for_path(blocked_marker)
+    blocked_evaluation = asyncio.create_task(
+        evaluator.evaluate(
+            samples[1],
+            TargetContext(
+                id="step",
+                index=0,
+                config={"largePayload": "x" * (2 * 1024 * 1024)},
+            ),
+        )
+    )
+    await asyncio.sleep(0.1)
+    assert not blocked_evaluation.done()
+    blocked_evaluation.cancel()
+    await asyncio.wait_for(write_cancellation_started.wait(), timeout=1)
+    blocked_evaluation.cancel()
+    release_write_cancellation.set()
+
+    try:
+        done, _ = await asyncio.wait({blocked_evaluation}, timeout=1)
+        assert blocked_evaluation in done
+        with pytest.raises(asyncio.CancelledError):
+            await blocked_evaluation
+        await asyncio.wait_for(evaluator.close(), timeout=1)
+        first_result = await asyncio.wait_for(
+            asyncio.gather(first_evaluation, return_exceptions=True),
+            timeout=1,
+        )
+        assert isinstance(first_result[0], AdapterRuntimeError)
+    finally:
+        release_write_cancellation.set()
+        try:
+            await asyncio.wait_for(evaluator.close(), timeout=1)
+        except BaseException:
+            pass
+        for sample in samples:
+            sample.image.close()
+        for evaluation in (first_evaluation, blocked_evaluation):
+            if not evaluation.done():
+                evaluation.cancel()
+        await asyncio.gather(
+            first_evaluation, blocked_evaluation, return_exceptions=True
+        )
+
+
 @pytest.mark.parametrize("mode", ["hangOnClose", "inheritPipesAfterClose"])
 def test_process_adapter_bounds_entire_shutdown_sequence(
     mode: str, monkeypatch: pytest.MonkeyPatch

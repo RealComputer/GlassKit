@@ -229,10 +229,12 @@ class _ProcessAdapter:
                 write_task.cancel()
                 future.cancel()
                 self._pending.pop(request_id, None)
-                await asyncio.gather(
-                    write_completion_task, write_task, return_exceptions=True
+                cleanup_task = asyncio.create_task(
+                    self._abort_after_blocked_write_cancellation(
+                        write_completion_task, write_task
+                    )
                 )
-                await self.abort()
+                await _drain_task(cleanup_task)
                 raise
             await _drain_task(write_completion_task)
             if not write_task.cancelled() and write_task.exception() is None:
@@ -251,6 +253,18 @@ class _ProcessAdapter:
             if method != "close":
                 await self._cancel_request(request_id)
             raise
+
+    async def _abort_after_blocked_write_cancellation(
+        self,
+        write_completion_task: asyncio.Task[None],
+        write_task: asyncio.Task[None],
+    ) -> None:
+        try:
+            await asyncio.gather(
+                write_completion_task, write_task, return_exceptions=True
+            )
+        finally:
+            await self.abort()
 
     async def _cancel_request(self, request_id: int) -> None:
         try:
