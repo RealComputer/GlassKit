@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sample, target } from "../test/fixtures.ts";
-import { canDeleteFromTarget, createSampleAt } from "./editing.ts";
+import { canDeleteFromTarget, createSampleAt, mostRecentSampleAt } from "./editing.ts";
 
 describe("sample editing helpers", () => {
   it("rounds a new time and copies the closest payload without notes or origin", () => {
@@ -38,6 +38,16 @@ describe("sample editing helpers", () => {
     expect(created.sample.has_expectation).toBe(true);
     expect(created.sample.expect_type).toBe("boolean");
     expect(created.sample.expect_json).toBe("false");
+  });
+
+  it("finds the most recently crossed sample in an unsorted target", () => {
+    const samples = [sample("later", 3), sample("first", 1), sample("recent", 2)];
+    const status = target("status", samples);
+
+    expect(mostRecentSampleAt(status, 0.999)).toBeUndefined();
+    expect(mostRecentSampleAt(status, 2)).toBe(samples[2]);
+    expect(mostRecentSampleAt(status, 2.5)).toBe(samples[2]);
+    expect(mostRecentSampleAt(status, 4)).toBe(samples[0]);
   });
 
   it("protects the accepted last sample but permits cancelling an unsaved first sample", () => {

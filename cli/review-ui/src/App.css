@@ -1086,10 +1086,22 @@ tbody tr.selected {
   border-bottom: 1px solid var(--border);
 }
 
-.inspector-heading > div {
+.inspector-title {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.inspector-heading-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.follow-playhead-control {
+  min-height: auto;
+  padding: 2px;
+  white-space: nowrap;
 }
 
 .muted {

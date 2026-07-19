@@ -50,6 +50,80 @@ describe("review application navigation and drafts", () => {
     expect(pause).toHaveBeenCalledOnce();
   });
 
+  it("follows the most recently crossed sample only while playback is active", async () => {
+    const doc = caseFile([
+      target("target_a", [
+        sample("first", 1, "false"),
+        sample("second", 2, "true"),
+        sample("third", 3, "false"),
+      ]),
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const follow = await screen.findByLabelText("Follow playhead");
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "1"));
+    const video = document.querySelector("video");
+    expect(follow).toHaveProperty("checked", true);
+    expect(video).not.toBeNull();
+    const pause = vi.spyOn(video!, "pause");
+    pause.mockClear();
+
+    fireEvent.play(video!);
+    fireEvent.timeUpdate(video!, { target: { currentTime: 0.5 } });
+    await waitFor(() =>
+      expect(screen.getByText("Select a sample to inspect its expectation.")).toBeTruthy(),
+    );
+
+    fireEvent.timeUpdate(video!, { target: { currentTime: 2.5 } });
+    await waitFor(() => expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2"));
+    expect(pause).not.toHaveBeenCalled();
+
+    fireEvent.pause(video!);
+    fireEvent.timeUpdate(video!, { target: { currentTime: 3.5 } });
+    expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2");
+
+    const currentFollow = screen.getByLabelText("Follow playhead");
+    fireEvent.click(currentFollow);
+    expect(currentFollow).toHaveProperty("checked", false);
+    fireEvent.play(video!);
+    fireEvent.timeUpdate(video!, { target: { currentTime: 3.5 } });
+    expect(screen.getByLabelText("Timestamp")).toHaveProperty("value", "2");
+  });
+
+  it("pauses active playback when an inspector editor receives focus", async () => {
+    const doc = caseFile();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    const timestamp = await screen.findByLabelText("Timestamp");
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    Object.defineProperty(video!, "paused", { configurable: true, value: false });
+    const pause = vi.spyOn(video!, "pause");
+    pause.mockClear();
+
+    fireEvent.focus(timestamp);
+
+    expect(pause).toHaveBeenCalledOnce();
+  });
+
   it("gives transport actions visible labels and shortcut hints", async () => {
     const doc = caseFile();
     vi.stubGlobal(

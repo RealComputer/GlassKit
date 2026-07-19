@@ -222,12 +222,30 @@ export function Inspector() {
   })();
 
   const editingDisabled = !workspace?.document.editing_enabled;
+  const pauseForEditing = () => {
+    const video = globalThis.document.querySelector("video");
+    if (video && !video.paused) video.pause();
+  };
+  const followControl = (
+    <label className="toggle-control follow-playhead-control" htmlFor="follow-playhead">
+      <input
+        id="follow-playhead"
+        type="checkbox"
+        checked={state.followPlayhead}
+        onChange={(event) => dispatch({ type: "SET_FOLLOW_PLAYHEAD", value: event.target.checked })}
+      />
+      Follow playhead
+    </label>
+  );
 
   if (!sample || !target || !workspace) {
     return (
       <aside className="inspector">
         <div className="inspector-heading">
-          <h2>Inspector</h2>
+          <div className="inspector-title">
+            <h2>Inspector</h2>
+          </div>
+          {followControl}
         </div>
         <div className="empty-state">Select a sample to inspect its expectation.</div>
       </aside>
@@ -241,13 +259,16 @@ export function Inspector() {
   return (
     <aside className="inspector" aria-label="Sample inspector">
       <div className="inspector-heading">
-        <div>
+        <div className="inspector-title">
           <h2>Inspector</h2>
           <span className="mono muted">{formatSeconds(sample.timestamp_s)}</span>
         </div>
-        <span className="type-chip">{sample.has_expectation ? sample.expect_type : "draft"}</span>
+        <div className="inspector-heading-actions">
+          {followControl}
+          <span className="type-chip">{sample.has_expectation ? sample.expect_type : "draft"}</span>
+        </div>
       </div>
-      <fieldset disabled={editingDisabled}>
+      <fieldset disabled={editingDisabled} onFocusCapture={pauseForEditing}>
         <div className="field-group">
           <label htmlFor="sample-time">Timestamp</label>
           <div className="timestamp-editor">

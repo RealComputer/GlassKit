@@ -43,6 +43,7 @@ export interface AppState {
   targetFilter: string;
   zoom: 1 | 2 | 4 | 8;
   selectedLaneOnly: boolean;
+  followPlayhead: boolean;
   sourceDrawer: "case_file" | "eval_config_file" | null;
   helpOpen: boolean;
   toast: string | null;
@@ -64,6 +65,7 @@ export const initialState: AppState = {
   targetFilter: "",
   zoom: 1,
   selectedLaneOnly: false,
+  followPlayhead: true,
   sourceDrawer: null,
   helpOpen: false,
   toast: null,
@@ -104,6 +106,11 @@ export type AppAction =
       timestamp: number;
     }
   | {
+      type: "SELECT_FOLLOWED_SAMPLE";
+      targetId: string;
+      sampleId: string | null;
+    }
+  | {
       type: "REPLACE_TARGET_SAMPLES";
       caseId: string;
       targetId: string;
@@ -137,6 +144,7 @@ export type AppAction =
   | { type: "SET_TARGET_FILTER"; value: string }
   | { type: "SET_ZOOM"; value: 1 | 2 | 4 | 8 }
   | { type: "SET_SELECTED_LANE_ONLY"; value: boolean }
+  | { type: "SET_FOLLOW_PLAYHEAD"; value: boolean }
   | { type: "SET_SOURCE_DRAWER"; value: "case_file" | "eval_config_file" | null }
   | { type: "SET_HELP_OPEN"; value: boolean }
   | { type: "SET_TOAST"; value: string | null }
@@ -335,6 +343,19 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           previewMessage: null,
         },
       };
+    case "SELECT_FOLLOWED_SAMPLE": {
+      if (
+        state.selectedTargetId !== action.targetId ||
+        state.selectedSampleId === action.sampleId
+      ) {
+        return state;
+      }
+      const workspace = state.selectedCaseId
+        ? state.caseFileWorkspaces[state.selectedCaseId]
+        : null;
+      if (workspace && Object.keys(workspace.formErrors).length > 0) return state;
+      return { ...state, selectedSampleId: action.sampleId };
+    }
     case "REPLACE_TARGET_SAMPLES": {
       const workspace = state.caseFileWorkspaces[action.caseId];
       if (!workspace) return state;
@@ -594,6 +615,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, zoom: action.value };
     case "SET_SELECTED_LANE_ONLY":
       return { ...state, selectedLaneOnly: action.value };
+    case "SET_FOLLOW_PLAYHEAD":
+      return { ...state, followPlayhead: action.value };
     case "SET_SOURCE_DRAWER":
       return { ...state, sourceDrawer: action.value };
     case "SET_HELP_OPEN":

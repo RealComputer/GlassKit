@@ -5,7 +5,7 @@ This workspace contains the React application served by `glasskit eval review`. 
 ## Features
 
 - Browse cases and targets, filter both lists, and open the case file or eval config file source.
-- Seek and play the case video, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the currently displayed frame image.
+- Seek and play the case video, follow the most recently crossed sample for the selected target, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the currently displayed frame image.
 - Inspect and scrub all targets on a zoomable timeline, or limit the view to the selected target. Equal typed expectation values receive the same color.
 - Switch between the timeline and a table that groups consecutive equivalent samples for the selected target.
 - Distinguish omitted draft expectations from explicit `null`, and edit sample timing, expectations, comparison settings, notes, and ignore status, or delete samples when valid.

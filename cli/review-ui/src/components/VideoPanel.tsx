@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/AppContext.tsx";
-import { findSampleAt } from "../state/editing.ts";
+import { findSampleAt, mostRecentSampleAt } from "../state/editing.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
 import {
   downloadVideoFrame,
@@ -49,6 +49,22 @@ export function VideoPanel() {
     [target?.samples],
   );
   const hasSampleAtVideoTime = Boolean(target && findSampleAt(target, state.video.currentTime));
+
+  useEffect(() => {
+    if (!state.followPlayhead || state.video.paused || !target) return;
+    const followedSample = mostRecentSampleAt(target, state.video.currentTime);
+    const sampleId = followedSample?.id ?? null;
+    if (sampleId !== state.selectedSampleId) {
+      dispatch({ type: "SELECT_FOLLOWED_SAMPLE", targetId: target.id, sampleId });
+    }
+  }, [
+    dispatch,
+    state.followPlayhead,
+    state.selectedSampleId,
+    state.video.currentTime,
+    state.video.paused,
+    target,
+  ]);
 
   useEffect(() => {
     if (globalThis.document.activeElement !== timeInputRef.current) {

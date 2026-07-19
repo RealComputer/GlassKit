@@ -80,6 +80,28 @@ describe("appReducer save ordering", () => {
     });
   });
 
+  it("selects a followed sample without changing playback", () => {
+    const doc = caseFile([target("target_a", [sample("first", 1), sample("followed", 2, "true")])]);
+    let state = appReducer(
+      { ...initialState, selectedCaseId: doc.id },
+      { type: "CASE_FILE_LOADED", document: doc },
+    );
+    state = appReducer(state, {
+      type: "VIDEO_PATCH",
+      patch: { currentTime: 2.1, paused: false },
+    });
+    const video = state.video;
+
+    state = appReducer(state, {
+      type: "SELECT_FOLLOWED_SAMPLE",
+      targetId: "target_a",
+      sampleId: "followed",
+    });
+
+    expect(state.selectedSampleId).toBe("followed");
+    expect(state.video).toBe(video);
+  });
+
   it("reloads retained selection at its sample and refreshes the media element", () => {
     const original = caseFile([target("target_a", [sample("first", 1), sample("retained", 7)])]);
     let state = appReducer(

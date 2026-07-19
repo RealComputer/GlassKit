@@ -18,6 +18,17 @@ export function findSampleAt(target: ReviewTarget, playheadTime: number): Review
   return target.samples.find((sample) => Math.abs(sample.timestamp_s - timestamp) <= 1e-9);
 }
 
+export function mostRecentSampleAt(
+  target: ReviewTarget,
+  playheadTime: number,
+): ReviewSample | undefined {
+  return target.samples.reduce<ReviewSample | undefined>((mostRecent, sample) => {
+    if (sample.timestamp_s > playheadTime + 1e-9) return mostRecent;
+    if (!mostRecent || sample.timestamp_s > mostRecent.timestamp_s) return sample;
+    return mostRecent;
+  }, undefined);
+}
+
 export function createSampleAt(
   target: ReviewTarget,
   playheadTime: number,
