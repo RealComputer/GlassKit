@@ -317,7 +317,7 @@ async def _run_with_evaluator(
     async def load_evaluator(*args: Any, **kwargs: Any) -> LoadedEvaluator:
         return loaded
 
-    monkeypatch.setattr("glasskit.eval.runner.load_evaluator", load_evaluator)
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", load_evaluator)
     return await run_eval(
         RunOptions(
             eval_dir=eval_dir,

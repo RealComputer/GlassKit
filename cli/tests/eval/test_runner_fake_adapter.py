@@ -826,7 +826,12 @@ def create_evaluator(config):
     )
     output_json = tmp_path / "report.json"
     clock_values = iter([10.0, 20.0, 30.0, 40.0, 72.25, 72.25])
-    monkeypatch.setattr("glasskit.eval.runner.perf_counter", lambda: next(clock_values))
+
+    def clock() -> float:
+        return next(clock_values)
+
+    monkeypatch.setattr("glasskit.eval.runner.perf_counter", clock)
+    monkeypatch.setattr("glasskit.eval.execution.perf_counter", clock)
 
     report = await run_eval(
         RunOptions(
