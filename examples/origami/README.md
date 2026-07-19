@@ -103,41 +103,13 @@ To view the step IDs, reference images, and criteria in HTML, run `cd backend &&
 
 ### Recorded-Video Fold-Check Evals
 
-Testing this app only by wearing the glasses is slow: every prompt, model, or workflow change can require repeating the same physical folds. A recorded-video eval turns that manual check into a repeatable test. You record a run once, label what the fold checker should answer at specific times, and replay those checks with [`glasskit eval`](../../cli/README.md).
+Recorded-video evals make prompt and model changes repeatable without performing every fold again. This project uses [`glasskit eval`](../../cli/README.md) to ask whether each sampled camera frame satisfies an origami step.
 
-In this project, the eval answers one question for each sampled video frame: should the current origami step be considered complete? The `glasskit eval` CLI loads the video and the YAML labels, calls this repo's adapter in `backend/eval/adapter.py`, and reports whether the adapter's result matched the expected value. The adapter reuses the live backend's fold-check composition, prompt, Overshoot chat-completion, and parsing helpers: it composes the camera frame with the step reference image, sends that composed frame to Overshoot, parses the VLM response, and returns `true` or `false`.
+The eval suite lives under `backend/eval/`. `adapter.py` is the default adapter for `glasskit eval run` and reuses the live Overshoot fold-check path. `label_adapter.py` uses Gemini to propose draft expectations, while `suggest_criteria.py` and `check_image.py` help investigate and refine step criteria. See the [GlassKit Eval README](../../cli/README.md) for case syntax, command behavior, review controls, filtering, and quality gates.
 
-The eval files live under `backend/eval/`:
+To use the suite in this project, record a fold-check input video with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`, add or update a case under `backend/eval/cases/`, and point the case at the recording. `backend/eval/cases/full-run.yaml` is the current full-workflow case.
 
-- `adapter.py` connects `glasskit eval` to the origami fold-check logic.
-- `label_adapter.py` connects `glasskit eval seed` to the stronger Gemini labeling path used to propose draft expectations.
-- `gemini.py` contains the shared Gemini request, image encoding, and sampled-video helpers used by the labeling and criteria-authoring tools.
-- `check_image.py` checks one or more camera images against an origami step with the same Gemini path as the seed adapter.
-- `suggest_criteria.py` asks Gemini at high thinking level to propose reusable criteria from a target reference, balanced reviewed true/false frames, and optional fast-evaluator feedback.
-- `test_label_adapter.py` covers the Gemini seed adapter's target and reference routing.
-- `cases/*.yaml` are draft or runnable eval cases. Each case points to a recording and chooses timestamps or ranges to sample; runnable samples also declare the expected result for each step.
-
-To create a new eval, first record fold-check input video from the backend with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. You can move the recording wherever you keep eval media.
-
-Create a draft case that names the recording, sampling interval, and timestamp ranges to label for each target. Omit `expect` from draft sample blocks. This works well with a larger labeling VLM because the live app needs a fast model so the wearer gets instant feedback, while draft labeling is outside the user loop and can spend more time per frame. For example, `backend/eval/cases/full-run.yaml` can begin as:
-
-```yaml
-video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
-description: Full origami workflow recording
-sampling:
-  every_s: 0.5
-targets:
-  step_1:
-    samples:
-    - range: [0.0, 64.0]
-  step_2:
-    samples:
-    - range: [64.0, 117.0]
-```
-
-The `video:` path is resolved relative to the case YAML file. Before seeding with Gemini, add `GEMINI_API_KEY` to `backend/.env`.
-
-Seed the omitted expectations with the stronger Gemini adapter introduced for this example:
+To propose missing expectations with Gemini, set `GEMINI_API_KEY` in `backend/.env` and explicitly select the labeling adapter:
 
 ```sh
 cd backend
@@ -147,25 +119,7 @@ uv run --with-editable ../../../cli --env-file .env \
   --concurrency 8
 ```
 
-`glasskit eval seed` decodes the same frames that `run` will use, calls Gemini with the runtime fold-check prompt shape, writes the proposed expectations into the case, and compacts adjacent equal values back into ranges. It fills only samples where `expect` is omitted by default. Treat seeded expectations as proposals: review them before using the case as ground truth.
-
-To deliberately relabel selected existing targets, repeat `--target` and add `--replace`:
-
-```sh
-uv run --with-editable ../../../cli --env-file .env \
-  glasskit eval seed --case full-run \
-  --adapter eval/label_adapter.py:create_evaluator \
-  --target step_1 \
-  --target step_3 \
-  --replace \
-  --concurrency 8
-```
-
-The seed command preserves expectations outside the selected scope and, without `--replace`, preserves existing expectations inside it as well. It validates the reconstructed case, refuses to overwrite a case changed during evaluation, and uses atomic file replacement. Do not use `--replace` merely because criteria changed; reviewed expectations are ground truth for measuring those criteria.
-
-#### Review and Refine Seeded Labels
-
-Review the seeded expectations with the `glasskit eval` browser UI:
+Review the proposed expectations before treating them as ground truth:
 
 ```sh
 cd backend
@@ -174,15 +128,19 @@ uv run --with-editable ../../../cli glasskit eval review \
   --case full-run
 ```
 
-The review UI is a convenient data viewer for this workflow: it puts the source video, expanded per-target sample schedule, timestamps, and expected values in one place. You can focus a target, move through its samples, and compare each expectation with the corresponding video moment. Add options such as `--target step_5 --time 202.5` to open directly at a target and timestamp. Edits are saved directly to the case YAML, so commit the seeded case first or use Git to inspect and undo review changes.
+Run the reviewed suite through the default Overshoot adapter:
 
-For an isolated labeling mistake, edit the sample's expected value in the review UI. A one-off correction usually does not justify changing a prompt that already handles the surrounding samples well.
+```sh
+cd backend
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval run --concurrency 2
+```
 
-#### Improve Step Criteria
+Keep reviewed expectations fixed while changing prompts or criteria. Correct an expectation only when human review shows that the label itself is wrong.
 
-When the same bad labeling pattern appears repeatedly, fix the labeling rule instead of correcting every expectation by hand. In this example, global comparison and visibility behavior lives in `backend/src/fold_check_prompts.py`, while step-specific shape requirements live in the `criteria` fields of `backend/assets/origami_steps.json`. Prefer the narrowest fix that explains the repeated errors, and check both failing examples and known-good counterexamples so the new rule does not become unnecessarily strict.
+#### Refine Step Criteria
 
-The criteria suggester can turn the reviewed labels into a grounded first draft. It sends the authoritative target drawing, neighboring-step drawings, and a balanced sample of non-ignored true and false frames to `gemini-3.5-flash` with high thinking enabled. Without evaluator feedback, samples are spread across label blocks. With an eval report, misclassified frames are selected first within each class budget and the remaining slots are filled with spread counterexamples. Timestamps are not shown to the model, and the output validator rejects criteria tied to example IDs, exact colors, or recording-background objects. Start without evaluator feedback:
+Repeated errors may call for a shared prompt change in `backend/src/fold_check_prompts.py` or a step-specific criteria change in `backend/assets/origami_steps.json`. The project-specific criteria suggester can propose a revision from the target references and reviewed labels:
 
 ```sh
 cd backend
@@ -192,9 +150,7 @@ uv run --env-file .env python -m eval.suggest_criteria \
   --output eval/runs/suggest-criteria/step_5.json
 ```
 
-The JSON report records the selected timestamps for reproducibility, the model's visual analysis and generalization notes, and ready-to-review Markdown criteria. The tool deliberately does not update `origami_steps.json`. Treat the report as an analyst's proposal rather than ground truth: compare it with the target reference, adjacent fold states, and the complete reviewed sample set before applying a narrowly scoped criteria change.
-
-After applying a candidate change, keep the reviewed case fixed and run the fast Overshoot evaluator for the whole target. Save machine-readable results for the next suggestion pass:
+The tool writes a proposal without changing `origami_steps.json`. After applying a candidate change, evaluate the target and optionally feed the results into another suggestion pass:
 
 ```sh
 uv run --with-editable ../../../cli --env-file .env \
@@ -212,23 +168,7 @@ uv run --env-file .env python -m eval.suggest_criteria \
   --output eval/runs/suggest-criteria/step_5-feedback.json
 ```
 
-Evaluator feedback marks which selected images confused the fast model without exposing timestamps to Gemini. The full balanced true/false set still anchors the revision. Inspect false positives, false negatives, and nearby passing counterexamples; do not derive a rule from one failed frame alone. Apply one logical wording or structure change at a time and rerun the complete target, because even semantically similar phrasing or headings can shift model attention.
-
-Criteria do not require a fixed three-section template. A useful pattern is to separate candidate or material context from `Required Visual Evidence`, `Allowed Variations`, and `Return False If`. Use nouns already defined by the system prompt, such as "candidate" and "reference," and describe observable image evidence rather than hidden folding actions. Keep a condition beside the visual feature it qualifies when an apparently cleaner move measurably hurts the eval.
-
-Once a version passes, enforce the intended target threshold and repeat the full run to check stability:
-
-```sh
-uv run --with-editable ../../../cli --env-file .env \
-  glasskit eval run --concurrency 2 --target step_5 \
-  --min-target-pass-rate 1
-```
-
-A perfect score on one recording is evidence for that suite, not proof of universal behavior. Add recordings with different people, viewpoints, lighting, and valid paper colors over time rather than making criteria increasingly specific to one video.
-
-Periodically audit criteria across steps for repeated general rules. A rule about candidate selection, orientation tolerance, visibility, or interaction with hands may belong in the shared system prompt when it is truly universal. Promote it only after checking that its meaning is identical across steps, remove the duplicated step-level copies, and rerun every affected target because system-prompt changes have a wider regression surface. Keep step geometry, fold-specific layer relationships, and application-specific material assumptions in the step criteria.
-
-The review UI can download the displayed sample frame as a native-resolution PNG. That frame makes a useful bug report: attach it to a coding-agent conversation, identify the target step and intended result, and use the individual-image checker to investigate how Gemini labels it:
+To investigate individual frames with the same Gemini labeling path used for seeding:
 
 ```sh
 cd backend
@@ -237,35 +177,6 @@ uv run --env-file .env python -m eval.check_image \
   /path/to/frame-38.000s.png \
   /path/to/frame-41.500s.png
 ```
-
-The checker composes each camera image with the target's reference image and runs the same Gemini labeling path as the seed adapter. It is useful for investigating proposed labels, but it is not a substitute for the fast Overshoot eval. Do not reseed a reviewed target after changing its criteria: that would change the ground truth while measuring the prompt. Keep the reviewed case fixed, rerun `glasskit eval`, and edit expectations only when human review shows that a label itself is wrong.
-
-Here is what the case YAML looks like. A minimal case says which video to replay and what each step should return:
-
-```yaml
-video: ../../../../../../GlassKit_origami-recordings/full-run.mp4
-targets:
-  step_1:
-    samples:
-    - range: [0.0, 21.0]
-      expect: false
-    - range: [21.0, 51.0]
-      expect: true
-  step_2:
-    ...
-```
-
-In this example, frames from 0.0s up to 21.0s are expected to return `false`; frames from 21.0s up to 51.0s are expected to return `true`.
-
-Run evals locally from `backend/` with two concurrent Overshoot requests:
-
-```sh
-cd backend
-uv run --with-editable ../../../cli --env-file .env \
-  glasskit eval run --concurrency 2
-```
-
-The Origami adapter implements individual `evaluate` calls because each sampled frame becomes an independent Overshoot request. `--concurrency 2` lets GlassKit overlap those requests while keeping the reported samples in their original order. Concurrency changes elapsed time, not the number or cost of model calls; lower the value if the provider returns rate-limit responses. The command prints case progress, per-target results, and a final summary that you can use to improve the app and aim for a higher score.
 
 ## Vision Path Comparison
 
