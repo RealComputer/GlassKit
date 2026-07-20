@@ -62,6 +62,20 @@ def test_command_formatting_uses_shell_safe_quoting() -> None:
     )
 
 
+@pytest.mark.parametrize("quote", ["'", "\u2018", "\u2019", "\u201a", "\u201b"])
+def test_powershell_formatting_escapes_every_single_quote_delimiter(
+    quote: str,
+) -> None:
+    case_name = f"Ada{quote}; Write-Output injected; {quote}case"
+
+    command = format_command(["glasskit", "--case", case_name], windows=True)
+
+    assert command == (
+        f"& 'glasskit' '--case' "
+        f"'Ada{quote}{quote}; Write-Output injected; {quote}{quote}case'"
+    )
+
+
 def test_posix_command_parsing_still_rejects_unclosed_quotes() -> None:
     with pytest.raises(ValueError, match="No closing quotation"):
         split_command("python 'adapter.py", windows=False)

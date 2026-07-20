@@ -6,6 +6,7 @@ import subprocess
 from collections.abc import Sequence
 
 _WINDOWS = os.name == "nt"
+_POWERSHELL_SINGLE_QUOTES = frozenset("'\u2018\u2019\u201a\u201b")
 
 
 def split_command(command: str, *, windows: bool | None = None) -> list[str]:
@@ -38,8 +39,16 @@ def format_command(argv: Sequence[str], *, windows: bool | None = None) -> str:
 def _format_powershell_command(argv: Sequence[str]) -> str:
     if not argv:
         return ""
-    arguments = " ".join(f"'{argument.replace("'", "''")}'" for argument in argv)
+    arguments = " ".join(_quote_powershell_argument(argument) for argument in argv)
     return f"& {arguments}"
+
+
+def _quote_powershell_argument(argument: str) -> str:
+    escaped = "".join(
+        character * 2 if character in _POWERSHELL_SINGLE_QUOTES else character
+        for character in argument
+    )
+    return f"'{escaped}'"
 
 
 def _split_windows_command(command: str) -> list[str]:
