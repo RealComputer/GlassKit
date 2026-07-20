@@ -57,6 +57,26 @@ def test_probe_video_applies_display_rotation_to_dimensions() -> None:
     assert metadata.height == 96
 
 
+def test_probe_dimensions_match_expanded_non_quarter_turn_frames(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "rotated.mp4"
+    monkeypatch.setattr(
+        "glasskit.eval.video.av.open",
+        lambda path: _SingleFrameContainer(rotation=2),
+    )
+
+    metadata = probe_video(video_path)
+    decoded = decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    assert (metadata.width, metadata.height) == (100, 68)
+    assert decoded[0].image.size == (metadata.width, metadata.height)
+
+
 def test_decode_sample_frames_uses_committed_fixture() -> None:
     video_path = FIXTURES / "videos" / "two-state-64x64.mp4"
     samples = [
@@ -85,6 +105,23 @@ def test_decode_sample_frames_applies_display_rotation_to_pixels() -> None:
     _assert_color(_rgb_pixel(image, (48, 24)), "yellow")
     _assert_color(_rgb_pixel(image, (16, 72)), "red")
     _assert_color(_rgb_pixel(image, (48, 72)), "blue")
+
+
+def test_decode_sample_frames_applies_display_reflection_to_pixels() -> None:
+    video_path = FIXTURES / "videos" / "reflected-quadrants-96x64.mp4"
+
+    decoded = decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    image = decoded[0].image
+    assert image.size == (96, 64)
+    _assert_color(_rgb_pixel(image, (24, 16)), "green")
+    _assert_color(_rgb_pixel(image, (72, 16)), "red")
+    _assert_color(_rgb_pixel(image, (24, 48)), "yellow")
+    _assert_color(_rgb_pixel(image, (72, 48)), "blue")
 
 
 def test_decode_sample_frames_stops_after_final_requested_frame(
@@ -235,3 +272,43 @@ class _FakeFrame:
 
     def to_image(self) -> Image.Image:
         return Image.new("RGB", (2, 2), "white")
+
+
+class _SingleFrameContainer:
+    duration = None
+
+    def __init__(self, *, rotation: int) -> None:
+        self.streams = [_SingleFrameStream()]
+        self.frame = _SingleFrame(rotation=rotation)
+
+    def __enter__(self) -> _SingleFrameContainer:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def decode(self, stream: object):
+        yield self.frame
+
+
+class _SingleFrameStream:
+    type = "video"
+    width = 96
+    height = 64
+    frames = 1
+    duration = 1
+    time_base = 1
+    average_rate = 1.0
+    thread_type = "SLICE"
+
+
+class _SingleFrame:
+    pts = None
+    time_base = None
+    time = 0.0
+
+    def __init__(self, *, rotation: int) -> None:
+        self.rotation = rotation
+
+    def to_image(self) -> Image.Image:
+        return Image.new("RGB", (96, 64), "white")

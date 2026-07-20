@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from math import ceil, cos, radians, sin
+from dataclasses import dataclass
+from math import atan2, degrees
 from pathlib import Path
+from struct import unpack
 from typing import Any
 
 import av
 from av import VideoFrame
 from av.error import FFmpegError
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .models import EvalConfigError, FrameSample, SampleExpectation, VideoMetadata
 
@@ -22,11 +24,11 @@ def probe_video(video_path: Path) -> VideoMetadata:
             height = int(stream.height or 0)
             frame_count = int(stream.frames) if stream.frames else None
             first_frame = next(container.decode(stream), None)
-            if first_frame is not None:
+            if first_frame is not None and width > 0 and height > 0:
                 width, height = _display_dimensions(
                     width,
                     height,
-                    _display_rotation(first_frame),
+                    _display_transform(first_frame),
                 )
     except FFmpegError as error:
         raise EvalConfigError(f"could not open video {video_path}: {error}") from error
@@ -146,11 +148,17 @@ def _frame_sample(
 
 def _display_image(frame: VideoFrame) -> Image.Image:
     image = frame.to_image().convert("RGB")
-    rotation = _display_rotation(frame)
-    if rotation == 0:
+    transform = _display_transform(frame)
+    if transform.rotation == 0 and not transform.reflected:
         return image
-    displayed = image.rotate(rotation, expand=True)
+
+    rotated = image.rotate(transform.rotation, expand=True)
     image.close()
+    if not transform.reflected:
+        return rotated
+
+    displayed = ImageOps.mirror(rotated)
+    rotated.close()
     return displayed
 
 
@@ -158,16 +166,48 @@ def _display_rotation(frame: VideoFrame) -> int:
     return int(frame.rotation or 0) % 360
 
 
-def _display_dimensions(width: int, height: int, rotation: int) -> tuple[int, int]:
+@dataclass(frozen=True)
+class _DisplayTransform:
+    rotation: int
+    reflected: bool = False
+
+
+def _display_transform(frame: VideoFrame) -> _DisplayTransform:
+    rotation = _display_rotation(frame)
+    for side_data in getattr(frame, "side_data", ()):
+        side_data_type = getattr(side_data, "type", None)
+        if getattr(side_data_type, "name", None) != "DISPLAYMATRIX":
+            continue
+        matrix_bytes = bytes(side_data)
+        if len(matrix_bytes) != 36:
+            continue
+        a, b, _, c, d, _, _, _, _ = unpack("=9i", matrix_bytes)
+        if a * d - b * c >= 0:
+            break
+
+        reflected_rotation = round(degrees(atan2(-b, -a))) % 360
+        return _DisplayTransform(rotation=reflected_rotation, reflected=True)
+    return _DisplayTransform(rotation=rotation)
+
+
+def _display_dimensions(
+    width: int, height: int, transform: _DisplayTransform
+) -> tuple[int, int]:
+    rotation = transform.rotation
     if rotation in {0, 180}:
         return width, height
     if rotation in {90, 270}:
         return height, width
 
-    angle = radians(rotation)
-    displayed_width = ceil(abs(width * cos(angle)) + abs(height * sin(angle)))
-    displayed_height = ceil(abs(width * sin(angle)) + abs(height * cos(angle)))
-    return displayed_width, displayed_height
+    image = Image.new("1", (width, height))
+    try:
+        displayed = image.rotate(rotation, expand=True)
+        try:
+            return displayed.size
+        finally:
+            displayed.close()
+    finally:
+        image.close()
 
 
 def _nearest_frame(

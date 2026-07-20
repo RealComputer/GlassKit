@@ -43,3 +43,9 @@ ffmpeg -hide_banner -loglevel error -y \
   -i "$rotation_tmp/rotated-quadrants-raw.mp4" \
   -c copy \
   "$videos_dir/rotated-quadrants-96x64.mp4"
+
+ffmpeg -hide_banner -loglevel error -y \
+  -display_hflip:v:0 \
+  -i "$rotation_tmp/rotated-quadrants-raw.mp4" \
+  -c copy \
+  "$videos_dir/reflected-quadrants-96x64.mp4"
