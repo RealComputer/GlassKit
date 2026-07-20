@@ -14,6 +14,7 @@ from .models import EvalConfigError, EvalDirectory
 
 CHECKPOINT_SCHEMA_VERSION = 1
 CheckpointKind = Literal["run", "seed"]
+_O_BINARY = getattr(os, "O_BINARY", 0)
 
 
 @dataclass(frozen=True)
@@ -139,7 +140,7 @@ class CheckpointStore:
         try:
             descriptor = os.open(
                 self._events_path,
-                os.O_APPEND | os.O_WRONLY,
+                os.O_APPEND | os.O_WRONLY | _O_BINARY,
             )
             try:
                 view = memoryview(encoded)
@@ -223,7 +224,7 @@ class CheckpointStore:
             try:
                 descriptor = os.open(
                     self._events_path,
-                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY | _O_BINARY,
                     0o600,
                 )
             except FileExistsError:
@@ -245,7 +246,7 @@ class CheckpointStore:
     def _truncate_torn_event_tail(self) -> None:
         descriptor: int | None = None
         try:
-            descriptor = os.open(self._events_path, os.O_RDWR)
+            descriptor = os.open(self._events_path, os.O_RDWR | _O_BINARY)
             size = os.lseek(descriptor, 0, os.SEEK_END)
             if size == 0:
                 return

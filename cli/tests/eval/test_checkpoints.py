@@ -107,6 +107,54 @@ def test_resume_truncates_any_event_tail_without_a_newline_before_appending(
     assert len(raw.splitlines()) == 2
 
 
+def test_torn_tail_repair_uses_binary_offsets_for_crlf_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = _create_checkpoint(tmp_path)
+    events_path = store.path / "events.jsonl"
+    checkpoint_path = store.path
+    store.record("result", "first", {"value": 1})
+    store.release()
+
+    committed = events_path.read_bytes().removesuffix(b"\n") + b"\r\n"
+    events_path.write_bytes(committed + b'{"key":"unfinished')
+
+    native_binary_flag = getattr(os, "O_BINARY", 0)
+    test_binary_flag = 1 << 29
+    real_open = os.open
+    event_open_flags: list[int] = []
+
+    def record_event_open_flags(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+    ) -> int:
+        if os.fsdecode(path) == str(events_path):
+            event_open_flags.append(flags)
+            flags = (flags & ~test_binary_flag) | native_binary_flag
+        return real_open(path, flags, mode)
+
+    monkeypatch.setattr(checkpoints, "_O_BINARY", test_binary_flag)
+    monkeypatch.setattr(checkpoints.os, "open", record_event_open_flags)
+
+    resumed = CheckpointStore.resume(
+        eval_dir=tmp_path / "eval",
+        reference=checkpoint_path,
+        kind="seed",
+        plan_hash="test-plan",
+    )
+    try:
+        assert resumed.latest("result") == {"first": {"value": 1}}
+    finally:
+        resumed.release()
+
+    assert events_path.read_bytes() == committed
+    assert any(
+        flags & os.O_RDWR == os.O_RDWR and flags & test_binary_flag
+        for flags in event_open_flags
+    )
+
+
 def _create_checkpoint(tmp_path: Path) -> CheckpointStore:
     return CheckpointStore.create(
         kind="seed",
