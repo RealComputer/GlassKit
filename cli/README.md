@@ -337,11 +337,12 @@ sample_defaults:
   compare:
     mode: json_subset
 targets:
-  mistake:
+  object_detection:
     samples:
     - range: [180.0, 182.0]
       expect:
-        mistakeSku: 67190R91-FLIP
+        object: coffee_mug
+        color: red
   confidence:
     sample_defaults:
       field: result.confidence
