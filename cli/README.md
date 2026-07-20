@@ -159,7 +159,7 @@ uv run glasskit eval run --case task-01 --target step_1 --verbose --keep-going -
 
 Expected output: focused case and target progress, every selected sample result, a final summary, and a per-target table.
 
-Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. Every completed result is also checkpointed, so the printed `glasskit eval run --resume ...` command can retry adapter errors without rerunning completed samples. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
+Note: `--keep-going` records adapter evaluation errors and comparison errors as sample results instead of aborting on the first sample error. Every completed adapter result is also checkpointed, so when there is reusable progress the printed `glasskit eval run --resume ...` command can retry adapter errors without rerunning completed samples. `--save-failures` writes JPEG frames and per-result JSON for failed or errored samples. Treat `eval/runs/` as disposable output and add it to your app repo's `.gitignore` if you keep generated eval reports out of source control.
 
 ### Measure Nondeterministic Stability
 
@@ -802,9 +802,9 @@ Options:
 
 When `field` is present on a sample block, `seed` extracts that path from the adapter's observation and writes the extracted value as `expect`; otherwise it writes the complete observation. Existing expectations outside the selected filters, and inside the filters without `--replace`, are preserved. Missing expectations outside the selected filters may remain draft; `run`, `validate`, and `list-samples` reject draft samples only when they fall inside those commands' selected scope.
 
-Each successful adapter result is durably checkpointed before the command advances. If seeding is interrupted or an adapter call fails, the case file is left unchanged and the error output prints an exact `glasskit eval seed --resume ...` command. Resume evaluates only checkpointed errors and unfinished samples, including when the original operation used `--replace`. Once all selected expectations are available, `seed` validates and atomically replaces the complete case YAML. Resume does not automatically retry calls; each invocation makes at most one new attempt for each selected pending sample.
+Each successful adapter result is durably checkpointed before the command advances. If seeding is interrupted or an adapter call fails after at least one result succeeds, the case file is left unchanged and the error output prints an exact `glasskit eval seed --resume ...` command. Setup failures and attempts with no successful results do not print a resume command, because rerunning the original command repeats no completed adapter work. Resume evaluates only checkpointed errors and unfinished samples, including when the original operation used `--replace`. Once all selected expectations are available, `seed` validates and atomically replaces the complete case YAML. Resume does not automatically retry calls; each invocation makes at most one new attempt for each selected pending sample.
 
-Exit behavior: exits `0` after seeding or when the selected scope has nothing to seed, `1` when `--keep-going` attempted the selected scope but one or more expectations remain incomplete, and `2` for invalid input, an adapter failure that aborted evaluation, or a case file that cannot be updated. Interrupted and incomplete operations retain their printed checkpoints.
+Exit behavior: exits `0` after seeding or when the selected scope has nothing to seed, `1` when `--keep-going` attempted the selected scope but one or more expectations remain incomplete, and `2` for invalid input, an adapter failure that aborted evaluation, or a case file that cannot be updated. Interrupted and incomplete operations retain checkpoints only when they contain successful adapter results.
 
 ### `glasskit eval review`
 
@@ -867,7 +867,7 @@ Options:
 
 `--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
-Every completed sample result is durably checkpointed. If a fail-fast run is interrupted, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command when those adapter-error slots can be retried. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically.
+Every completed sample result is durably checkpointed. If a fail-fast run is interrupted after at least one adapter evaluation completes, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command only when the checkpoint contains completed adapter work. Setup failures and attempts where every adapter call fails do not print a resume command. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically.
 
 To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
 
@@ -947,7 +947,7 @@ Default values at a glance:
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | `<eval-dir>/adapter.yaml` when present, otherwise an empty object; `--adapter-config` overrides discovery. |
 | Failure artifacts | Saved only with `--save-failures`; stored below `<eval-dir>/runs/failures/` by default. |
-| Checkpoints | Created automatically below `<eval-dir>/runs/checkpoints/`; successful calls are fsynced before the command advances. |
+| Checkpoints | Created automatically below `<eval-dir>/runs/checkpoints/`; completed adapter evaluations are fsynced before the command advances, and new error-only checkpoints are discarded. |
 
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:
 

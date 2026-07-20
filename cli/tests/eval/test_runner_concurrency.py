@@ -12,6 +12,7 @@ from PIL import Image
 
 from glasskit.eval.adapters import LoadedEvaluator
 from glasskit.eval.models import (
+    AdapterLoadError,
     AdapterRuntimeError,
     EvalConfigError,
     FrameSample,
@@ -292,6 +293,70 @@ def test_run_resume_reuses_results_before_a_fail_fast_error(
     assert failing.started == [0, 1]
     assert resumed.completed == [1, 2, 3]
     assert report.success
+
+
+def test_run_setup_failure_discards_checkpoint_without_exposing_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _write_eval(
+        tmp_path,
+        """
+  step:
+    samples:
+      - at: 0.0
+        expect: false
+        """,
+    )
+    callbacks = RecordingCallbacks()
+
+    async def fail_to_load(*args: Any, **kwargs: Any) -> LoadedEvaluator:
+        raise AdapterLoadError("provider setup failed")
+
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", fail_to_load)
+    with pytest.raises(AdapterLoadError, match="provider setup failed") as raised:
+        asyncio.run(
+            run_eval(
+                RunOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                ),
+                callbacks=callbacks,
+            )
+        )
+
+    assert raised.value.checkpoint_path is None
+    assert callbacks.checkpoints == []
+    assert list((eval_dir / "runs" / "checkpoints").glob("*")) == []
+
+
+def test_run_keep_going_all_adapter_errors_has_no_resumable_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _write_eval(
+        tmp_path,
+        """
+  step:
+    samples:
+      - at: [0.0, 1.0]
+        expect: false
+        """,
+    )
+    callbacks = RecordingCallbacks()
+
+    report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            AllErrorEvaluator(),
+            eval_dir=eval_dir,
+            keep_going=True,
+            callbacks=callbacks,
+        )
+    )
+
+    assert report.resumable_error_count == 2
+    assert report.checkpoint_path is None
+    assert callbacks.checkpoints == []
+    assert list((eval_dir / "runs" / "checkpoints").glob("*")) == []
 
 
 def test_individual_evaluation_stops_queued_work_and_drains_in_flight_calls(
@@ -670,6 +735,10 @@ class AsyncTrackingEvaluator:
 class RecordingCallbacks:
     def __init__(self) -> None:
         self.completed: list[int] = []
+        self.checkpoints: list[Path] = []
+
+    def on_checkpoint(self, path: Path) -> None:
+        self.checkpoints.append(path)
 
     def on_trial_start(self, trial_index: int, trial_count: int) -> None:
         return None
@@ -776,6 +845,14 @@ class OneErrorEvaluator:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class AllErrorEvaluator:
+    async def evaluate(self, sample: Any, target: Any) -> bool:
+        raise RuntimeError("provider unavailable")
+
+    async def close(self) -> None:
+        return None
 
 
 class FailFastEvaluator:

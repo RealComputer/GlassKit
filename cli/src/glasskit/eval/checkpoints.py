@@ -34,12 +34,16 @@ class CheckpointSnapshot:
 
 
 class CheckpointStore:
-    def __init__(self, snapshot: CheckpointSnapshot) -> None:
+    def __init__(
+        self, snapshot: CheckpointSnapshot, *, created_by_current_operation: bool
+    ) -> None:
         self.path = snapshot.path
         self.manifest = snapshot.manifest
         self._events_path = self.path / "events.jsonl"
         self._lock_path = self.path / "active.lock"
         self._lock_token = secrets.token_hex(16)
+        self._created_by_current_operation = created_by_current_operation
+        self._has_reusable_results = False
         self._acquire_lock()
         try:
             self._prepare_event_log()
@@ -81,7 +85,10 @@ class CheckpointStore:
             "invocation": invocation,
         }
         _atomic_write_json(path / "manifest.json", manifest)
-        return cls(CheckpointSnapshot(path=path, manifest=manifest))
+        return cls(
+            CheckpointSnapshot(path=path, manifest=manifest),
+            created_by_current_operation=True,
+        )
 
     @classmethod
     def resume(
@@ -101,7 +108,17 @@ class CheckpointStore:
                 "checkpoint inputs changed; start a new operation instead of "
                 f"resuming {snapshot.path}"
             )
-        return cls(snapshot)
+        return cls(snapshot, created_by_current_operation=False)
+
+    @property
+    def has_reusable_results(self) -> bool:
+        return self._has_reusable_results
+
+    def mark_reusable(self) -> bool:
+        if self._has_reusable_results:
+            return False
+        self._has_reusable_results = True
+        return True
 
     def latest(self, event_type: str) -> dict[str, dict[str, Any]]:
         latest: dict[str, dict[str, Any]] = {}
@@ -175,6 +192,23 @@ class CheckpointStore:
                 pass
             except OSError:
                 pass
+
+    def discard_if_no_reusable_results(self) -> None:
+        if not self._created_by_current_operation or self._has_reusable_results:
+            return
+        self.release()
+        for path in (self._events_path, self.path / "manifest.json"):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return
+        try:
+            self.path.rmdir()
+        except OSError:
+            return
+        _sync_directory_best_effort(self.path.parent)
 
     def _acquire_lock(self) -> None:
         payload = json.dumps(

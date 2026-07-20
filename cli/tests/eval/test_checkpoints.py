@@ -58,6 +58,35 @@ def test_directory_sync_is_best_effort_when_opening_directories_is_unsupported(
         store.release()
 
 
+def test_new_checkpoint_without_reusable_results_is_discarded(tmp_path: Path) -> None:
+    store = _create_checkpoint(tmp_path)
+    checkpoint_path = store.path
+    store.record("result", "failed", {"status": "error"})
+
+    store.discard_if_no_reusable_results()
+
+    assert not checkpoint_path.exists()
+
+
+def test_resumed_checkpoint_is_not_discarded_without_new_reusable_results(
+    tmp_path: Path,
+) -> None:
+    store = _create_checkpoint(tmp_path)
+    checkpoint_path = store.path
+    store.release()
+    resumed = CheckpointStore.resume(
+        eval_dir=tmp_path / "eval",
+        reference=checkpoint_path,
+        kind="seed",
+        plan_hash="test-plan",
+    )
+
+    resumed.discard_if_no_reusable_results()
+
+    assert checkpoint_path.is_dir()
+    resumed.release()
+
+
 @pytest.mark.parametrize(
     "torn_tail",
     [

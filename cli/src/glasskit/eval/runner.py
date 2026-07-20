@@ -162,14 +162,15 @@ async def run_eval(
             total=len(planned_samples),
         )
     )
-    if callbacks is not None and callable(
-        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
-    ):
-        on_checkpoint(checkpoint.path)
-
+    discard_checkpoint = False
     try:
         saved_results = checkpoint.latest("run_result")
         _validate_run_checkpoint_keys(saved_results, planned_samples, checkpoint.path)
+        if any(
+            _checkpoint_result_has_reusable_adapter_work(payload)
+            for payload in saved_results.values()
+        ):
+            _publish_reusable_checkpoint(checkpoint, callbacks)
         trials: list[EvalTrialReport] = []
         for trial_index in range(1, options.repeat + 1):
             if callbacks is not None:
@@ -198,20 +199,31 @@ async def run_eval(
             stability=stability,
             gate_results=_apply_stability_gates(stability, options),
             duration_s=max(0.0, perf_counter() - started_at),
-            checkpoint_path=checkpoint.path,
+            checkpoint_path=(
+                checkpoint.path
+                if resumable_error_count == 0 or checkpoint.has_reusable_results
+                else None
+            ),
             resumed=options.resume_checkpoint is not None,
             resumable_error_count=resumable_error_count,
         )
         if resumable_error_count == 0:
             checkpoint.mark_complete()
+        elif not checkpoint.has_reusable_results:
+            discard_checkpoint = True
         if options.output_json is not None:
             write_json_report(report, options.output_json)
         return report
     except BaseException as error:
-        attach_checkpoint(error, checkpoint)
+        if checkpoint.has_reusable_results:
+            attach_checkpoint(error, checkpoint)
+        else:
+            discard_checkpoint = True
         raise
     finally:
         checkpoint.release()
+        if discard_checkpoint:
+            checkpoint.discard_if_no_reusable_results()
 
 
 async def _run_trial(
@@ -442,6 +454,8 @@ def _checkpoint_run_result(
     payload = _result_to_json(result)
     checkpoint.record("run_result", key, payload)
     saved_results[key] = payload
+    if _checkpoint_result_has_reusable_adapter_work(payload):
+        _publish_reusable_checkpoint(checkpoint, callbacks)
     return _report_result(result, callbacks=callbacks)
 
 
@@ -453,6 +467,27 @@ def _checkpoint_result_is_complete(payload: Mapping[str, Any] | None) -> bool:
         and isinstance(payload.get("reason"), str)
         and payload["reason"].startswith("adapter_error:")
     )
+
+
+def _checkpoint_result_has_reusable_adapter_work(
+    payload: Mapping[str, Any] | None,
+) -> bool:
+    return (
+        _checkpoint_result_is_complete(payload)
+        and payload is not None
+        and payload.get("status") != "ignored"
+    )
+
+
+def _publish_reusable_checkpoint(
+    checkpoint: CheckpointStore, callbacks: RunCallbacks | None
+) -> None:
+    if not checkpoint.mark_reusable():
+        return
+    if callbacks is not None and callable(
+        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
+    ):
+        on_checkpoint(checkpoint.path)
 
 
 def _is_resumable_adapter_error(result: SampleResult) -> bool:

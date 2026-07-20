@@ -12,6 +12,7 @@ import yaml
 from glasskit.eval.adapters import LoadedEvaluator
 from glasskit.eval.expectations import load_eval_directory
 from glasskit.eval.models import (
+    AdapterLoadError,
     AdapterRuntimeError,
     CaseWriteError,
     EvalConfigError,
@@ -650,6 +651,77 @@ targets:
     ]
 
 
+def test_seed_setup_failure_discards_checkpoint_without_exposing_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, _case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        """,
+    )
+    callbacks = SeedRecordingCallbacks()
+
+    async def fail_to_load(*args: Any, **kwargs: Any) -> LoadedEvaluator:
+        raise AdapterLoadError("provider setup failed")
+
+    monkeypatch.setattr("glasskit.eval.execution.load_evaluator", fail_to_load)
+    with pytest.raises(AdapterLoadError, match="provider setup failed") as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                ),
+                callbacks=callbacks,
+            )
+        )
+
+    assert raised.value.checkpoint_path is None
+    assert callbacks.checkpoints == []
+    assert list((eval_dir / "runs" / "checkpoints").glob("*")) == []
+
+
+def test_seed_keep_going_all_adapter_errors_has_no_resumable_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, _case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: [0.0, 1.0]
+        """,
+    )
+    callbacks = SeedRecordingCallbacks()
+
+    async def fail(_sample: Any, _target: Any) -> bool:
+        raise RuntimeError("provider unavailable")
+
+    _use_evaluator(monkeypatch, evaluate=fail)
+    with pytest.raises(SeedIncompleteError) as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                    keep_going=True,
+                ),
+                callbacks=callbacks,
+            )
+        )
+
+    assert raised.value.checkpoint_path is None
+    assert callbacks.checkpoints == []
+    assert list((eval_dir / "runs" / "checkpoints").glob("*")) == []
+
+
 def test_seed_keep_going_checkpoints_replace_without_partial_yaml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -723,17 +795,21 @@ def test_seed_resume_rejects_changed_case_inputs(
         tmp_path,
         f"""
 video: "{TWO_STATE_VIDEO}"
+sampling:
+  every_s: 0.5
 targets:
   state:
     samples:
-      - at: 0.0
+      - range: [0.0, 1.0]
         """,
     )
 
-    async def fail(_sample: Any, _target: Any) -> bool:
-        raise RuntimeError("provider unavailable")
+    async def fail_second(sample: Any, _target: Any) -> bool:
+        if sample.timestamp_s == 0.5:
+            raise RuntimeError("provider unavailable")
+        return False
 
-    _use_evaluator(monkeypatch, evaluate=fail)
+    _use_evaluator(monkeypatch, evaluate=fail_second)
     with pytest.raises(AdapterRuntimeError) as raised:
         asyncio.run(
             seed_eval(
@@ -779,6 +855,26 @@ class BatchLabeler:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class SeedRecordingCallbacks:
+    def __init__(self) -> None:
+        self.checkpoints: list[Path] = []
+
+    def on_checkpoint(self, path: Path) -> None:
+        self.checkpoints.append(path)
+
+    def on_case_start(self, case: Any, sample_count: int) -> None:
+        return None
+
+    def on_target_start(self, case: Any, target_id: str, sample_count: int) -> None:
+        return None
+
+    def on_result(self, result: Any) -> None:
+        return None
+
+    def on_error(self, sample: Any, error: Exception) -> None:
+        return None
 
 
 def _use_evaluator(

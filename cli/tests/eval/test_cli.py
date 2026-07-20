@@ -377,6 +377,9 @@ def test_eval_commands_close_progress_when_execution_fails(
 
     assert result.exit_code == 2
     assert reporter.closed
+    output = Text.from_ansi(result.output).plain
+    assert "Checkpoint:" not in output
+    assert "--resume" not in output
 
 
 def test_eval_run_does_not_define_failure_table_limit() -> None:

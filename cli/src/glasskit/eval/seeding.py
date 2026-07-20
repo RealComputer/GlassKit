@@ -156,11 +156,7 @@ async def seed_eval(
             total=len(samples_to_seed),
         )
     )
-    if callbacks is not None and callable(
-        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
-    ):
-        on_checkpoint(checkpoint.path)
-
+    discard_checkpoint = False
     try:
         saved = checkpoint.latest("seed_result")
         _validate_checkpoint_keys(saved, samples_to_seed, checkpoint.path)
@@ -169,6 +165,8 @@ async def seed_eval(
             for key, payload in saved.items()
             if payload.get("status") == "success"
         }
+        if successful:
+            _publish_reusable_checkpoint(checkpoint, callbacks)
         pending = {
             key: sample
             for key, sample in samples_to_seed.items()
@@ -322,10 +320,15 @@ async def seed_eval(
             directory_sync_warnings=tuple(sync_warnings),
         )
     except BaseException as error:
-        attach_checkpoint(error, checkpoint)
+        if checkpoint.has_reusable_results:
+            attach_checkpoint(error, checkpoint)
+        else:
+            discard_checkpoint = True
         raise
     finally:
         checkpoint.release()
+        if discard_checkpoint:
+            checkpoint.discard_if_no_reusable_results()
 
 
 def seed_checkpoint_invocation(options: SeedOptions) -> dict[str, Any]:
@@ -420,9 +423,21 @@ def _checkpoint_seed_outcome(
             "evaluation_timing_mode": outcome.timing_mode,
         },
     )
+    _publish_reusable_checkpoint(checkpoint, callbacks)
     if callbacks is not None:
         callbacks.on_result(result)
     return result
+
+
+def _publish_reusable_checkpoint(
+    checkpoint: CheckpointStore, callbacks: SeedCallbacks | None
+) -> None:
+    if not checkpoint.mark_reusable():
+        return
+    if callbacks is not None and callable(
+        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
+    ):
+        on_checkpoint(checkpoint.path)
 
 
 def _checkpoint_seed_error(
