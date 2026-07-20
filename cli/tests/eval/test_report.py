@@ -4,8 +4,10 @@ from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 
+import pytest
 from rich.console import Console
 
+from glasskit.eval import commands
 from glasskit.eval.models import (
     EvalCase,
     EvalDirectory,
@@ -65,6 +67,27 @@ def test_print_run_summary_includes_manual_resume_command() -> None:
     output = buffer.getvalue()
     assert "1 adapter error can be retried" in output
     assert f"glasskit eval run --resume {checkpoint_path}" in output
+
+
+def test_print_run_summary_uses_windows_quoting_for_resume_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=160)
+    checkpoint_path = Path("eval dir/runs/checkpoints/run-example")
+    report = replace(
+        _report(),
+        checkpoint_path=checkpoint_path,
+        resumable_error_count=1,
+    )
+    monkeypatch.setattr(commands, "_WINDOWS", True)
+
+    print_run_summary(report, console=console)
+
+    assert (
+        'glasskit eval run --resume "eval dir/runs/checkpoints/run-example"'
+        in buffer.getvalue()
+    )
 
 
 def test_print_run_summary_includes_individual_timing_and_throughput() -> None:

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shlex
 import signal
 import sys
 from asyncio.subprocess import Process
@@ -13,6 +12,7 @@ from io import BytesIO
 from typing import Any
 
 from .adapters import LoadedEvaluator
+from .commands import format_command, split_command
 from .models import (
     AdapterConfig,
     AdapterLoadError,
@@ -517,7 +517,7 @@ class _ProcessAdapter:
 
 def _parse_adapter_command(adapter_command: str) -> list[str]:
     try:
-        argv = shlex.split(adapter_command, posix=True)
+        argv = split_command(adapter_command)
     except ValueError as error:
         raise AdapterLoadError(f"invalid adapter command: {error}") from error
     if not argv:
@@ -526,7 +526,7 @@ def _parse_adapter_command(adapter_command: str) -> list[str]:
 
 
 def _command_label(argv: list[str]) -> str:
-    return repr(shlex.join(argv))
+    return repr(format_command(argv))
 
 
 def _parse_capabilities(result: Any) -> _Capabilities:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shlex
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
+from .commands import format_command
 from .expectations import format_sample_schedule
 from .models import (
     EvalCase,
@@ -239,11 +239,10 @@ def print_seed_summary(report: SeedReport, *, console: Console | None = None) ->
             "failed.",
             highlight=False,
         )
-    review_command = "glasskit eval review --eval-dir " + shlex.quote(
-        str(report.eval_dir)
-    )
+    review_argv = ["glasskit", "eval", "review", "--eval-dir", str(report.eval_dir)]
     if len(report.case_names) == 1:
-        review_command += " --case " + shlex.quote(report.case_names[0])
+        review_argv.extend(("--case", report.case_names[0]))
+    review_command = format_command(review_argv)
     console.print(
         f"Review the proposed expectations with `{review_command}`.",
         highlight=False,
@@ -330,11 +329,10 @@ def print_run_summary(
             highlight=False,
         )
         console.print(f"Checkpoint: {report.checkpoint_path}", highlight=False)
-        console.print(
-            f"Resume with `glasskit eval run --resume "
-            f"{report.checkpoint_path.as_posix()}`.",
-            highlight=False,
+        resume_command = format_command(
+            ["glasskit", "eval", "run", "--resume", str(report.checkpoint_path)]
         )
+        console.print(f"Resume with `{resume_command}`.", highlight=False)
 
 
 def _print_single_run_summary(report: EvalRunReport, console: Console) -> None:

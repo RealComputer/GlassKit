@@ -17,6 +17,7 @@ from .eval.checkpoints import (
     checkpoint_path_from_error,
     load_checkpoint,
 )
+from .eval.commands import format_command
 from .eval.expectations import load_eval_directory
 from .eval.models import EvalError, RunOptions, SeedIncompleteError, SeedOptions
 from .eval.report import (
@@ -867,10 +868,10 @@ def _print_resume_hint(
     if checkpoint_path is None:
         return
     console.print(f"Checkpoint: {checkpoint_path}", highlight=False)
-    console.print(
-        f"Resume with `glasskit eval {command} --resume {checkpoint_path.as_posix()}`.",
-        highlight=False,
+    resume_command = format_command(
+        ["glasskit", "eval", command, "--resume", str(checkpoint_path)]
     )
+    console.print(f"Resume with `{resume_command}`.", highlight=False)
 
 
 def _reporter_checkpoint_path(reporter: Any) -> Path | None:
