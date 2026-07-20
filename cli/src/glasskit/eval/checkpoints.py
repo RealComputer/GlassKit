@@ -181,13 +181,16 @@ class CheckpointStore:
         _atomic_write_json(self.path / "manifest.json", self.manifest)
 
     def release(self) -> None:
+        self._release_lock(self._lock_path)
+
+    def _release_lock(self, path: Path) -> None:
         try:
-            lock = json.loads(self._lock_path.read_text(encoding="utf-8"))
+            lock = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return
         if isinstance(lock, dict) and lock.get("token") == self._lock_token:
             try:
-                self._lock_path.unlink()
+                path.unlink()
             except FileNotFoundError:
                 pass
             except OSError:
@@ -196,19 +199,34 @@ class CheckpointStore:
     def discard_if_no_reusable_results(self) -> None:
         if not self._created_by_current_operation or self._has_reusable_results:
             return
-        self.release()
-        for path in (self._events_path, self.path / "manifest.json"):
+        discarded_path = self.path.with_name(
+            f".{self.path.name}.{self._lock_token}.discarding"
+        )
+        try:
+            os.replace(self.path, discarded_path)
+        except OSError:
+            return
+        _sync_directory_best_effort(discarded_path.parent)
+
+        contents_removed = True
+        for path in (
+            discarded_path / self._events_path.name,
+            discarded_path / "manifest.json",
+        ):
             try:
                 path.unlink()
             except FileNotFoundError:
                 pass
             except OSError:
-                return
+                contents_removed = False
+        self._release_lock(discarded_path / self._lock_path.name)
+        if not contents_removed:
+            return
         try:
-            self.path.rmdir()
+            discarded_path.rmdir()
         except OSError:
             return
-        _sync_directory_best_effort(self.path.parent)
+        _sync_directory_best_effort(discarded_path.parent)
 
     def _acquire_lock(self) -> None:
         payload = json.dumps(

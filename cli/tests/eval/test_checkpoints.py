@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -66,6 +67,31 @@ def test_new_checkpoint_without_reusable_results_is_discarded(tmp_path: Path) ->
     store.discard_if_no_reusable_results()
 
     assert not checkpoint_path.exists()
+
+
+def test_discard_moves_checkpoint_before_removing_contents_and_releases_lock_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = _create_checkpoint(tmp_path)
+    checkpoint_path = store.path
+    removed_contents: list[str] = []
+    real_unlink = Path.unlink
+
+    def observe_unlink(path: Path, *args: Any, **kwargs: Any) -> None:
+        if path.name in {"events.jsonl", "manifest.json"}:
+            assert not checkpoint_path.exists()
+            assert (path.parent / "active.lock").is_file()
+            removed_contents.append(path.name)
+        elif path.name == "active.lock":
+            assert set(removed_contents) == {"events.jsonl", "manifest.json"}
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", observe_unlink)
+
+    store.discard_if_no_reusable_results()
+
+    assert not checkpoint_path.exists()
+    assert set(removed_contents) == {"events.jsonl", "manifest.json"}
 
 
 def test_resumed_checkpoint_is_not_discarded_without_new_reusable_results(

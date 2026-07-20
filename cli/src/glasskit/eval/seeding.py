@@ -326,9 +326,9 @@ async def seed_eval(
             discard_checkpoint = True
         raise
     finally:
-        checkpoint.release()
         if discard_checkpoint:
             checkpoint.discard_if_no_reusable_results()
+        checkpoint.release()
 
 
 def seed_checkpoint_invocation(options: SeedOptions) -> dict[str, Any]:

@@ -182,10 +182,12 @@ def eval_seed(
     try:
         report = asyncio.run(seed_eval(options, callbacks=reporter))
     except KeyboardInterrupt as error:
-        _print_labeled_message(
-            console, "Seeding interrupted", "progress was saved", style="red"
+        _print_interruption(
+            console,
+            "Seeding interrupted",
+            "seed",
+            _reporter_checkpoint_path(reporter),
         )
-        _print_resume_hint(console, "seed", _reporter_checkpoint_path(reporter))
         raise typer.Exit(130) from error
     except SeedIncompleteError as error:
         _print_labeled_message(console, "Seed incomplete", str(error), style="red")
@@ -449,10 +451,12 @@ def eval_run(
     try:
         report = asyncio.run(run_eval(options, callbacks=reporter))
     except KeyboardInterrupt as error:
-        _print_labeled_message(
-            console, "Eval interrupted", "progress was saved", style="red"
+        _print_interruption(
+            console,
+            "Eval interrupted",
+            "run",
+            _reporter_checkpoint_path(reporter),
         )
-        _print_resume_hint(console, "run", _reporter_checkpoint_path(reporter))
         raise typer.Exit(130) from error
     except EvalError as error:
         _print_labeled_message(console, "Eval failed", str(error), style="red")
@@ -872,6 +876,21 @@ def _print_resume_hint(
         ["glasskit", "eval", command, "--resume", str(checkpoint_path)]
     )
     console.print(f"Resume with `{resume_command}`.", highlight=False)
+
+
+def _print_interruption(
+    console: Console,
+    label: str,
+    command: str,
+    checkpoint_path: Path | None,
+) -> None:
+    detail = (
+        "progress was saved"
+        if checkpoint_path is not None
+        else "no reusable progress was saved"
+    )
+    _print_labeled_message(console, label, detail, style="red")
+    _print_resume_hint(console, command, checkpoint_path)
 
 
 def _reporter_checkpoint_path(reporter: Any) -> Path | None:

@@ -382,6 +382,53 @@ def test_eval_commands_close_progress_when_execution_fails(
     assert "--resume" not in output
 
 
+@pytest.mark.parametrize(
+    ("command", "execution_name", "reporter_name", "label"),
+    [
+        ("run", "run_eval", "ConsoleReporter", "Eval interrupted"),
+        ("seed", "seed_eval", "ConsoleSeedReporter", "Seeding interrupted"),
+    ],
+)
+@pytest.mark.parametrize("has_reusable_progress", [False, True])
+def test_eval_interrupt_reports_only_reusable_checkpoint_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    execution_name: str,
+    reporter_name: str,
+    label: str,
+    has_reusable_progress: bool,
+) -> None:
+    checkpoint_path = tmp_path / "checkpoint" if has_reusable_progress else None
+
+    class Reporter:
+        def __init__(self) -> None:
+            self.checkpoint_path = checkpoint_path
+
+        def close(self) -> None:
+            return None
+
+    async def interrupt(*args: object, **kwargs: object) -> object:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(f"glasskit.cli.{execution_name}", interrupt)
+    monkeypatch.setattr(f"glasskit.cli.{reporter_name}", lambda **kwargs: Reporter())
+
+    result = CliRunner().invoke(app, ["eval", command])
+
+    assert result.exit_code == 130
+    output = Text.from_ansi(result.output).plain
+    if checkpoint_path is None:
+        assert f"{label}: no reusable progress was saved" in output
+        assert "Checkpoint:" not in output
+        assert "--resume" not in output
+    else:
+        assert f"{label}: progress was saved" in output
+        assert "no reusable progress" not in output
+        assert f"glasskit eval {command} --resume" in output
+        assert str(checkpoint_path) in output.replace("\n", "")
+
+
 def test_eval_run_does_not_define_failure_table_limit() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)

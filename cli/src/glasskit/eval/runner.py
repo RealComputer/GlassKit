@@ -223,9 +223,9 @@ async def run_eval(
             discard_checkpoint = True
         raise
     finally:
-        checkpoint.release()
         if discard_checkpoint:
             checkpoint.discard_if_no_reusable_results()
+        checkpoint.release()
 
 
 async def _run_trial(
