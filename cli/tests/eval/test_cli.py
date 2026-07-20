@@ -429,6 +429,47 @@ def test_eval_interrupt_reports_only_reusable_checkpoint_progress(
         assert str(checkpoint_path) in output.replace("\n", "")
 
 
+@pytest.mark.parametrize(
+    ("command", "execution_name", "reporter_name"),
+    [
+        ("run", "run_eval", "ConsoleReporter"),
+        ("seed", "seed_eval", "ConsoleSeedReporter"),
+    ],
+)
+def test_eval_interrupt_prefers_exception_checkpoint_over_reporter_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    execution_name: str,
+    reporter_name: str,
+) -> None:
+    exception_checkpoint = tmp_path / "exception-checkpoint"
+    reporter_checkpoint = tmp_path / "reporter-checkpoint"
+
+    class Reporter:
+        checkpoint_path = reporter_checkpoint
+
+        def close(self) -> None:
+            return None
+
+    async def interrupt(*args: object, **kwargs: object) -> object:
+        error = KeyboardInterrupt()
+        error.__dict__["checkpoint_path"] = exception_checkpoint
+        raise error
+
+    monkeypatch.setattr(f"glasskit.cli.{execution_name}", interrupt)
+    monkeypatch.setattr(f"glasskit.cli.{reporter_name}", lambda **kwargs: Reporter())
+
+    result = CliRunner().invoke(app, ["eval", command])
+
+    assert result.exit_code == 130
+    output = Text.from_ansi(result.output).plain.replace("\n", "")
+    assert "progress was saved" in output
+    assert f"glasskit eval {command} --resume" in output
+    assert str(exception_checkpoint) in output
+    assert str(reporter_checkpoint) not in output
+
+
 def test_eval_run_does_not_define_failure_table_limit() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)

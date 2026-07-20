@@ -186,7 +186,7 @@ def eval_seed(
             console,
             "Seeding interrupted",
             "seed",
-            _reporter_checkpoint_path(reporter),
+            checkpoint_path_from_error(error) or _reporter_checkpoint_path(reporter),
         )
         raise typer.Exit(130) from error
     except SeedIncompleteError as error:
@@ -455,7 +455,7 @@ def eval_run(
             console,
             "Eval interrupted",
             "run",
-            _reporter_checkpoint_path(reporter),
+            checkpoint_path_from_error(error) or _reporter_checkpoint_path(reporter),
         )
         raise typer.Exit(130) from error
     except EvalError as error:
