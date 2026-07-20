@@ -3,6 +3,8 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -153,6 +155,49 @@ def test_torn_tail_repair_uses_binary_offsets_for_crlf_log(
         flags & os.O_RDWR == os.O_RDWR and flags & test_binary_flag
         for flags in event_open_flags
     )
+
+
+def test_windows_pid_liveness_uses_nondestructive_platform_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probed: list[int] = []
+    monkeypatch.setattr(checkpoints, "_WINDOWS", True)
+    monkeypatch.setattr(
+        checkpoints,
+        "_windows_pid_exists",
+        lambda pid: probed.append(pid) or True,
+    )
+    monkeypatch.setattr(
+        checkpoints.os,
+        "kill",
+        lambda *args: pytest.fail("os.kill must not probe Windows processes"),
+    )
+
+    assert checkpoints._pid_exists(1234)
+    assert probed == [1234]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows process handles")
+def test_windows_native_pid_probe_distinguishes_running_and_exited_processes() -> None:
+    assert checkpoints._windows_pid_exists(os.getpid())
+
+    process = subprocess.Popen([sys.executable, "-c", "pass"])
+    process.wait()
+
+    assert not checkpoints._windows_pid_exists(process.pid)
+
+
+def test_checkpoint_lock_staleness_follows_pid_liveness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock_path = tmp_path / "active.lock"
+    lock_path.write_text('{"pid": 1234}', encoding="utf-8")
+
+    monkeypatch.setattr(checkpoints, "_pid_exists", lambda pid: pid == 1234)
+    assert not checkpoints._checkpoint_lock_is_stale(lock_path)
+
+    monkeypatch.setattr(checkpoints, "_pid_exists", lambda pid: False)
+    assert checkpoints._checkpoint_lock_is_stale(lock_path)
 
 
 def _create_checkpoint(tmp_path: Path) -> CheckpointStore:

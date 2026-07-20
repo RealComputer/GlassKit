@@ -15,6 +15,7 @@ from .models import EvalConfigError, EvalDirectory
 CHECKPOINT_SCHEMA_VERSION = 1
 CheckpointKind = Literal["run", "seed"]
 _O_BINARY = getattr(os, "O_BINARY", 0)
+_WINDOWS = os.name == "nt"
 
 
 @dataclass(frozen=True)
@@ -411,13 +412,51 @@ def _checkpoint_lock_is_stale(path: Path) -> bool:
     pid = value.get("pid") if isinstance(value, dict) else None
     if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
         return True
+    return not _pid_exists(pid)
+
+
+def _pid_exists(pid: int) -> bool:
+    if _WINDOWS:
+        return _windows_pid_exists(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
-        return True
-    except (PermissionError, OSError):
         return False
-    return False
+    except (PermissionError, OSError):
+        return True
+    return True
+
+
+def _windows_pid_exists(pid: int) -> bool:
+    # os.kill(pid, 0) terminates rather than probes a process on Windows. Query a
+    # minimal process handle instead, treating access failures as active locks.
+    import ctypes
+    from ctypes import wintypes
+
+    windows_ctypes: Any = ctypes
+    win_dll = windows_ctypes.WinDLL
+    get_last_error = windows_ctypes.get_last_error
+    kernel32 = win_dll("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    open_process.restype = wintypes.HANDLE
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    wait_for_single_object.restype = wintypes.DWORD
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+
+    synchronize = 0x00100000
+    error_invalid_parameter = 87
+    wait_object_0 = 0
+    handle = open_process(synchronize, False, pid)
+    if not handle:
+        return get_last_error() != error_invalid_parameter
+    try:
+        return wait_for_single_object(handle, 0) != wait_object_0
+    finally:
+        close_handle(handle)
 
 
 def _new_checkpoint_id(kind: CheckpointKind) -> str:
