@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from struct import pack
 from typing import cast
 
 import pytest
@@ -15,6 +16,17 @@ from glasskit.eval.video import (
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+ANISOTROPIC_REFLECTED_MATRIX = (
+    -92682,
+    -46341,
+    0,
+    -92682,
+    46341,
+    0,
+    0,
+    0,
+    1 << 30,
+)
 
 
 def test_decode_sample_frames_normalizes_non_zero_start_time() -> None:
@@ -74,6 +86,29 @@ def test_probe_dimensions_match_expanded_non_quarter_turn_frames(
     )
 
     assert (metadata.width, metadata.height) == (100, 68)
+    assert decoded[0].image.size == (metadata.width, metadata.height)
+
+
+def test_reflected_display_rotation_normalizes_anisotropic_scale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "scaled-reflection.mp4"
+    monkeypatch.setattr(
+        "glasskit.eval.video.av.open",
+        lambda path: _SingleFrameContainer(
+            rotation=27,
+            display_matrix=ANISOTROPIC_REFLECTED_MATRIX,
+        ),
+    )
+
+    metadata = probe_video(video_path)
+    decoded = decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    assert (metadata.width, metadata.height) == (114, 114)
     assert decoded[0].image.size == (metadata.width, metadata.height)
 
 
@@ -277,9 +312,17 @@ class _FakeFrame:
 class _SingleFrameContainer:
     duration = None
 
-    def __init__(self, *, rotation: int) -> None:
+    def __init__(
+        self,
+        *,
+        rotation: int,
+        display_matrix: tuple[int, ...] | None = None,
+    ) -> None:
         self.streams = [_SingleFrameStream()]
-        self.frame = _SingleFrame(rotation=rotation)
+        self.frame = _SingleFrame(
+            rotation=rotation,
+            display_matrix=display_matrix,
+        )
 
     def __enter__(self) -> _SingleFrameContainer:
         return self
@@ -307,8 +350,29 @@ class _SingleFrame:
     time_base = None
     time = 0.0
 
-    def __init__(self, *, rotation: int) -> None:
+    def __init__(
+        self,
+        *,
+        rotation: int,
+        display_matrix: tuple[int, ...] | None,
+    ) -> None:
         self.rotation = rotation
+        self.side_data = (
+            [] if display_matrix is None else [_DisplayMatrixSideData(display_matrix)]
+        )
 
     def to_image(self) -> Image.Image:
         return Image.new("RGB", (96, 64), "white")
+
+
+class _DisplayMatrixSideData:
+    class Type:
+        name = "DISPLAYMATRIX"
+
+    type = Type()
+
+    def __init__(self, matrix: tuple[int, ...]) -> None:
+        self.matrix = matrix
+
+    def __bytes__(self) -> bytes:
+        return pack("=9i", *self.matrix)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from dataclasses import dataclass
-from math import atan2, degrees
+from math import atan2, degrees, hypot
 from pathlib import Path
 from struct import unpack
 from typing import Any
@@ -185,7 +185,19 @@ def _display_transform(frame: VideoFrame) -> _DisplayTransform:
         if a * d - b * c >= 0:
             break
 
-        reflected_rotation = round(degrees(atan2(-b, -a))) % 360
+        horizontal_scale = hypot(a, c)
+        vertical_scale = hypot(b, d)
+        reflected_rotation = (
+            round(
+                degrees(
+                    atan2(
+                        -b / vertical_scale,
+                        -a / horizontal_scale,
+                    )
+                )
+            )
+            % 360
+        )
         return _DisplayTransform(rotation=reflected_rotation, reflected=True)
     return _DisplayTransform(rotation=rotation)
 
