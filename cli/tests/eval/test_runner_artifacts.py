@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+
+import pytest
+
 from glasskit.eval.models import SampleResult
 from glasskit.eval.runner import _failure_artifact_stem
 
@@ -18,6 +22,37 @@ def test_failure_artifact_stem_bounds_long_target_ids() -> None:
 
     assert len(stem) <= 181
     assert stem.endswith("_00002_1.250s")
+
+
+@pytest.mark.parametrize(
+    ("target_id", "windows"),
+    [
+        ("?" + "😀" * 56, False),
+        ("😀" * 120, True),
+    ],
+)
+def test_failure_artifact_stem_bounds_multibyte_filesystem_units(
+    target_id: str, windows: bool
+) -> None:
+    stem = _failure_artifact_stem(_result(target_id), windows=windows)
+    filename = f"{stem}.json"
+    units = (
+        len(filename.encode("utf-16-le")) // 2
+        if windows
+        else len(os.fsencode(filename))
+    )
+
+    assert units <= 255
+    assert stem.endswith("_00002_1.250s")
+
+
+def test_failure_artifact_stem_with_multibyte_id_can_be_written(tmp_path) -> None:
+    stem = _failure_artifact_stem(_result("?" + "😀" * 56), windows=False)
+    path = tmp_path / f"{stem}.json"
+
+    path.write_text("{}", encoding="utf-8")
+
+    assert path.read_text(encoding="utf-8") == "{}"
 
 
 def _result(target_id: str) -> SampleResult:

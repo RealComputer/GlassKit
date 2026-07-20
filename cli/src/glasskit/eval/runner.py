@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections import defaultdict
 from collections.abc import Mapping
@@ -42,7 +43,8 @@ from .models import (
 from .video import iter_sample_frames, probe_video, validate_sample_times
 
 _INVALID_ARTIFACT_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-_MAX_ARTIFACT_PREFIX_LENGTH = 160
+_MAX_ARTIFACT_COMPONENT_UNITS = 255
+_MAX_ARTIFACT_PREFIX_UNITS = 160
 
 
 class RunCallbacks(Protocol):
@@ -775,16 +777,49 @@ def _save_failure_artifacts(
     )
 
 
-def _failure_artifact_stem(result: SampleResult) -> str:
+def _failure_artifact_stem(result: SampleResult, *, windows: bool | None = None) -> str:
+    use_windows = os.name == "nt" if windows is None else windows
     raw_prefix = f"{result.case_name}_{result.target_id}"
     safe_prefix = _INVALID_ARTIFACT_FILENAME.sub("_", raw_prefix).rstrip(" .")
     if not safe_prefix:
         safe_prefix = "sample"
-    if safe_prefix != raw_prefix or len(safe_prefix) > _MAX_ARTIFACT_PREFIX_LENGTH:
+    artifact_suffix = f"_{result.sample_index:05d}_{result.timestamp_s:.3f}s"
+    prefix_units = min(
+        _MAX_ARTIFACT_PREFIX_UNITS,
+        _MAX_ARTIFACT_COMPONENT_UNITS
+        - _filename_units(f"{artifact_suffix}.json", windows=use_windows),
+    )
+    if (
+        safe_prefix != raw_prefix
+        or _filename_units(safe_prefix, windows=use_windows) > prefix_units
+    ):
         digest = hashlib.sha256(raw_prefix.encode("utf-8")).hexdigest()[:10]
-        safe_prefix = safe_prefix[: _MAX_ARTIFACT_PREFIX_LENGTH - 11].rstrip(" ._")
+        digest_suffix = f"_{digest}"
+        safe_prefix = _truncate_filename_units(
+            safe_prefix,
+            prefix_units - _filename_units(digest_suffix, windows=use_windows),
+            windows=use_windows,
+        ).rstrip(" ._")
         safe_prefix = f"{safe_prefix or 'sample'}_{digest}"
-    return f"{safe_prefix}_{result.sample_index:05d}_{result.timestamp_s:.3f}s"
+    return f"{safe_prefix}{artifact_suffix}"
+
+
+def _filename_units(value: str, *, windows: bool) -> int:
+    if windows:
+        return len(value.encode("utf-16-le", errors="surrogatepass")) // 2
+    return len(os.fsencode(value))
+
+
+def _truncate_filename_units(value: str, max_units: int, *, windows: bool) -> str:
+    characters: list[str] = []
+    used_units = 0
+    for character in value:
+        character_units = _filename_units(character, windows=windows)
+        if used_units + character_units > max_units:
+            break
+        characters.append(character)
+        used_units += character_units
+    return "".join(characters)
 
 
 def _summarize_stability(
