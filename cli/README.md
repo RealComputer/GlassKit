@@ -326,7 +326,7 @@ Use `ignore` for a known exceptional sample that should remain documented withou
 
 ## Comparison Reference
 
-The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return the value you want compared and omit `field`. Use `field` when the adapter already returns a structured observation that should be preserved in JSON output or saved failure artifacts, such as `matches`, `confidence`, `reason`, or detected classes in one object. When `field` is present, `glasskit eval` extracts that nested value first and compares the extracted value against `expect`.
+The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return only the value you want compared and omit `field`. Use `field` when the adapter naturally returns a structured result but only one nested value should determine correctness. For example, an adapter can return its result alongside diagnostic metadata; selecting the result with `field` makes it the seeded and compared value while preserving the complete adapter response in machine-readable reports and saved failure artifacts.
 
 Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with a `missing field: ...` reason.
 
