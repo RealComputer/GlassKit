@@ -193,13 +193,13 @@ Note: Threshold defaults are intentionally unset. Without `--min-pass-rate`, `--
 
 Goal: pass runtime settings to your adapter without putting them in case files.
 
-Command:
+Save portable adapter settings in `eval/adapter.yaml`; GlassKit discovers this file automatically:
 
 ```sh
-uv run --env-file .env glasskit eval run --adapter-config eval/local-adapter.yaml
+uv run --env-file .env glasskit eval run
 ```
 
-Example `eval/local-adapter.yaml`:
+Example `eval/adapter.yaml`:
 
 ```yaml
 api_url: https://example.test/v1
@@ -207,7 +207,7 @@ model: vision-checker
 jpeg_quality: 90
 ```
 
-Note: `--adapter-config` must be a YAML or JSON object. `glasskit eval` does not expand environment variables inside this file. Read secrets from environment variables in your adapter.
+Use `--adapter-config PATH` to load a different YAML or JSON object instead. GlassKit does not expand environment variables inside adapter config files. Read secrets from environment variables in your adapter.
 
 ## Eval Directory Layout
 
@@ -220,6 +220,7 @@ recordings/
 your-app-repo/
   eval/
     adapter.py
+    adapter.yaml # Optional adapter config file
     config.yaml # Optional eval config file
     cases/
       task-01.yaml # Case file
@@ -230,7 +231,7 @@ You can also keep videos next to the case file and reference them with a local f
 
 The `video:` path in the case file is resolved relative to that file.
 
-The eval config file is optional and supports eval-level `thresholds`. It must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
+The adapter config file is optional and must be named `adapter.yaml` for automatic discovery. The eval config file is also optional and supports eval-level `thresholds`; it must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
 
 ## Case File Reference
 
@@ -789,7 +790,7 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only seed one case by filename or stem. |
 | `--target TEXT` | All targets | Only seed this target id from the selected cases. Repeat the option to seed multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter in its `config` field. |
+| `--adapter-config PATH` | `<eval-dir>/adapter.yaml` when present | YAML or JSON object passed to the selected adapter in its `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--replace` | `false` | Evaluate and replace existing expectations in the selected scope as well as filling missing ones. |
 | `--verbose` | `false` | Print every proposed expectation and set the factory config object's `verbose` field. |
@@ -842,7 +843,7 @@ Options:
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter in its `config` field. |
+| `--adapter-config PATH` | `<eval-dir>/adapter.yaml` when present | YAML or JSON object passed to the selected adapter in its `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
 | `--min-pass-rate FLOAT` | None | Pass-rate gate from `0.0` to `1.0`. Overrides eval-level `thresholds.min_pass_rate` and suppresses case-level gates when set. |
@@ -883,7 +884,7 @@ Options:
 | `--adapter-command TEXT` | None | Optional process adapter command to verify. Mutually exclusive with `--adapter`. |
 | `--case TEXT` | All cases | Only validate one case by filename or stem. |
 | `--target TEXT` | All targets | Only validate this target id from the selected cases. Repeat the option to validate multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--adapter-config PATH` | None | YAML or JSON object passed to the selected adapter during validation. |
+| `--adapter-config PATH` | `<eval-dir>/adapter.yaml` when present | YAML or JSON object passed to the selected adapter during validation. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 When `--adapter` or `--adapter-command` is provided, validation also constructs and closes that adapter. It does not evaluate a sample or verify the adapter's observations. Without either option, validation checks only the eval directory and selected cases.
@@ -925,6 +926,7 @@ Default values at a glance:
 | `seed` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | `run` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | Individual evaluation concurrency | `1`. Increase with `seed --concurrency` or `run --concurrency`. |
+| `<eval-dir>/adapter.yaml` | Optional. Missing file means the adapter receives an empty config object. |
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
@@ -933,7 +935,7 @@ Default values at a glance:
 | Numeric `compare.tolerance` | `0.0`. |
 | `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
-| Adapter config | Empty object unless `--adapter-config` is provided. |
+| Adapter config | `<eval-dir>/adapter.yaml` when present, otherwise an empty object; `--adapter-config` overrides discovery. |
 | Failure artifacts | Saved only with `--save-failures`; stored below `<eval-dir>/runs/failures/` by default. |
 
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:
@@ -975,7 +977,7 @@ Other precedence rules:
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
 | Sample settings | A sample block overrides target `sample_defaults`, which overrides case `sample_defaults`. A declared `compare` replaces the inherited comparison as one value. |
 | Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
-| Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the selected adapter. |
+| Adapter config | `<eval-dir>/adapter.yaml`, or the explicit `--adapter-config` override, is independent of the eval config file and case files and is passed only to the selected adapter. |
 
 ## Environment Variables
 

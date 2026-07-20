@@ -4,12 +4,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import typer
 from rich.text import Text
 from typer.core import TyperGroup, TyperOption
 from typer.main import get_command
 from typer.testing import CliRunner
 
-from glasskit.cli import _default_adapter_target, app
+from glasskit.cli import _default_adapter_target, _load_adapter_config, app
 from glasskit.eval.models import (
     AdapterRuntimeError,
     CaseWriteError,
@@ -171,6 +172,32 @@ def test_eval_run_passes_adapter_command_without_python_default(
     assert isinstance(options, RunOptions)
     assert options.adapter is None
     assert options.adapter_command == "node eval/adapter.js"
+
+
+def test_eval_run_discovers_adapter_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "adapter.yaml").write_text("model: discovered\n", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    async def fake_run_eval(options: object, callbacks: object) -> object:
+        captured["options"] = options
+        return SimpleNamespace(success=True)
+
+    monkeypatch.setattr("glasskit.cli.run_eval", fake_run_eval)
+    monkeypatch.setattr("glasskit.cli.print_run_summary", lambda *args, **kwargs: None)
+
+    result = CliRunner().invoke(
+        app,
+        ["eval", "run", "--eval-dir", str(eval_dir)],
+    )
+
+    assert result.exit_code == 0
+    options = captured["options"]
+    assert isinstance(options, RunOptions)
+    assert options.adapter_config == {"model": "discovered"}
 
 
 @pytest.mark.parametrize("command", ["seed", "run", "validate"])
@@ -429,3 +456,44 @@ def test_default_adapter_target_preserves_colons_in_eval_dir() -> None:
         _default_adapter_target(Path("repo:with-colon/eval"))
         == "repo:with-colon/eval/adapter.py:create_evaluator"
     )
+
+
+def test_adapter_config_is_discovered_in_eval_dir(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "adapter.yaml").write_text("model: discovered\n", encoding="utf-8")
+
+    assert _load_adapter_config(None, eval_dir) == {"model": "discovered"}
+
+
+def test_adapter_config_discovery_accepts_yml_variant(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "adapter.yml").write_text("model: discovered\n", encoding="utf-8")
+
+    assert _load_adapter_config(None, eval_dir) == {"model": "discovered"}
+
+
+def test_explicit_adapter_config_takes_precedence_over_discovery(
+    tmp_path: Path,
+) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "adapter.yaml").write_text("model: yaml\n", encoding="utf-8")
+    (eval_dir / "adapter.yml").write_text("model: yml\n", encoding="utf-8")
+    explicit = tmp_path / "local.yaml"
+    explicit.write_text("model: explicit\n", encoding="utf-8")
+
+    assert _load_adapter_config(explicit, eval_dir) == {"model": "explicit"}
+
+
+def test_adapter_config_discovery_rejects_ambiguous_variants(
+    tmp_path: Path,
+) -> None:
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "adapter.yaml").write_text("model: yaml\n", encoding="utf-8")
+    (eval_dir / "adapter.yml").write_text("model: yml\n", encoding="utf-8")
+
+    with pytest.raises(typer.BadParameter, match="multiple adapter config files found"):
+        _load_adapter_config(None, eval_dir)

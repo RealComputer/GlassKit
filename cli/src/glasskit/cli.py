@@ -34,6 +34,7 @@ app.add_typer(eval_app, name="eval")
 
 DEFAULT_EVAL_DIR = Path("eval")
 DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
+ADAPTER_CONFIG_FILE_NAMES = ("adapter.yaml", "adapter.yml")
 
 
 @eval_app.command("seed")
@@ -76,7 +77,11 @@ def eval_seed(
     adapter_config: Annotated[
         Path | None,
         typer.Option(
-            "--adapter-config", help="YAML or JSON config passed to the adapter."
+            "--adapter-config",
+            help=(
+                "YAML or JSON config passed to the adapter. Defaults to "
+                "adapter.yaml in the eval dir when present."
+            ),
         ),
     ] = None,
     concurrency: Annotated[
@@ -120,7 +125,7 @@ def eval_seed(
         adapter_command=adapter_command,
         case_filter=case,
         target_filter=_target_filter(target),
-        adapter_config=_load_config(adapter_config),
+        adapter_config=_load_adapter_config(adapter_config, eval_dir),
         concurrency=concurrency,
         replace=replace,
         verbose=verbose,
@@ -195,7 +200,11 @@ def eval_run(
     adapter_config: Annotated[
         Path | None,
         typer.Option(
-            "--adapter-config", help="YAML or JSON config passed to the adapter."
+            "--adapter-config",
+            help=(
+                "YAML or JSON config passed to the adapter. Defaults to "
+                "adapter.yaml in the eval dir when present."
+            ),
         ),
     ] = None,
     concurrency: Annotated[
@@ -317,7 +326,7 @@ def eval_run(
         target_filter=_target_filter(target),
         from_time_s=from_time,
         until_time_s=until_time,
-        adapter_config=_load_config(adapter_config),
+        adapter_config=_load_adapter_config(adapter_config, eval_dir),
         concurrency=concurrency,
         repeat=repeat,
         min_pass_rate=min_pass_rate,
@@ -375,7 +384,11 @@ def eval_validate(
     adapter_config: Annotated[
         Path | None,
         typer.Option(
-            "--adapter-config", help="YAML or JSON config passed to the adapter."
+            "--adapter-config",
+            help=(
+                "YAML or JSON config passed to the adapter. Defaults to "
+                "adapter.yaml in the eval dir when present."
+            ),
         ),
     ] = None,
     allow_empty: Annotated[
@@ -395,7 +408,7 @@ def eval_validate(
         eval_dir=eval_dir,
         case_filter=case,
         target_filter=_target_filter(target),
-        adapter_config=_load_config(adapter_config),
+        adapter_config=_load_adapter_config(adapter_config, eval_dir),
         allow_empty=allow_empty,
     )
     report = asyncio.run(validate_eval_directory(options))
@@ -598,6 +611,25 @@ def _validate_sample_time_options(
             "must be greater than --from",
             param_hint="--until",
         )
+
+
+def _load_adapter_config(path: Path | None, eval_dir: Path) -> dict[str, Any]:
+    if path is not None:
+        return _load_config(path)
+
+    expanded_eval_dir = eval_dir.expanduser()
+    candidates = [
+        expanded_eval_dir / name
+        for name in ADAPTER_CONFIG_FILE_NAMES
+        if (expanded_eval_dir / name).exists()
+    ]
+    if len(candidates) > 1:
+        joined = ", ".join(str(candidate) for candidate in candidates)
+        raise typer.BadParameter(
+            f"multiple adapter config files found: {joined}; "
+            "remove one or pass --adapter-config"
+        )
+    return _load_config(candidates[0] if candidates else None)
 
 
 def _load_config(path: Path | None) -> dict[str, Any]:
