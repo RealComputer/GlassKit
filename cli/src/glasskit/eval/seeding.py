@@ -351,7 +351,6 @@ def seed_options_from_invocation(
     invocation: Mapping[str, Any],
     *,
     checkpoint_path: Path,
-    verbose: bool,
 ) -> SeedOptions:
     target_filter = invocation.get("target_filter")
     if isinstance(target_filter, list):
@@ -369,7 +368,7 @@ def seed_options_from_invocation(
         concurrency=int(invocation.get("concurrency", 1)),
         replace=invocation.get("replace") is True,
         keep_going=invocation.get("keep_going") is True,
-        verbose=verbose or invocation.get("verbose") is True,
+        verbose=invocation.get("verbose") is True,
         resume_checkpoint=checkpoint_path,
     )
 

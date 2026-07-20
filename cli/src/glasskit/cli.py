@@ -145,6 +145,7 @@ def eval_seed(
             concurrency=concurrency,
             replace=replace,
             keep_going=keep_going,
+            verbose=verbose,
         )
         try:
             snapshot = load_checkpoint(eval_dir, resume, expected_kind="seed")
@@ -153,7 +154,6 @@ def eval_seed(
         options = seed_options_from_invocation(
             snapshot.invocation,
             checkpoint_path=snapshot.path,
-            verbose=verbose,
         )
     else:
         if adapter is not None and adapter_command is not None:
@@ -397,6 +397,7 @@ def eval_run(
             artifacts_dir=artifacts_dir,
             save_failures=save_failures,
             allow_empty=allow_empty,
+            verbose=verbose,
         )
         try:
             snapshot = load_checkpoint(eval_dir, resume, expected_kind="run")
@@ -405,7 +406,6 @@ def eval_run(
         options = run_options_from_invocation(
             snapshot.invocation,
             checkpoint_path=snapshot.path,
-            verbose=verbose,
         )
     else:
         _validate_sample_time_options(
@@ -787,6 +787,7 @@ def _reject_seed_resume_overrides(
     concurrency: int,
     replace: bool,
     keep_going: bool,
+    verbose: bool,
 ) -> None:
     if any(
         (
@@ -798,6 +799,7 @@ def _reject_seed_resume_overrides(
             concurrency != 1,
             replace,
             keep_going,
+            verbose,
         )
     ):
         raise typer.BadParameter(
@@ -827,6 +829,7 @@ def _reject_run_resume_overrides(
     artifacts_dir: Path | None,
     save_failures: bool,
     allow_empty: bool,
+    verbose: bool,
 ) -> None:
     if any(
         (
@@ -848,6 +851,7 @@ def _reject_run_resume_overrides(
             artifacts_dir is not None,
             save_failures,
             allow_empty,
+            verbose,
         )
     ):
         raise typer.BadParameter(

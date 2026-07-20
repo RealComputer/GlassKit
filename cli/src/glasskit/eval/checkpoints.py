@@ -39,6 +39,11 @@ class CheckpointStore:
         self._lock_path = self.path / "active.lock"
         self._lock_token = secrets.token_hex(16)
         self._acquire_lock()
+        try:
+            self._prepare_event_log()
+        except BaseException:
+            self.release()
+            raise
 
     @classmethod
     def create(
@@ -134,8 +139,7 @@ class CheckpointStore:
         try:
             descriptor = os.open(
                 self._events_path,
-                os.O_APPEND | os.O_CREAT | os.O_WRONLY,
-                0o600,
+                os.O_APPEND | os.O_WRONLY,
             )
             try:
                 view = memoryview(encoded)
@@ -213,6 +217,60 @@ class CheckpointStore:
             return
         raise RuntimeError("internal error: checkpoint lock retry was exhausted")
 
+    def _prepare_event_log(self) -> None:
+        created = False
+        try:
+            try:
+                descriptor = os.open(
+                    self._events_path,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    0o600,
+                )
+            except FileExistsError:
+                pass
+            else:
+                created = True
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not create checkpoint event log in {self.path}: {error}"
+            ) from error
+        if created:
+            _sync_directory_best_effort(self.path)
+        self._truncate_torn_event_tail()
+
+    def _truncate_torn_event_tail(self) -> None:
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(self._events_path, os.O_RDWR)
+            size = os.lseek(descriptor, 0, os.SEEK_END)
+            if size == 0:
+                return
+            os.lseek(descriptor, -1, os.SEEK_END)
+            if os.read(descriptor, 1) == b"\n":
+                return
+
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            raw = bytearray()
+            while len(raw) < size:
+                chunk = os.read(descriptor, min(64 * 1024, size - len(raw)))
+                if not chunk:
+                    break
+                raw.extend(chunk)
+            complete_length = raw.rfind(b"\n") + 1
+            os.ftruncate(descriptor, complete_length)
+            os.fsync(descriptor)
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not repair checkpoint event log in {self.path}: {error}"
+            ) from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+
     def _read_events(self) -> list[dict[str, Any]]:
         try:
             raw = self._events_path.read_bytes()
@@ -222,6 +280,11 @@ class CheckpointStore:
             raise EvalConfigError(
                 f"could not read checkpoint events from {self.path}: {error}"
             ) from error
+        if raw and not raw.endswith(b"\n"):
+            raise EvalConfigError(
+                f"checkpoint event log has an incomplete final record: "
+                f"{self._events_path}"
+            )
         lines = raw.splitlines(keepends=True)
         events: list[dict[str, Any]] = []
         for index, line in enumerate(lines):
@@ -230,9 +293,6 @@ class CheckpointStore:
             try:
                 event = json.loads(line)
             except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                is_truncated_tail = index == len(lines) - 1 and not line.endswith(b"\n")
-                if is_truncated_tail:
-                    break
                 raise EvalConfigError(
                     f"checkpoint event log is corrupt at line {index + 1}: "
                     f"{self._events_path}: {error}"
@@ -389,11 +449,7 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        directory_descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_descriptor)
-        finally:
-            os.close(directory_descriptor)
+        _sync_directory_best_effort(path.parent)
     except OSError as error:
         raise EvalConfigError(
             f"could not write checkpoint manifest {path}: {error}"
@@ -405,5 +461,24 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             temporary.unlink()
         except FileNotFoundError:
             pass
+        except OSError:
+            pass
+
+
+def _sync_directory_best_effort(directory: Path) -> None:
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if directory_flag is None:
+        return
+    try:
+        descriptor = os.open(directory, directory_flag | os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        try:
+            os.close(descriptor)
         except OSError:
             pass

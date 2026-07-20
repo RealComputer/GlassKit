@@ -393,7 +393,6 @@ def run_options_from_invocation(
     invocation: Mapping[str, Any],
     *,
     checkpoint_path: Path,
-    verbose: bool,
 ) -> RunOptions:
     target_filter = invocation.get("target_filter")
     if isinstance(target_filter, list):
@@ -417,7 +416,7 @@ def run_options_from_invocation(
         max_failures=_optional_integer(invocation.get("max_failures")),
         max_flaky_samples=_optional_integer(invocation.get("max_flaky_samples")),
         keep_going=invocation.get("keep_going") is True,
-        verbose=verbose or invocation.get("verbose") is True,
+        verbose=invocation.get("verbose") is True,
         output_json=_optional_checkpoint_path(invocation.get("output_json")),
         artifacts_dir=_optional_checkpoint_path(invocation.get("artifacts_dir")),
         save_failures=invocation.get("save_failures") is True,

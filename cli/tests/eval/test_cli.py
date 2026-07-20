@@ -334,6 +334,18 @@ def test_eval_seed_incomplete_prints_manual_resume_command(
     assert checkpoint_path.name in output
 
 
+@pytest.mark.parametrize("command", ["run", "seed"])
+def test_eval_resume_rejects_verbose_override(command: str) -> None:
+    result = CliRunner().invoke(
+        app,
+        ["eval", command, "--resume", "missing-checkpoint", "--verbose"],
+    )
+
+    assert result.exit_code == 2
+    output = Text.from_ansi(result.output).plain
+    assert "cannot be combined with overrides" in output
+
+
 @pytest.mark.parametrize(
     ("command", "execution_name", "reporter_name"),
     [
