@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from collections import defaultdict
 from collections.abc import Mapping
 from pathlib import Path
@@ -38,6 +40,9 @@ from .models import (
     ValidationReport,
 )
 from .video import iter_sample_frames, probe_video, validate_sample_times
+
+_INVALID_ARTIFACT_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_MAX_ARTIFACT_PREFIX_LENGTH = 160
 
 
 class RunCallbacks(Protocol):
@@ -699,10 +704,7 @@ def _save_failure_artifacts(
 ) -> SampleResult:
     artifacts_dir = options.artifacts_dir or (eval_dir / "runs")
     failures_dir = artifacts_dir / "failures" / f"trial-{trial_index:03d}"
-    stem = (
-        f"{result.case_name}_{result.target_id}_"
-        f"{result.sample_index:05d}_{result.timestamp_s:.3f}s"
-    ).replace("/", "_")
+    stem = _failure_artifact_stem(result)
     image_path = failures_dir / f"{stem}.jpg"
     json_path = failures_dir / f"{stem}.json"
     image_path.parent.mkdir(parents=True, exist_ok=True)
@@ -736,6 +738,18 @@ def _save_failure_artifacts(
         artifact_image=str(image_path),
         artifact_json=str(json_path),
     )
+
+
+def _failure_artifact_stem(result: SampleResult) -> str:
+    raw_prefix = f"{result.case_name}_{result.target_id}"
+    safe_prefix = _INVALID_ARTIFACT_FILENAME.sub("_", raw_prefix).rstrip(" .")
+    if not safe_prefix:
+        safe_prefix = "sample"
+    if safe_prefix != raw_prefix or len(safe_prefix) > _MAX_ARTIFACT_PREFIX_LENGTH:
+        digest = hashlib.sha256(raw_prefix.encode("utf-8")).hexdigest()[:10]
+        safe_prefix = safe_prefix[: _MAX_ARTIFACT_PREFIX_LENGTH - 11].rstrip(" ._")
+        safe_prefix = f"{safe_prefix or 'sample'}_{digest}"
+    return f"{safe_prefix}_{result.sample_index:05d}_{result.timestamp_s:.3f}s"
 
 
 def _summarize_stability(
