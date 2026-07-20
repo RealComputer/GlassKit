@@ -102,6 +102,11 @@ class SampleCompare(TransportModel):
         return value
 
 
+class ReviewSampleDefaults(TransportModel):
+    field: str | None = None
+    compare: SampleCompare = Field(default_factory=SampleCompare)
+
+
 class SampleOrigin(TransportModel):
     block_index: Annotated[int, Field(ge=1)]
     kind: GroupKind
@@ -196,6 +201,7 @@ class TargetDocument(TransportModel):
     id: str
     label: str | None = None
     details_yaml: str
+    sample_defaults: ReviewSampleDefaults = Field(default_factory=ReviewSampleDefaults)
     samples: list[ReviewSample]
     display_groups: list[DisplayGroup]
 

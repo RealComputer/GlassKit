@@ -15,8 +15,8 @@ from typing import Any
 
 import yaml
 
-from ..expectations import expand_sample_timestamps
-from ..models import SUPPORTED_COMPARE_MODES, EvalConfigError
+from ..expectations import expand_sample_timestamps, resolve_sample_defaults
+from ..models import SUPPORTED_COMPARE_MODES, EvalConfigError, SampleDefaults
 from ..schemas import RawCaseFile, RawSampleBlock
 from .models import (
     DisplayGroup,
@@ -281,6 +281,7 @@ def reconstruct_target(
     samples: Sequence[ReviewSample],
     *,
     default_every_s: float,
+    sample_defaults: SampleDefaults | None = None,
     range_end_bound_s: float | None = None,
     allow_range_reconstruction: bool = True,
 ) -> ReconstructedTarget:
@@ -294,6 +295,7 @@ def reconstruct_target(
         else None
     )
     blocks: list[dict[str, Any]] = []
+    effective_defaults = sample_defaults or SampleDefaults()
     grouped_samples: list[list[ParsedSample]] = []
     group_specs: list[tuple[GroupKind, int | None, int | None]] = []
 
@@ -311,6 +313,7 @@ def reconstruct_target(
             default_every_s=default_every_s,
             range_end_bound_tick=range_end_bound_tick,
             allow_range_reconstruction=allow_range_reconstruction,
+            sample_defaults=effective_defaults,
             blocks=blocks,
             grouped_samples=grouped_samples,
             group_specs=group_specs,
@@ -393,6 +396,10 @@ def build_candidate_case_file(
             target_id,
             replacement.samples,
             default_every_s=raw_case.sampling.every_s,
+            sample_defaults=resolve_sample_defaults(
+                raw_case.sample_defaults,
+                raw_case.targets[target_id].sample_defaults,
+            ),
         )
         replacement_target = dict(raw_target)
         replacement_target["samples"] = reconstructed.blocks
@@ -506,12 +513,19 @@ def _reconstruct_payload_run(
     default_every_s: float,
     range_end_bound_tick: int | None,
     allow_range_reconstruction: bool,
+    sample_defaults: SampleDefaults,
     blocks: list[dict[str, Any]],
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
 ) -> None:
     if not allow_range_reconstruction:
-        _flush_at(all_samples[start:end], blocks, grouped_samples, group_specs)
+        _flush_at(
+            all_samples[start:end],
+            blocks,
+            grouped_samples,
+            group_specs,
+            sample_defaults=sample_defaults,
+        )
         return
 
     pending_at: list[ParsedSample] = []
@@ -558,9 +572,15 @@ def _reconstruct_payload_run(
             index = candidate_end
             continue
 
-        _flush_at(pending_at, blocks, grouped_samples, group_specs)
+        _flush_at(
+            pending_at,
+            blocks,
+            grouped_samples,
+            group_specs,
+            sample_defaults=sample_defaults,
+        )
         pending_at = []
-        block = _payload_block(candidate[0])
+        block = _payload_block(candidate[0], sample_defaults=sample_defaults)
         block_with_location: dict[str, Any] = {
             "range": FlowSequence(
                 [candidate[0].timestamp_s, _seconds_from_tick(end_tick)]
@@ -574,7 +594,13 @@ def _reconstruct_payload_run(
         group_specs.append(("range", end_tick, cadence_tick))
         index = candidate_end
 
-    _flush_at(pending_at, blocks, grouped_samples, group_specs)
+    _flush_at(
+        pending_at,
+        blocks,
+        grouped_samples,
+        group_specs,
+        sample_defaults=sample_defaults,
+    )
 
 
 def _flush_at(
@@ -582,6 +608,8 @@ def _flush_at(
     blocks: list[dict[str, Any]],
     grouped_samples: list[list[ParsedSample]],
     group_specs: list[tuple[GroupKind, int | None, int | None]],
+    *,
+    sample_defaults: SampleDefaults,
 ) -> None:
     if not samples:
         return
@@ -591,30 +619,38 @@ def _flush_at(
     else:
         location = FlowSequence([sample.timestamp_s for sample in samples])
     block: dict[str, Any] = {"at": location}
-    block.update(_payload_block(samples[0]))
+    block.update(_payload_block(samples[0], sample_defaults=sample_defaults))
     blocks.append(block)
     grouped_samples.append(list(samples))
     group_specs.append(("at", None, None))
 
 
-def _payload_block(sample: ParsedSample) -> dict[str, Any]:
+def _payload_block(
+    sample: ParsedSample, *, sample_defaults: SampleDefaults
+) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    if sample.field is not None:
+    if sample.field != sample_defaults.field:
         result["field"] = sample.field
     if sample.has_expectation:
         result["expect"] = sample.expected
-    if sample.mode is not None or sample.tolerance is not None:
+    if not _same_compare(sample, sample_defaults):
         compare: dict[str, Any] = {}
         if sample.mode is not None:
             compare["mode"] = sample.mode
         if sample.tolerance is not None:
             compare["tolerance"] = sample.tolerance
-        result["compare"] = compare
+        result["compare"] = compare or None
     if sample.comment is not None:
         result["comment"] = sample.comment
     if sample.ignore is not None:
         result["ignore"] = sample.ignore
     return result
+
+
+def _same_compare(sample: ParsedSample, defaults: SampleDefaults) -> bool:
+    return sample.mode == defaults.compare.mode and _same_optional_number(
+        sample.tolerance, defaults.compare.tolerance
+    )
 
 
 def _same_payload(left: ParsedSample, right: ParsedSample) -> bool:

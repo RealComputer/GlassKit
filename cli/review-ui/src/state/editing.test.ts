@@ -40,6 +40,21 @@ describe("sample editing helpers", () => {
     expect(created.sample.expect_json).toBe("false");
   });
 
+  it("uses target sample defaults when creating the first sample", () => {
+    const empty = {
+      ...target("status", []),
+      sample_defaults: {
+        field: "result",
+        compare: { mode: "json_subset" as const, tolerance: null },
+      },
+    };
+
+    const created = createSampleAt(empty, 2, "created");
+
+    expect(created.sample.field).toBe("result");
+    expect(created.sample.compare).toEqual({ mode: "json_subset", tolerance: null });
+  });
+
   it("finds the most recently crossed sample in an unsorted target", () => {
     const samples = [sample("later", 3), sample("first", 1), sample("recent", 2)];
     const status = target("status", samples);

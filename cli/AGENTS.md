@@ -17,7 +17,7 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - `pyproject.toml` and `hatch_build.py`: package metadata, `glasskit = "glasskit.cli:app"` console entry point, runtime dependencies, dev tools, and the frontend distribution build hook.
 - `src/glasskit/cli.py`: Typer command definitions and CLI exit-code handling.
 - `src/glasskit/eval/models.py`: dataclasses, protocols, JSON value aliases, result types, and eval errors.
-- `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, target config merging, and thresholds.
+- `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, case/target sample-default resolution, target config merging, and thresholds.
 - `src/glasskit/eval/execution.py`: shared adapter construction and cleanup, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, JSON observation validation, and cancellation draining.
 - `src/glasskit/eval/seeding.py`: draft expectation selection, adapter-backed labeling, field extraction, deterministic target reconstruction, candidate validation, concurrent-edit protection, and atomic case updates.
 - `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles through the shared executor, completion-time result callbacks, sample comparison, stability aggregation, reports, trial-scoped artifacts, and quality gates.

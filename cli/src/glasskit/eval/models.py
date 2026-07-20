@@ -92,6 +92,12 @@ class ComparisonConfig:
 
 
 @dataclass(frozen=True)
+class SampleDefaults:
+    field: str | None = None
+    compare: ComparisonConfig = dc_field(default_factory=ComparisonConfig)
+
+
+@dataclass(frozen=True)
 class TargetThreshold:
     min_pass_rate: float | None = None
 
@@ -129,6 +135,7 @@ class TargetSpec:
     label: str | None
     config: Mapping[str, Any]
     samples: list[SampleExpectation]
+    sample_defaults: SampleDefaults = dc_field(default_factory=SampleDefaults)
 
 
 @dataclass(frozen=True)

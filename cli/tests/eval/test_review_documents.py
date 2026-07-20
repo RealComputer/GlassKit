@@ -483,6 +483,64 @@ def test_unrelated_timestamp_edit_preserves_lossless_nested_expectation(
     )
 
 
+def test_review_write_preserves_sample_defaults_and_compact_overrides(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "defaults.yaml"
+    path.write_text(
+        """video: ../../../videos/two-state-64x64.mp4
+sample_defaults:
+  field: result
+  compare:
+    mode: json_subset
+targets:
+  state:
+    samples:
+      - at: 0.0
+        expect: {status: ready}
+      - at: 1.0
+        field: null
+        compare: null
+        expect: {result: {status: ready}}
+""",
+        encoding="utf-8",
+    )
+    repository = ReviewRepository(eval_dir)
+    document = repository.case_file_document("defaults.yaml")
+    target = document.targets[0]
+
+    assert target.sample_defaults.field == "result"
+    assert target.sample_defaults.compare.mode == "json_subset"
+    assert [sample.field for sample in target.samples] == ["result", None]
+    assert [sample.compare.mode for sample in target.samples] == [
+        "json_subset",
+        None,
+    ]
+
+    samples = list(target.samples)
+    samples[0] = samples[0].model_copy(update={"timestamp_s": 0.1})
+    repository.replace_samples(
+        "defaults.yaml",
+        ReplaceSamplesRequest(targets={"state": TargetReplacement(samples=samples)}),
+    )
+
+    written = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert written["sample_defaults"] == {
+        "field": "result",
+        "compare": {"mode": "json_subset"},
+    }
+    assert written["targets"]["state"]["samples"] == [
+        {"at": 0.1, "expect": {"status": "ready"}},
+        {
+            "at": 1.0,
+            "field": None,
+            "expect": {"result": {"status": "ready"}},
+            "compare": None,
+        },
+    ]
+
+
 def test_writer_does_not_insert_omitted_case_or_target_defaults(
     tmp_path: Path,
 ) -> None:

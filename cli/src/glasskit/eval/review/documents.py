@@ -32,6 +32,7 @@ from .models import (
     ReplaceSamplesRequest,
     ReviewAPIError,
     ReviewSample,
+    ReviewSampleDefaults,
     SampleCompare,
     SampleOrigin,
     TargetDocument,
@@ -454,7 +455,10 @@ def _target_documents(
             id_overrides=sample_ids_by_target_tick.get(target_id, {}),
         )
         reconstructed = reconstruct_target(
-            target_id, samples, default_every_s=raw_case.sampling.every_s
+            target_id,
+            samples,
+            default_every_s=raw_case.sampling.every_s,
+            sample_defaults=loaded_target.sample_defaults,
         )
         samples_by_id = {sample.id: sample for sample in samples}
         sorted_samples = [samples_by_id[sample.id] for sample in reconstructed.samples]
@@ -476,6 +480,13 @@ def _target_documents(
                 id=target_id,
                 label=loaded_target.label,
                 details_yaml=details_yaml,
+                sample_defaults=ReviewSampleDefaults(
+                    field=loaded_target.sample_defaults.field,
+                    compare=SampleCompare(
+                        mode=loaded_target.sample_defaults.compare.mode,
+                        tolerance=loaded_target.sample_defaults.compare.tolerance,
+                    ),
+                ),
                 samples=sorted_samples,
                 display_groups=reconstructed.groups,
             )

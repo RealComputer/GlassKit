@@ -47,10 +47,10 @@ export function createSampleAt(
       has_expectation: true,
       expect_type: sourceExpectation?.expect_type ?? "boolean",
       expect_json: sourceExpectation?.expect_json ?? "false",
-      field: source?.field ?? null,
+      field: source ? source.field : target.sample_defaults.field,
       compare: sourceExpectation
         ? { ...sourceExpectation.compare }
-        : { mode: null, tolerance: null },
+        : { ...target.sample_defaults.compare },
       comment: null,
       ignore: null,
       origin: null,

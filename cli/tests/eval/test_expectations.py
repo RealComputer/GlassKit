@@ -65,6 +65,73 @@ def test_sparse_at_samples_expand_and_sort(tmp_path: Path) -> None:
     ]
 
 
+def test_sample_defaults_resolve_by_scope_and_allow_explicit_clearing(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        sample_defaults:
+          field: result
+          compare:
+            mode: json_subset
+        targets:
+          inherited:
+            samples:
+              - at: 0.0
+                expect: {status: ready}
+              - at: 1.0
+                field: null
+                compare: null
+                expect: {result: {status: ready}}
+          overridden:
+            sample_defaults:
+              field: result.confidence
+              compare:
+                mode: numeric
+                tolerance: 0.1
+            samples:
+              - at: 2.0
+                expect: 0.9
+              - at: 3.0
+                compare:
+                  tolerance: 0.2
+                expect: 0.8
+          cleared:
+            sample_defaults:
+              field: null
+              compare: null
+            samples:
+              - at: 4.0
+                expect: true
+        """,
+    )
+
+    case = load_eval_directory(eval_dir).cases[0]
+    inherited, overridden, cleared = case.targets
+
+    assert inherited.sample_defaults.field == "result"
+    assert inherited.sample_defaults.compare.mode == "json_subset"
+    assert inherited.samples[0].field == "result"
+    assert inherited.samples[0].compare.mode == "json_subset"
+    assert inherited.samples[1].field is None
+    assert inherited.samples[1].compare.mode is None
+
+    assert overridden.sample_defaults.field == "result.confidence"
+    assert overridden.sample_defaults.compare.mode == "numeric"
+    assert overridden.sample_defaults.compare.tolerance == 0.1
+    assert overridden.samples[0].compare.mode == "numeric"
+    assert overridden.samples[0].compare.tolerance == 0.1
+    assert overridden.samples[1].compare.mode is None
+    assert overridden.samples[1].compare.tolerance == 0.2
+
+    assert cleared.sample_defaults.field is None
+    assert cleared.sample_defaults.compare.mode is None
+    assert cleared.samples[0].field is None
+    assert cleared.samples[0].compare.mode is None
+
+
 def test_sample_comment_is_trimmed_and_expands_to_every_sample(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

@@ -10,6 +10,7 @@ import yaml
 from pydantic import ValidationError
 
 from glasskit.eval.expectations import MAX_EXPANDED_SAMPLES_PER_CASE, load_case
+from glasskit.eval.models import ComparisonConfig, SampleDefaults
 from glasskit.eval.review.models import (
     ReviewAPIError,
     ReviewSample,
@@ -169,6 +170,43 @@ def test_reconstruction_preserves_draft_and_explicit_null_as_distinct_values() -
     assert reconstructed.blocks == [
         {"at": 0.0},
         {"at": 0.5, "expect": None},
+    ]
+
+
+def test_reconstruction_omits_inherited_settings_and_emits_explicit_clears() -> None:
+    defaults = SampleDefaults(
+        field="result",
+        compare=ComparisonConfig(mode="json_subset"),
+    )
+    inherited = _sample(
+        "inherited",
+        0.0,
+        expect_json='{"status":"ready"}',
+        expect_type="object",
+        field="result",
+    ).model_copy(update={"compare": SampleCompare(mode="json_subset")})
+    cleared = _sample(
+        "cleared",
+        0.5,
+        expect_json='{"result":{"status":"ready"}}',
+        expect_type="object",
+    )
+
+    reconstructed = reconstruct_target(
+        "state",
+        [inherited, cleared],
+        default_every_s=0.5,
+        sample_defaults=defaults,
+    )
+
+    assert reconstructed.blocks == [
+        {"at": 0.0, "expect": {"status": "ready"}},
+        {
+            "at": 0.5,
+            "field": None,
+            "expect": {"result": {"status": "ready"}},
+            "compare": None,
+        },
     ]
 
 

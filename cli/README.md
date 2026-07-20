@@ -278,6 +278,7 @@ Case fields:
 | `video` | Yes | Video path resolved relative to the case file's directory. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
+| `sample_defaults` | No | Case-wide defaults for sample `field` and `compare`. Target defaults override these values, and sample blocks override both scopes. |
 | `workflow.targets` | No | Optional advanced target metadata list for imported or generated workflow definitions. |
 | `targets` | Yes | Mapping of target id to target definition. Must contain at least one target. |
 | `thresholds` | No | Case-level gates: `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate`. Omitted keys create no gate for that key. |
@@ -288,6 +289,7 @@ Target fields:
 | --- | ---: | --- |
 | `label` | No | Display name shown in reports. |
 | `config` | No | Adapter-specific metadata for the target. Use this as the default place for prompt IDs, rubric IDs, reference assets, confidence thresholds, or other target-specific settings. Defaults to an empty object. Values override matching keys from `workflow.targets`. |
+| `sample_defaults` | No | Target-wide defaults for sample `field` and `compare`. These override case defaults. |
 | `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
 
 Most evals should put adapter metadata directly under `targets.<id>.config`. `workflow.targets` is useful when an eval is generated from or synchronized with an app workflow manifest and workflow-owned metadata should stay separate from eval-owned samples, expectations, and per-case overrides. Each workflow target needs an `id`; `label` and extra metadata keys are allowed. Entries are matched by `id`, then merged into the adapter target config before `targets.<id>.config` is applied:
@@ -315,14 +317,40 @@ Sample block fields:
 | `at` | Conditionally | One timestamp or a list of timestamps in seconds. Exactly one of `range` or `at` is required. Lists are sorted during expansion. |
 | `expect` | For runnable samples | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. Omit it to create a draft sample for `seed`; explicit `null` is a labeled expectation. |
 | `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
-| `field` | No | Dot-separated path to extract from the adapter observation before comparison. When omitted, the whole observation is compared. |
-| `compare` | No | Comparison config with `mode` and optional `tolerance`. When omitted, mode is inferred from `expect` and numeric tolerance is `0.0`. |
+| `field` | No | Dot-separated path to extract from the adapter observation before comparison. An omitted value inherits target or case `sample_defaults`; without a default, the whole observation is compared. Explicit `null` clears an inherited field. |
+| `compare` | No | Comparison config with `mode` and optional `tolerance`. An omitted value inherits target or case `sample_defaults`; without a default, mode is inferred from `expect` and numeric tolerance is `0.0`. Explicit `null` clears an inherited comparison. |
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
 | `ignore` | No | Nonempty reason for ignoring this block. Ignored samples are reported but are not decoded, sent to the adapter, or included in pass rates, failure counts, or quality gates. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
 
 Use `ignore` for a known exceptional sample that should remain documented without affecting a run. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
+
+Sample settings use the precedence `sample block > target sample_defaults > case sample_defaults > built-in behavior`. `compare` is inherited or replaced as one complete value rather than merged key by key, so an override never retains an unrelated tolerance from a broader scope. Only `field` and `compare` can be defaulted; expectations, locations, comments, and ignore reasons remain explicit sample-block properties.
+
+For example, these defaults apply a structured result envelope and subset comparison to every target in the case, while the `confidence` target replaces both settings:
+
+```yaml
+sample_defaults:
+  field: result
+  compare:
+    mode: json_subset
+targets:
+  mistake:
+    samples:
+    - range: [180.0, 182.0]
+      expect:
+        mistakeSku: 67190R91-FLIP
+  confidence:
+    sample_defaults:
+      field: result.confidence
+      compare:
+        mode: numeric
+        tolerance: 0.05
+    samples:
+    - at: 182.0
+      expect: 0.9
+```
 
 ## Comparison Reference
 
@@ -900,8 +928,8 @@ Default values at a glance:
 | `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
-| Sample `field` | Compares the whole adapter observation. |
-| Sample `compare.mode` | Inferred from `expect`: non-boolean numbers use `numeric`; booleans, strings, `null`, arrays, and objects use `exact`. |
+| Sample `field` | Inherits target or case `sample_defaults.field`; otherwise compares the whole adapter observation. |
+| Sample `compare.mode` | Inherits target or case `sample_defaults.compare`; otherwise inferred from `expect`: non-boolean numbers use `numeric`; booleans, strings, `null`, arrays, and objects use `exact`. |
 | Numeric `compare.tolerance` | `0.0`. |
 | `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
@@ -945,6 +973,7 @@ Other precedence rules:
 | Area | Rule |
 | --- | --- |
 | Range sampling | A sample block's `every_s` overrides case-level `sampling.every_s`. |
+| Sample settings | A sample block overrides target `sample_defaults`, which overrides case `sample_defaults`. A declared `compare` replaces the inherited comparison as one value. |
 | Target metadata | `targets.<id>.config` is the default place for adapter target metadata and overrides matching keys from optional `workflow.targets` metadata. |
 | Adapter config | `--adapter-config` is independent of the eval config file and case files and is passed only to the selected adapter. |
 

@@ -13,6 +13,7 @@ from .models import (
     EvalCase,
     EvalConfigError,
     EvalDirectory,
+    SampleDefaults,
     SampleExpectation,
     TargetSpec,
     TargetThreshold,
@@ -22,6 +23,7 @@ from .schemas import (
     RawCaseFile,
     RawCompare,
     RawSampleBlock,
+    RawSampleDefaults,
     RawThresholds,
     parse_case_file,
     parse_eval_config_file,
@@ -321,6 +323,7 @@ def _filter_cases_by_time(
                     label=target.label,
                     config=target.config,
                     samples=samples,
+                    sample_defaults=target.sample_defaults,
                 )
             )
         if not any(target.samples for target in filtered_targets):
@@ -383,6 +386,9 @@ def load_case(
         metadata = workflow_targets.get(target_id, {})
         label = raw_target.label or _optional_string(metadata.get("label"))
         target_config = _target_config(metadata, raw_target.config)
+        sample_defaults = resolve_sample_defaults(
+            raw.sample_defaults, raw_target.sample_defaults
+        )
 
         samples: list[SampleExpectation] = []
         intervals: list[tuple[float, float, str]] = []
@@ -394,6 +400,7 @@ def load_case(
                 target_index=target_index,
                 target_label=label,
                 target_config=target_config,
+                sample_defaults=sample_defaults,
                 video_path=video_path,
                 default_every_s=raw.sampling.every_s,
                 next_sample_index=next_sample_index,
@@ -418,6 +425,7 @@ def load_case(
                 label=label,
                 config=target_config,
                 samples=samples,
+                sample_defaults=sample_defaults,
             )
         )
 
@@ -509,6 +517,7 @@ def _expand_sample_block(
     target_index: int,
     target_label: str | None,
     target_config: Mapping[str, Any],
+    sample_defaults: SampleDefaults,
     video_path: Path,
     default_every_s: float,
     next_sample_index: int,
@@ -516,7 +525,16 @@ def _expand_sample_block(
     case_path: Path,
     intervals: list[tuple[float, float, str]],
 ) -> list[SampleExpectation]:
-    compare = _compare_from_raw(raw_block.compare)
+    field = (
+        raw_block.field
+        if "field" in raw_block.model_fields_set
+        else sample_defaults.field
+    )
+    compare = (
+        _compare_from_raw(raw_block.compare)
+        if "compare" in raw_block.model_fields_set
+        else sample_defaults.compare
+    )
     timestamps = expand_sample_timestamps(
         raw_block,
         default_every_s=default_every_s,
@@ -547,7 +565,7 @@ def _expand_sample_block(
             sample_index=next_sample_index + offset,
             expected=raw_block.expect,
             has_expectation=raw_block.has_expectation,
-            field=raw_block.field,
+            field=field,
             compare=compare,
             source=source,
             comment=raw_block.comment,
@@ -578,6 +596,25 @@ def _compare_from_raw(raw_compare: RawCompare | None) -> ComparisonConfig:
         tolerance=raw_compare.tolerance,
         raw=raw_compare.model_dump(exclude_none=True),
     )
+
+
+def resolve_sample_defaults(
+    case_defaults: RawSampleDefaults,
+    target_defaults: RawSampleDefaults,
+) -> SampleDefaults:
+    field = _nearest_declared_setting("field", case_defaults, target_defaults)
+    raw_compare = _nearest_declared_setting("compare", case_defaults, target_defaults)
+    return SampleDefaults(
+        field=field,
+        compare=_compare_from_raw(raw_compare),
+    )
+
+
+def _nearest_declared_setting(name: str, *layers: RawSampleDefaults) -> Any:
+    for layer in reversed(layers):
+        if name in layer.model_fields_set:
+            return getattr(layer, name)
+    return None
 
 
 def expand_sample_timestamps(

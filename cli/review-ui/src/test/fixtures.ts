@@ -28,6 +28,10 @@ export function target(
     id,
     label: id.replaceAll("_", " "),
     details_yaml: `label: ${id}\n`,
+    sample_defaults: {
+      field: null,
+      compare: { mode: null, tolerance: null },
+    },
     samples,
     display_groups: samples.map((item, index) => ({
       id: `group-${index}`,

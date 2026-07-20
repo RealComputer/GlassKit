@@ -93,6 +93,55 @@ targets:
     ]
 
 
+def test_seed_preserves_sample_defaults_without_expanding_them_into_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+sample_defaults:
+  field: result
+  compare:
+    mode: json_subset
+targets:
+  state:
+    sample_defaults:
+      field: result.matches
+      compare:
+        mode: exact
+    samples:
+      - range: [0.0, 2.0]
+        """,
+    )
+    labeler = BatchLabeler()
+    _use_evaluator(monkeypatch, evaluate_many=labeler.evaluate_many)
+
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+            )
+        )
+    )
+
+    assert report.seeded_count == 4
+    raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
+    assert raw["sample_defaults"] == {
+        "field": "result",
+        "compare": {"mode": "json_subset"},
+    }
+    assert raw["targets"]["state"]["sample_defaults"] == {
+        "field": "result.matches",
+        "compare": {"mode": "exact"},
+    }
+    assert raw["targets"]["state"]["samples"] == [
+        {"range": [0.0, 1.0], "expect": False},
+        {"range": [1.0, 2.0], "expect": True},
+    ]
+
+
 def test_seed_reconstructs_ranges_before_adjacent_sample_blocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

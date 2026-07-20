@@ -64,6 +64,16 @@ class RawSampling(_SchemaModel):
         return _number(value, label="every_s", minimum=0.0, exclusive_minimum=True)
 
 
+class RawSampleDefaults(_SchemaModel):
+    field: str | None = None
+    compare: RawCompare | None = None
+
+    @field_validator("field")
+    @classmethod
+    def _strip_field(cls, value: str | None) -> str | None:
+        return _strip_sample_field(value)
+
+
 class RawSampleBlock(_SchemaModel):
     range_: list[float] | None = Field(default=None, alias="range")
     at: float | list[float] | None = None
@@ -115,13 +125,7 @@ class RawSampleBlock(_SchemaModel):
     @field_validator("field")
     @classmethod
     def _strip_field(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("must not be empty")
-        _validate_unicode_scalar(stripped)
-        return stripped
+        return _strip_sample_field(value)
 
     @field_validator("comment", "ignore")
     @classmethod
@@ -148,6 +152,7 @@ class RawSampleBlock(_SchemaModel):
 class RawTarget(_SchemaModel):
     label: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    sample_defaults: RawSampleDefaults = Field(default_factory=RawSampleDefaults)
     samples: list[RawSampleBlock]
 
     @field_validator("label")
@@ -235,6 +240,7 @@ class RawCaseFile(_SchemaModel):
     video: str
     description: str | None = None
     sampling: RawSampling = Field(default_factory=RawSampling)
+    sample_defaults: RawSampleDefaults = Field(default_factory=RawSampleDefaults)
     workflow: RawWorkflow = Field(default_factory=RawWorkflow)
     targets: dict[str, RawTarget]
     thresholds: RawThresholds = Field(default_factory=RawThresholds)
@@ -278,6 +284,16 @@ def workflow_target_metadata(target: RawWorkflowTarget) -> dict[str, Any]:
     if target.label is not None:
         data["label"] = target.label
     return data
+
+
+def _strip_sample_field(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("must not be empty")
+    _validate_unicode_scalar(stripped)
+    return stripped
 
 
 def _validate_mapping_keys(value: Mapping[str, Any], *, label: str) -> None:

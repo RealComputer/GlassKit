@@ -19,6 +19,11 @@ export interface SampleComparison {
   tolerance: number | null;
 }
 
+export interface SampleDefaults {
+  field: string | null;
+  compare: SampleComparison;
+}
+
 export interface ReviewSample {
   id: string;
   timestamp_s: number;
@@ -46,6 +51,7 @@ export interface ReviewTarget {
   id: string;
   label: string | null;
   details_yaml: string;
+  sample_defaults: SampleDefaults;
   samples: ReviewSample[];
   display_groups: DisplayGroup[];
 }

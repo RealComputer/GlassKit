@@ -413,6 +413,7 @@ def _reconstruct_seeded_target(
                 target.id,
                 review_samples,
                 default_every_s=raw_case.sampling.every_s,
+                sample_defaults=target.sample_defaults,
                 range_end_bound_s=(
                     raw_block.range_[1] if raw_block.range_ is not None else None
                 ),
