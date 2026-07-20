@@ -16,6 +16,11 @@ The following example uses `glasskit eval run --repeat 2 --max-flaky-samples 0 -
   "cases": ["task-01"],
   "repeat_count": 2,
   "success": false,
+  "checkpoint": {
+    "path": "/workspace/eval/runs/checkpoints/run-20260720T143812Z-a1b2c3d4",
+    "resumed": false,
+    "resumable_adapter_errors": 0
+  },
   "summary": {
     "trials": 2,
     "successful_trials": 2,
@@ -162,3 +167,5 @@ The following example uses `glasskit eval run --repeat 2 --max-flaky-samples 0 -
 ## Report Structure
 
 The `trials` array is the report's uniform representation for complete executions. A default run has one entry; with `--repeat`, each repetition adds an entry identified by its `trial` number. Root `gates` contains run-wide stability gates, while each entry in `trials` contains its own quality gates and complete sample results. The `stability` array follows the deterministic result order and records each logical sample's status sequence. Ignored samples appear in every result set with status `ignored`, but root logical-sample counts include each ignored sample only once; attempts, pass rates, timing, throughput, quality gates, and stability gates exclude ignored outcomes.
+
+The root `checkpoint` object identifies the durable checkpoint associated with the logical run. `resumed` is true when this report was produced by `glasskit eval run --resume`; `resumable_adapter_errors` counts adapter-error result slots that another manual resume can retry without reevaluating completed samples. Ordinary failed comparisons and comparison-error results are completed outcomes and are not included in that count. A report normally points to a complete checkpoint, while a `--keep-going` report with adapter errors points to an incomplete checkpoint that retains the attempt history.
