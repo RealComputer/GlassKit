@@ -644,11 +644,19 @@ async function runGlassKitAdapter(createEvaluator) {
     );
   }
 
+  async function closeEvaluator() {
+    const currentEvaluator = evaluator;
+    evaluator = undefined;
+    if (typeof currentEvaluator?.close === "function") {
+      await Promise.resolve(currentEvaluator.close());
+    }
+  }
+
   async function close(request) {
     closing = true;
     await Promise.allSettled([...active.values()].map(({ promise }) => promise));
     await respond(request, async () => {
-      if (typeof evaluator?.close === "function") await evaluator.close();
+      await closeEvaluator();
       return null;
     });
     lines.close();
@@ -686,7 +694,7 @@ async function runGlassKitAdapter(createEvaluator) {
   if (!closing) {
     for (const { controller } of active.values()) controller.abort();
     await Promise.allSettled([...active.values()].map(({ promise }) => promise));
-    if (typeof evaluator?.close === "function") await evaluator.close();
+    await closeEvaluator();
   }
   await outputTail;
 }
