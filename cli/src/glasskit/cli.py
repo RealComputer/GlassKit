@@ -13,6 +13,7 @@ import yaml
 from rich.console import Console
 from rich.text import Text
 
+from . import __version__
 from .eval.checkpoints import (
     checkpoint_path_from_error,
     load_checkpoint,
@@ -44,6 +45,27 @@ app.add_typer(eval_app, name="eval")
 DEFAULT_EVAL_DIR = Path("eval")
 DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
 ADAPTER_CONFIG_FILE_NAMES = ("adapter.yaml", "adapter.yml")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"glasskit {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def glasskit(
+    version: Annotated[
+        bool | None,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = None,
+) -> None:
+    """GlassKit tools for smart-glasses apps."""
 
 
 @eval_app.command("seed")

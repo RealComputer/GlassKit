@@ -10,6 +10,7 @@ from typer.core import TyperGroup, TyperOption
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from glasskit import __version__
 from glasskit.cli import _default_adapter_target, _load_adapter_config, app
 from glasskit.eval.models import (
     AdapterRuntimeError,
@@ -19,6 +20,20 @@ from glasskit.eval.models import (
     SeedOptions,
     SeedReport,
 )
+
+
+def test_root_version_option_prints_installed_package_version() -> None:
+    result = CliRunner().invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output == f"glasskit {__version__}\n"
+
+
+def test_root_version_option_exits_before_running_a_command() -> None:
+    result = CliRunner().invoke(app, ["--version", "unknown-command"])
+
+    assert result.exit_code == 0
+    assert result.output == f"glasskit {__version__}\n"
 
 
 def test_eval_help_lists_current_commands() -> None:

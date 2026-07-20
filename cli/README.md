@@ -746,6 +746,7 @@ Options:
 
 | Option | Default | Description |
 | --- | --- | --- |
+| `--version` | None | Show the installed GlassKit version and exit. |
 | `--install-completion` | None | Install shell completion for the current shell. |
 | `--show-completion` | None | Print shell completion setup text. |
 | `--help` | None | Show help and exit. |
