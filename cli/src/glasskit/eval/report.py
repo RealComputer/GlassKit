@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -21,6 +22,7 @@ from .models import (
     EvalCase,
     EvalDirectory,
     EvalRunReport,
+    SampleExpectation,
     SampleResult,
     SampleStability,
     SeededExpectation,
@@ -83,11 +85,15 @@ class ConsoleReporter:
         self.console = console or Console()
         self._trial_index = 1
         self._trial_count = 1
+        self.checkpoint_path: Path | None = None
         self._target_progress = _TargetProgress(
             console=self.console,
             unit="samples",
             show_progress=show_progress,
         )
+
+    def on_checkpoint(self, path: Path) -> None:
+        self.checkpoint_path = path
 
     def on_trial_start(self, trial_index: int, trial_count: int) -> None:
         self._target_progress.stop()
@@ -153,11 +159,15 @@ class ConsoleSeedReporter:
     ) -> None:
         self.verbose = verbose
         self.console = console or Console()
+        self.checkpoint_path: Path | None = None
         self._target_progress = _TargetProgress(
             console=self.console,
             unit="expectations",
             show_progress=show_progress,
         )
+
+    def on_checkpoint(self, path: Path) -> None:
+        self.checkpoint_path = path
 
     def on_case_start(self, case: EvalCase, sample_count: int) -> None:
         self._target_progress.stop()
@@ -189,6 +199,16 @@ class ConsoleSeedReporter:
         line.append(
             f" {_format_target_name(sample.target_id, sample.target_label)} "
             f"@{sample.timestamp_s:g}s expect={_short(result.expected)}"
+        )
+        self.console.print(line, highlight=False)
+
+    def on_error(self, sample: SampleExpectation, error: Exception) -> None:
+        self._target_progress.advance()
+        line = Text("    ")
+        line.append("ERROR", style="red")
+        line.append(
+            f" {_format_target_name(sample.target_id, sample.target_label)} "
+            f"@{sample.timestamp_s:g}s reason={error}"
         )
         self.console.print(line, highlight=False)
 
@@ -302,6 +322,19 @@ def print_run_summary(
         _print_single_run_summary(report, console)
     else:
         _print_repeated_run_summary(report, console)
+    if report.resumable_error_count and report.checkpoint_path is not None:
+        error_label = "error" if report.resumable_error_count == 1 else "errors"
+        console.print(
+            f"{report.resumable_error_count} adapter {error_label} can be retried "
+            "without rerunning completed samples.",
+            highlight=False,
+        )
+        console.print(f"Checkpoint: {report.checkpoint_path}", highlight=False)
+        console.print(
+            f"Resume with `glasskit eval run --resume "
+            f"{report.checkpoint_path.as_posix()}`.",
+            highlight=False,
+        )
 
 
 def _print_single_run_summary(report: EvalRunReport, console: Console) -> None:

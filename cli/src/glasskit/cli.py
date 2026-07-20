@@ -13,8 +13,12 @@ import yaml
 from rich.console import Console
 from rich.text import Text
 
+from .eval.checkpoints import (
+    checkpoint_path_from_error,
+    load_checkpoint,
+)
 from .eval.expectations import load_eval_directory
-from .eval.models import EvalError, RunOptions, SeedOptions
+from .eval.models import EvalError, RunOptions, SeedIncompleteError, SeedOptions
 from .eval.report import (
     ConsoleReporter,
     ConsoleSeedReporter,
@@ -25,8 +29,12 @@ from .eval.report import (
 )
 from .eval.review.documents import ReviewRepository
 from .eval.review.server import create_review_server
-from .eval.runner import run_eval, validate_eval_directory
-from .eval.seeding import seed_eval
+from .eval.runner import (
+    run_eval,
+    run_options_from_invocation,
+    validate_eval_directory,
+)
+from .eval.seeding import seed_eval, seed_options_from_invocation
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
@@ -102,6 +110,23 @@ def eval_seed(
             help="Replace existing expectations in the selected scope too.",
         ),
     ] = False,
+    keep_going: Annotated[
+        bool,
+        typer.Option(
+            "--keep-going",
+            help=(
+                "Checkpoint adapter errors and continue; case YAML remains unchanged "
+                "until every selected expectation succeeds."
+            ),
+        ),
+    ] = False,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume",
+            help="Resume an incomplete seed checkpoint by path or checkpoint id.",
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", help="Print every proposed expectation."),
@@ -109,33 +134,74 @@ def eval_seed(
 ) -> None:
     """Propose expectations for selected draft samples with an adapter."""
 
-    if adapter is not None and adapter_command is not None:
-        raise typer.BadParameter(
-            "cannot be used with --adapter", param_hint="--adapter-command"
-        )
     console = Console()
-    adapter_target = (
-        None
-        if adapter_command is not None
-        else adapter or _default_adapter_target(eval_dir)
-    )
-    options = SeedOptions(
-        eval_dir=eval_dir,
-        adapter=adapter_target,
-        adapter_command=adapter_command,
-        case_filter=case,
-        target_filter=_target_filter(target),
-        adapter_config=_load_adapter_config(adapter_config, eval_dir),
-        concurrency=concurrency,
-        replace=replace,
-        verbose=verbose,
-    )
-    reporter = ConsoleSeedReporter(verbose=verbose, console=console)
+    if resume is not None:
+        _reject_seed_resume_overrides(
+            adapter=adapter,
+            adapter_command=adapter_command,
+            case=case,
+            target=target,
+            adapter_config=adapter_config,
+            concurrency=concurrency,
+            replace=replace,
+            keep_going=keep_going,
+        )
+        try:
+            snapshot = load_checkpoint(eval_dir, resume, expected_kind="seed")
+        except EvalError as error:
+            raise typer.BadParameter(str(error), param_hint="--resume") from error
+        options = seed_options_from_invocation(
+            snapshot.invocation,
+            checkpoint_path=snapshot.path,
+            verbose=verbose,
+        )
+    else:
+        if adapter is not None and adapter_command is not None:
+            raise typer.BadParameter(
+                "cannot be used with --adapter", param_hint="--adapter-command"
+            )
+        adapter_target = (
+            None
+            if adapter_command is not None
+            else adapter or _default_adapter_target(eval_dir)
+        )
+        options = SeedOptions(
+            eval_dir=eval_dir,
+            adapter=adapter_target,
+            adapter_command=adapter_command,
+            case_filter=case,
+            target_filter=_target_filter(target),
+            adapter_config=_load_adapter_config(adapter_config, eval_dir),
+            concurrency=concurrency,
+            replace=replace,
+            keep_going=keep_going,
+            verbose=verbose,
+        )
+    reporter = ConsoleSeedReporter(verbose=options.verbose, console=console)
     try:
         report = asyncio.run(seed_eval(options, callbacks=reporter))
+    except KeyboardInterrupt as error:
+        _print_labeled_message(
+            console, "Seeding interrupted", "progress was saved", style="red"
+        )
+        _print_resume_hint(console, "seed", _reporter_checkpoint_path(reporter))
+        raise typer.Exit(130) from error
+    except SeedIncompleteError as error:
+        _print_labeled_message(console, "Seed incomplete", str(error), style="red")
+        _print_resume_hint(
+            console,
+            "seed",
+            checkpoint_path_from_error(error) or _reporter_checkpoint_path(reporter),
+        )
+        raise typer.Exit(1) from error
     except EvalError as error:
         _print_labeled_message(
             console, "Could not seed expectations", str(error), style="red"
+        )
+        _print_resume_hint(
+            console,
+            "seed",
+            checkpoint_path_from_error(error) or _reporter_checkpoint_path(reporter),
         )
         raise typer.Exit(2) from error
     finally:
@@ -270,6 +336,13 @@ def eval_run(
             help="Record adapter or comparison errors as results and continue.",
         ),
     ] = False,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume",
+            help="Resume an incomplete run checkpoint by path or checkpoint id.",
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", help="Print every sample result."),
@@ -303,48 +376,90 @@ def eval_run(
 ) -> None:
     """Run selected samples and apply quality gates."""
 
-    _validate_sample_time_options(
-        case=case,
-        from_time=from_time,
-        until_time=until_time,
-    )
-    if adapter is not None and adapter_command is not None:
-        raise typer.BadParameter(
-            "cannot be used with --adapter", param_hint="--adapter-command"
-        )
     console = Console()
-    adapter_target = (
-        None
-        if adapter_command is not None
-        else adapter or _default_adapter_target(eval_dir)
-    )
-    options = RunOptions(
-        adapter=adapter_target,
-        adapter_command=adapter_command,
-        eval_dir=eval_dir,
-        case_filter=case,
-        target_filter=_target_filter(target),
-        from_time_s=from_time,
-        until_time_s=until_time,
-        adapter_config=_load_adapter_config(adapter_config, eval_dir),
-        concurrency=concurrency,
-        repeat=repeat,
-        min_pass_rate=min_pass_rate,
-        min_target_pass_rate=min_target_pass_rate,
-        max_failures=max_failures,
-        max_flaky_samples=max_flaky_samples,
-        keep_going=keep_going,
-        verbose=verbose,
-        output_json=output_json,
-        artifacts_dir=artifacts_dir,
-        save_failures=save_failures,
-        allow_empty=allow_empty,
-    )
-    reporter = ConsoleReporter(verbose=verbose, console=console)
+    if resume is not None:
+        _reject_run_resume_overrides(
+            adapter=adapter,
+            adapter_command=adapter_command,
+            case=case,
+            target=target,
+            from_time=from_time,
+            until_time=until_time,
+            adapter_config=adapter_config,
+            concurrency=concurrency,
+            repeat=repeat,
+            min_pass_rate=min_pass_rate,
+            min_target_pass_rate=min_target_pass_rate,
+            max_failures=max_failures,
+            max_flaky_samples=max_flaky_samples,
+            keep_going=keep_going,
+            output_json=output_json,
+            artifacts_dir=artifacts_dir,
+            save_failures=save_failures,
+            allow_empty=allow_empty,
+        )
+        try:
+            snapshot = load_checkpoint(eval_dir, resume, expected_kind="run")
+        except EvalError as error:
+            raise typer.BadParameter(str(error), param_hint="--resume") from error
+        options = run_options_from_invocation(
+            snapshot.invocation,
+            checkpoint_path=snapshot.path,
+            verbose=verbose,
+        )
+    else:
+        _validate_sample_time_options(
+            case=case,
+            from_time=from_time,
+            until_time=until_time,
+        )
+        if adapter is not None and adapter_command is not None:
+            raise typer.BadParameter(
+                "cannot be used with --adapter", param_hint="--adapter-command"
+            )
+        adapter_target = (
+            None
+            if adapter_command is not None
+            else adapter or _default_adapter_target(eval_dir)
+        )
+        options = RunOptions(
+            adapter=adapter_target,
+            adapter_command=adapter_command,
+            eval_dir=eval_dir,
+            case_filter=case,
+            target_filter=_target_filter(target),
+            from_time_s=from_time,
+            until_time_s=until_time,
+            adapter_config=_load_adapter_config(adapter_config, eval_dir),
+            concurrency=concurrency,
+            repeat=repeat,
+            min_pass_rate=min_pass_rate,
+            min_target_pass_rate=min_target_pass_rate,
+            max_failures=max_failures,
+            max_flaky_samples=max_flaky_samples,
+            keep_going=keep_going,
+            verbose=verbose,
+            output_json=output_json,
+            artifacts_dir=artifacts_dir,
+            save_failures=save_failures,
+            allow_empty=allow_empty,
+        )
+    reporter = ConsoleReporter(verbose=options.verbose, console=console)
     try:
         report = asyncio.run(run_eval(options, callbacks=reporter))
+    except KeyboardInterrupt as error:
+        _print_labeled_message(
+            console, "Eval interrupted", "progress was saved", style="red"
+        )
+        _print_resume_hint(console, "run", _reporter_checkpoint_path(reporter))
+        raise typer.Exit(130) from error
     except EvalError as error:
         _print_labeled_message(console, "Eval failed", str(error), style="red")
+        _print_resume_hint(
+            console,
+            "run",
+            checkpoint_path_from_error(error) or _reporter_checkpoint_path(reporter),
+        )
         raise typer.Exit(2) from error
     finally:
         reporter.close()
@@ -660,6 +775,103 @@ def _default_adapter_target(eval_dir: Path) -> str:
 
 def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
     return tuple(targets) if targets is not None else None
+
+
+def _reject_seed_resume_overrides(
+    *,
+    adapter: str | None,
+    adapter_command: str | None,
+    case: str | None,
+    target: list[str] | None,
+    adapter_config: Path | None,
+    concurrency: int,
+    replace: bool,
+    keep_going: bool,
+) -> None:
+    if any(
+        (
+            adapter is not None,
+            adapter_command is not None,
+            case is not None,
+            target is not None,
+            adapter_config is not None,
+            concurrency != 1,
+            replace,
+            keep_going,
+        )
+    ):
+        raise typer.BadParameter(
+            "restores the original adapter and seed options and cannot be combined "
+            "with overrides",
+            param_hint="--resume",
+        )
+
+
+def _reject_run_resume_overrides(
+    *,
+    adapter: str | None,
+    adapter_command: str | None,
+    case: str | None,
+    target: list[str] | None,
+    from_time: float | None,
+    until_time: float | None,
+    adapter_config: Path | None,
+    concurrency: int,
+    repeat: int,
+    min_pass_rate: float | None,
+    min_target_pass_rate: float | None,
+    max_failures: int | None,
+    max_flaky_samples: int | None,
+    keep_going: bool,
+    output_json: Path | None,
+    artifacts_dir: Path | None,
+    save_failures: bool,
+    allow_empty: bool,
+) -> None:
+    if any(
+        (
+            adapter is not None,
+            adapter_command is not None,
+            case is not None,
+            target is not None,
+            from_time is not None,
+            until_time is not None,
+            adapter_config is not None,
+            concurrency != 1,
+            repeat != 1,
+            min_pass_rate is not None,
+            min_target_pass_rate is not None,
+            max_failures is not None,
+            max_flaky_samples is not None,
+            keep_going,
+            output_json is not None,
+            artifacts_dir is not None,
+            save_failures,
+            allow_empty,
+        )
+    ):
+        raise typer.BadParameter(
+            "restores the original adapter and run options and cannot be combined "
+            "with overrides",
+            param_hint="--resume",
+        )
+
+
+def _print_resume_hint(
+    console: Console, command: str, checkpoint_path: Path | None
+) -> None:
+    if checkpoint_path is None:
+        return
+    console.print(f"Checkpoint: {checkpoint_path}", highlight=False)
+    console.print(
+        f"Resume with `glasskit eval {command} --resume {checkpoint_path.as_posix()}`.",
+        highlight=False,
+    )
+
+
+def _reporter_checkpoint_path(reporter: Any) -> Path | None:
+    value = getattr(reporter, "checkpoint_path", None)
+    return value if isinstance(value, Path) else None
 
 
 def _print_labeled_message(

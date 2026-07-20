@@ -16,6 +16,7 @@ from glasskit.eval.models import (
     CaseWriteError,
     EvalConfigError,
     EvalDirectory,
+    SeedIncompleteError,
     SeedOptions,
 )
 from glasskit.eval.seeding import seed_eval
@@ -582,6 +583,181 @@ targets:
         {"range": [0.0, 1.0], "expect": False},
         {"range": [1.0, 2.0], "expect": True},
     ]
+
+
+def test_seed_resume_reuses_successes_before_a_fail_fast_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+sampling:
+  every_s: 0.5
+targets:
+  state:
+    samples:
+      - range: [0.0, 2.0]
+        """,
+    )
+    original = case_path.read_text(encoding="utf-8")
+    first_calls: list[float] = []
+
+    async def fail_second(sample: Any, _target: Any) -> bool:
+        first_calls.append(sample.timestamp_s)
+        if sample.timestamp_s == 0.5:
+            raise RuntimeError("provider unavailable")
+        return sample.timestamp_s >= 1.0
+
+    _use_evaluator(monkeypatch, evaluate=fail_second)
+    with pytest.raises(AdapterRuntimeError, match="provider unavailable") as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                )
+            )
+        )
+
+    assert first_calls == [0.0, 0.5]
+    assert case_path.read_text(encoding="utf-8") == original
+    checkpoint_path = raised.value.checkpoint_path
+    resumed_calls: list[float] = []
+
+    async def succeed(sample: Any, _target: Any) -> bool:
+        resumed_calls.append(sample.timestamp_s)
+        return sample.timestamp_s >= 1.0
+
+    _use_evaluator(monkeypatch, evaluate=succeed)
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+                resume_checkpoint=checkpoint_path,
+            )
+        )
+    )
+
+    assert resumed_calls == [0.5, 1.0, 1.5]
+    assert report.seeded_count == 4
+    assert [sample.expected for sample in load_eval_directory(eval_dir).samples] == [
+        False,
+        False,
+        True,
+        True,
+    ]
+
+
+def test_seed_keep_going_checkpoints_replace_without_partial_yaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: [0.0, 1.0]
+        expect: false
+        """,
+    )
+    original = case_path.read_text(encoding="utf-8")
+    first_calls: list[float] = []
+
+    async def fail_second(sample: Any, _target: Any) -> bool:
+        first_calls.append(sample.timestamp_s)
+        if sample.timestamp_s == 1.0:
+            raise RuntimeError("provider unavailable")
+        return True
+
+    _use_evaluator(monkeypatch, evaluate=fail_second)
+    with pytest.raises(
+        SeedIncompleteError, match="case YAML was not changed"
+    ) as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                    replace=True,
+                    keep_going=True,
+                )
+            )
+        )
+
+    assert first_calls == [0.0, 1.0]
+    assert case_path.read_text(encoding="utf-8") == original
+    checkpoint_path = raised.value.checkpoint_path
+    resumed_calls: list[float] = []
+
+    async def succeed(sample: Any, _target: Any) -> bool:
+        resumed_calls.append(sample.timestamp_s)
+        return True
+
+    _use_evaluator(monkeypatch, evaluate=succeed)
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+                replace=True,
+                keep_going=True,
+                resume_checkpoint=checkpoint_path,
+            )
+        )
+    )
+
+    assert resumed_calls == [1.0]
+    assert report.seeded_count == 2
+    raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
+    assert raw["targets"]["state"]["samples"] == [{"at": [0.0, 1.0], "expect": True}]
+
+
+def test_seed_resume_rejects_changed_case_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        """,
+    )
+
+    async def fail(_sample: Any, _target: Any) -> bool:
+        raise RuntimeError("provider unavailable")
+
+    _use_evaluator(monkeypatch, evaluate=fail)
+    with pytest.raises(AdapterRuntimeError) as raised:
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                )
+            )
+        )
+
+    case_path.write_text(
+        case_path.read_text(encoding="utf-8") + "\n# changed\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(EvalConfigError, match="checkpoint inputs changed"):
+        asyncio.run(
+            seed_eval(
+                SeedOptions(
+                    eval_dir=eval_dir,
+                    adapter="unused:create_evaluator",
+                    resume_checkpoint=raised.value.checkpoint_path,
+                )
+            )
+        )
 
 
 class BatchLabeler:

@@ -50,6 +50,23 @@ def test_print_run_summary_uses_target_label_with_id() -> None:
     assert "Step 1 (step_1)" in buffer.getvalue()
 
 
+def test_print_run_summary_includes_manual_resume_command() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=160)
+    checkpoint_path = Path("eval/runs/checkpoints/run-example")
+    report = replace(
+        _report(),
+        checkpoint_path=checkpoint_path,
+        resumable_error_count=1,
+    )
+
+    print_run_summary(report, console=console)
+
+    output = buffer.getvalue()
+    assert "1 adapter error can be retried" in output
+    assert f"glasskit eval run --resume {checkpoint_path}" in output
+
+
 def test_print_run_summary_includes_individual_timing_and_throughput() -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=120)

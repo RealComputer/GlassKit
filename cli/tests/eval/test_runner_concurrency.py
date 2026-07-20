@@ -226,6 +226,74 @@ def test_keep_going_records_only_the_failing_individual_sample(
     assert evaluator.closed
 
 
+def test_run_resume_retries_only_keep_going_adapter_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failing = OneErrorEvaluator()
+
+    first_report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            failing,
+            concurrency=1,
+            keep_going=True,
+        )
+    )
+
+    assert first_report.resumable_error_count == 1
+    assert first_report.checkpoint_path is not None
+    resumed = AsyncTrackingEvaluator()
+    resumed_report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            resumed,
+            concurrency=1,
+            keep_going=True,
+            resume_checkpoint=first_report.checkpoint_path,
+        )
+    )
+
+    assert resumed.completed == [1]
+    assert resumed_report.resumed
+    assert resumed_report.resumable_error_count == 0
+    assert [result.status for result in resumed_report.trials[0].results] == [
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+    ]
+
+
+def test_run_resume_reuses_results_before_a_fail_fast_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failing = OneErrorEvaluator()
+
+    with pytest.raises(AdapterRuntimeError, match="sample 1") as raised:
+        asyncio.run(
+            _run_with_evaluator(
+                monkeypatch,
+                failing,
+                concurrency=1,
+            )
+        )
+
+    checkpoint_path = raised.value.checkpoint_path
+    resumed = AsyncTrackingEvaluator()
+    report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            resumed,
+            concurrency=1,
+            resume_checkpoint=checkpoint_path,
+        )
+    )
+
+    assert failing.started == [0, 1]
+    assert resumed.completed == [1, 2, 3]
+    assert report.success
+
+
 def test_individual_evaluation_stops_queued_work_and_drains_in_flight_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -337,6 +405,7 @@ async def _run_with_evaluator(
     keep_going: bool = False,
     batch: bool = False,
     callbacks: Any = None,
+    resume_checkpoint: Path | None = None,
 ) -> Any:
     loaded = LoadedEvaluator(
         evaluate=getattr(evaluator, "evaluate", None),
@@ -354,6 +423,7 @@ async def _run_with_evaluator(
             adapter="unused:create_evaluator",
             concurrency=concurrency,
             keep_going=keep_going,
+            resume_checkpoint=resume_checkpoint,
         ),
         callbacks=callbacks,
     )
@@ -695,8 +765,10 @@ class BlockingBatchEvaluator:
 class OneErrorEvaluator:
     def __init__(self) -> None:
         self.closed = False
+        self.started: list[int] = []
 
     async def evaluate(self, sample: Any, target: Any) -> bool:
+        self.started.append(sample.sample_index)
         await asyncio.sleep(0)
         if sample.sample_index == 1:
             raise RuntimeError("provider unavailable")

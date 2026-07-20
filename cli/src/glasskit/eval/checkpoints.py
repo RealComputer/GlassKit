@@ -1,0 +1,409 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import secrets
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Literal
+
+from .models import EvalConfigError, EvalDirectory
+
+CHECKPOINT_SCHEMA_VERSION = 1
+CheckpointKind = Literal["run", "seed"]
+
+
+@dataclass(frozen=True)
+class CheckpointSnapshot:
+    path: Path
+    manifest: dict[str, Any]
+
+    @property
+    def invocation(self) -> dict[str, Any]:
+        invocation = self.manifest.get("invocation")
+        if not isinstance(invocation, dict):
+            raise EvalConfigError(
+                f"checkpoint manifest has no valid invocation: {self.path}"
+            )
+        return invocation
+
+
+class CheckpointStore:
+    def __init__(self, snapshot: CheckpointSnapshot) -> None:
+        self.path = snapshot.path
+        self.manifest = snapshot.manifest
+        self._events_path = self.path / "events.jsonl"
+        self._lock_path = self.path / "active.lock"
+        self._lock_token = secrets.token_hex(16)
+        self._acquire_lock()
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        kind: CheckpointKind,
+        eval_dir: Path,
+        invocation: dict[str, Any],
+        plan_hash: str,
+        total: int,
+    ) -> CheckpointStore:
+        checkpoint_id = _new_checkpoint_id(kind)
+        root = _checkpoint_root(eval_dir)
+        path = root / checkpoint_id
+        try:
+            path.mkdir(parents=True, mode=0o700)
+            os.chmod(path, 0o700)
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not create checkpoint directory {path}: {error}"
+            ) from error
+        now = _utc_timestamp()
+        manifest = {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
+            "id": checkpoint_id,
+            "kind": kind,
+            "status": "in_progress",
+            "eval_dir": str(eval_dir.expanduser().resolve()),
+            "created_at": now,
+            "updated_at": now,
+            "plan_hash": plan_hash,
+            "total": total,
+            "invocation": invocation,
+        }
+        _atomic_write_json(path / "manifest.json", manifest)
+        return cls(CheckpointSnapshot(path=path, manifest=manifest))
+
+    @classmethod
+    def resume(
+        cls,
+        *,
+        eval_dir: Path,
+        reference: Path,
+        kind: CheckpointKind,
+        plan_hash: str,
+    ) -> CheckpointStore:
+        snapshot = load_checkpoint(eval_dir, reference, expected_kind=kind)
+        status = snapshot.manifest.get("status")
+        if status == "complete":
+            raise EvalConfigError(f"checkpoint is already complete: {snapshot.path}")
+        if snapshot.manifest.get("plan_hash") != plan_hash:
+            raise EvalConfigError(
+                "checkpoint inputs changed; start a new operation instead of "
+                f"resuming {snapshot.path}"
+            )
+        return cls(snapshot)
+
+    def latest(self, event_type: str) -> dict[str, dict[str, Any]]:
+        latest: dict[str, dict[str, Any]] = {}
+        for event in self._read_events():
+            if event.get("type") != event_type:
+                continue
+            key = event.get("key")
+            payload = event.get("payload")
+            if not isinstance(key, str) or not isinstance(payload, dict):
+                raise EvalConfigError(
+                    f"checkpoint contains an invalid {event_type} event: {self.path}"
+                )
+            latest[key] = payload
+        return latest
+
+    def record(self, event_type: str, key: str, payload: dict[str, Any]) -> None:
+        event = {
+            "type": event_type,
+            "key": key,
+            "recorded_at": _utc_timestamp(),
+            "payload": payload,
+        }
+        try:
+            encoded = (
+                json.dumps(
+                    event,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("utf-8")
+        except (TypeError, ValueError) as error:
+            raise EvalConfigError(
+                f"checkpoint result is not JSON serializable: {error}"
+            ) from error
+        try:
+            descriptor = os.open(
+                self._events_path,
+                os.O_APPEND | os.O_CREAT | os.O_WRONLY,
+                0o600,
+            )
+            try:
+                view = memoryview(encoded)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written == 0:
+                        raise OSError("checkpoint append made no progress")
+                    view = view[written:]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not persist checkpoint result to {self.path}: {error}"
+            ) from error
+
+    def mark_complete(self) -> None:
+        self.manifest["status"] = "complete"
+        self.manifest["updated_at"] = _utc_timestamp()
+        _atomic_write_json(self.path / "manifest.json", self.manifest)
+
+    def release(self) -> None:
+        try:
+            lock = json.loads(self._lock_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if isinstance(lock, dict) and lock.get("token") == self._lock_token:
+            try:
+                self._lock_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+
+    def _acquire_lock(self) -> None:
+        payload = json.dumps(
+            {
+                "pid": os.getpid(),
+                "token": self._lock_token,
+                "started_at": _utc_timestamp(),
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+        ).encode("utf-8")
+        for attempt in range(2):
+            try:
+                descriptor = os.open(
+                    self._lock_path,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    0o600,
+                )
+            except FileExistsError as error:
+                if attempt == 0 and _checkpoint_lock_is_stale(self._lock_path):
+                    try:
+                        self._lock_path.unlink()
+                    except FileNotFoundError:
+                        pass
+                    except OSError:
+                        raise EvalConfigError(
+                            f"could not clear stale checkpoint lock: {self._lock_path}"
+                        ) from error
+                    continue
+                raise EvalConfigError(
+                    f"checkpoint is already active in another process: {self.path}"
+                ) from error
+            except OSError as error:
+                raise EvalConfigError(
+                    f"could not lock checkpoint {self.path}: {error}"
+                ) from error
+            try:
+                os.write(descriptor, payload)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            return
+        raise RuntimeError("internal error: checkpoint lock retry was exhausted")
+
+    def _read_events(self) -> list[dict[str, Any]]:
+        try:
+            raw = self._events_path.read_bytes()
+        except FileNotFoundError:
+            return []
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not read checkpoint events from {self.path}: {error}"
+            ) from error
+        lines = raw.splitlines(keepends=True)
+        events: list[dict[str, Any]] = []
+        for index, line in enumerate(lines):
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                is_truncated_tail = index == len(lines) - 1 and not line.endswith(b"\n")
+                if is_truncated_tail:
+                    break
+                raise EvalConfigError(
+                    f"checkpoint event log is corrupt at line {index + 1}: "
+                    f"{self._events_path}: {error}"
+                ) from error
+            if not isinstance(event, dict):
+                raise EvalConfigError(
+                    f"checkpoint event at line {index + 1} is not an object: "
+                    f"{self._events_path}"
+                )
+            events.append(event)
+        return events
+
+
+def load_checkpoint(
+    eval_dir: Path,
+    reference: Path,
+    *,
+    expected_kind: CheckpointKind,
+) -> CheckpointSnapshot:
+    path = _resolve_checkpoint_path(eval_dir, reference)
+    manifest_path = path / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise EvalConfigError(
+            f"could not read checkpoint manifest {manifest_path}: {error}"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise EvalConfigError(
+            f"invalid checkpoint manifest {manifest_path}: {error}"
+        ) from error
+    if not isinstance(manifest, dict):
+        raise EvalConfigError(f"checkpoint manifest must be an object: {manifest_path}")
+    if manifest.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise EvalConfigError(
+            f"unsupported checkpoint schema in {manifest_path}: "
+            f"{manifest.get('schema_version')!r}"
+        )
+    if manifest.get("kind") != expected_kind:
+        raise EvalConfigError(
+            f"checkpoint {path} is for {manifest.get('kind')!r}, not {expected_kind!r}"
+        )
+    return CheckpointSnapshot(path=path, manifest=manifest)
+
+
+def checkpoint_plan_hash(
+    eval_directory: EvalDirectory, invocation: dict[str, Any]
+) -> str:
+    cases: list[dict[str, Any]] = []
+    for case in eval_directory.cases:
+        try:
+            source = case.path.read_bytes()
+            video_stat = case.video_path.stat()
+        except OSError as error:
+            raise EvalConfigError(
+                f"could not fingerprint checkpoint input for {case.name}: {error}"
+            ) from error
+        cases.append(
+            {
+                "path": str(case.path.expanduser().resolve()),
+                "source_sha256": hashlib.sha256(source).hexdigest(),
+                "video": {
+                    "path": str(case.video_path.expanduser().resolve()),
+                    "size": video_stat.st_size,
+                    "mtime_ns": video_stat.st_mtime_ns,
+                },
+            }
+        )
+    payload = {"invocation": invocation, "cases": cases}
+    try:
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as error:
+        raise EvalConfigError(
+            f"eval options cannot be checkpointed as JSON: {error}"
+        ) from error
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def attach_checkpoint(error: BaseException, checkpoint: CheckpointStore) -> None:
+    error.__dict__["checkpoint_path"] = checkpoint.path
+
+
+def checkpoint_path_from_error(error: BaseException) -> Path | None:
+    value = getattr(error, "checkpoint_path", None)
+    return value if isinstance(value, Path) else None
+
+
+def _resolve_checkpoint_path(eval_dir: Path, reference: Path) -> Path:
+    expanded = reference.expanduser()
+    if expanded.is_absolute() or expanded.parent != Path("."):
+        return expanded.resolve()
+    direct = expanded.resolve()
+    if direct.exists():
+        return direct
+    return _checkpoint_root(eval_dir) / expanded.name
+
+
+def _checkpoint_root(eval_dir: Path) -> Path:
+    return eval_dir.expanduser().resolve() / "runs" / "checkpoints"
+
+
+def _checkpoint_lock_is_stale(path: Path) -> bool:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        try:
+            return time.time() - path.stat().st_mtime > 5.0
+        except OSError:
+            return True
+    pid = value.get("pid") if isinstance(value, dict) else None
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return False
+    return False
+
+
+def _new_checkpoint_id(kind: CheckpointKind) -> str:
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"{kind}-{timestamp}-{secrets.token_hex(4)}"
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    try:
+        encoded = json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+    except (TypeError, ValueError) as error:
+        raise EvalConfigError(
+            f"checkpoint manifest is not JSON serializable: {error}"
+        ) from error
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            0o600,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            descriptor = None
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    except OSError as error:
+        raise EvalConfigError(
+            f"could not write checkpoint manifest {path}: {error}"
+        ) from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass

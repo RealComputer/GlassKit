@@ -849,6 +849,9 @@ def create_evaluator(config):
         pytest.approx(2.5)
     ] * 4
     data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert data["checkpoint"]["path"] == str(report.checkpoint_path)
+    assert not data["checkpoint"]["resumed"]
+    assert data["checkpoint"]["resumable_adapter_errors"] == 0
     assert data["summary"]["duration_seconds"] == pytest.approx(62.25)
     assert data["summary"]["evaluation_timing_mode"] == "batch_amortized"
     assert data["summary"]["average_evaluation_seconds_per_attempt"] == pytest.approx(

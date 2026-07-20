@@ -4,10 +4,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import yaml
 
+from .checkpoints import (
+    CheckpointStore,
+    attach_checkpoint,
+    checkpoint_plan_hash,
+)
 from .compare import extract_observation_field
 from .execution import (
     EvaluationOutcome,
@@ -28,8 +33,10 @@ from .models import (
     CaseWriteError,
     EvalCase,
     EvalConfigError,
+    EvaluationTimingMode,
     SampleExpectation,
     SeededExpectation,
+    SeedIncompleteError,
     SeedOptions,
     SeedReport,
     TargetContext,
@@ -48,6 +55,8 @@ from .video import iter_sample_frames, probe_video, validate_sample_times
 
 
 class SeedCallbacks(Protocol):
+    def on_checkpoint(self, path: Path) -> None: ...
+
     def on_case_start(self, case: EvalCase, sample_count: int) -> None: ...
 
     def on_target_start(
@@ -55,6 +64,8 @@ class SeedCallbacks(Protocol):
     ) -> None: ...
 
     def on_result(self, result: SeededExpectation) -> None: ...
+
+    def on_error(self, sample: SampleExpectation, error: Exception) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -108,7 +119,7 @@ async def seed_eval(
                 f"case changed while its draft was being loaded; retry seeding: {path}"
             )
     samples_to_seed = {
-        (case.name, sample.sample_index): sample
+        _sample_key(sample): sample
         for case in eval_directory.cases
         for sample in case.samples
         if options.replace or not sample.has_expectation
@@ -118,7 +129,7 @@ async def seed_eval(
         for case in eval_directory.cases
         for sample in case.samples
     )
-    if not samples_to_seed:
+    if not samples_to_seed and options.resume_checkpoint is None:
         return SeedReport(
             eval_dir=eval_directory.path,
             case_names=[],
@@ -127,139 +138,272 @@ async def seed_eval(
             duration_s=max(0.0, perf_counter() - started_at),
         )
 
-    _validate_seed_videos(eval_directory.cases, samples_to_seed)
-    evaluator = await load_configured_evaluator(
-        options.adapter,
-        options.adapter_command,
-        AdapterConfig(
+    invocation = seed_checkpoint_invocation(options)
+    plan_hash = checkpoint_plan_hash(eval_directory, invocation)
+    checkpoint = (
+        CheckpointStore.resume(
             eval_dir=eval_directory.path,
-            config=options.adapter_config,
-            verbose=options.verbose,
-        ),
+            reference=options.resume_checkpoint,
+            kind="seed",
+            plan_hash=plan_hash,
+        )
+        if options.resume_checkpoint is not None
+        else CheckpointStore.create(
+            kind="seed",
+            eval_dir=eval_directory.path,
+            invocation=invocation,
+            plan_hash=plan_hash,
+            total=len(samples_to_seed),
+        )
     )
-    seeded: list[SeededExpectation] = []
+    if callbacks is not None and callable(
+        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
+    ):
+        on_checkpoint(checkpoint.path)
+
     try:
-        for case in eval_directory.cases:
-            case_samples = [
-                sample
-                for sample in case.samples
-                if (case.name, sample.sample_index) in samples_to_seed
-            ]
-            if not case_samples:
-                continue
-            if callbacks is not None:
-                callbacks.on_case_start(case, len(case_samples))
-            frame_cursor = FrameCursor(
-                iter_sample_frames(
-                    case.video_path,
-                    case_samples,
-                    case_name=case.name,
-                )
+        saved = checkpoint.latest("seed_result")
+        _validate_checkpoint_keys(saved, samples_to_seed, checkpoint.path)
+        successful = {
+            key: _seeded_from_checkpoint(samples_to_seed[key], payload)
+            for key, payload in saved.items()
+            if payload.get("status") == "success"
+        }
+        pending = {
+            key: sample
+            for key, sample in samples_to_seed.items()
+            if key not in successful
+        }
+        _validate_seed_videos(eval_directory.cases, pending)
+
+        if pending:
+            evaluator = await load_configured_evaluator(
+                options.adapter,
+                options.adapter_command,
+                AdapterConfig(
+                    eval_dir=eval_directory.path,
+                    config=options.adapter_config,
+                    verbose=options.verbose,
+                ),
             )
             try:
-                for target in case.targets:
-                    target_samples = [
+                for case in eval_directory.cases:
+                    case_samples = [
                         sample
-                        for sample in target.samples
-                        if (case.name, sample.sample_index) in samples_to_seed
+                        for sample in case.samples
+                        if _sample_key(sample) in pending
                     ]
-                    if not target_samples:
+                    if not case_samples:
                         continue
                     if callbacks is not None:
-                        callbacks.on_target_start(case, target.id, len(target_samples))
-                    context = TargetContext(
-                        id=target.id,
-                        index=target.index,
-                        label=target.label,
-                        config=target.config,
-                    )
-                    seeded.extend(
-                        await evaluate_samples(
-                            evaluator,
-                            frame_cursor,
-                            target_samples,
-                            context,
-                            concurrency=options.concurrency,
-                            keep_going=False,
-                            transform=lambda outcome, _frame: _seeded_expectation(
-                                outcome, callbacks=callbacks
-                            ),
+                        callbacks.on_case_start(case, len(case_samples))
+                    frame_cursor = FrameCursor(
+                        iter_sample_frames(
+                            case.video_path,
+                            case_samples,
+                            case_name=case.name,
                         )
                     )
+                    try:
+                        for target in case.targets:
+                            target_samples = [
+                                sample
+                                for sample in target.samples
+                                if _sample_key(sample) in pending
+                            ]
+                            if not target_samples:
+                                continue
+                            if callbacks is not None:
+                                callbacks.on_target_start(
+                                    case, target.id, len(target_samples)
+                                )
+                            context = TargetContext(
+                                id=target.id,
+                                index=target.index,
+                                label=target.label,
+                                config=target.config,
+                            )
+                            await evaluate_samples(
+                                evaluator,
+                                frame_cursor,
+                                target_samples,
+                                context,
+                                concurrency=options.concurrency,
+                                keep_going=options.keep_going,
+                                transform=lambda outcome, _frame: (
+                                    _checkpoint_seed_outcome(
+                                        outcome,
+                                        checkpoint=checkpoint,
+                                        keep_going=options.keep_going,
+                                        callbacks=callbacks,
+                                    )
+                                ),
+                            )
+                    finally:
+                        frame_cursor.close()
             finally:
-                frame_cursor.close()
-    finally:
-        await close_evaluator(evaluator)
+                await close_evaluator(evaluator)
 
-    seeded_by_case_index = {
-        (result.sample.case_name, result.sample.sample_index): result
-        for result in seeded
-    }
-    candidate_sources: dict[Path, str] = {}
-    updated_case_names: list[str] = []
-    for case in eval_directory.cases:
-        case_results = {
-            sample_index: result
-            for (case_name, sample_index), result in seeded_by_case_index.items()
-            if case_name == case.name
+        saved = checkpoint.latest("seed_result")
+        successful = {
+            key: _seeded_from_checkpoint(samples_to_seed[key], payload)
+            for key, payload in saved.items()
+            if key in samples_to_seed and payload.get("status") == "success"
         }
-        if not case_results:
-            continue
-        candidate_sources[case.path] = _build_seeded_case_source(
-            case,
-            source=sources[case.path],
-            seeded=case_results,
+        incomplete_count = len(samples_to_seed) - len(successful)
+        if incomplete_count:
+            expectation_label = (
+                "expectation" if incomplete_count == 1 else "expectations"
+            )
+            raise SeedIncompleteError(
+                f"{incomplete_count} {expectation_label} could not be seeded; "
+                "the case YAML was not changed"
+            )
+
+        seeded = [
+            successful[_sample_key(sample)]
+            for case in eval_directory.cases
+            for sample in case.samples
+            if _sample_key(sample) in samples_to_seed
+        ]
+        seeded_by_case_index = {
+            (result.sample.case_name, result.sample.sample_index): result
+            for result in seeded
+        }
+        candidate_sources: dict[Path, str] = {}
+        updated_case_names: list[str] = []
+        for case in eval_directory.cases:
+            case_results = {
+                sample_index: result
+                for (case_name, sample_index), result in seeded_by_case_index.items()
+                if case_name == case.name
+            }
+            if not case_results:
+                continue
+            candidate_sources[case.path] = _build_seeded_case_source(
+                case,
+                source=sources[case.path],
+                seeded=case_results,
+            )
+            updated_case_names.append(case.name)
+
+        for path, source in sources.items():
+            if path not in candidate_sources:
+                continue
+            if _read_text(path) != source.text:
+                raise EvalConfigError(
+                    f"case changed while expectations were being seeded; refusing to "
+                    f"overwrite: {path}"
+                )
+
+        sync_warnings: list[Path] = []
+        for path, candidate_source in candidate_sources.items():
+            if _read_text(path) != sources[path].text:
+                raise EvalConfigError(
+                    f"case changed while expectations were being seeded; refusing to "
+                    f"overwrite: {path}"
+                )
+            try:
+                directory_sync_failed = atomic_replace_text(path, candidate_source)
+            except OSError as error:
+                raise CaseWriteError(
+                    f"could not write seeded case file {path}: {error}"
+                ) from error
+            if directory_sync_failed:
+                sync_warnings.append(path)
+
+        checkpoint.mark_complete()
+        return SeedReport(
+            eval_dir=eval_directory.path,
+            case_names=updated_case_names,
+            seeded=seeded,
+            preserved_count=preserved_count,
+            duration_s=max(0.0, perf_counter() - started_at),
+            directory_sync_warnings=tuple(sync_warnings),
         )
-        updated_case_names.append(case.name)
+    except BaseException as error:
+        attach_checkpoint(error, checkpoint)
+        raise
+    finally:
+        checkpoint.release()
 
-    for path, source in sources.items():
-        if path not in candidate_sources:
-            continue
-        if _read_text(path) != source.text:
-            raise EvalConfigError(
-                f"case changed while expectations were being seeded; refusing to "
-                f"overwrite: {path}"
-            )
 
-    sync_warnings: list[Path] = []
-    for path, candidate_source in candidate_sources.items():
-        if _read_text(path) != sources[path].text:
-            raise EvalConfigError(
-                f"case changed while expectations were being seeded; refusing to "
-                f"overwrite: {path}"
-            )
-        try:
-            directory_sync_failed = atomic_replace_text(path, candidate_source)
-        except OSError as error:
-            raise CaseWriteError(
-                f"could not write seeded case file {path}: {error}"
-            ) from error
-        if directory_sync_failed:
-            sync_warnings.append(path)
+def seed_checkpoint_invocation(options: SeedOptions) -> dict[str, Any]:
+    return {
+        "eval_dir": str(options.eval_dir.expanduser().resolve()),
+        "adapter": options.adapter,
+        "adapter_command": options.adapter_command,
+        "case_filter": options.case_filter,
+        "target_filter": (
+            list(options.target_filter)
+            if isinstance(options.target_filter, tuple)
+            else options.target_filter
+        ),
+        "adapter_config": dict(options.adapter_config),
+        "concurrency": options.concurrency,
+        "replace": options.replace,
+        "keep_going": options.keep_going,
+        "verbose": options.verbose,
+    }
 
-    return SeedReport(
-        eval_dir=eval_directory.path,
-        case_names=updated_case_names,
-        seeded=seeded,
-        preserved_count=preserved_count,
-        duration_s=max(0.0, perf_counter() - started_at),
-        directory_sync_warnings=tuple(sync_warnings),
+
+def seed_options_from_invocation(
+    invocation: Mapping[str, Any],
+    *,
+    checkpoint_path: Path,
+    verbose: bool,
+) -> SeedOptions:
+    target_filter = invocation.get("target_filter")
+    if isinstance(target_filter, list):
+        target_filter = tuple(str(value) for value in target_filter)
+    adapter_config = invocation.get("adapter_config", {})
+    if not isinstance(adapter_config, Mapping):
+        raise EvalConfigError("seed checkpoint adapter_config must be an object")
+    return SeedOptions(
+        eval_dir=Path(str(invocation.get("eval_dir", "eval"))),
+        adapter=_optional_string(invocation.get("adapter")),
+        adapter_command=_optional_string(invocation.get("adapter_command")),
+        case_filter=_optional_string(invocation.get("case_filter")),
+        target_filter=target_filter,
+        adapter_config=dict(adapter_config),
+        concurrency=int(invocation.get("concurrency", 1)),
+        replace=invocation.get("replace") is True,
+        keep_going=invocation.get("keep_going") is True,
+        verbose=verbose or invocation.get("verbose") is True,
+        resume_checkpoint=checkpoint_path,
     )
 
 
-def _seeded_expectation(
-    outcome: EvaluationOutcome, *, callbacks: SeedCallbacks | None
-) -> SeededExpectation:
+def _checkpoint_seed_outcome(
+    outcome: EvaluationOutcome,
+    *,
+    checkpoint: CheckpointStore,
+    keep_going: bool,
+    callbacks: SeedCallbacks | None,
+) -> SeededExpectation | bool:
     if outcome.runtime_error is not None:
-        raise outcome.runtime_error
+        return _checkpoint_seed_error(
+            outcome.sample,
+            outcome.runtime_error,
+            checkpoint=checkpoint,
+            keep_going=keep_going,
+            callbacks=callbacks,
+        )
     expected, field_error = extract_observation_field(
         outcome.observation, outcome.sample.field
     )
     if field_error is not None:
         sample = outcome.sample
-        raise AdapterRuntimeError(
+        error = AdapterRuntimeError(
             f"cannot seed {sample.case_name}/{sample.target_id} sample "
             f"{sample.sample_index} at {sample.timestamp_s:g}s: {field_error}"
+        )
+        return _checkpoint_seed_error(
+            sample,
+            error,
+            checkpoint=checkpoint,
+            keep_going=keep_going,
+            callbacks=callbacks,
         )
     result = SeededExpectation(
         sample=outcome.sample,
@@ -267,21 +411,98 @@ def _seeded_expectation(
         evaluation_duration_s=outcome.duration_s,
         evaluation_timing_mode=outcome.timing_mode,
     )
+    checkpoint.record(
+        "seed_result",
+        _sample_key(outcome.sample),
+        {
+            "status": "success",
+            "expected": expected,
+            "evaluation_duration_seconds": outcome.duration_s,
+            "evaluation_timing_mode": outcome.timing_mode,
+        },
+    )
     if callbacks is not None:
         callbacks.on_result(result)
     return result
 
 
+def _checkpoint_seed_error(
+    sample: SampleExpectation,
+    error: Exception,
+    *,
+    checkpoint: CheckpointStore,
+    keep_going: bool,
+    callbacks: SeedCallbacks | None,
+) -> bool:
+    if not keep_going:
+        raise error
+    checkpoint.record(
+        "seed_result",
+        _sample_key(sample),
+        {"status": "error", "message": str(error)},
+    )
+    if callbacks is not None and callable(
+        on_error := getattr(callbacks, "on_error", None)
+    ):
+        on_error(sample, error)
+    return False
+
+
+def _seeded_from_checkpoint(
+    sample: SampleExpectation, payload: Mapping[str, Any]
+) -> SeededExpectation:
+    duration = payload.get("evaluation_duration_seconds")
+    timing_mode = payload.get("evaluation_timing_mode")
+    if not isinstance(duration, (int, float)) or isinstance(duration, bool):
+        raise EvalConfigError(
+            "checkpoint contains an invalid seed evaluation duration for "
+            f"{sample.case_name}/{sample.target_id} sample {sample.sample_index}"
+        )
+    if timing_mode not in {"individual", "batch_amortized"}:
+        raise EvalConfigError(
+            "checkpoint contains an invalid seed timing mode for "
+            f"{sample.case_name}/{sample.target_id} sample {sample.sample_index}"
+        )
+    return SeededExpectation(
+        sample=sample,
+        expected=payload.get("expected"),
+        evaluation_duration_s=float(duration),
+        evaluation_timing_mode=cast(EvaluationTimingMode, timing_mode),
+    )
+
+
+def _validate_checkpoint_keys(
+    saved: Mapping[str, Any],
+    selected: Mapping[str, SampleExpectation],
+    checkpoint_path: Path,
+) -> None:
+    unexpected = sorted(set(saved) - set(selected))
+    if unexpected:
+        raise EvalConfigError(
+            f"checkpoint contains results outside the selected seed plan: "
+            f"{checkpoint_path}"
+        )
+
+
+def _sample_key(sample: SampleExpectation) -> str:
+    return (
+        f"{sample.case_name}\u0000{sample.target_id}\u0000"
+        f"{sample.sample_index}\u0000{float(sample.timestamp_s).hex()}"
+    )
+
+
+def _optional_string(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def _validate_seed_videos(
     cases: list[EvalCase],
-    samples_to_seed: Mapping[tuple[str, int], SampleExpectation],
+    samples_to_seed: Mapping[str, SampleExpectation],
 ) -> None:
     issues: list[str] = []
     for case in cases:
         selected = [
-            sample
-            for sample in case.samples
-            if (case.name, sample.sample_index) in samples_to_seed
+            sample for sample in case.samples if _sample_key(sample) in samples_to_seed
         ]
         if not selected:
             continue

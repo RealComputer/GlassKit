@@ -29,6 +29,8 @@ SUPPORTED_COMPARE_MODES = frozenset(
 class EvalError(Exception):
     """Base exception for user-facing eval failures."""
 
+    checkpoint_path: Path | None = None
+
 
 class EvalConfigError(EvalError):
     """Raised when an eval directory, case, or CLI option is invalid."""
@@ -44,6 +46,10 @@ class AdapterRuntimeError(EvalError):
 
 class CaseWriteError(EvalError):
     """Raised when an eval case cannot be persisted."""
+
+
+class SeedIncompleteError(EvalError):
+    """Raised when keep-going seeding finishes with unseeded expectations."""
 
 
 @dataclass(frozen=True)
@@ -383,6 +389,9 @@ class EvalRunReport:
     stability: list[SampleStability]
     gate_results: list[GateResult]
     duration_s: float
+    checkpoint_path: Path | None = None
+    resumed: bool = False
+    resumable_error_count: int = 0
 
     @property
     def repeat_count(self) -> int:
@@ -517,6 +526,7 @@ class RunOptions:
     artifacts_dir: Path | None = None
     save_failures: bool = False
     allow_empty: bool = False
+    resume_checkpoint: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -529,4 +539,6 @@ class SeedOptions:
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
     concurrency: int = 1
     replace: bool = False
+    keep_going: bool = False
     verbose: bool = False
+    resume_checkpoint: Path | None = None

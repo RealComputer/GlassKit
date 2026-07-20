@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
+from .checkpoints import CheckpointStore, attach_checkpoint, checkpoint_plan_hash
 from .compare import compare_observation
 from .execution import (
     EvaluationOutcome,
@@ -22,8 +24,10 @@ from .models import (
     EvalDirectory,
     EvalRunReport,
     EvalTrialReport,
+    EvaluationTimingMode,
     FrameSample,
     GateResult,
+    ResultStatus,
     RunOptions,
     SampleExpectation,
     SampleResult,
@@ -37,6 +41,8 @@ from .video import iter_sample_frames, probe_video, validate_sample_times
 
 
 class RunCallbacks(Protocol):
+    def on_checkpoint(self, path: Path) -> None: ...
+
     def on_trial_start(self, trial_index: int, trial_count: int) -> None: ...
 
     def on_case_start(self, case: EvalCase, sample_count: int) -> None: ...
@@ -127,31 +133,80 @@ async def run_eval(
     if error_messages:
         raise EvalConfigError("; ".join(error_messages))
 
-    trials: list[EvalTrialReport] = []
-    for trial_index in range(1, options.repeat + 1):
-        if callbacks is not None:
-            callbacks.on_trial_start(trial_index, options.repeat)
-        trials.append(
-            await _run_trial(
-                eval_directory,
-                options=options,
-                trial_index=trial_index,
-                callbacks=callbacks,
-            )
+    invocation = run_checkpoint_invocation(options)
+    plan_hash = checkpoint_plan_hash(eval_directory, invocation)
+    planned_samples = {
+        _run_result_key(trial_index, sample): sample
+        for trial_index in range(1, options.repeat + 1)
+        for case in eval_directory.cases
+        for sample in case.samples
+    }
+    checkpoint = (
+        CheckpointStore.resume(
+            eval_dir=eval_directory.path,
+            reference=options.resume_checkpoint,
+            kind="run",
+            plan_hash=plan_hash,
         )
-
-    stability = _summarize_stability(trials)
-    report = EvalRunReport(
-        eval_dir=eval_directory.path,
-        case_names=[case.name for case in eval_directory.cases],
-        trials=trials,
-        stability=stability,
-        gate_results=_apply_stability_gates(stability, options),
-        duration_s=max(0.0, perf_counter() - started_at),
+        if options.resume_checkpoint is not None
+        else CheckpointStore.create(
+            kind="run",
+            eval_dir=eval_directory.path,
+            invocation=invocation,
+            plan_hash=plan_hash,
+            total=len(planned_samples),
+        )
     )
-    if options.output_json is not None:
-        write_json_report(report, options.output_json)
-    return report
+    if callbacks is not None and callable(
+        on_checkpoint := getattr(callbacks, "on_checkpoint", None)
+    ):
+        on_checkpoint(checkpoint.path)
+
+    try:
+        saved_results = checkpoint.latest("run_result")
+        _validate_run_checkpoint_keys(saved_results, planned_samples, checkpoint.path)
+        trials: list[EvalTrialReport] = []
+        for trial_index in range(1, options.repeat + 1):
+            if callbacks is not None:
+                callbacks.on_trial_start(trial_index, options.repeat)
+            trials.append(
+                await _run_trial(
+                    eval_directory,
+                    options=options,
+                    trial_index=trial_index,
+                    callbacks=callbacks,
+                    checkpoint=checkpoint,
+                    saved_results=saved_results,
+                )
+            )
+
+        stability = _summarize_stability(trials)
+        resumable_error_count = sum(
+            _is_resumable_adapter_error(result)
+            for trial in trials
+            for result in trial.results
+        )
+        report = EvalRunReport(
+            eval_dir=eval_directory.path,
+            case_names=[case.name for case in eval_directory.cases],
+            trials=trials,
+            stability=stability,
+            gate_results=_apply_stability_gates(stability, options),
+            duration_s=max(0.0, perf_counter() - started_at),
+            checkpoint_path=checkpoint.path,
+            resumed=options.resume_checkpoint is not None,
+            resumable_error_count=resumable_error_count,
+        )
+        if resumable_error_count == 0:
+            checkpoint.mark_complete()
+        if options.output_json is not None:
+            write_json_report(report, options.output_json)
+        return report
+    except BaseException as error:
+        attach_checkpoint(error, checkpoint)
+        raise
+    finally:
+        checkpoint.release()
 
 
 async def _run_trial(
@@ -160,30 +215,52 @@ async def _run_trial(
     options: RunOptions,
     trial_index: int,
     callbacks: RunCallbacks | None,
+    checkpoint: CheckpointStore,
+    saved_results: dict[str, dict[str, Any]],
 ) -> EvalTrialReport:
     started_at = perf_counter()
     if options.adapter is None and options.adapter_command is None:
         raise RuntimeError("internal error: trial started without an adapter")
-    evaluator = await load_configured_evaluator(
-        options.adapter,
-        options.adapter_command,
-        AdapterConfig(
-            eval_dir=eval_directory.path,
-            config=options.adapter_config,
-            artifacts_dir=options.artifacts_dir,
-            verbose=options.verbose,
-        ),
+    pending_evaluations = [
+        sample
+        for case in eval_directory.cases
+        for sample in case.samples
+        if sample.ignore is None
+        and not _checkpoint_result_is_complete(
+            saved_results.get(_run_result_key(trial_index, sample))
+        )
+    ]
+    evaluator = (
+        await load_configured_evaluator(
+            options.adapter,
+            options.adapter_command,
+            AdapterConfig(
+                eval_dir=eval_directory.path,
+                config=options.adapter_config,
+                artifacts_dir=options.artifacts_dir,
+                verbose=options.verbose,
+            ),
+        )
+        if pending_evaluations
+        else None
     )
 
     results: list[SampleResult] = []
     try:
         for case in eval_directory.cases:
             case_samples = case.samples
-            evaluated_case_samples = [
-                sample for sample in case_samples if sample.ignore is None
+            pending_case_samples = [
+                sample
+                for sample in case_samples
+                if not _checkpoint_result_is_complete(
+                    saved_results.get(_run_result_key(trial_index, sample))
+                )
             ]
-            if callbacks is not None:
-                callbacks.on_case_start(case, len(case_samples))
+            evaluated_case_samples = [
+                sample for sample in pending_case_samples if sample.ignore is None
+            ]
+            if callbacks is not None and pending_case_samples:
+                callbacks.on_case_start(case, len(pending_case_samples))
             frame_cursor = FrameCursor(
                 iter_sample_frames(
                     case.video_path,
@@ -196,8 +273,17 @@ async def _run_trial(
                     target_samples = target.samples
                     if not target_samples:
                         continue
-                    if callbacks is not None:
-                        callbacks.on_target_start(case, target.id, len(target_samples))
+                    pending_target_samples = [
+                        sample
+                        for sample in target_samples
+                        if not _checkpoint_result_is_complete(
+                            saved_results.get(_run_result_key(trial_index, sample))
+                        )
+                    ]
+                    if callbacks is not None and pending_target_samples:
+                        callbacks.on_target_start(
+                            case, target.id, len(pending_target_samples)
+                        )
                     context = TargetContext(
                         id=target.id,
                         index=target.index,
@@ -205,33 +291,54 @@ async def _run_trial(
                         config=target.config,
                     )
                     evaluated_target_samples = [
-                        sample for sample in target_samples if sample.ignore is None
+                        sample
+                        for sample in pending_target_samples
+                        if sample.ignore is None
                     ]
                     evaluated_results = {
                         result.sample_index: result
-                        for result in await evaluate_samples(
-                            evaluator,
-                            frame_cursor,
-                            evaluated_target_samples,
-                            context,
-                            concurrency=options.concurrency,
-                            keep_going=options.keep_going,
-                            transform=lambda evaluation, frame: _report_result(
-                                _result_for_frame(
-                                    evaluation,
-                                    frame,
-                                    options=options,
-                                    eval_dir=eval_directory.path,
-                                    trial_index=trial_index,
+                        for result in (
+                            await evaluate_samples(
+                                evaluator,
+                                frame_cursor,
+                                evaluated_target_samples,
+                                context,
+                                concurrency=options.concurrency,
+                                keep_going=options.keep_going,
+                                transform=lambda evaluation, frame: (
+                                    _checkpoint_run_result(
+                                        _result_for_frame(
+                                            evaluation,
+                                            frame,
+                                            options=options,
+                                            eval_dir=eval_directory.path,
+                                            trial_index=trial_index,
+                                        ),
+                                        trial_index=trial_index,
+                                        checkpoint=checkpoint,
+                                        saved_results=saved_results,
+                                        callbacks=callbacks,
+                                    )
                                 ),
-                                callbacks=callbacks,
-                            ),
+                            )
+                            if evaluated_target_samples and evaluator is not None
+                            else []
                         )
                     }
                     for sample in target_samples:
-                        if sample.ignore is not None:
-                            result = _report_result(
-                                _ignored_result(sample), callbacks=callbacks
+                        key = _run_result_key(trial_index, sample)
+                        if result_payload := saved_results.get(key):
+                            if _checkpoint_result_is_complete(result_payload):
+                                result = _result_from_checkpoint(sample, result_payload)
+                            else:
+                                result = evaluated_results[sample.sample_index]
+                        elif sample.ignore is not None:
+                            result = _checkpoint_run_result(
+                                _ignored_result(sample),
+                                trial_index=trial_index,
+                                checkpoint=checkpoint,
+                                saved_results=saved_results,
+                                callbacks=callbacks,
                             )
                         else:
                             result = evaluated_results[sample.sample_index]
@@ -239,7 +346,8 @@ async def _run_trial(
             finally:
                 frame_cursor.close()
     finally:
-        await close_evaluator(evaluator)
+        if evaluator is not None:
+            await close_evaluator(evaluator)
 
     gate_results = _apply_quality_gates(eval_directory, results, options)
     return EvalTrialReport(
@@ -248,6 +356,202 @@ async def _run_trial(
         gate_results=gate_results,
         duration_s=max(0.0, perf_counter() - started_at),
     )
+
+
+def run_checkpoint_invocation(options: RunOptions) -> dict[str, Any]:
+    return {
+        "eval_dir": str(options.eval_dir.expanduser().resolve()),
+        "adapter": options.adapter,
+        "adapter_command": options.adapter_command,
+        "case_filter": options.case_filter,
+        "target_filter": (
+            list(options.target_filter)
+            if isinstance(options.target_filter, tuple)
+            else options.target_filter
+        ),
+        "from_time_s": options.from_time_s,
+        "until_time_s": options.until_time_s,
+        "adapter_config": dict(options.adapter_config),
+        "concurrency": options.concurrency,
+        "repeat": options.repeat,
+        "min_pass_rate": options.min_pass_rate,
+        "min_target_pass_rate": options.min_target_pass_rate,
+        "max_failures": options.max_failures,
+        "max_flaky_samples": options.max_flaky_samples,
+        "keep_going": options.keep_going,
+        "verbose": options.verbose,
+        "output_json": str(options.output_json) if options.output_json else None,
+        "artifacts_dir": (
+            str(options.artifacts_dir) if options.artifacts_dir else None
+        ),
+        "save_failures": options.save_failures,
+        "allow_empty": options.allow_empty,
+    }
+
+
+def run_options_from_invocation(
+    invocation: Mapping[str, Any],
+    *,
+    checkpoint_path: Path,
+    verbose: bool,
+) -> RunOptions:
+    target_filter = invocation.get("target_filter")
+    if isinstance(target_filter, list):
+        target_filter = tuple(str(value) for value in target_filter)
+    adapter_config = invocation.get("adapter_config", {})
+    if not isinstance(adapter_config, Mapping):
+        raise EvalConfigError("run checkpoint adapter_config must be an object")
+    return RunOptions(
+        eval_dir=Path(str(invocation.get("eval_dir", "eval"))),
+        adapter=_optional_checkpoint_string(invocation.get("adapter")),
+        adapter_command=_optional_checkpoint_string(invocation.get("adapter_command")),
+        case_filter=_optional_checkpoint_string(invocation.get("case_filter")),
+        target_filter=target_filter,
+        from_time_s=_optional_number(invocation.get("from_time_s")),
+        until_time_s=_optional_number(invocation.get("until_time_s")),
+        adapter_config=dict(adapter_config),
+        concurrency=int(invocation.get("concurrency", 1)),
+        repeat=int(invocation.get("repeat", 1)),
+        min_pass_rate=_optional_number(invocation.get("min_pass_rate")),
+        min_target_pass_rate=_optional_number(invocation.get("min_target_pass_rate")),
+        max_failures=_optional_integer(invocation.get("max_failures")),
+        max_flaky_samples=_optional_integer(invocation.get("max_flaky_samples")),
+        keep_going=invocation.get("keep_going") is True,
+        verbose=verbose or invocation.get("verbose") is True,
+        output_json=_optional_checkpoint_path(invocation.get("output_json")),
+        artifacts_dir=_optional_checkpoint_path(invocation.get("artifacts_dir")),
+        save_failures=invocation.get("save_failures") is True,
+        allow_empty=invocation.get("allow_empty") is True,
+        resume_checkpoint=checkpoint_path,
+    )
+
+
+def _checkpoint_run_result(
+    result: SampleResult,
+    *,
+    trial_index: int,
+    checkpoint: CheckpointStore,
+    saved_results: dict[str, dict[str, Any]],
+    callbacks: RunCallbacks | None,
+) -> SampleResult:
+    key = _run_result_key_for_result(trial_index, result)
+    payload = _result_to_json(result)
+    checkpoint.record("run_result", key, payload)
+    saved_results[key] = payload
+    return _report_result(result, callbacks=callbacks)
+
+
+def _checkpoint_result_is_complete(payload: Mapping[str, Any] | None) -> bool:
+    if payload is None:
+        return False
+    return not (
+        payload.get("status") == "error"
+        and isinstance(payload.get("reason"), str)
+        and payload["reason"].startswith("adapter_error:")
+    )
+
+
+def _is_resumable_adapter_error(result: SampleResult) -> bool:
+    return result.status == "error" and result.reason.startswith("adapter_error:")
+
+
+def _result_from_checkpoint(
+    sample: SampleExpectation, payload: Mapping[str, Any]
+) -> SampleResult:
+    identity = (
+        payload.get("case"),
+        payload.get("target"),
+        payload.get("sample_index"),
+        payload.get("timestamp_s"),
+    )
+    expected_identity = (
+        sample.case_name,
+        sample.target_id,
+        sample.sample_index,
+        sample.timestamp_s,
+    )
+    if identity != expected_identity:
+        raise EvalConfigError(
+            "checkpoint result identity does not match the current sample plan for "
+            f"{sample.case_name}/{sample.target_id} sample {sample.sample_index}"
+        )
+    status = payload.get("status")
+    if status not in {"passed", "failed", "error", "ignored"}:
+        raise EvalConfigError(
+            f"checkpoint contains an invalid result status for {sample.case_name}/"
+            f"{sample.target_id} sample {sample.sample_index}"
+        )
+    duration = payload.get("evaluation_duration_seconds")
+    if duration is not None and (
+        not isinstance(duration, (int, float)) or isinstance(duration, bool)
+    ):
+        raise EvalConfigError("checkpoint contains an invalid evaluation duration")
+    timing_mode = payload.get("evaluation_timing_mode")
+    if timing_mode not in {None, "individual", "batch_amortized"}:
+        raise EvalConfigError("checkpoint contains an invalid evaluation timing mode")
+    return SampleResult(
+        case_name=sample.case_name,
+        target_id=sample.target_id,
+        target_label=sample.target_label,
+        sample_index=sample.sample_index,
+        timestamp_s=sample.timestamp_s,
+        status=cast(ResultStatus, status),
+        expected=sample.expected,
+        observed=payload.get("observed"),
+        observed_value=payload.get("observed_value"),
+        compare_mode=sample.compare.mode,
+        field=sample.field,
+        reason=str(payload.get("reason", "")),
+        source=sample.source,
+        evaluation_duration_s=float(duration) if duration is not None else None,
+        evaluation_timing_mode=cast(EvaluationTimingMode | None, timing_mode),
+        artifact_image=_optional_checkpoint_string(payload.get("artifact_image")),
+        artifact_json=_optional_checkpoint_string(payload.get("artifact_json")),
+    )
+
+
+def _validate_run_checkpoint_keys(
+    saved: Mapping[str, Any],
+    planned: Mapping[str, SampleExpectation],
+    checkpoint_path: Path,
+) -> None:
+    if set(saved) - set(planned):
+        raise EvalConfigError(
+            f"checkpoint contains results outside the selected run plan: "
+            f"{checkpoint_path}"
+        )
+
+
+def _run_result_key(trial_index: int, sample: SampleExpectation) -> str:
+    return (
+        f"{trial_index}\u0000{sample.case_name}\u0000{sample.target_id}\u0000"
+        f"{sample.sample_index}\u0000{float(sample.timestamp_s).hex()}"
+    )
+
+
+def _run_result_key_for_result(trial_index: int, result: SampleResult) -> str:
+    return (
+        f"{trial_index}\u0000{result.case_name}\u0000{result.target_id}\u0000"
+        f"{result.sample_index}\u0000{float(result.timestamp_s).hex()}"
+    )
+
+
+def _optional_checkpoint_string(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _optional_checkpoint_path(value: Any) -> Path | None:
+    return Path(value) if isinstance(value, str) else None
+
+
+def _optional_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def _optional_integer(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _ignored_result(sample: SampleExpectation) -> SampleResult:
@@ -711,6 +1015,15 @@ def _report_to_json(report: EvalRunReport) -> dict[str, Any]:
         "cases": report.case_names,
         "repeat_count": report.repeat_count,
         "success": report.success,
+        "checkpoint": (
+            {
+                "path": str(report.checkpoint_path),
+                "resumed": report.resumed,
+                "resumable_adapter_errors": report.resumable_error_count,
+            }
+            if report.checkpoint_path is not None
+            else None
+        ),
         "summary": {
             "trials": report.repeat_count,
             "successful_trials": report.successful_trial_count,

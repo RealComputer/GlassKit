@@ -15,6 +15,7 @@ from glasskit.eval.models import (
     AdapterRuntimeError,
     CaseWriteError,
     RunOptions,
+    SeedIncompleteError,
     SeedOptions,
     SeedReport,
 )
@@ -310,6 +311,27 @@ def test_eval_seed_reports_case_write_failures_as_user_errors(
     output = Text.from_ansi(result.output).plain
     assert "Could not seed expectations" in output
     assert "eval/cases/case.yaml" in output
+
+
+def test_eval_seed_incomplete_prints_manual_resume_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint_path = tmp_path / "seed-checkpoint"
+
+    async def fake_seed_eval(options: object, callbacks: object) -> SeedReport:
+        error = SeedIncompleteError("1 expectation could not be seeded")
+        error.checkpoint_path = checkpoint_path
+        raise error
+
+    monkeypatch.setattr("glasskit.cli.seed_eval", fake_seed_eval)
+
+    result = CliRunner().invoke(app, ["eval", "seed", "--keep-going"])
+
+    assert result.exit_code == 1
+    output = Text.from_ansi(result.output).plain
+    assert "Seed incomplete" in output
+    assert "glasskit eval seed --resume" in output
+    assert checkpoint_path.name in output
 
 
 @pytest.mark.parametrize(
