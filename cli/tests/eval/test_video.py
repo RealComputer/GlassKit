@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 from PIL import Image
@@ -49,6 +50,13 @@ def test_probe_video_reads_committed_portrait_fixture_dimensions() -> None:
     assert metadata.height == 128
 
 
+def test_probe_video_applies_display_rotation_to_dimensions() -> None:
+    metadata = probe_video(FIXTURES / "videos" / "rotated-quadrants-96x64.mp4")
+
+    assert metadata.width == 64
+    assert metadata.height == 96
+
+
 def test_decode_sample_frames_uses_committed_fixture() -> None:
     video_path = FIXTURES / "videos" / "two-state-64x64.mp4"
     samples = [
@@ -60,6 +68,23 @@ def test_decode_sample_frames_uses_committed_fixture() -> None:
 
     assert decoded[0].image.size == (64, 64)
     assert decoded[1].image.size == (64, 64)
+
+
+def test_decode_sample_frames_applies_display_rotation_to_pixels() -> None:
+    video_path = FIXTURES / "videos" / "rotated-quadrants-96x64.mp4"
+
+    decoded = decode_sample_frames(
+        video_path,
+        [_sample(timestamp_s=0.0, sample_index=0, video_path=video_path)],
+        case_name="case",
+    )
+
+    image = decoded[0].image
+    assert image.size == (64, 96)
+    _assert_color(_rgb_pixel(image, (16, 24)), "green")
+    _assert_color(_rgb_pixel(image, (48, 24)), "yellow")
+    _assert_color(_rgb_pixel(image, (16, 72)), "red")
+    _assert_color(_rgb_pixel(image, (48, 72)), "blue")
 
 
 def test_decode_sample_frames_stops_after_final_requested_frame(
@@ -157,6 +182,23 @@ def _sample(
     )
 
 
+def _assert_color(pixel: tuple[int, int, int], expected: str) -> None:
+    red, green, blue = pixel
+    if expected == "red":
+        assert red > 180 and green < 80 and blue < 80
+    elif expected == "green":
+        assert red < 80 and green > 180 and blue < 80
+    elif expected == "blue":
+        assert red < 80 and green < 80 and blue > 180
+    else:
+        assert expected == "yellow"
+        assert red > 180 and green > 180 and blue < 80
+
+
+def _rgb_pixel(image: Image.Image, position: tuple[int, int]) -> tuple[int, int, int]:
+    return cast(tuple[int, int, int], image.getpixel(position))
+
+
 class _CountingContainer:
     def __init__(self, *, frame_count: int) -> None:
         self.frame_count = frame_count
@@ -186,6 +228,7 @@ class _FakeStream:
 class _FakeFrame:
     pts = None
     time_base = None
+    rotation = 0
 
     def __init__(self, *, timestamp_s: float) -> None:
         self.time = timestamp_s

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from math import ceil, cos, radians, sin
 from pathlib import Path
 from typing import Any
 
 import av
 from av import VideoFrame
 from av.error import FFmpegError
+from PIL import Image
 
 from .models import EvalConfigError, FrameSample, SampleExpectation, VideoMetadata
 
@@ -19,6 +21,13 @@ def probe_video(video_path: Path) -> VideoMetadata:
             width = int(stream.width or 0)
             height = int(stream.height or 0)
             frame_count = int(stream.frames) if stream.frames else None
+            first_frame = next(container.decode(stream), None)
+            if first_frame is not None:
+                width, height = _display_dimensions(
+                    width,
+                    height,
+                    _display_rotation(first_frame),
+                )
     except FFmpegError as error:
         raise EvalConfigError(f"could not open video {video_path}: {error}") from error
     if duration_s <= 0:
@@ -126,13 +135,39 @@ def _frame_sample(
 ) -> FrameSample:
     frame, _frame_time, frame_index = chosen
     return FrameSample(
-        image=frame.to_image().convert("RGB"),
+        image=_display_image(frame),
         timestamp_s=sample.timestamp_s,
         frame_index=frame_index,
         sample_index=sample.sample_index,
         video_path=str(video_path),
         case_name=case_name,
     )
+
+
+def _display_image(frame: VideoFrame) -> Image.Image:
+    image = frame.to_image().convert("RGB")
+    rotation = _display_rotation(frame)
+    if rotation == 0:
+        return image
+    displayed = image.rotate(rotation, expand=True)
+    image.close()
+    return displayed
+
+
+def _display_rotation(frame: VideoFrame) -> int:
+    return int(frame.rotation or 0) % 360
+
+
+def _display_dimensions(width: int, height: int, rotation: int) -> tuple[int, int]:
+    if rotation in {0, 180}:
+        return width, height
+    if rotation in {90, 270}:
+        return height, width
+
+    angle = radians(rotation)
+    displayed_width = ceil(abs(width * cos(angle)) + abs(height * sin(angle)))
+    displayed_height = ceil(abs(width * sin(angle)) + abs(height * cos(angle)))
+    return displayed_width, displayed_height
 
 
 def _nearest_frame(

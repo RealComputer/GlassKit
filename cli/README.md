@@ -487,14 +487,14 @@ Sample fields passed to the evaluator:
 
 | Field | Description |
 | --- | --- |
-| `image` | Decoded RGB `PIL.Image.Image` for the nearest decoded frame at the requested timestamp. |
+| `image` | Display-oriented RGB `PIL.Image.Image` for the nearest decoded frame at the requested timestamp. |
 | `timestamp_s` | Requested sample timestamp in seconds from the start of the clip, from `at` or the expanded `range`. |
 | `frame_index` | Zero-based decoded video frame index chosen for that timestamp. |
 | `sample_index` | Case-local sample index. |
 | `video_path` | Source video path as a string. |
 | `case_name` | Case filename stem. |
 
-Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. For variable-frame-rate videos, `glasskit eval` uses each frame's media timestamp when available; if a video lacks frame timestamps, it estimates them from the frame index and average frame rate.
+Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. GlassKit applies the source video's display rotation before handing the frame to an adapter, so its pixels and dimensions match normal video playback. For variable-frame-rate videos, `glasskit eval` uses each frame's media timestamp when available; if a video lacks frame timestamps, it estimates them from the frame index and average frame rate.
 
 Target fields passed to the evaluator:
 
@@ -542,7 +542,7 @@ Command-adapter samples contain the same information as Python samples, using lo
 
 | Field | Description |
 | --- | --- |
-| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the lossless PNG. |
+| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the display-oriented lossless PNG. |
 | `timestampS` | Requested sample timestamp in seconds. |
 | `frameIndex` | Zero-based decoded video frame index selected for that timestamp. |
 | `sampleIndex` | Case-local sample index. |

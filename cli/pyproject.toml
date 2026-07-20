@@ -10,7 +10,7 @@ authors = [
     { name = "RealComputer" },
 ]
 dependencies = [
-    "av",
+    "av>=18",
     "pillow",
     "pydantic>=2",
     "pyyaml",

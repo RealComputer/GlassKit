@@ -78,7 +78,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "av" },
+    { name = "av", specifier = ">=18" },
     { name = "pillow" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyyaml" },
