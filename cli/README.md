@@ -952,7 +952,7 @@ uv run --env-file .env glasskit eval run
 
 ## Output Formats
 
-Human-readable output is printed as tables to stdout. JSON output is written to a file when `--output-json` is provided. See the [JSON output reference](https://github.com/RealComputer/GlassKit/blob/main/cli/JSON_OUTPUT.md) for the complete report format, a repeated-run example, and result-structure semantics.
+Human-readable output is printed as tables to stdout. Pass `--output-json PATH` to retain a machine-readable report after the run. Each sample result records the complete adapter observation in `observed` and the value selected by `field` in `observed_value`, so diagnostic metadata remains available even when only one nested value determines pass/fail. See the [JSON output reference](https://github.com/RealComputer/GlassKit/blob/main/cli/JSON_OUTPUT.md) for the complete report format, a repeated-run example, and result-structure semantics.
 
 `--save-failures` writes artifacts for every failed or errored sample attempt. To prevent repeated executions from overwriting one another, files are grouped under `<eval-dir>/runs/failures/trial-NNN/` by default or `<artifacts-dir>/failures/trial-NNN/` when `--artifacts-dir` is provided. A run without `--repeat` uses `trial-001`. Each saved result includes a JPEG frame and a JSON metadata file named with the case, target, sample index, and timestamp; the metadata also records its one-based trial number.
 
