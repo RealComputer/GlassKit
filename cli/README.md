@@ -31,8 +31,6 @@ uv run --with glasskit.ai glasskit --help
 
 The `uv run ...` examples below assume the package has been added to your project. If you use the one-off form, replace `uv run` with `uv run --with glasskit.ai`.
 
-Windows has best-effort basic support in PowerShell and Command Prompt. The CLI, Python adapters, command adapters, checkpoints, reports, and review UI use native Windows paths and command quoting, but the shell snippets that create files in this guide use POSIX syntax; create the same files with an editor or the equivalent PowerShell commands.
-
 ## Quickstart
 
 Start in an app repository checked out next to a `recordings/` directory. This example uses `../recordings/task-01.mp4` from the shell working directory and creates an `eval/` directory in the app repo.
@@ -517,7 +515,7 @@ Use `--adapter-command` when the app is easier to call from its own runtime, suc
 glasskit eval run --adapter-command "node eval/adapter.js"
 ```
 
-GlassKit Eval parses the command using POSIX shell argument quoting on macOS and Linux and Windows command-line quoting on Windows, then starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are therefore unavailable. The command inherits the current working directory and environment, so it can import the app normally and read the same secrets and configuration.
+GlassKit Eval parses the command into an argument list, then starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are therefore unavailable. The command inherits the current working directory and environment, so it can import the app normally and read the same secrets and configuration.
 
 Start from the complete JavaScript file below. Its editable application section passes a factory to `runGlassKitAdapter`; the protocol function handles communication with GlassKit Eval. Stdout belongs to that function, so write application and dependency logs to stderr with `console.error()`.
 

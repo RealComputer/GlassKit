@@ -17,13 +17,29 @@ def split_command(command: str, *, windows: bool | None = None) -> list[str]:
     return shlex.split(command, posix=True)
 
 
-def format_command(argv: Sequence[str], *, windows: bool | None = None) -> str:
-    """Format arguments as a copyable command for the current platform."""
+def serialize_command(argv: Sequence[str], *, windows: bool | None = None) -> str:
+    """Serialize arguments for parsing before direct process execution."""
 
     use_windows = _WINDOWS if windows is None else windows
     if use_windows:
         return subprocess.list2cmdline(argv)
     return shlex.join(argv)
+
+
+def format_command(argv: Sequence[str], *, windows: bool | None = None) -> str:
+    """Format arguments as a copyable shell command for the current platform."""
+
+    use_windows = _WINDOWS if windows is None else windows
+    if use_windows:
+        return _format_powershell_command(argv)
+    return shlex.join(argv)
+
+
+def _format_powershell_command(argv: Sequence[str]) -> str:
+    if not argv:
+        return ""
+    arguments = " ".join(f"'{argument.replace("'", "''")}'" for argument in argv)
+    return f"& {arguments}"
 
 
 def _split_windows_command(command: str) -> list[str]:

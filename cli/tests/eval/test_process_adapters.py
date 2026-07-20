@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shlex
 import sys
 from pathlib import Path
 
@@ -9,6 +8,7 @@ import pytest
 from PIL import Image
 
 from glasskit.eval import process_adapters
+from glasskit.eval.commands import serialize_command
 from glasskit.eval.models import (
     AdapterConfig,
     AdapterLoadError,
@@ -685,7 +685,7 @@ def test_runner_rejects_python_and_process_adapter_together(validate: bool) -> N
 
 
 def _adapter_command() -> str:
-    return shlex.join([sys.executable, str(PROCESS_ADAPTER)])
+    return serialize_command([sys.executable, str(PROCESS_ADAPTER)])
 
 
 def _shorten_shutdown_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:

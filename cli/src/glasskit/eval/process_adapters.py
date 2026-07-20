@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any
 
 from .adapters import LoadedEvaluator
-from .commands import format_command, split_command
+from .commands import serialize_command, split_command
 from .models import (
     AdapterConfig,
     AdapterLoadError,
@@ -526,7 +526,7 @@ def _parse_adapter_command(adapter_command: str) -> list[str]:
 
 
 def _command_label(argv: list[str]) -> str:
-    return repr(format_command(argv))
+    return repr(serialize_command(argv))
 
 
 def _parse_capabilities(result: Any) -> _Capabilities:

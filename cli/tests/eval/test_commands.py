@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
-from glasskit.eval.commands import format_command, split_command
+from glasskit.eval.commands import format_command, serialize_command, split_command
 
 
 @pytest.mark.parametrize(
@@ -18,7 +16,7 @@ from glasskit.eval.commands import format_command, split_command
     ],
 )
 def test_windows_command_parsing_round_trips_native_quoting(argv: list[str]) -> None:
-    command = subprocess.list2cmdline(argv)
+    command = serialize_command(argv, windows=True)
 
     assert split_command(command, windows=True) == argv
 
@@ -33,14 +31,34 @@ def test_windows_command_parsing_accepts_quoted_executable_path() -> None:
     ]
 
 
-def test_command_formatting_uses_platform_specific_quoting() -> None:
+def test_command_serialization_uses_platform_specific_quoting() -> None:
     argv = ["glasskit", "eval", "run", "--resume", "eval dir/checkpoint"]
 
-    assert format_command(argv, windows=False) == (
+    assert serialize_command(argv, windows=False) == (
         "glasskit eval run --resume 'eval dir/checkpoint'"
     )
-    assert format_command(argv, windows=True) == (
+    assert serialize_command(argv, windows=True) == (
         'glasskit eval run --resume "eval dir/checkpoint"'
+    )
+
+
+def test_command_formatting_uses_shell_safe_quoting() -> None:
+    argv = [
+        "glasskit",
+        "eval",
+        "review",
+        "--eval-dir",
+        r"C:\eval&old",
+        "--case",
+        "Ada's $case",
+    ]
+
+    assert format_command(argv, windows=False) == (
+        "glasskit eval review --eval-dir 'C:\\eval&old' --case 'Ada'\"'\"'s $case'"
+    )
+    assert format_command(argv, windows=True) == (
+        "& 'glasskit' 'eval' 'review' '--eval-dir' 'C:\\eval&old' "
+        "'--case' 'Ada''s $case'"
     )
 
 

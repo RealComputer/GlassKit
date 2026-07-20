@@ -74,7 +74,7 @@ def test_print_run_summary_uses_windows_quoting_for_resume_command(
 ) -> None:
     buffer = StringIO()
     console = Console(file=buffer, force_terminal=False, width=160)
-    checkpoint_path = Path("eval dir/runs/checkpoints/run-example")
+    checkpoint_path = Path("eval&old/runs/checkpoints/run-example")
     report = replace(
         _report(),
         checkpoint_path=checkpoint_path,
@@ -84,10 +84,8 @@ def test_print_run_summary_uses_windows_quoting_for_resume_command(
 
     print_run_summary(report, console=console)
 
-    assert (
-        'glasskit eval run --resume "eval dir/runs/checkpoints/run-example"'
-        in buffer.getvalue()
-    )
+    assert "& 'glasskit' 'eval' 'run' '--resume'" in buffer.getvalue()
+    assert "'eval&old/runs/checkpoints/run-example'" in buffer.getvalue()
 
 
 def test_print_run_summary_includes_individual_timing_and_throughput() -> None:

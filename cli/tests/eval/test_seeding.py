@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ import pytest
 import yaml
 
 from glasskit.eval.adapters import LoadedEvaluator
+from glasskit.eval.commands import serialize_command
 from glasskit.eval.expectations import load_eval_directory
 from glasskit.eval.models import (
     AdapterLoadError,
@@ -566,7 +566,7 @@ targets:
       - range: [0.0, 2.0]
         """,
     )
-    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(PROCESS_ADAPTER))}"
+    command = serialize_command([sys.executable, str(PROCESS_ADAPTER)])
 
     report = asyncio.run(
         seed_eval(
