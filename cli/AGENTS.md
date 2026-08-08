@@ -24,7 +24,7 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - `src/glasskit/eval/runner.py`: validation and repeated-trial orchestration, fresh per-trial adapter lifecycles through the shared executor, checkpoint recovery, completion-time result callbacks, sample comparison, stability aggregation, reports, trial-scoped artifacts, and quality gates.
 - `src/glasskit/eval/adapters.py`: adapter target loading, individual-versus-batch strategy detection, and sync/async normalization for simple functions, factories, and evaluator objects.
 - `src/glasskit/eval/commands.py` and `process_adapters.py`: native direct-execution command parsing and serialization, shell-safe command display, process startup and teardown, NDJSON protocol transport, PNG sample serialization, request multiplexing and cancellation, stderr diagnostics, and command-adapter capability negotiation.
-- `src/glasskit/eval/video.py`, `compare.py`, and `report.py`: frame decoding, comparison modes, Rich output, and transient interactive progress.
+- `src/glasskit/eval/video.py`, `frame_export.py`, `compare.py`, and `report.py`: shared frame selection and display transforms, lossless CLI frame exports, comparison modes, Rich output, and transient interactive progress.
 - `src/glasskit/eval/review/`: review document models, YAML reconstruction, local HTTP server, and the ignored generated-static destination.
 - `review-ui/`: React, TypeScript, Vite, and Vitest contributor workspace for the browser review application, labeled "Eval Editor" in its own UI. See [`review-ui/AGENTS.md`](review-ui/AGENTS.md) for its features, architecture, and frontend-specific invariants.
 - `tests/eval/`: focused unit and integration tests using fake adapters and committed fixtures.

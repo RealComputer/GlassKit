@@ -11,6 +11,7 @@ from glasskit.eval.models import ComparisonConfig, SampleExpectation
 from glasskit.eval.video import (
     _stream_duration_s,
     decode_sample_frames,
+    iter_frames_at,
     iter_sample_frames,
     probe_video,
 )
@@ -235,6 +236,25 @@ def test_decode_sample_frames_can_stop_on_first_frame(
 
     assert decoded[0].frame_index == 0
     assert container.decoded_frame_count == 1
+
+
+def test_iter_frames_at_reports_selected_media_times_and_request_indexes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    container = _CountingContainer(frame_count=3)
+    monkeypatch.setattr("glasskit.eval.video.av.open", lambda path: container)
+
+    selected = list(iter_frames_at(video_path, [1.2, 0.5]))
+
+    try:
+        assert [frame.request_index for frame in selected] == [1, 0]
+        assert [frame.requested_timestamp_s for frame in selected] == [0.5, 1.2]
+        assert [frame.media_timestamp_s for frame in selected] == [0.0, 1.0]
+        assert [frame.frame_index for frame in selected] == [0, 1]
+    finally:
+        for frame in selected:
+            frame.image.close()
 
 
 def _sample(

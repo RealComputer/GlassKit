@@ -20,6 +20,7 @@ from .eval.checkpoints import (
 )
 from .eval.commands import format_command
 from .eval.expectations import load_eval_directory
+from .eval.frame_export import export_case_frames
 from .eval.models import EvalError, RunOptions, SeedIncompleteError, SeedOptions
 from .eval.report import (
     ConsoleReporter,
@@ -619,6 +620,49 @@ def eval_list_samples(
         )
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
+
+
+@eval_app.command("export-frames")
+def eval_export_frames(
+    case: Annotated[
+        str,
+        typer.Option("--case", help="Case filename or stem containing the video."),
+    ],
+    at: Annotated[
+        list[float],
+        typer.Option(
+            "--at",
+            min=0.0,
+            help="Frame time in seconds; repeat to export multiple frames.",
+        ),
+    ],
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Destination directory; defaults below <eval-dir>/runs/frames/.",
+        ),
+    ] = None,
+) -> None:
+    """Export the eval-decoded frames at selected case times."""
+
+    try:
+        paths = export_case_frames(
+            eval_dir,
+            case_selector=case,
+            timestamps_s=at,
+            output_dir=output_dir,
+        )
+    except EvalError as error:
+        _print_labeled_message(
+            Console(), "Could not export frames", str(error), style="red"
+        )
+        raise typer.Exit(2) from error
+    for path in paths:
+        typer.echo(path)
 
 
 @eval_app.command("review")

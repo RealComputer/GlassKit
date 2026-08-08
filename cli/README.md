@@ -774,6 +774,7 @@ Commands:
 | `review` | Open the local browser UI for inspecting and correcting timed expectations. |
 | `validate` | Check eval structure, videos, sample times, and optional adapter construction without running samples. |
 | `list-samples` | Print the expanded sample schedule for inspection or debugging. |
+| `export-frames` | Export the eval-decoded image at one or more case timestamps. |
 
 ### `glasskit eval seed`
 
@@ -829,6 +830,29 @@ Because edits are saved directly to the case file, commit or copy case files bef
 The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview. The review command does not transcode video, so if the preview is unavailable, continue inspecting and editing the case source without playback or convert a copy to a codec supported by your browser.
 
 Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, or failure to load or start the review UI. Failure to open the browser is nonfatal because the printed URL remains usable.
+
+### `glasskit eval export-frames`
+
+Purpose: export the exact display-oriented frames GlassKit would pass to an adapter at arbitrary points in one case.
+
+```sh
+glasskit eval export-frames --case task-01 --at 7.5 --at 8.0
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--eval-dir PATH` | `eval` | Eval directory. |
+| `--case TEXT` | Required | Case filename or stem containing the source video. |
+| `--at FLOAT` | Required | Nonnegative frame time in seconds. Repeat to export multiple times in one video decode. Duplicate times are exported once. |
+| `--output-dir PATH` | `<eval-dir>/runs/frames/<case>/` | Directory for exported PNGs. |
+
+Each image is named `at-<timestamp>s.png`. A frame with the same destination name is replaced, and the command prints only the absolute path of each written image, in requested order. Timestamps do not need to be declared samples, and draft or ignored samples do not prevent export.
+
+Frame selection is identical to eval execution: GlassKit chooses the nearest decoded frame, chooses the earlier frame on a tie, and applies the video's display rotation and reflection before writing a lossless RGB PNG. A time beyond the source video duration is rejected.
+
+Exit behavior: exits `0` after exporting every requested frame and `2` for an invalid eval path, case, timestamp, video, or destination.
 
 ### `glasskit eval run`
 
@@ -946,6 +970,7 @@ Default values at a glance:
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | `<eval-dir>/adapter.yaml` when present, otherwise an empty object; `--adapter-config` overrides discovery. |
 | Failure artifacts | Saved only with `--save-failures`; stored below `<eval-dir>/runs/failures/` by default. |
+| Frame exports | Written by `export-frames` below `<eval-dir>/runs/frames/<case>/` by default. |
 | Checkpoints | Created automatically below `<eval-dir>/runs/checkpoints/`; completed adapter evaluations are fsynced before the command advances, and new error-only checkpoints are discarded. |
 
 `<eval-dir>/config.yaml` currently supports only eval-level thresholds:

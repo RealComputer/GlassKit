@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from math import atan2, degrees, hypot
 from pathlib import Path
@@ -13,6 +13,15 @@ from av.error import FFmpegError
 from PIL import Image, ImageOps
 
 from .models import EvalConfigError, FrameSample, SampleExpectation, VideoMetadata
+
+
+@dataclass(frozen=True)
+class SelectedFrame:
+    image: Image.Image
+    requested_timestamp_s: float
+    media_timestamp_s: float
+    frame_index: int
+    request_index: int
 
 
 def probe_video(video_path: Path) -> VideoMetadata:
@@ -77,6 +86,27 @@ def iter_sample_frames(
     ordered = sorted(
         samples, key=lambda sample: (sample.timestamp_s, sample.sample_index)
     )
+    selected_frames = iter_frames_at(
+        video_path, [sample.timestamp_s for sample in ordered]
+    )
+    try:
+        for selected in selected_frames:
+            yield _frame_sample(
+                selected,
+                ordered[selected.request_index],
+                case_name=case_name,
+                video_path=video_path,
+            )
+    finally:
+        selected_frames.close()
+
+
+def iter_frames_at(
+    video_path: Path, timestamps_s: Sequence[float]
+) -> Generator[SelectedFrame, None, None]:
+    if not timestamps_s:
+        return
+    ordered = sorted(enumerate(timestamps_s), key=lambda item: (item[1], item[0]))
     try:
         with av.open(str(video_path)) as container:
             stream = _video_stream(container)
@@ -94,17 +124,18 @@ def iter_sample_frames(
                 timestamp_s = max(0.0, raw_timestamp_s - first_timestamp_s)
                 while (
                     pending_index < len(ordered)
-                    and ordered[pending_index].timestamp_s <= timestamp_s
+                    and ordered[pending_index][1] <= timestamp_s
                 ):
-                    sample = ordered[pending_index]
+                    request_index, requested_timestamp_s = ordered[pending_index]
                     chosen = _nearest_frame(
-                        previous, (frame, timestamp_s, frame_index), sample.timestamp_s
+                        previous,
+                        (frame, timestamp_s, frame_index),
+                        requested_timestamp_s,
                     )
-                    yield _frame_sample(
+                    yield _selected_frame(
                         chosen,
-                        sample,
-                        case_name=case_name,
-                        video_path=video_path,
+                        requested_timestamp_s=requested_timestamp_s,
+                        request_index=request_index,
                     )
                     pending_index += 1
                 previous = (frame, timestamp_s, frame_index)
@@ -114,12 +145,11 @@ def iter_sample_frames(
             if previous is None:
                 raise EvalConfigError(f"video contains no frames: {video_path}")
             while pending_index < len(ordered):
-                sample = ordered[pending_index]
-                yield _frame_sample(
+                request_index, requested_timestamp_s = ordered[pending_index]
+                yield _selected_frame(
                     previous,
-                    sample,
-                    case_name=case_name,
-                    video_path=video_path,
+                    requested_timestamp_s=requested_timestamp_s,
+                    request_index=request_index,
                 )
                 pending_index += 1
     except FFmpegError as error:
@@ -129,20 +159,35 @@ def iter_sample_frames(
 
 
 def _frame_sample(
-    chosen: tuple[VideoFrame, float, int],
+    selected: SelectedFrame,
     sample: SampleExpectation,
     *,
     case_name: str,
     video_path: Path,
 ) -> FrameSample:
-    frame, _frame_time, frame_index = chosen
     return FrameSample(
-        image=_display_image(frame),
+        image=selected.image,
         timestamp_s=sample.timestamp_s,
-        frame_index=frame_index,
+        frame_index=selected.frame_index,
         sample_index=sample.sample_index,
         video_path=str(video_path),
         case_name=case_name,
+    )
+
+
+def _selected_frame(
+    chosen: tuple[VideoFrame, float, int],
+    *,
+    requested_timestamp_s: float,
+    request_index: int,
+) -> SelectedFrame:
+    frame, media_timestamp_s, frame_index = chosen
+    return SelectedFrame(
+        image=_display_image(frame),
+        requested_timestamp_s=requested_timestamp_s,
+        media_timestamp_s=media_timestamp_s,
+        frame_index=frame_index,
+        request_index=request_index,
     )
 
 

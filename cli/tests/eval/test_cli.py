@@ -44,6 +44,7 @@ def test_eval_help_lists_current_commands() -> None:
     assert "seed" in result.output
     assert "validate" in result.output
     assert "list-samples" in result.output
+    assert "export-frames" in result.output
     assert "init-case" not in result.output
 
 
