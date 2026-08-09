@@ -871,6 +871,7 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
+| `--at FLOAT` | None | Only run expanded samples declared at this exact time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
 | `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | `<eval-dir>/adapter.yaml` when present | YAML or JSON object passed to the selected adapter in its `config` field. |
@@ -888,14 +889,14 @@ Options:
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
-`--from` and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--from` is inclusive, `--until` is exclusive, either may be used alone, and both require `--case`. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
+`--at`, `--from`, and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--at` uses the same nine-decimal normalization as sample expansion, requires every requested time to exist in the selected case and target scope, and can be repeated. `--from` is inclusive, `--until` is exclusive, and either range bound may be used alone. All three options require `--case`, and `--at` cannot be combined with either range bound. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
 Every completed sample result is durably checkpointed. If a fail-fast run is interrupted after at least one adapter evaluation completes, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command only when the checkpoint contains completed adapter work. Setup failures and attempts where every adapter call fails do not print a resume command. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically.
 
-To test one specific sample, first inspect the schedule, then choose a narrow interval containing only that timestamp. If no other `step_1` sample is declared in the interval, this example runs only the sample at `7.5` seconds:
+To test one specific sample, select its case, target, and declared timestamp:
 
 ```sh
-glasskit eval run --case task-01 --target step_1 --from 7.5 --until 7.51
+glasskit eval run --case task-01 --target step_1 --at 7.5
 ```
 
 Exit behavior: exits `0` when every configured gate passes, `1` when the eval completed but one or more gates failed, and `2` when setup or runtime errors abort the run.
@@ -939,6 +940,7 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
 | `--target TEXT` | All targets | Only list this target id from the selected cases. Repeat the option to list multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
+| `--at FLOAT` | None | Only list expanded samples declared at this exact time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
 | `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
 | `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |

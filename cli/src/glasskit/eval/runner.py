@@ -129,6 +129,7 @@ async def run_eval(
         options.eval_dir,
         case_filter=options.case_filter,
         target_filter=options.target_filter,
+        at_times_s=options.at_times_s,
         from_time_s=options.from_time_s,
         until_time_s=options.until_time_s,
         allow_empty=options.allow_empty,
@@ -388,6 +389,9 @@ def run_checkpoint_invocation(options: RunOptions) -> dict[str, Any]:
             if isinstance(options.target_filter, tuple)
             else options.target_filter
         ),
+        "at_times_s": (
+            list(options.at_times_s) if options.at_times_s is not None else None
+        ),
         "from_time_s": options.from_time_s,
         "until_time_s": options.until_time_s,
         "adapter_config": dict(options.adapter_config),
@@ -416,6 +420,9 @@ def run_options_from_invocation(
     target_filter = invocation.get("target_filter")
     if isinstance(target_filter, list):
         target_filter = tuple(str(value) for value in target_filter)
+    parsed_at_times = _optional_checkpoint_numbers(
+        invocation.get("at_times_s"), field="at_times_s"
+    )
     adapter_config = invocation.get("adapter_config", {})
     if not isinstance(adapter_config, Mapping):
         raise EvalConfigError("run checkpoint adapter_config must be an object")
@@ -425,6 +432,7 @@ def run_options_from_invocation(
         adapter_command=_optional_checkpoint_string(invocation.get("adapter_command")),
         case_filter=_optional_checkpoint_string(invocation.get("case_filter")),
         target_filter=target_filter,
+        at_times_s=parsed_at_times,
         from_time_s=_optional_number(invocation.get("from_time_s")),
         until_time_s=_optional_number(invocation.get("until_time_s")),
         adapter_config=dict(adapter_config),
@@ -583,6 +591,20 @@ def _optional_checkpoint_string(value: Any) -> str | None:
 
 def _optional_checkpoint_path(value: Any) -> Path | None:
     return Path(value) if isinstance(value, str) else None
+
+
+def _optional_checkpoint_numbers(value: Any, *, field: str) -> tuple[float, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise EvalConfigError(f"run checkpoint {field} must be an array")
+    numbers: list[float] = []
+    for item in value:
+        number = _optional_number(item)
+        if number is None:
+            raise EvalConfigError(f"run checkpoint {field} must contain numbers")
+        numbers.append(number)
+    return tuple(numbers)
 
 
 def _optional_number(value: Any) -> float | None:
@@ -890,7 +912,7 @@ def _apply_quality_gates(
 ) -> list[GateResult]:
     results = [result for result in results if result.status != "ignored"]
     selected_target_ids = _selected_target_ids(options.target_filter)
-    time_filtered = options.from_time_s is not None or options.until_time_s is not None
+    time_filtered = _time_filtered(options)
     sampled_target_ids = (
         {
             target.id
@@ -967,7 +989,7 @@ def _case_gates(
     thresholds = case.thresholds
     declared_target_ids = {target.id for target in case.targets}
     sampled_target_ids = {target.id for target in case.targets if target.samples}
-    time_filtered = options.from_time_s is not None or options.until_time_s is not None
+    time_filtered = _time_filtered(options)
     gates: list[GateResult] = []
     if thresholds.min_pass_rate is not None:
         gates.append(
@@ -991,7 +1013,7 @@ def _case_gates(
         if selected_target_ids is not None and target_id not in selected_target_ids:
             continue
         # Undeclared target ids still produce an empty, failing gate. Only suppress
-        # targets known to have been emptied by the requested time window.
+        # targets known to have been emptied by the requested sample-time filter.
         if (
             time_filtered
             and target_id in declared_target_ids
@@ -1057,6 +1079,14 @@ def _configured_target_pass_rate_gates(
             )
         )
     return gates
+
+
+def _time_filtered(options: RunOptions) -> bool:
+    return (
+        options.at_times_s is not None
+        or options.from_time_s is not None
+        or options.until_time_s is not None
+    )
 
 
 def _selected_target_ids(

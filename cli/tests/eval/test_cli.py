@@ -94,6 +94,36 @@ def test_eval_list_samples_accepts_multiple_target_options(
     assert captured["target_filter"] == ("step_1", "step_2")
 
 
+def test_eval_list_samples_passes_exact_sample_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_load_eval_directory(eval_dir: Path, **kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("glasskit.cli.load_eval_directory", fake_load_eval_directory)
+    monkeypatch.setattr("glasskit.cli.print_sample_schedule", lambda loaded: None)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            "list-samples",
+            "--case",
+            "case-001",
+            "--at",
+            "167",
+            "--at",
+            "171.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["at_times_s"] == (167.0, 171.5)
+
+
 @pytest.mark.parametrize(
     ("command", "expected_exit_code"),
     [("seed", 2), ("run", 2), ("validate", 1), ("list-samples", 2)],
@@ -362,6 +392,16 @@ def test_eval_resume_rejects_verbose_override(command: str) -> None:
     assert "cannot be combined with overrides" in output
 
 
+def test_eval_run_resume_rejects_exact_time_override() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["eval", "run", "--resume", "missing-checkpoint", "--at", "167"],
+    )
+
+    assert result.exit_code == 2
+    assert "cannot be combined with overrides" in Text.from_ansi(result.output).plain
+
+
 @pytest.mark.parametrize(
     ("command", "execution_name", "reporter_name"),
     [
@@ -502,7 +542,7 @@ def test_eval_run_does_not_define_failure_table_limit() -> None:
     assert "--max-failures-to-print" not in option_names
 
 
-def test_eval_run_and_list_samples_define_time_window_filters() -> None:
+def test_eval_run_and_list_samples_define_sample_time_filters() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)
     eval_command = root_command.commands["eval"]
@@ -517,7 +557,48 @@ def test_eval_run_and_list_samples_define_time_window_filters() -> None:
             for option_name in option.opts
         }
 
-        assert {"--from", "--until"} <= option_names
+        assert {"--at", "--from", "--until"} <= option_names
+
+        at_option = next(
+            option
+            for option in options
+            if isinstance(option, TyperOption) and "--at" in option.opts
+        )
+        assert at_option.multiple
+
+
+def test_eval_run_passes_exact_sample_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_run_eval(options: object, callbacks: object) -> object:
+        captured["options"] = options
+        return SimpleNamespace(success=True)
+
+    monkeypatch.setattr("glasskit.cli.run_eval", fake_run_eval)
+    monkeypatch.setattr("glasskit.cli.print_run_summary", lambda *args, **kwargs: None)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            "run",
+            "--case",
+            "case-001",
+            "--target",
+            "step_1",
+            "--at",
+            "167",
+            "--at",
+            "171.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    options = captured["options"]
+    assert isinstance(options, RunOptions)
+    assert options.at_times_s == (167.0, 171.5)
 
 
 def test_eval_run_rejects_non_positive_concurrency() -> None:
@@ -548,11 +629,37 @@ def test_eval_run_requires_repetition_for_flaky_sample_gate() -> None:
 
 
 @pytest.mark.parametrize("command", ["run", "list-samples"])
-def test_eval_time_window_filters_require_case(command: str) -> None:
-    result = CliRunner().invoke(app, ["eval", command, "--from", "1.0"])
+@pytest.mark.parametrize("option", ["--at", "--from", "--until"])
+def test_eval_sample_time_filters_require_case(command: str, option: str) -> None:
+    result = CliRunner().invoke(app, ["eval", command, option, "1.0"])
 
     assert result.exit_code == 2
-    assert "--from and --until require --case" in Text.from_ansi(result.output).plain
+    output = " ".join(Text.from_ansi(result.output).plain.split())
+    assert option in output
+    assert "requires --case" in output
+
+
+@pytest.mark.parametrize("command", ["run", "list-samples"])
+@pytest.mark.parametrize("range_option", ["--from", "--until"])
+def test_eval_exact_time_rejects_range_filters(command: str, range_option: str) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "eval",
+            command,
+            "--case",
+            "case-001",
+            "--at",
+            "1.0",
+            range_option,
+            "1.5",
+        ],
+    )
+
+    assert result.exit_code == 2
+    output = Text.from_ansi(result.output).plain
+    assert "--at" in output
+    assert "cannot be combined with --from or --until" in output
 
 
 def test_eval_time_window_rejects_reversed_bounds() -> None:
@@ -574,8 +681,13 @@ def test_eval_time_window_rejects_reversed_bounds() -> None:
     assert "must be greater than --from" in Text.from_ansi(result.output).plain
 
 
-@pytest.mark.parametrize(("option", "value"), [("--from", "nan"), ("--until", "inf")])
-def test_eval_time_window_rejects_nonfinite_bounds(option: str, value: str) -> None:
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [("--at", "nan"), ("--from", "nan"), ("--until", "inf")],
+)
+def test_eval_sample_time_filter_rejects_nonfinite_values(
+    option: str, value: str
+) -> None:
     result = CliRunner().invoke(
         app,
         ["eval", "run", "--case", "case-001", option, value],

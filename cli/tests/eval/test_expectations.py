@@ -1036,7 +1036,102 @@ def test_time_window_filter_supports_one_sided_bounds(tmp_path: Path) -> None:
     assert [sample.timestamp_s for sample in until_directory.samples] == [0.0, 1.0]
 
 
-def test_time_window_filter_requires_case(tmp_path: Path) -> None:
+def test_exact_time_filter_selects_declared_samples_after_normalization(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        sampling:
+          every_s: 0.1
+        targets:
+          step_1:
+            samples:
+              - range: [0.1, 0.5]
+                expect: true
+          step_2:
+            samples:
+              - at: [0.2, 0.4]
+                expect: false
+        """,
+    )
+
+    eval_directory = load_eval_directory(
+        eval_dir,
+        case_filter="case-001",
+        at_times_s=(0.3, 0.4, 0.3),
+    )
+
+    case = eval_directory.cases[0]
+    assert [target.id for target in case.targets] == ["step_1", "step_2"]
+    assert [sample.timestamp_s for sample in case.targets[0].samples] == [0.3, 0.4]
+    assert [sample.timestamp_s for sample in case.targets[1].samples] == [0.4]
+    assert [sample.sample_index for sample in case.samples] == [2, 3, 5]
+
+
+def test_exact_time_filter_requires_every_requested_time_to_exist(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: [1.0, 2.0, 3.0]
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError,
+        match=(
+            "no eval samples found at requested times: 2.1, 4 seconds; "
+            "nearest available sample times: 2, 3, 1 seconds"
+        ),
+    ):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            at_times_s=(2.1, 4.0),
+        )
+
+
+def test_exact_time_filter_checks_the_selected_target_scope(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          early:
+            samples:
+              - at: 1.0
+                expect: true
+          late:
+            samples:
+              - at: 2.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError,
+        match=(
+            "no eval samples found at requested time: 1 seconds; "
+            "nearest available sample times: 2 seconds"
+        ),
+    ):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            target_filter="late",
+            at_times_s=(1.0,),
+        )
+
+
+def test_sample_time_filters_require_case(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,
         """
@@ -1049,8 +1144,46 @@ def test_time_window_filter_requires_case(tmp_path: Path) -> None:
         """,
     )
 
-    with pytest.raises(EvalConfigError, match="--from and --until require --case"):
+    with pytest.raises(
+        EvalConfigError, match="--at, --from, and --until require --case"
+    ):
+        load_eval_directory(eval_dir, at_times_s=(0.0,))
+    with pytest.raises(
+        EvalConfigError, match="--at, --from, and --until require --case"
+    ):
         load_eval_directory(eval_dir, from_time_s=0.0)
+
+
+def test_exact_time_filter_rejects_ranges_and_invalid_times(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 1.0
+                expect: true
+        """,
+    )
+
+    with pytest.raises(
+        EvalConfigError, match="--at cannot be combined with --from or --until"
+    ):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            at_times_s=(1.0,),
+            from_time_s=1.0,
+        )
+    with pytest.raises(
+        EvalConfigError, match="--at must be a finite, nonnegative number"
+    ):
+        load_eval_directory(
+            eval_dir,
+            case_filter="case-001",
+            at_times_s=(float("nan"),),
+        )
 
 
 @pytest.mark.parametrize(

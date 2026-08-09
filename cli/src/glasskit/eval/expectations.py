@@ -44,13 +44,15 @@ def load_eval_directory(
     *,
     case_filter: str | None = None,
     target_filter: str | Sequence[str] | None = None,
+    at_times_s: Sequence[float] | None = None,
     from_time_s: float | None = None,
     until_time_s: float | None = None,
     allow_empty: bool = False,
     allow_draft: bool = False,
 ) -> EvalDirectory:
-    _validate_time_window(
+    normalized_at_times = _validate_sample_time_filter(
         case_filter=case_filter,
+        at_times_s=at_times_s,
         from_time_s=from_time_s,
         until_time_s=until_time_s,
     )
@@ -70,7 +72,9 @@ def load_eval_directory(
     ]
     if target_ids is not None:
         cases = _filter_cases_by_targets(cases, target_ids)
-    if from_time_s is not None or until_time_s is not None:
+    if normalized_at_times is not None:
+        cases = _filter_cases_by_exact_times(cases, normalized_at_times)
+    elif from_time_s is not None or until_time_s is not None:
         cases = _filter_cases_by_time(
             cases,
             from_time_s=from_time_s,
@@ -277,16 +281,28 @@ def _filter_cases_by_targets(
     return filtered
 
 
-def _validate_time_window(
+def _validate_sample_time_filter(
     *,
     case_filter: str | None,
+    at_times_s: Sequence[float] | None,
     from_time_s: float | None,
     until_time_s: float | None,
-) -> None:
-    if from_time_s is None and until_time_s is None:
-        return
+) -> tuple[float, ...] | None:
+    if at_times_s is None and from_time_s is None and until_time_s is None:
+        return None
     if case_filter is None:
-        raise EvalConfigError("--from and --until require --case")
+        raise EvalConfigError("--at, --from, and --until require --case")
+    if at_times_s is not None and (from_time_s is not None or until_time_s is not None):
+        raise EvalConfigError("--at cannot be combined with --from or --until")
+    if at_times_s is not None:
+        if not at_times_s:
+            raise EvalConfigError("at least one sample time must be provided with --at")
+        normalized_at_times: list[float] = []
+        for value in at_times_s:
+            if not math.isfinite(value) or value < 0:
+                raise EvalConfigError("--at must be a finite, nonnegative number")
+            normalized_at_times.append(_round_timestamp(value))
+        return tuple(dict.fromkeys(normalized_at_times))
     for option, value in (("--from", from_time_s), ("--until", until_time_s)):
         if value is not None and (not math.isfinite(value) or value < 0):
             raise EvalConfigError(f"{option} must be a finite, nonnegative number")
@@ -296,6 +312,78 @@ def _validate_time_window(
         and from_time_s >= until_time_s
     ):
         raise EvalConfigError("--from must be less than --until")
+    return None
+
+
+def _filter_cases_by_exact_times(
+    cases: list[EvalCase], at_times_s: tuple[float, ...]
+) -> list[EvalCase]:
+    requested_ticks = {_timestamp_tick(timestamp) for timestamp in at_times_s}
+    available_times = sorted(
+        {sample.timestamp_s for case in cases for sample in case.samples}
+    )
+    available_ticks = {_timestamp_tick(timestamp) for timestamp in available_times}
+    missing_times = [
+        timestamp
+        for timestamp in at_times_s
+        if _timestamp_tick(timestamp) not in available_ticks
+    ]
+    if missing_times:
+        raise EvalConfigError(_exact_time_error(missing_times, available_times))
+
+    filtered_cases: list[EvalCase] = []
+    for case in cases:
+        filtered_targets: list[TargetSpec] = []
+        for target in case.targets:
+            samples = [
+                sample
+                for sample in target.samples
+                if _timestamp_tick(sample.timestamp_s) in requested_ticks
+            ]
+            # Retain declared targets so gate evaluation can distinguish a target
+            # removed by this selector from a misspelled threshold target id.
+            filtered_targets.append(
+                TargetSpec(
+                    id=target.id,
+                    index=target.index,
+                    label=target.label,
+                    config=target.config,
+                    samples=samples,
+                    sample_defaults=target.sample_defaults,
+                )
+            )
+        if not any(target.samples for target in filtered_targets):
+            continue
+        filtered_cases.append(
+            EvalCase(
+                name=case.name,
+                path=case.path,
+                video_path=case.video_path,
+                description=case.description,
+                targets=filtered_targets,
+                thresholds=case.thresholds,
+            )
+        )
+    return filtered_cases
+
+
+def _exact_time_error(missing_times: list[float], available_times: list[float]) -> str:
+    requested = ", ".join(f"{timestamp:g}" for timestamp in missing_times)
+    label = "time" if len(missing_times) == 1 else "times"
+    message = f"no eval samples found at requested {label}: {requested} seconds"
+    if not available_times:
+        return (
+            f"{message}; no sample times are available in the selected case and targets"
+        )
+    nearest = sorted(
+        available_times,
+        key=lambda timestamp: (
+            min(abs(timestamp - missing) for missing in missing_times),
+            timestamp,
+        ),
+    )[:3]
+    formatted_nearest = ", ".join(f"{timestamp:g}" for timestamp in nearest)
+    return f"{message}; nearest available sample times: {formatted_nearest} seconds"
 
 
 def _filter_cases_by_time(

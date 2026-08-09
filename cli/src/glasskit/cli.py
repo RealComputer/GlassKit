@@ -271,6 +271,18 @@ def eval_run(
             help="Only run this target id; repeat to select multiple targets.",
         ),
     ] = None,
+    at: Annotated[
+        list[float] | None,
+        typer.Option(
+            "--at",
+            min=0.0,
+            help=(
+                "Only run samples at this exact declared time in seconds; repeat "
+                "to select multiple times; requires --case; cannot be combined "
+                "with --from or --until."
+            ),
+        ),
+    ] = None,
     from_time: Annotated[
         float | None,
         typer.Option(
@@ -409,6 +421,7 @@ def eval_run(
             adapter_command=adapter_command,
             case=case,
             target=target,
+            at=at,
             from_time=from_time,
             until_time=until_time,
             adapter_config=adapter_config,
@@ -436,6 +449,7 @@ def eval_run(
     else:
         _validate_sample_time_options(
             case=case,
+            at=at,
             from_time=from_time,
             until_time=until_time,
         )
@@ -454,6 +468,7 @@ def eval_run(
             eval_dir=eval_dir,
             case_filter=case,
             target_filter=_target_filter(target),
+            at_times_s=tuple(at) if at is not None else None,
             from_time_s=from_time,
             until_time_s=until_time,
             adapter_config=_load_adapter_config(adapter_config, eval_dir),
@@ -575,6 +590,18 @@ def eval_list_samples(
             help="Only list this target id; repeat to select multiple targets.",
         ),
     ] = None,
+    at: Annotated[
+        list[float] | None,
+        typer.Option(
+            "--at",
+            min=0.0,
+            help=(
+                "Only list samples at this exact declared time in seconds; repeat "
+                "to select multiple times; requires --case; cannot be combined "
+                "with --from or --until."
+            ),
+        ),
+    ] = None,
     from_time: Annotated[
         float | None,
         typer.Option(
@@ -602,6 +629,7 @@ def eval_list_samples(
 
     _validate_sample_time_options(
         case=case,
+        at=at,
         from_time=from_time,
         until_time=until_time,
     )
@@ -610,6 +638,7 @@ def eval_list_samples(
             eval_dir,
             case_filter=case,
             target_filter=_target_filter(target),
+            at_times_s=tuple(at) if at is not None else None,
             from_time_s=from_time,
             until_time_s=until_time,
             allow_empty=allow_empty,
@@ -778,14 +807,34 @@ def eval_review(
 def _validate_sample_time_options(
     *,
     case: str | None,
+    at: list[float] | None,
     from_time: float | None,
     until_time: float | None,
 ) -> None:
-    if (from_time is not None or until_time is not None) and case is None:
+    if (
+        at is not None or from_time is not None or until_time is not None
+    ) and case is None:
+        if at is not None:
+            option = "--at"
+        elif from_time is not None:
+            option = "--from"
+        else:
+            option = "--until"
         raise typer.BadParameter(
-            "--from and --until require --case",
-            param_hint="--from/--until",
+            "requires --case",
+            param_hint=option,
         )
+    if at is not None and (from_time is not None or until_time is not None):
+        raise typer.BadParameter(
+            "cannot be combined with --from or --until",
+            param_hint="--at",
+        )
+    for value in at or ():
+        if not math.isfinite(value) or value < 0:
+            raise typer.BadParameter(
+                "must be a finite, nonnegative number",
+                param_hint="--at",
+            )
     for option, value in (("--from", from_time), ("--until", until_time)):
         if value is not None and (not math.isfinite(value) or value < 0):
             raise typer.BadParameter(
@@ -886,6 +935,7 @@ def _reject_run_resume_overrides(
     adapter_command: str | None,
     case: str | None,
     target: list[str] | None,
+    at: list[float] | None,
     from_time: float | None,
     until_time: float | None,
     adapter_config: Path | None,
@@ -908,6 +958,7 @@ def _reject_run_resume_overrides(
             adapter_command is not None,
             case is not None,
             target is not None,
+            at is not None,
             from_time is not None,
             until_time is not None,
             adapter_config is not None,

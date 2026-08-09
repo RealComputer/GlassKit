@@ -7,10 +7,29 @@ from pathlib import Path
 import pytest
 
 from glasskit.eval.models import AdapterRuntimeError, RunOptions
-from glasskit.eval.runner import run_eval
+from glasskit.eval.runner import (
+    run_checkpoint_invocation,
+    run_eval,
+    run_options_from_invocation,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TWO_STATE_VIDEO = (FIXTURES / "videos" / "two-state-64x64.mp4").as_posix()
+
+
+def test_run_checkpoint_round_trips_exact_sample_times(tmp_path: Path) -> None:
+    options = RunOptions(
+        eval_dir=tmp_path / "eval",
+        case_filter="case-001",
+        at_times_s=(167.0, 171.5),
+    )
+
+    restored = run_options_from_invocation(
+        run_checkpoint_invocation(options),
+        checkpoint_path=tmp_path / "checkpoint",
+    )
+
+    assert restored.at_times_s == (167.0, 171.5)
 
 
 def test_runner_evaluates_committed_fixture_with_fake_adapter(
@@ -748,6 +767,24 @@ def create_evaluator(config):
     assert "case-001_step_1_min_pass_rate" not in windowed_gate_names
     assert "case-001_step_2_min_pass_rate" in windowed_gate_names
     assert windowed_report.success
+
+    exact_report = await run_eval(
+        RunOptions(
+            eval_dir=eval_dir,
+            case_filter="case-001",
+            target_filter=("step_1", "step_2"),
+            at_times_s=(1.0,),
+            adapter=f"{adapter_path}:create_evaluator",
+        )
+    )
+
+    exact_gate_names = {gate.name for gate in exact_report.trials[0].gate_results}
+    assert [result.target_id for result in exact_report.trials[0].results] == ["step_2"]
+    assert "eval_step_1_min_pass_rate" not in exact_gate_names
+    assert "eval_step_2_min_pass_rate" in exact_gate_names
+    assert "case-001_step_1_min_pass_rate" not in exact_gate_names
+    assert "case-001_step_2_min_pass_rate" in exact_gate_names
+    assert exact_report.success
 
 
 async def _run_non_json_adapter_observation_test(tmp_path: Path) -> None:

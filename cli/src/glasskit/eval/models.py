@@ -511,6 +511,7 @@ class RunOptions:
     adapter_command: str | None = None
     case_filter: str | None = None
     target_filter: str | tuple[str, ...] | None = None
+    at_times_s: tuple[float, ...] | None = None
     from_time_s: float | None = None
     until_time_s: float | None = None
     adapter_config: Mapping[str, Any] = dc_field(default_factory=dict)
