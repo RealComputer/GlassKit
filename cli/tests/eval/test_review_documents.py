@@ -138,6 +138,27 @@ targets:
     assert "expect" not in written["targets"]["draft"]["samples"][0]
 
 
+def test_ignored_omitted_expectation_is_not_reported_as_draft(tmp_path: Path) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    path = eval_dir / "cases" / "ignored.yaml"
+    path.write_text(
+        """video: ../../../videos/two-state-64x64.mp4
+targets:
+  state:
+    samples:
+      - at: 0.0
+        ignore: Expected behavior is not known for this frame.
+""",
+        encoding="utf-8",
+    )
+
+    document = ReviewRepository(eval_dir).case_file_document("ignored.yaml")
+
+    assert document.status == "ready"
+    assert document.validation_issues == []
+    assert not document.targets[0].samples[0].has_expectation
+
+
 def test_surrogate_source_text_is_isolated_as_a_blocked_case(tmp_path: Path) -> None:
     eval_dir = _copy_fixtures(tmp_path)
     path = eval_dir / "cases" / "surrogate.yaml"

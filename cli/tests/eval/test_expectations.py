@@ -206,6 +206,28 @@ def test_sample_ignore_reason_is_trimmed_and_expands_to_every_sample(
     ]
 
 
+def test_ignored_sample_does_not_require_expectation(tmp_path: Path) -> None:
+    eval_dir = _eval_dir(
+        tmp_path,
+        """
+        video: video.mp4
+        targets:
+          step_1:
+            samples:
+              - at: 0.0
+                ignore: Expected behavior is not known for this frame.
+              - at: 1.0
+                expect: true
+        """,
+    )
+
+    samples = load_eval_directory(eval_dir).samples
+
+    assert not samples[0].has_expectation
+    assert samples[0].ignore == "Expected behavior is not known for this frame."
+    assert samples[1].has_expectation
+
+
 def test_blank_sample_ignore_reason_is_invalid(tmp_path: Path) -> None:
     eval_dir = _eval_dir(
         tmp_path,

@@ -665,7 +665,11 @@ def _expand_sample_block(
 
 def _require_expectations(cases: Sequence[EvalCase]) -> None:
     for case in cases:
-        missing = [sample for sample in case.samples if not sample.has_expectation]
+        missing = [
+            sample
+            for sample in case.samples
+            if not sample.has_expectation and sample.ignore is None
+        ]
         if not missing:
             continue
         count = len(missing)

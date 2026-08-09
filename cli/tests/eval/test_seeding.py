@@ -444,6 +444,74 @@ targets:
     assert case_path.read_text(encoding="utf-8") == before
 
 
+def test_seed_skips_ignored_samples_and_preserves_omitted_expectation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir, case_path = _write_case(
+        tmp_path,
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  state:
+    samples:
+      - at: 0.0
+        ignore: Expected behavior is not known for this frame.
+      - at: 0.5
+        expect: false
+        ignore: Keep this existing ignored label.
+      - at: 1.0
+      - at: 1.5
+        expect: false
+        """,
+    )
+    calls: list[float] = []
+
+    async def evaluate(sample: Any, _target: Any) -> bool:
+        calls.append(sample.timestamp_s)
+        return True
+
+    _use_evaluator(monkeypatch, evaluate=evaluate)
+
+    report = asyncio.run(
+        seed_eval(
+            SeedOptions(
+                eval_dir=eval_dir,
+                adapter="unused:create_evaluator",
+                replace=True,
+            )
+        )
+    )
+
+    assert calls == [1.0, 1.5]
+    assert report.seeded_count == 2
+    assert report.preserved_count == 1
+    raw_samples = yaml.safe_load(case_path.read_text(encoding="utf-8"))["targets"][
+        "state"
+    ]["samples"]
+    assert raw_samples == [
+        {
+            "at": 0.0,
+            "ignore": "Expected behavior is not known for this frame.",
+        },
+        {
+            "at": 0.5,
+            "expect": False,
+            "ignore": "Keep this existing ignored label.",
+        },
+        {"at": 1.0, "expect": True},
+        {"at": 1.5, "expect": True},
+    ]
+    expectation_presence = [
+        sample.has_expectation for sample in load_eval_directory(eval_dir).samples
+    ]
+    assert expectation_presence == [
+        False,
+        True,
+        True,
+        True,
+    ]
+
+
 def test_seed_field_error_leaves_draft_unchanged(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

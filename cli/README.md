@@ -79,7 +79,7 @@ A video is declared by each case with `video:`. The path is resolved relative to
 
 A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
 
-A sample is one timestamp, or one timestamp expanded from a range. A runnable sample has an expected JSON-like value. A draft sample omits `expect` until `glasskit eval seed` proposes one or you add one manually; `expect: null` is a real expectation and is not a draft.
+A sample is one timestamp, or one timestamp expanded from a range. A runnable, non-ignored sample has an expected JSON-like value. A draft sample omits `expect` until `glasskit eval seed` proposes one or you add one manually; `expect: null` is a real expectation and is not a draft. Ignored samples may omit `expect` because they are not evaluated.
 
 An adapter is your Python bridge from the CLI to your app's logic. The CLI decodes frames and calls the adapter; the adapter returns observations.
 
@@ -316,12 +316,12 @@ Sample block fields:
 | --- | ---: | --- |
 | `range` | Conditionally | Two-element `[start, end]` interval in seconds. Exactly one of `range` or `at` is required. The interval is half-open. |
 | `at` | Conditionally | One timestamp or a list of timestamps in seconds. Exactly one of `range` or `at` is required. Lists are sorted during expansion. |
-| `expect` | For runnable samples | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. Omit it to create a draft sample for `seed`; explicit `null` is a labeled expectation. |
+| `expect` | For non-ignored runnable samples | JSON-like expected value: `null`, boolean, finite number, string, array, or object with string keys. Omit it to create a draft sample for `seed`; explicit `null` is a labeled expectation. Ignored samples may omit it without becoming drafts. |
 | `every_s` | No | Per-block range sampling interval. Defaults to `sampling.every_s` for the case, which defaults to `0.5`. |
 | `field` | No | Dot-separated path to extract from the adapter observation before comparison. An omitted value inherits target or case `sample_defaults`; without a default, the whole observation is compared. Explicit `null` clears an inherited field. |
 | `compare` | No | Comparison config with `mode` and optional `tolerance`. An omitted value inherits target or case `sample_defaults`; without a default, mode is inferred from `expect` and numeric tolerance is `0.0`. Explicit `null` clears an inherited comparison. |
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
-| `ignore` | No | Nonempty reason for ignoring this block. Ignored samples are reported but are not decoded, sent to the adapter, or included in pass rates, failure counts, or quality gates. |
+| `ignore` | No | Nonempty reason for ignoring this block. Ignored samples do not need `expect`; they are reported but are not decoded, sent to the adapter, seeded, or included in pass rates, failure counts, or quality gates. |
 
 Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
 
@@ -800,7 +800,7 @@ Options:
 | `--resume PATH` | None | Resume an incomplete seed checkpoint by its printed path or checkpoint id. The checkpoint restores the original adapter, filters, config, concurrency, and seed options, so it cannot be combined with overrides. |
 | `--verbose` | `false` | Print every proposed expectation and set the factory config object's `verbose` field. |
 
-When `field` is present on a sample block, `seed` extracts that path from the adapter's observation and writes the extracted value as `expect`; otherwise it writes the complete observation. Existing expectations outside the selected filters, and inside the filters without `--replace`, are preserved. Missing expectations outside the selected filters may remain draft; `run`, `validate`, and `list-samples` reject draft samples only when they fall inside those commands' selected scope.
+When `field` is present on a sample block, `seed` extracts that path from the adapter's observation and writes the extracted value as `expect`; otherwise it writes the complete observation. Existing expectations outside the selected filters, and inside the filters without `--replace`, are preserved. Ignored samples are never seeded, even with `--replace`, and may omit `expect`. Other missing expectations outside the selected filters may remain draft; `run`, `validate`, and `list-samples` reject draft samples only when they fall inside those commands' selected scope.
 
 Each successful adapter result is durably checkpointed before the command advances. If seeding is interrupted or an adapter call fails after at least one result succeeds, the case file is left unchanged and the error output prints an exact `glasskit eval seed --resume ...` command. Setup failures and attempts with no successful results do not print a resume command, because rerunning the original command repeats no completed adapter work. Resume evaluates only checkpointed errors and unfinished samples, including when the original operation used `--replace`. Once all selected expectations are available, `seed` validates and atomically replaces the complete case YAML. Resume does not automatically retry calls; each invocation makes at most one new attempt for each selected pending sample.
 
@@ -986,7 +986,7 @@ With `--repeat`, quality gates are calculated separately for every trial, and th
 
 Adapter evaluation errors, non-JSON adapter observations, and unexpected comparison exceptions abort the run with exit code `2` by default. Completed results remain in the printed checkpoint. With `--keep-going`, those sample-level errors are recorded as results with status `error`, and the automatic `adapter_errors` gate makes the completed run fail with exit code `1`. Adapter-error results remain resumable; comparison errors remain completed diagnostic results. Adapter setup, loading, and close errors still abort the command, but any sample results completed before those errors remain checkpointed.
 
-Validation, listing, and running require `expect` on every sample in their selected scope. If one of those commands reports draft samples, use `glasskit eval seed` to propose their expectations or label them manually. Filters are applied before this check, so a focused command can operate on a ready target while another target in the same case remains draft.
+Validation, listing, and running require `expect` on every non-ignored sample in their selected scope. Ignored samples may omit it. If one of those commands reports draft samples, use `glasskit eval seed` to propose their expectations or label them manually. Filters are applied before this check, so a focused command can operate on a ready target while another target in the same case remains draft.
 
 Threshold precedence:
 

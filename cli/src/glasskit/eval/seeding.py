@@ -122,10 +122,10 @@ async def seed_eval(
         _sample_key(sample): sample
         for case in eval_directory.cases
         for sample in case.samples
-        if options.replace or not sample.has_expectation
+        if sample.ignore is None and (options.replace or not sample.has_expectation)
     }
     preserved_count = sum(
-        sample.has_expectation and not options.replace
+        sample.has_expectation and (not options.replace or sample.ignore is not None)
         for case in eval_directory.cases
         for sample in case.samples
     )
@@ -618,7 +618,11 @@ def _reconstruct_seeded_target(
         review_samples: list[ReviewSample] = []
         for sample in block_samples:
             generated = seeded.get(sample.sample_index)
-            if generated is None and not sample.has_expectation:
+            if (
+                generated is None
+                and not sample.has_expectation
+                and sample.ignore is None
+            ):
                 raise RuntimeError(
                     "internal error: seeding left a selected expectation missing"
                 )
@@ -627,6 +631,7 @@ def _reconstruct_seeded_target(
                 ReviewSample(
                     id=f"seed-{sample.sample_index}",
                     timestamp_s=sample.timestamp_s,
+                    has_expectation=generated is not None or sample.has_expectation,
                     expect_type=expectation_type(expected),
                     expect_json=compact_json(expected),
                     field=sample.field,

@@ -222,7 +222,6 @@ targets:
   step_1:
     samples:
       - at: 0.0
-        expect: false
         ignore: Provider output is flaky for this difficult frame.
       - at: 1.0
         expect: true
@@ -259,6 +258,7 @@ def create_evaluator(config):
     assert report.success
     results = report.trials[0].results
     assert [result.status for result in results] == ["ignored", "passed"]
+    assert results[0].expected is None
     assert results[0].reason == ("Provider output is flaky for this difficult frame.")
     assert results[0].evaluation_duration_s is None
     assert report.trials[0].evaluated_count == 1

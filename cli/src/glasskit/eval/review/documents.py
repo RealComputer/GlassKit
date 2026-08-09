@@ -341,7 +341,10 @@ class ReviewRepository:
                         repairable=True,
                     )
                 )
-            draft_count = sum(not sample.has_expectation for sample in target.samples)
+            draft_count = sum(
+                not sample.has_expectation and sample.ignore is None
+                for sample in target.samples
+            )
             if draft_count:
                 noun = "sample" if draft_count == 1 else "samples"
                 issues.append(
