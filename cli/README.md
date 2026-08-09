@@ -871,9 +871,9 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only run one case by filename or stem. Do not include path separators. |
 | `--target TEXT` | All targets | Only run this target id from the selected cases. Repeat the option to run multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--at FLOAT` | None | Only run expanded samples declared at this exact time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
-| `--from FLOAT` | None | Only run expanded samples at or after this time in seconds. Requires `--case`. |
-| `--until FLOAT` | None | Only run expanded samples before this time in seconds. Requires `--case`. |
+| `--at FLOAT` | None | Only run samples scheduled at this time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
+| `--from FLOAT` | None | Only run samples scheduled at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only run samples scheduled before this time in seconds. Requires `--case`. |
 | `--adapter-config PATH` | `<eval-dir>/adapter.yaml` when present | YAML or JSON object passed to the selected adapter in its `config` field. |
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--repeat INTEGER` | `1` | Number of complete executions. Values above `1` run sequential trials with a fresh evaluator for each one. |
@@ -889,15 +889,9 @@ Options:
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
-`--at`, `--from`, and `--until` filter the declared expanded sample schedule; they do not create new timestamps. `--at` uses the same nine-decimal normalization as sample expansion, requires every requested time to exist in the selected case and target scope, and can be repeated. `--from` is inclusive, `--until` is exclusive, and either range bound may be used alone. All three options require `--case`, and `--at` cannot be combined with either range bound. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
+`--at`, `--from`, and `--until` select samples already scheduled in the case; they do not create samples at arbitrary video times. Repeat `--at` to select multiple timestamps. Each requested timestamp must be present among the samples chosen by `--case` and `--target`. `--from` is inclusive, `--until` is exclusive, and either range bound may be used alone. All three options require `--case`, and `--at` cannot be combined with either range bound. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
 Every completed sample result is durably checkpointed. If a fail-fast run is interrupted after at least one adapter evaluation completes, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command only when the checkpoint contains completed adapter work. Setup failures and attempts where every adapter call fails do not print a resume command. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically.
-
-To test one specific sample, select its case, target, and declared timestamp:
-
-```sh
-glasskit eval run --case task-01 --target step_1 --at 7.5
-```
 
 Exit behavior: exits `0` when every configured gate passes, `1` when the eval completed but one or more gates failed, and `2` when setup or runtime errors abort the run.
 
@@ -940,9 +934,9 @@ Options:
 | `--eval-dir PATH` | `eval` | Eval directory. |
 | `--case TEXT` | All cases | Only list one case by filename or stem. |
 | `--target TEXT` | All targets | Only list this target id from the selected cases. Repeat the option to list multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
-| `--at FLOAT` | None | Only list expanded samples declared at this exact time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
-| `--from FLOAT` | None | Only list expanded samples at or after this time in seconds. Requires `--case`. |
-| `--until FLOAT` | None | Only list expanded samples before this time in seconds. Requires `--case`. |
+| `--at FLOAT` | None | Only list samples scheduled at this time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
+| `--from FLOAT` | None | Only list samples scheduled at or after this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only list samples scheduled before this time in seconds. Requires `--case`. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 The table includes each sample's case, target, timestamp, expectation, comparison mode, field, and source. Range blocks are half-open: for example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
