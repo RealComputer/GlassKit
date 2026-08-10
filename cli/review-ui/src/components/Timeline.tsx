@@ -13,7 +13,7 @@ import {
   timelineTrackWidth,
   timeToPosition,
 } from "../timeline/math.ts";
-import { expectationSummary, formatSeconds } from "../utils/format.ts";
+import { expectationDescription, expectationSummary, formatSeconds } from "../utils/format.ts";
 
 type TimelineStyle = CSSProperties & {
   "--track-width"?: string;
@@ -364,7 +364,7 @@ export function Timeline({ controlsHost }: { controlsHost: HTMLDivElement | null
                           aria-pressed={selected}
                           aria-label={`${target.label ?? target.id}, ${formatSeconds(
                             sample.timestamp_s,
-                          )}, expected ${expectationSummary(sample)}${
+                          )}, ${expectationDescription(sample)}${
                             sample.ignore ? `, ignored: ${sample.ignore}` : ""
                           }`}
                         />

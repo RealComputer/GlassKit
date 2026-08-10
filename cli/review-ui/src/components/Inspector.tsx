@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import type { CompareMode, ExpectType, ReviewSample } from "../api/types.ts";
 import { useApp } from "../state/AppContext.tsx";
 import { SAMPLE_DURATION_TOLERANCE_S } from "../state/reducer.ts";
-import { formatSeconds } from "../utils/format.ts";
+import { expectationTypeLabel, formatSeconds } from "../utils/format.ts";
 
 const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 const allModes: { value: CompareMode; label: string }[] = [
@@ -257,6 +257,7 @@ export function Inspector() {
   const numericTolerance =
     sample.expect_type === "number" &&
     (sample.compare.mode === null || sample.compare.mode === "numeric");
+  const ignoredWithoutExpectation = !sample.has_expectation && sample.ignore !== null;
 
   return (
     <aside className="inspector" aria-label="Sample inspector">
@@ -267,7 +268,7 @@ export function Inspector() {
         </div>
         <div className="inspector-heading-actions">
           {followControl}
-          <span className="type-chip">{sample.has_expectation ? sample.expect_type : "draft"}</span>
+          <span className="type-chip">{expectationTypeLabel(sample)}</span>
         </div>
       </div>
       <fieldset disabled={editingDisabled} onFocusCapture={pauseForEditing}>
@@ -321,7 +322,7 @@ export function Inspector() {
           >
             {!sample.has_expectation && (
               <option value="" disabled>
-                Draft (missing)
+                {ignoredWithoutExpectation ? "Not required (ignored)" : "Draft (missing)"}
               </option>
             )}
             <option value="null">Null</option>
@@ -342,7 +343,11 @@ export function Inspector() {
             <label htmlFor="expect-value">Expected value</label>
           )}
           {!sample.has_expectation ? (
-            <div className="draft-expectation">Choose a type to set this draft expectation.</div>
+            <div className="draft-expectation">
+              {ignoredWithoutExpectation
+                ? "No expectation is required while this sample is ignored."
+                : "Choose a type to set this draft expectation."}
+            </div>
           ) : sample.expect_type === "null" ? (
             <div className="null-value mono" aria-labelledby="expect-value-label">
               null

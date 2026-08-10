@@ -15,7 +15,7 @@ export function formatSeconds(seconds: number): string {
 }
 
 export function expectationSummary(sample: ReviewSample, maxLength = 46): string {
-  if (!sample.has_expectation) return "Draft";
+  if (!sample.has_expectation) return sample.ignore ? "Not required" : "Draft";
   let text = sample.expect_json;
   if (sample.expect_type === "string") {
     try {
@@ -26,6 +26,16 @@ export function expectationSummary(sample: ReviewSample, maxLength = 46): string
     }
   }
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+export function expectationTypeLabel(sample: ReviewSample): string {
+  if (sample.has_expectation) return sample.expect_type;
+  return sample.ignore ? "ignored" : "draft";
+}
+
+export function expectationDescription(sample: ReviewSample): string {
+  if (!sample.has_expectation && sample.ignore) return "no expectation required";
+  return `expected ${expectationSummary(sample)}`;
 }
 
 export function effectiveCompare(sample: ReviewSample): string {

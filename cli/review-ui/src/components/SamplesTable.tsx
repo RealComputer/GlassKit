@@ -7,14 +7,19 @@ import {
   type ConsecutiveSampleGroup,
 } from "../samples/grouping.ts";
 import { useApp } from "../state/AppContext.tsx";
-import { effectiveCompare, expectationSummary, formatSeconds } from "../utils/format.ts";
+import {
+  effectiveCompare,
+  expectationSummary,
+  expectationTypeLabel,
+  formatSeconds,
+} from "../utils/format.ts";
 
 function SampleSettingsCells({ sample }: { sample: ReviewSample }) {
   const summary = expectationSummary(sample);
   return (
     <>
       <td className="expect-cell" title={summary}>
-        <span className="type-chip">{sample.has_expectation ? sample.expect_type : "draft"}</span>
+        <span className="type-chip">{expectationTypeLabel(sample)}</span>
         {summary}
       </td>
       <td className="mono truncate-cell" title={sample.field ?? ""}>

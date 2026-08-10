@@ -47,4 +47,15 @@ describe("timeline expectation colors", () => {
     expect(expectationColorKey(draft)).toBe("draft");
     expect(expectationColor(draft)).toBe("#9a6700");
   });
+
+  it("uses a neutral color for ignored samples that need no expectation", () => {
+    const ignored = {
+      ...sample("null", "null"),
+      has_expectation: false,
+      ignore: "Expected behavior is not known.",
+    };
+
+    expect(expectationColorKey(ignored)).toBe("ignored");
+    expect(expectationColor(ignored)).toBe("#6e7781");
+  });
 });

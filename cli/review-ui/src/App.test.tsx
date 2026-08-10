@@ -891,6 +891,47 @@ describe("review application navigation and drafts", () => {
     await screen.findByText("Saved");
   });
 
+  it("presents an ignored sample without an expectation as complete", async () => {
+    const ignored = {
+      ...sample("ignored", 1, "null"),
+      has_expectation: false,
+      expect_type: "null" as const,
+      ignore: "Expected behavior is not known.",
+    };
+    const doc = caseFile([target("ignored_target", [ignored])]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", {
+        name: "ignored target, 1s, no expectation required, ignored: Expected behavior is not known.",
+      }),
+    ).toBeTruthy();
+    const inspector = screen.getByLabelText("Sample inspector");
+    expect(within(inspector).getByText("ignored")).toBeTruthy();
+    expect(
+      within(inspector).getByText("No expectation is required while this sample is ignored."),
+    ).toBeTruthy();
+    const type = within(inspector).getByLabelText("Expectation type") as HTMLSelectElement;
+    expect(type).toHaveProperty("value", "");
+    expect(type.selectedOptions[0]?.textContent).toBe("Not required (ignored)");
+    expect(screen.queryByText("Choose a type to set this draft expectation.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Samples" }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("ignored")).toBeTruthy();
+    expect(within(table).getByText("Not required")).toBeTruthy();
+    expect(within(table).queryByText("Draft")).toBeNull();
+  });
+
   it("saves an ignore reason and marks the sample as ignored", async () => {
     const doc = caseFile([target("target_a", [sample("first", 1, "true")])]);
     const saves: {
