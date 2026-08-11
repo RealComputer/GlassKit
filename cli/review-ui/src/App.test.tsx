@@ -10,6 +10,18 @@ function response(body: unknown, status = 200): Response {
   });
 }
 
+function frameResponse(frameIndex = 7, mediaTime = 0.8, requestedTime = 1): Response {
+  return new Response(new Blob(["png"], { type: "image/png" }), {
+    headers: {
+      "Content-Type": "image/png",
+      "X-GlassKit-Requested-Time": String(requestedTime),
+      "X-GlassKit-Media-Time": String(mediaTime),
+      "X-GlassKit-Frame-Index": String(frameIndex),
+      "X-GlassKit-Frame-SHA256": "sha256-exact-frame",
+    },
+  });
+}
+
 async function advanceAutosaveDelay(): Promise<void> {
   await act(async () => vi.advanceTimersByTimeAsync(400));
 }
@@ -19,6 +31,89 @@ afterEach(() => {
 });
 
 describe("review application navigation and drafts", () => {
+  it("shows the authoritative eval frame only while paused", async () => {
+    const doc = caseFile();
+    doc.video = {
+      ...doc.video!,
+      frame_url: "/api/case-files/case-001.yaml/frame",
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+      if (url.includes("/frame?at=")) return Promise.resolve(frameResponse());
+      if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:exact-frame");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL");
+    render(<App />);
+
+    expect(await screen.findByAltText("Exact frame used by evaluation")).toHaveProperty(
+      "src",
+      "blob:exact-frame",
+    );
+    expect(screen.getByText("Exact eval frame 7 · media 0.8s")).toBeTruthy();
+    expect(createObjectUrl).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/frame?at=1"))).toBe(
+      true,
+    );
+
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    fireEvent.error(video!);
+    expect(
+      await screen.findByText(
+        "Smooth playback is unavailable in this browser. The exact eval frame is shown.",
+        { exact: false },
+      ),
+    ).toBeTruthy();
+    fireEvent.play(video!);
+    await waitFor(() => expect(screen.queryByAltText("Exact frame used by evaluation")).toBeNull());
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:exact-frame");
+  });
+
+  it("aborts a stale exact-frame request when the paused time changes", async () => {
+    const doc = caseFile();
+    doc.video = {
+      ...doc.video!,
+      frame_url: "/api/case-files/case-001.yaml/frame",
+    };
+    const frameSignals: AbortSignal[] = [];
+    const frameVersions: { clientId: string | null; generation: number }[] = [];
+    const never = new Promise<Response>(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/frame?at=")) {
+          frameSignals.push(init?.signal as AbortSignal);
+          const headers = new Headers(init?.headers);
+          frameVersions.push({
+            clientId: headers.get("X-GlassKit-Frame-Client"),
+            generation: Number(headers.get("X-GlassKit-Frame-Generation")),
+          });
+          return frameSignals.length === 1 ? never : Promise.resolve(frameResponse(8, 1.1, 1.1));
+        }
+        if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:latest-frame");
+    render(<App />);
+
+    await screen.findByText("Loading exact eval frame…");
+    fireEvent.click(screen.getByRole("button", { name: "Move video time forward 0.1 seconds" }));
+
+    await waitFor(() => expect(frameSignals).toHaveLength(2));
+    expect(frameSignals[0].aborted).toBe(true);
+    expect(frameVersions[0].clientId).toBeTruthy();
+    expect(frameVersions[1].clientId).toBe(frameVersions[0].clientId);
+    expect(frameVersions[1].generation).toBeGreaterThan(frameVersions[0].generation);
+    expect(await screen.findByText("Exact eval frame 8 · media 1.1s")).toBeTruthy();
+  });
+
   it("uses the unobstructed video surface to toggle playback", async () => {
     const doc = caseFile();
     vi.stubGlobal(
@@ -241,12 +336,17 @@ describe("review application navigation and drafts", () => {
   it.each([
     ["an empty target", caseFile([target("empty", [])])],
     ["no targets", caseFile([])],
-  ])("enables frame downloads after video data loads with %s", async (_scenario, doc) => {
+  ])("enables exact frame downloads with %s", async (_scenario, doc) => {
+    doc.video = {
+      ...doc.video!,
+      frame_url: "/api/case-files/case-001.yaml/frame",
+    };
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url === "/api/eval-directory") return Promise.resolve(response(evalDirectory()));
+        if (url.includes("/frame?at=")) return Promise.resolve(frameResponse(0, 0));
         if (url.includes("/api/case-files/")) return Promise.resolve(response(doc));
         throw new Error(`Unexpected request: ${url}`);
       }),
@@ -254,17 +354,7 @@ describe("review application navigation and drafts", () => {
     render(<App />);
 
     const download = await screen.findByRole("button", { name: "Download current frame" });
-    const video = document.querySelector("video");
-    expect(video).not.toBeNull();
-    expect(download).toHaveProperty("disabled", true);
-
-    Object.defineProperties(video!, {
-      readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
-      videoWidth: { configurable: true, value: 64 },
-      videoHeight: { configurable: true, value: 64 },
-    });
-    fireEvent.loadedData(video!);
-
+    await screen.findByAltText("Exact frame used by evaluation");
     expect(download).toHaveProperty("disabled", false);
   });
 

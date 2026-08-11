@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from math import atan2, degrees, hypot
 from pathlib import Path
@@ -22,6 +22,19 @@ class SelectedFrame:
     media_timestamp_s: float
     frame_index: int
     request_index: int
+
+
+@dataclass(frozen=True)
+class RandomAccessFrame:
+    image: Image.Image
+    requested_timestamp_s: float
+    media_timestamp_s: float
+    # PyAV does not expose the global decode ordinal after a keyframe seek.
+    frame_index: int | None
+
+
+class FrameSelectionCancelled(Exception):
+    """Raised when a caller supersedes an in-progress frame selection."""
 
 
 def probe_video(video_path: Path) -> VideoMetadata:
@@ -102,11 +115,15 @@ def iter_sample_frames(
 
 
 def iter_frames_at(
-    video_path: Path, timestamps_s: Sequence[float]
+    video_path: Path,
+    timestamps_s: Sequence[float],
+    *,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> Generator[SelectedFrame, None, None]:
     if not timestamps_s:
         return
     ordered = sorted(enumerate(timestamps_s), key=lambda item: (item[1], item[0]))
+    _raise_if_cancelled(should_cancel)
     try:
         with av.open(str(video_path)) as container:
             stream = _video_stream(container)
@@ -117,6 +134,7 @@ def iter_frames_at(
             first_timestamp_s: float | None = None
             previous: tuple[VideoFrame, float, int] | None = None
             for frame in container.decode(stream):
+                _raise_if_cancelled(should_cancel)
                 frame_index += 1
                 raw_timestamp_s = _frame_timestamp_s(frame, frame_index, frame_rate)
                 if first_timestamp_s is None:
@@ -156,6 +174,109 @@ def iter_frames_at(
         raise EvalConfigError(
             f"could not decode video {video_path}: {error}"
         ) from error
+
+
+def select_frame_at(
+    video_path: Path,
+    timestamp_s: float,
+    *,
+    should_cancel: Callable[[], bool] | None = None,
+) -> RandomAccessFrame:
+    """Select one eval frame by seeking to its preceding keyframe when possible."""
+
+    _raise_if_cancelled(should_cancel)
+    seek_supported = True
+    try:
+        with av.open(str(video_path)) as container:
+            stream = _video_stream(container)
+            stream.thread_type = "AUTO"
+            frame_rate = _average_rate(stream)
+            initial_decoder = container.decode(stream)
+            first_frame = next(initial_decoder, None)
+            initial_decoder.close()
+            if first_frame is None:
+                raise EvalConfigError(f"video contains no frames: {video_path}")
+            _raise_if_cancelled(should_cancel)
+
+            first_timestamp_s = _frame_timestamp_s(first_frame, 0, frame_rate)
+            if timestamp_s <= 0:
+                return RandomAccessFrame(
+                    image=_display_image(first_frame),
+                    requested_timestamp_s=timestamp_s,
+                    media_timestamp_s=0.0,
+                    frame_index=0,
+                )
+
+            time_base = stream.time_base
+            if time_base is None or first_frame.pts is None:
+                seek_supported = False
+            else:
+                seek_offset = first_frame.pts + int(timestamp_s / float(time_base))
+                try:
+                    container.seek(
+                        seek_offset,
+                        stream=stream,
+                        backward=True,
+                        any_frame=False,
+                    )
+                except (FFmpegError, ValueError):
+                    seek_supported = False
+
+            if seek_supported:
+                previous: tuple[VideoFrame, float, int] | None = None
+                for seek_index, frame in enumerate(container.decode(stream)):
+                    _raise_if_cancelled(should_cancel)
+                    raw_timestamp_s = _frame_timestamp_s(frame, seek_index, frame_rate)
+                    media_timestamp_s = max(0.0, raw_timestamp_s - first_timestamp_s)
+                    if previous is None and media_timestamp_s > timestamp_s:
+                        # An imprecise index or open GOP can land after the target.
+                        # Without the preceding frame, nearest-frame parity cannot be
+                        # established, so use the sequential evaluator path below.
+                        seek_supported = False
+                        break
+                    current = (frame, media_timestamp_s, seek_index)
+                    if timestamp_s <= media_timestamp_s:
+                        chosen = _nearest_frame(previous, current, timestamp_s)
+                        return _random_access_frame(chosen, timestamp_s)
+                    previous = current
+
+                if seek_supported and previous is not None:
+                    return _random_access_frame(previous, timestamp_s)
+    except FFmpegError as error:
+        raise EvalConfigError(
+            f"could not decode video {video_path}: {error}"
+        ) from error
+
+    selected_frames = iter_frames_at(
+        video_path, [timestamp_s], should_cancel=should_cancel
+    )
+    try:
+        selected = next(selected_frames)
+        return RandomAccessFrame(
+            image=selected.image,
+            requested_timestamp_s=selected.requested_timestamp_s,
+            media_timestamp_s=selected.media_timestamp_s,
+            frame_index=selected.frame_index,
+        )
+    finally:
+        selected_frames.close()
+
+
+def _raise_if_cancelled(should_cancel: Callable[[], bool] | None) -> None:
+    if should_cancel is not None and should_cancel():
+        raise FrameSelectionCancelled
+
+
+def _random_access_frame(
+    chosen: tuple[VideoFrame, float, int], requested_timestamp_s: float
+) -> RandomAccessFrame:
+    frame, media_timestamp_s, _seek_index = chosen
+    return RandomAccessFrame(
+        image=_display_image(frame),
+        requested_timestamp_s=requested_timestamp_s,
+        media_timestamp_s=media_timestamp_s,
+        frame_index=None,
+    )
 
 
 def _frame_sample(

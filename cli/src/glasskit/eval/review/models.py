@@ -208,6 +208,7 @@ class TargetDocument(TransportModel):
 
 class VideoDocument(TransportModel):
     url: str | None = None
+    frame_url: str | None = None
     display_path: str
     content_type: str | None = None
     duration_s: float | None = None

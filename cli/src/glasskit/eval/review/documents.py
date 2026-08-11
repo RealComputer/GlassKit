@@ -390,6 +390,7 @@ class ReviewRepository:
             case_file_source=source,
             video=VideoDocument(
                 url=f"/api/case-files/{quote(path.name, safe='')}/video",
+                frame_url=f"/api/case-files/{quote(path.name, safe='')}/frame",
                 display_path=raw_case.video,
                 content_type=mimetypes.guess_type(video_path.name)[0]
                 or "application/octet-stream",

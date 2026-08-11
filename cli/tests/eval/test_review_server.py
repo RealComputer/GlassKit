@@ -8,16 +8,19 @@ import os
 import shutil
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from PIL import Image
 
 import glasskit.eval.review.server as review_server_module
 from glasskit.eval.models import EvalConfigError
 from glasskit.eval.review.server import ReviewServer, create_review_server
+from glasskit.eval.video import iter_frames_at
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
@@ -287,6 +290,283 @@ def test_video_full_head_and_byte_ranges(tmp_path: Path) -> None:
             assert status == 416
             assert body == b""
             assert headers["content-range"] == f"bytes */{len(expected)}"
+
+
+def test_authoritative_frame_matches_eval_decoder_and_caches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    video_path = tmp_path / "fixtures" / "videos" / "two-state-64x64.mp4"
+    selected_frames = iter_frames_at(video_path, [0.75])
+    try:
+        selected = next(selected_frames)
+        expected_pixels = selected.image.tobytes()
+        expected_media_time = selected.media_timestamp_s
+        selected.image.close()
+    finally:
+        selected_frames.close()
+
+    decode_calls = 0
+    original_select_frame_at = review_server_module.select_frame_at
+
+    def tracked_select_frame_at(
+        video_path: Path,
+        timestamp_s: float,
+        *,
+        should_cancel: Callable[[], bool] | None = None,
+    ):
+        nonlocal decode_calls
+        decode_calls += 1
+        return original_select_frame_at(
+            video_path, timestamp_s, should_cancel=should_cancel
+        )
+
+    monkeypatch.setattr(
+        review_server_module, "select_frame_at", tracked_select_frame_at
+    )
+    route = "/api/case-files/assembly.yaml/frame?at=0.75"
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        status, headers, body = _request(server, "GET", route)
+        assert status == 200
+        assert headers["content-type"] == "image/png"
+        assert headers["cache-control"] == "no-store"
+        assert headers["x-glasskit-requested-time"] == "0.75"
+        assert float(headers["x-glasskit-media-time"]) == expected_media_time
+        assert "x-glasskit-frame-index" not in headers
+        assert headers["x-glasskit-frame-sha256"].startswith("sha256-")
+        assert "blob:" in headers["content-security-policy"]
+        with Image.open(BytesIO(body)) as image:
+            assert image.format == "PNG"
+            assert image.convert("RGB").tobytes() == expected_pixels
+
+        second_status, second_headers, second_body = _request(server, "GET", route)
+        assert second_status == 200
+        assert second_headers["etag"] == headers["etag"]
+        assert second_body == body
+
+        head_status, head_headers, head_body = _request(server, "HEAD", route)
+        assert head_status == 200
+        assert head_body == b""
+        assert int(head_headers["content-length"]) == len(body)
+
+    assert decode_calls == 1
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["", "at=", "at=-1", "at=nan", "at=inf", "at=1&at=2"],
+)
+def test_authoritative_frame_rejects_invalid_times(tmp_path: Path, query: str) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    route = "/api/case-files/assembly.yaml/frame"
+    if query:
+        route += f"?{query}"
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        status, headers, body = _request(server, "GET", route)
+
+    assert status == 400
+    assert headers["content-type"].startswith("application/json")
+    assert json.loads(body)["error"]["code"] == "invalid_frame_time"
+
+
+def test_authoritative_frame_cache_invalidates_when_video_changes(
+    tmp_path: Path,
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    videos = tmp_path / "fixtures" / "videos"
+    video_path = videos / "two-state-64x64.mp4"
+    route = "/api/case-files/assembly.yaml/frame?at=0"
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        first_status, first_headers, first_body = _request(server, "GET", route)
+        assert first_status == 200
+        with Image.open(BytesIO(first_body)) as first_image:
+            assert first_image.size == (64, 64)
+
+        shutil.copyfile(videos / "portrait-96x128.mp4", video_path)
+        second_status, second_headers, second_body = _request(server, "GET", route)
+        assert second_status == 200
+        with Image.open(BytesIO(second_body)) as second_image:
+            assert second_image.size == (96, 128)
+
+        assert second_headers["etag"] != first_headers["etag"]
+        assert len(server._frame_cache) == 1
+
+
+def test_authoritative_frame_decodes_different_misses_concurrently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    entered_times: set[float] = set()
+    entered_lock = threading.Lock()
+    both_entered = threading.Event()
+    release = threading.Event()
+
+    def blocking_decode(
+        _path: Path,
+        requested_timestamp_s: float,
+        *,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> review_server_module._AuthoritativeFrame:
+        with entered_lock:
+            entered_times.add(requested_timestamp_s)
+            if len(entered_times) == 2:
+                both_entered.set()
+        assert release.wait(3)
+        return _fake_authoritative_frame(requested_timestamp_s)
+
+    monkeypatch.setattr(
+        review_server_module, "_decode_authoritative_frame", blocking_decode
+    )
+    results: dict[float, int] = {}
+
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        threads = [
+            threading.Thread(
+                target=lambda timestamp_s=timestamp_s: results.__setitem__(
+                    timestamp_s,
+                    _request(
+                        server,
+                        "GET",
+                        f"/api/case-files/assembly.yaml/frame?at={timestamp_s}",
+                    )[0],
+                )
+            )
+            for timestamp_s in (0.25, 0.75)
+        ]
+        for thread in threads:
+            thread.start()
+        try:
+            decoded_concurrently = both_entered.wait(2)
+        finally:
+            release.set()
+            for thread in threads:
+                thread.join(timeout=3)
+
+    assert decoded_concurrently
+    assert results == {0.25: 200, 0.75: 200}
+
+
+def test_authoritative_frame_coalesces_identical_misses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    decode_entered = threading.Event()
+    release = threading.Event()
+    decode_calls = 0
+
+    def blocking_decode(
+        _path: Path,
+        requested_timestamp_s: float,
+        *,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> review_server_module._AuthoritativeFrame:
+        nonlocal decode_calls
+        decode_calls += 1
+        decode_entered.set()
+        assert release.wait(3)
+        return _fake_authoritative_frame(requested_timestamp_s)
+
+    monkeypatch.setattr(
+        review_server_module, "_decode_authoritative_frame", blocking_decode
+    )
+    results: list[int] = []
+
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+
+        def request_frame() -> None:
+            results.append(
+                _request(
+                    server,
+                    "GET",
+                    "/api/case-files/assembly.yaml/frame?at=0.75",
+                )[0]
+            )
+
+        first = threading.Thread(target=request_frame)
+        second = threading.Thread(target=request_frame)
+        first.start()
+        assert decode_entered.wait(2)
+        second.start()
+        deadline = time.monotonic() + 2
+        joined_flight = False
+        while time.monotonic() < deadline:
+            with server._frame_cache_lock:
+                joined_flight = any(
+                    flight.users == 2 for flight in server._frame_flights.values()
+                )
+            if joined_flight:
+                break
+            time.sleep(0.01)
+        release.set()
+        first.join(timeout=3)
+        second.join(timeout=3)
+
+    assert joined_flight
+    assert results == [200, 200]
+    assert decode_calls == 1
+
+
+def test_new_frame_generation_cancels_obsolete_decode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _copy_fixtures(tmp_path)
+    obsolete_entered = threading.Event()
+
+    def cancellable_decode(
+        _path: Path,
+        requested_timestamp_s: float,
+        *,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> review_server_module._AuthoritativeFrame:
+        if requested_timestamp_s == 0.25:
+            obsolete_entered.set()
+            deadline = time.monotonic() + 3
+            while should_cancel is not None and not should_cancel():
+                if time.monotonic() >= deadline:
+                    raise AssertionError("obsolete frame decode was not cancelled")
+                time.sleep(0.01)
+            raise review_server_module.FrameSelectionCancelled
+        return _fake_authoritative_frame(requested_timestamp_s)
+
+    monkeypatch.setattr(
+        review_server_module, "_decode_authoritative_frame", cancellable_decode
+    )
+    obsolete_result: list[tuple[int, dict[str, str], bytes]] = []
+    version_headers = {
+        "X-GlassKit-Frame-Client": "video-panel-1",
+        "X-GlassKit-Frame-Generation": "1",
+    }
+
+    with _running_server(eval_dir, _static_dir(tmp_path)) as server:
+        obsolete_thread = threading.Thread(
+            target=lambda: obsolete_result.append(
+                _request(
+                    server,
+                    "GET",
+                    "/api/case-files/assembly.yaml/frame?at=0.25",
+                    headers=version_headers,
+                )
+            )
+        )
+        obsolete_thread.start()
+        assert obsolete_entered.wait(2)
+
+        current_headers = dict(version_headers)
+        current_headers["X-GlassKit-Frame-Generation"] = "2"
+        current_status, _headers, _body = _request(
+            server,
+            "GET",
+            "/api/case-files/assembly.yaml/frame?at=0.75",
+            headers=current_headers,
+        )
+        obsolete_thread.join(timeout=3)
+
+    assert current_status == 200
+    assert not obsolete_thread.is_alive()
+    assert obsolete_result[0][0] == 409
+    assert json.loads(obsolete_result[0][2])["error"]["code"] == (
+        "frame_request_superseded"
+    )
 
 
 def test_video_conditional_cache_requests(tmp_path: Path) -> None:
@@ -617,6 +897,18 @@ def _request(
     )
     connection.close()
     return result
+
+
+def _fake_authoritative_frame(
+    requested_timestamp_s: float,
+) -> review_server_module._AuthoritativeFrame:
+    return review_server_module._AuthoritativeFrame(
+        content=f"frame-{requested_timestamp_s}".encode(),
+        requested_timestamp_s=requested_timestamp_s,
+        media_timestamp_s=requested_timestamp_s,
+        frame_index=None,
+        pixel_sha256="0" * 64,
+    )
 
 
 def _copy_fixtures(tmp_path: Path) -> Path:

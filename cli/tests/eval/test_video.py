@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 from struct import pack
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from PIL import Image
 
+import glasskit.eval.video as video_module
 from glasskit.eval.models import ComparisonConfig, SampleExpectation
 from glasskit.eval.video import (
+    FrameSelectionCancelled,
     _stream_duration_s,
     decode_sample_frames,
     iter_frames_at,
     iter_sample_frames,
     probe_video,
+    select_frame_at,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -257,6 +261,105 @@ def test_iter_frames_at_reports_selected_media_times_and_request_indexes(
             frame.image.close()
 
 
+@pytest.mark.parametrize(
+    ("fixture_name", "timestamp_s"),
+    [
+        ("two-state-64x64.mp4", 0.125),
+        ("two-state-64x64.mp4", 1.2),
+        ("offset-start-64x64.mp4", 1.25),
+        ("rotated-quadrants-96x64.mp4", 0.7),
+        ("reflected-quadrants-96x64.mp4", 0.7),
+    ],
+)
+def test_random_access_selection_matches_sequential_eval_selection(
+    fixture_name: str, timestamp_s: float
+) -> None:
+    video_path = FIXTURES / "videos" / fixture_name
+    selected_frames = iter_frames_at(video_path, [timestamp_s])
+    expected = next(selected_frames)
+    selected_frames.close()
+
+    actual = select_frame_at(video_path, timestamp_s)
+
+    try:
+        assert actual.requested_timestamp_s == expected.requested_timestamp_s
+        assert actual.media_timestamp_s == expected.media_timestamp_s
+        assert actual.image.mode == expected.image.mode
+        assert actual.image.size == expected.image.size
+        assert actual.image.tobytes() == expected.image.tobytes()
+    finally:
+        expected.image.close()
+        actual.image.close()
+
+
+def test_random_access_selection_seeks_instead_of_decoding_from_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = FIXTURES / "videos" / "two-state-64x64.mp4"
+    original_open = video_module.av.open
+    opened: list[_TrackingContainer] = []
+
+    def tracked_open(path: str) -> _TrackingContainer:
+        container = _TrackingContainer(original_open(path))
+        opened.append(container)
+        return container
+
+    monkeypatch.setattr(video_module.av, "open", tracked_open)
+
+    selected = select_frame_at(video_path, 1.2)
+
+    selected.image.close()
+    assert len(opened) == 1
+    assert opened[0].seek_count == 1
+    assert opened[0].decoded_frame_count < 6
+
+
+def test_random_access_selection_falls_back_when_seek_lands_after_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video_path = tmp_path / "open-gop.mp4"
+    seek_container = _ForwardLandingContainer()
+    sequential_container = _TimestampContainer(
+        [
+            _TimestampFrame(timestamp_s=0.0, pts=0, color="black"),
+            _TimestampFrame(timestamp_s=3.933, pts=3933, color="green"),
+            _TimestampFrame(timestamp_s=4.0, pts=4000, color="red"),
+        ]
+    )
+    containers = iter([seek_container, sequential_container])
+    monkeypatch.setattr(video_module.av, "open", lambda _path: next(containers))
+
+    selected = select_frame_at(video_path, 3.946)
+
+    try:
+        assert selected.media_timestamp_s == 3.933
+        assert selected.frame_index == 1
+        assert selected.image.getpixel((0, 0)) == (0, 128, 0)
+        assert seek_container.seek_count == 1
+        assert seek_container.decoded_timestamps == [0.0, 4.0]
+        assert sequential_container.decoded_timestamps == [0.0, 3.933, 4.0]
+    finally:
+        selected.image.close()
+
+
+def test_random_access_selection_stops_when_request_is_cancelled() -> None:
+    callback_calls = 0
+
+    def should_cancel() -> bool:
+        nonlocal callback_calls
+        callback_calls += 1
+        return callback_calls >= 3
+
+    with pytest.raises(FrameSelectionCancelled):
+        select_frame_at(
+            FIXTURES / "videos" / "two-state-64x64.mp4",
+            1.2,
+            should_cancel=should_cancel,
+        )
+
+    assert callback_calls == 3
+
+
 def _sample(
     *, timestamp_s: float, sample_index: int, video_path: Path
 ) -> SampleExpectation:
@@ -309,6 +412,87 @@ class _CountingContainer:
         for frame_index in range(self.frame_count):
             self.decoded_frame_count += 1
             yield _FakeFrame(timestamp_s=float(frame_index))
+
+
+class _TrackingContainer:
+    def __init__(self, container: Any) -> None:
+        self.container = container
+        self.streams = container.streams
+        self.decoded_frame_count = 0
+        self.seek_count = 0
+
+    def __enter__(self) -> _TrackingContainer:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.container.close()
+
+    def decode(self, stream: object):
+        for frame in self.container.decode(stream):
+            self.decoded_frame_count += 1
+            yield frame
+
+    def seek(self, *args: object, **kwargs: object) -> None:
+        self.seek_count += 1
+        self.container.seek(*args, **kwargs)
+
+
+class _TimestampContainer:
+    def __init__(self, frames: list[_TimestampFrame]) -> None:
+        self.frames = frames
+        self.streams = [_TimestampStream()]
+        self.decoded_timestamps: list[float] = []
+
+    def __enter__(self) -> _TimestampContainer:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def decode(self, stream: object):
+        for frame in self.frames:
+            self.decoded_timestamps.append(frame.time)
+            yield frame
+
+
+class _ForwardLandingContainer(_TimestampContainer):
+    def __init__(self) -> None:
+        super().__init__([])
+        self.decode_count = 0
+        self.seek_count = 0
+
+    def decode(self, stream: object):
+        self.decode_count += 1
+        frame = (
+            _TimestampFrame(timestamp_s=0.0, pts=0, color="black")
+            if self.decode_count == 1
+            else _TimestampFrame(timestamp_s=4.0, pts=4000, color="red")
+        )
+        self.decoded_timestamps.append(frame.time)
+        yield frame
+
+    def seek(self, *args: object, **kwargs: object) -> None:
+        self.seek_count += 1
+
+
+class _TimestampStream:
+    type = "video"
+    average_rate = 30.0
+    thread_type = "SLICE"
+    time_base = Fraction(1, 1000)
+
+
+class _TimestampFrame:
+    time_base = Fraction(1, 1000)
+    rotation = 0
+
+    def __init__(self, *, timestamp_s: float, pts: int, color: str) -> None:
+        self.time = timestamp_s
+        self.pts = pts
+        self.color = color
+
+    def to_image(self) -> Image.Image:
+        return Image.new("RGB", (2, 2), self.color)
 
 
 class _FakeStream:

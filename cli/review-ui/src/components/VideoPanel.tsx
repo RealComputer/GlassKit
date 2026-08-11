@@ -9,16 +9,28 @@ import {
   StepForward,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchAuthoritativeFrame, type AuthoritativeFrame } from "../api/client.ts";
 import { useApp } from "../state/AppContext.tsx";
 import { findSampleAt, mostRecentSampleAt } from "../state/editing.ts";
+import { formatSeconds } from "../utils/format.ts";
 import { PreciseVideoSeeker } from "../video/PreciseVideoSeeker.ts";
-import {
-  downloadVideoFrame,
-  frameDownloadFilename,
-  isVideoFrameReady,
-} from "../video/downloadFrame.ts";
+import { downloadFrameUrl, frameDownloadFilename } from "../video/downloadFrame.ts";
 
 const SEEKING_MESSAGE_DELAY_MS = 200;
+let fallbackFrameClientId = 0;
+
+function createFrameClientId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  fallbackFrameClientId += 1;
+  return `review-${Date.now().toString(36)}-${fallbackFrameClientId.toString(36)}`;
+}
+
+type AuthoritativePreview =
+  | { status: "loading"; requestedTime: number }
+  | { status: "ready"; requestedTime: number; url: string; frame: AuthoritativeFrame }
+  | { status: "error"; requestedTime: number; message: string };
 
 export function DelayedSeekingStatus() {
   const [visible, setVisible] = useState(false);
@@ -36,10 +48,16 @@ export function VideoPanel() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const seekerRef = useRef<PreciseVideoSeeker | null>(null);
+  const authoritativeObjectUrlRef = useRef<string | null>(null);
+  const frameRequestVersionRef = useRef<{ clientId: string; generation: number } | null>(null);
+  if (frameRequestVersionRef.current === null) {
+    frameRequestVersionRef.current = { clientId: createFrameClientId(), generation: 0 };
+  }
   const skipNextTimeBlur = useRef(false);
   const [timeDraft, setTimeDraft] = useState("0.000");
-  const [frameCaptureReady, setFrameCaptureReady] = useState(false);
-  const [frameDownloadPending, setFrameDownloadPending] = useState(false);
+  const [authoritativePreview, setAuthoritativePreview] = useState<AuthoritativePreview | null>(
+    null,
+  );
   const workspace = state.selectedCaseId ? state.caseFileWorkspaces[state.selectedCaseId] : null;
   const document = workspace?.document;
   const target = document?.targets.find((item) => item.id === state.selectedTargetId);
@@ -72,9 +90,60 @@ export function VideoPanel() {
     }
   }, [state.video.currentTime]);
 
+  const authoritativeTime = state.video.paused ? state.video.currentTime : null;
+
   useEffect(() => {
-    setFrameCaptureReady(false);
-  }, [document?.video?.url, state.video.mediaGeneration]);
+    if (authoritativeObjectUrlRef.current) {
+      URL.revokeObjectURL(authoritativeObjectUrlRef.current);
+      authoritativeObjectUrlRef.current = null;
+    }
+    const frameUrl = document?.video?.frame_url;
+    if (!frameUrl || authoritativeTime === null) {
+      setAuthoritativePreview(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestVersion = frameRequestVersionRef.current;
+    if (requestVersion === null) return;
+    requestVersion.generation += 1;
+    setAuthoritativePreview({ status: "loading", requestedTime: authoritativeTime });
+    void fetchAuthoritativeFrame(frameUrl, authoritativeTime, controller.signal, requestVersion)
+      .then((frame) => {
+        const url = URL.createObjectURL(frame.image);
+        if (controller.signal.aborted) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        authoritativeObjectUrlRef.current = url;
+        setAuthoritativePreview({
+          status: "ready",
+          requestedTime: authoritativeTime,
+          url,
+          frame,
+        });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setAuthoritativePreview({
+          status: "error",
+          requestedTime: authoritativeTime,
+          message:
+            error instanceof Error ? error.message : "The exact eval frame could not be loaded.",
+        });
+      });
+    return () => controller.abort();
+  }, [authoritativeTime, document?.video?.frame_url, state.video.mediaGeneration]);
+
+  useEffect(
+    () => () => {
+      if (authoritativeObjectUrlRef.current) {
+        URL.revokeObjectURL(authoritativeObjectUrlRef.current);
+        authoritativeObjectUrlRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const video = videoRef.current;
@@ -187,90 +256,118 @@ export function VideoPanel() {
     setTimeDraft(clamped.toFixed(3));
     seek(clamped);
   };
-  const downloadCurrentFrame = async () => {
-    const video = videoRef.current;
-    if (!video || !document) return;
-    setFrameDownloadPending(true);
-    try {
-      await downloadVideoFrame(video, frameDownloadFilename(document.name, video.currentTime));
-    } catch (error) {
-      dispatch({
-        type: "SET_TOAST",
-        value:
-          error instanceof Error ? error.message : "The current frame could not be downloaded.",
-      });
-    } finally {
-      setFrameDownloadPending(false);
-    }
+  const downloadCurrentFrame = () => {
+    if (authoritativePreview?.status !== "ready" || !document) return;
+    downloadFrameUrl(
+      authoritativePreview.url,
+      frameDownloadFilename(document.name, authoritativePreview.requestedTime),
+    );
   };
-  const updateFrameCaptureReady = (video: HTMLVideoElement) => {
-    setFrameCaptureReady(isVideoFrameReady(video));
-  };
+  const previewMessage =
+    state.video.previewStatus === "unavailable" && authoritativePreview?.status === "ready"
+      ? "Smooth playback is unavailable in this browser. The exact eval frame is shown."
+      : state.video.previewMessage;
 
   return (
     <section className="video-section" aria-label="Video preview">
       <div className="video-stage">
         {document?.video?.url ? (
-          <video
-            key={`${document.id}:${state.video.mediaGeneration}`}
-            ref={videoRef}
-            src={document.video.url}
-            preload="metadata"
-            muted
-            onClick={togglePlay}
-            onLoadedMetadata={(event) => {
-              updateFrameCaptureReady(event.currentTarget);
-              dispatch({
-                type: "VIDEO_PATCH",
-                patch: {
-                  duration: document.video?.duration_s ?? event.currentTarget.duration,
-                },
-              });
-            }}
-            onLoadedData={(event) => updateFrameCaptureReady(event.currentTarget)}
-            onCanPlay={(event) => updateFrameCaptureReady(event.currentTarget)}
-            onDurationChange={(event) =>
-              dispatch({
-                type: "VIDEO_PATCH",
-                patch: {
-                  duration:
-                    document.video?.duration_s ??
-                    (Number.isFinite(event.currentTarget.duration)
-                      ? event.currentTarget.duration
-                      : null),
-                },
-              })
-            }
-            onTimeUpdate={(event) => {
-              updateFrameCaptureReady(event.currentTarget);
-              dispatch({
-                type: "VIDEO_PATCH",
-                patch: { currentTime: event.currentTarget.currentTime },
-              });
-            }}
-            onSeeking={() => setFrameCaptureReady(false)}
-            onSeeked={(event) => updateFrameCaptureReady(event.currentTarget)}
-            onPlay={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: false } })}
-            onPlaying={(event) => updateFrameCaptureReady(event.currentTarget)}
-            onPause={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: true } })}
-            onRateChange={(event) =>
-              dispatch({
-                type: "VIDEO_PATCH",
-                patch: { playbackRate: event.currentTarget.playbackRate },
-              })
-            }
-            onEmptied={() => setFrameCaptureReady(false)}
-            onError={() => {
-              setFrameCaptureReady(false);
-              dispatch({
-                type: "VIDEO_PATCH",
-                patch: {
-                  previewStatus: "unavailable",
-                  previewMessage: "This browser cannot play the video codec.",
-                },
-              });
-            }}
-          />
+          <>
+            <video
+              key={`${document.id}:${state.video.mediaGeneration}`}
+              ref={videoRef}
+              src={document.video.url}
+              preload="metadata"
+              muted
+              onClick={togglePlay}
+              onLoadedMetadata={(event) => {
+                dispatch({
+                  type: "VIDEO_PATCH",
+                  patch: {
+                    duration: document.video?.duration_s ?? event.currentTarget.duration,
+                  },
+                });
+              }}
+              onDurationChange={(event) =>
+                dispatch({
+                  type: "VIDEO_PATCH",
+                  patch: {
+                    duration:
+                      document.video?.duration_s ??
+                      (Number.isFinite(event.currentTarget.duration)
+                        ? event.currentTarget.duration
+                        : null),
+                  },
+                })
+              }
+              onTimeUpdate={(event) => {
+                dispatch({
+                  type: "VIDEO_PATCH",
+                  patch: { currentTime: event.currentTarget.currentTime },
+                });
+              }}
+              onPlay={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: false } })}
+              onPause={() => dispatch({ type: "VIDEO_PATCH", patch: { paused: true } })}
+              onRateChange={(event) =>
+                dispatch({
+                  type: "VIDEO_PATCH",
+                  patch: { playbackRate: event.currentTarget.playbackRate },
+                })
+              }
+              onError={() => {
+                dispatch({
+                  type: "VIDEO_PATCH",
+                  patch: {
+                    previewStatus: "unavailable",
+                    previewMessage:
+                      "Smooth playback is unavailable for this codec; exact eval frames remain available.",
+                  },
+                });
+              }}
+            />
+            {authoritativePreview && (
+              <button
+                type="button"
+                className={`authoritative-frame-overlay ${authoritativePreview.status}`}
+                onClick={togglePlay}
+                disabled={
+                  authoritativePreview.status !== "ready" ||
+                  state.video.previewStatus === "unavailable"
+                }
+                aria-label={
+                  authoritativePreview.status === "ready" &&
+                  state.video.previewStatus !== "unavailable"
+                    ? "Play video from exact eval frame"
+                    : undefined
+                }
+              >
+                {authoritativePreview.status === "ready" ? (
+                  <>
+                    <img src={authoritativePreview.url} alt="Exact frame used by evaluation" />
+                    <span className="authoritative-frame-badge mono">
+                      Exact eval frame
+                      {authoritativePreview.frame.frameIndex === null
+                        ? ""
+                        : ` ${authoritativePreview.frame.frameIndex}`}
+                      {" · media "}
+                      {formatSeconds(authoritativePreview.frame.mediaTime)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="authoritative-frame-message" role="status">
+                    <strong>
+                      {authoritativePreview.status === "loading"
+                        ? "Loading exact eval frame…"
+                        : "Exact eval frame unavailable"}
+                    </strong>
+                    {authoritativePreview.status === "error" && (
+                      <span>{authoritativePreview.message}</span>
+                    )}
+                  </span>
+                )}
+              </button>
+            )}
+          </>
         ) : (
           <div className="video-unavailable">
             <strong>Preview unavailable</strong>
@@ -396,15 +493,9 @@ export function VideoPanel() {
             <button
               type="button"
               className="icon-button"
-              onClick={() => void downloadCurrentFrame()}
-              disabled={
-                !document?.video?.url ||
-                !frameCaptureReady ||
-                state.video.previewStatus === "seeking" ||
-                state.video.previewStatus === "unavailable" ||
-                frameDownloadPending
-              }
-              title="Download current frame"
+              onClick={downloadCurrentFrame}
+              disabled={!document?.video?.frame_url || authoritativePreview?.status !== "ready"}
+              title="Download exact eval frame"
               aria-label="Download current frame"
             >
               <Download size={16} />
@@ -438,9 +529,9 @@ export function VideoPanel() {
           </div>
         )}
       </div>
-      {state.video.previewMessage && (
+      {previewMessage && (
         <div className="inline-warning" role="alert">
-          {state.video.previewMessage}{" "}
+          {previewMessage}{" "}
           {document?.video?.display_path && (
             <span className="mono">{document.video.display_path}</span>
           )}{" "}

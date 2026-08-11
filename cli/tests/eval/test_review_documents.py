@@ -51,6 +51,7 @@ def test_eval_directory_index_is_case_local_and_document_contains_lossless_sampl
     assert assembly.case_file_source.startswith("video:")
     assert assembly.video is not None
     assert assembly.video.url == "/api/case-files/assembly.yaml/video"
+    assert assembly.video.frame_url == "/api/case-files/assembly.yaml/frame"
     assert assembly.targets[0].details_yaml == "config:\n  confidence_floor: 0.75\n"
     assert assembly.targets[0].samples[0].expect_json == "false"
     assert assembly.targets[0].samples[0].origin is not None

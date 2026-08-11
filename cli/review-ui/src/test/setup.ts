@@ -38,3 +38,16 @@ if (!globalThis.CSS.escape) {
     value: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "\\$&"),
   });
 }
+
+if (!URL.createObjectURL) {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:test-frame"),
+  });
+}
+if (!URL.revokeObjectURL) {
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
+}

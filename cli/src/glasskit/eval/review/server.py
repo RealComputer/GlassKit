@@ -6,22 +6,27 @@ import http.server
 import importlib.resources
 import ipaddress
 import json
+import math
 import mimetypes
 import os
 import re
 import secrets
 import sys
 import threading
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
+from io import BytesIO
 from pathlib import Path
 from time import time as wall_time
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from pydantic import ValidationError
 
 from ..models import EvalConfigError
+from ..video import FrameSelectionCancelled, select_frame_at
 from .documents import ReviewRepository
 from .models import (
     ErrorContent,
@@ -33,12 +38,15 @@ from .models import (
 )
 
 MAX_JSON_BODY_BYTES = 2 * 1024 * 1024
+MAX_FRAME_CACHE_BYTES = 64 * 1024 * 1024
+MAX_FRAME_REQUEST_CLIENTS = 256
 STREAM_CHUNK_BYTES = 64 * 1024
 _HASHED_ASSET = re.compile(r"-[A-Za-z0-9_-]{8,}\.")
+_FRAME_CLIENT_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
 _SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; media-src 'self'; connect-src 'self'; "
+        "img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; "
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     ),
     "X-Content-Type-Options": "nosniff",
@@ -70,6 +78,34 @@ class _CachedVideoMetadata:
     last_modified_seconds: int
 
 
+@dataclass(frozen=True)
+class _FrameCacheKey:
+    path: Path
+    identity: _VideoFileIdentity
+    requested_timestamp_s: float
+
+
+@dataclass(frozen=True)
+class _AuthoritativeFrame:
+    content: bytes
+    requested_timestamp_s: float
+    media_timestamp_s: float
+    frame_index: int | None
+    pixel_sha256: str
+
+
+@dataclass(frozen=True)
+class _FrameRequestVersion:
+    client_id: str
+    generation: int
+
+
+@dataclass
+class _FrameFlight:
+    lock: threading.Lock
+    users: int = 0
+
+
 class ReviewServer(http.server.ThreadingHTTPServer):
     """Threaded loopback server carrying review API and packaged assets."""
 
@@ -89,6 +125,13 @@ class ReviewServer(http.server.ThreadingHTTPServer):
         self.write_token = write_token
         self._video_metadata_cache: dict[Path, _CachedVideoMetadata] = {}
         self._video_metadata_lock = threading.Lock()
+        self._frame_cache: OrderedDict[_FrameCacheKey, _AuthoritativeFrame] = (
+            OrderedDict()
+        )
+        self._frame_cache_bytes = 0
+        self._frame_cache_lock = threading.Lock()
+        self._frame_flights: dict[_FrameCacheKey, _FrameFlight] = {}
+        self._frame_request_generations: OrderedDict[str, int] = OrderedDict()
         super().__init__(server_address, ReviewRequestHandler)
 
     @property
@@ -141,6 +184,138 @@ class ReviewServer(http.server.ThreadingHTTPServer):
                     last_modified_seconds=last_modified_seconds,
                 )
                 return current_stat, etag, last_modified_seconds
+
+    def authoritative_frame(
+        self,
+        path: Path,
+        *,
+        requested_timestamp_s: float,
+        request_version: _FrameRequestVersion | None = None,
+    ) -> _AuthoritativeFrame:
+        def should_cancel() -> bool:
+            return self._frame_request_is_superseded(request_version)
+
+        self._raise_if_frame_request_superseded(request_version)
+        for _attempt in range(3):
+            stat_result, _etag, _last_modified = self.video_metadata(
+                path, response_time=int(wall_time())
+            )
+            identity = _video_file_identity(stat_result)
+            key = _FrameCacheKey(path, identity, requested_timestamp_s)
+            cached = self._cached_frame(key)
+            if cached is not None:
+                return cached
+
+            flight_key = key
+            flight = self._join_frame_flight(flight_key)
+            acquired = False
+            try:
+                while not acquired:
+                    self._raise_if_frame_request_superseded(request_version)
+                    acquired = flight.lock.acquire(timeout=0.05)
+                stat_result, _etag, _last_modified = self.video_metadata(
+                    path, response_time=int(wall_time())
+                )
+                identity = _video_file_identity(stat_result)
+                key = _FrameCacheKey(path, identity, requested_timestamp_s)
+                if key != flight_key:
+                    continue
+                cached = self._cached_frame(key)
+                if cached is not None:
+                    return cached
+
+                self._raise_if_frame_request_superseded(request_version)
+                try:
+                    frame = _decode_authoritative_frame(
+                        path,
+                        requested_timestamp_s,
+                        should_cancel=should_cancel,
+                    )
+                except FrameSelectionCancelled as error:
+                    raise _frame_request_superseded_error() from error
+                if _video_file_identity(path.stat()) != identity:
+                    continue
+                self._cache_frame(key, frame)
+                return frame
+            finally:
+                if acquired:
+                    flight.lock.release()
+                self._leave_frame_flight(flight_key, flight)
+
+        raise EvalConfigError(
+            f"video changed repeatedly while decoding an exact review frame: {path}"
+        )
+
+    def register_frame_request(
+        self, request_version: _FrameRequestVersion | None
+    ) -> None:
+        if request_version is None:
+            return
+        with self._frame_cache_lock:
+            latest = self._frame_request_generations.get(request_version.client_id)
+            if latest is None or request_version.generation > latest:
+                self._frame_request_generations[request_version.client_id] = (
+                    request_version.generation
+                )
+            self._frame_request_generations.move_to_end(request_version.client_id)
+            while len(self._frame_request_generations) > MAX_FRAME_REQUEST_CLIENTS:
+                self._frame_request_generations.popitem(last=False)
+
+    def _frame_request_is_superseded(
+        self, request_version: _FrameRequestVersion | None
+    ) -> bool:
+        if request_version is None:
+            return False
+        with self._frame_cache_lock:
+            latest = self._frame_request_generations.get(request_version.client_id)
+        return latest is not None and request_version.generation < latest
+
+    def _raise_if_frame_request_superseded(
+        self, request_version: _FrameRequestVersion | None
+    ) -> None:
+        if self._frame_request_is_superseded(request_version):
+            raise _frame_request_superseded_error()
+
+    def _join_frame_flight(self, key: _FrameCacheKey) -> _FrameFlight:
+        with self._frame_cache_lock:
+            flight = self._frame_flights.get(key)
+            if flight is None:
+                flight = _FrameFlight(lock=threading.Lock())
+                self._frame_flights[key] = flight
+            flight.users += 1
+            return flight
+
+    def _leave_frame_flight(self, key: _FrameCacheKey, flight: _FrameFlight) -> None:
+        with self._frame_cache_lock:
+            flight.users -= 1
+            if flight.users == 0 and self._frame_flights.get(key) is flight:
+                del self._frame_flights[key]
+
+    def _cached_frame(self, key: _FrameCacheKey) -> _AuthoritativeFrame | None:
+        with self._frame_cache_lock:
+            cached = self._frame_cache.get(key)
+            if cached is not None:
+                self._frame_cache.move_to_end(key)
+            return cached
+
+    def _cache_frame(self, key: _FrameCacheKey, frame: _AuthoritativeFrame) -> None:
+        if len(frame.content) > MAX_FRAME_CACHE_BYTES:
+            return
+        with self._frame_cache_lock:
+            for stale_key in [
+                cached_key
+                for cached_key in self._frame_cache
+                if cached_key.path == key.path and cached_key.identity != key.identity
+            ]:
+                self._frame_cache_bytes -= len(self._frame_cache.pop(stale_key).content)
+            previous = self._frame_cache.pop(key, None)
+            if previous is not None:
+                self._frame_cache_bytes -= len(previous.content)
+            self._frame_cache[key] = frame
+            self._frame_cache_bytes += len(frame.content)
+            while self._frame_cache_bytes > MAX_FRAME_CACHE_BYTES:
+                _evicted_key, evicted = self._frame_cache.popitem(last=False)
+                self._frame_cache_bytes -= len(evicted.content)
 
 
 class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -207,7 +382,8 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
                 send_body=send_body,
             )
             return
-        encoded_path = urlsplit(self.path).path
+        parsed_request = urlsplit(self.path)
+        encoded_path = parsed_request.path
         segments = _route_segments(encoded_path)
         try:
             if segments == ["api", "eval-directory"] and send_body:
@@ -233,6 +409,15 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
                 and segments[3] == "video"
             ):
                 self._serve_video(segments[2], send_body=send_body)
+                return
+            if (
+                len(segments) == 4
+                and segments[:2] == ["api", "case-files"]
+                and segments[3] == "frame"
+            ):
+                self._serve_authoritative_frame(
+                    segments[2], parsed_request.query, send_body=send_body
+                )
                 return
             if segments and segments[0] == "api":
                 self._send_error(
@@ -505,6 +690,35 @@ class ReviewRequestHandler(http.server.BaseHTTPRequestHandler):
             send_body=send_body,
         )
 
+    def _serve_authoritative_frame(
+        self, case_id: str, query: str, *, send_body: bool
+    ) -> None:
+        requested_timestamp_s = _parse_frame_timestamp(query)
+        request_version = _parse_frame_request_version(self.headers)
+        self.server.register_frame_request(request_version)
+        path = self.server.repository.video_path(case_id)
+        frame = self.server.authoritative_frame(
+            path,
+            requested_timestamp_s=requested_timestamp_s,
+            request_version=request_version,
+        )
+        response_headers = {
+            "ETag": f'"rgb-sha256-{frame.pixel_sha256}"',
+            "X-GlassKit-Requested-Time": format(frame.requested_timestamp_s, ".9g"),
+            "X-GlassKit-Media-Time": format(frame.media_timestamp_s, ".17g"),
+            "X-GlassKit-Frame-SHA256": f"sha256-{frame.pixel_sha256}",
+        }
+        if frame.frame_index is not None:
+            response_headers["X-GlassKit-Frame-Index"] = str(frame.frame_index)
+        self._send_bytes(
+            200,
+            frame.content,
+            content_type="image/png",
+            cache_control="no-store",
+            extra_headers=response_headers,
+            send_body=send_body,
+        )
+
     def _send_video_precondition_response(
         self, status: int, headers: dict[str, str]
     ) -> None:
@@ -731,6 +945,98 @@ def _route_segments(encoded_path: str) -> list[str]:
     if encoded_path in {"", "/"}:
         return []
     return [unquote(segment) for segment in encoded_path.lstrip("/").split("/")]
+
+
+def _parse_frame_timestamp(query: str) -> float:
+    values = [
+        value for key, value in parse_qsl(query, keep_blank_values=True) if key == "at"
+    ]
+    if len(values) != 1:
+        raise ReviewAPIError(
+            400,
+            "invalid_frame_time",
+            "Exact frame requests require exactly one 'at' query parameter.",
+        )
+    try:
+        requested_timestamp_s = float(values[0])
+    except ValueError as error:
+        raise ReviewAPIError(
+            400,
+            "invalid_frame_time",
+            "Exact frame time must be a finite, nonnegative number.",
+        ) from error
+    if not math.isfinite(requested_timestamp_s) or requested_timestamp_s < 0:
+        raise ReviewAPIError(
+            400,
+            "invalid_frame_time",
+            "Exact frame time must be a finite, nonnegative number.",
+        )
+    requested_timestamp_s = round(requested_timestamp_s, 9)
+    return 0.0 if requested_timestamp_s == 0 else requested_timestamp_s
+
+
+def _parse_frame_request_version(headers: Any) -> _FrameRequestVersion | None:
+    client_id = headers.get("X-GlassKit-Frame-Client")
+    generation_text = headers.get("X-GlassKit-Frame-Generation")
+    if client_id is None and generation_text is None:
+        return None
+    if (
+        client_id is None
+        or generation_text is None
+        or _FRAME_CLIENT_ID.fullmatch(client_id) is None
+        or not _is_ascii_digits(generation_text)
+    ):
+        raise ReviewAPIError(
+            400,
+            "invalid_frame_request",
+            "Exact frame request versions require a valid client ID and generation.",
+        )
+    generation = int(generation_text)
+    if generation > 2**53 - 1:
+        raise ReviewAPIError(
+            400,
+            "invalid_frame_request",
+            "Exact frame request generation is outside the supported range.",
+        )
+    return _FrameRequestVersion(client_id=client_id, generation=generation)
+
+
+def _frame_request_superseded_error() -> ReviewAPIError:
+    return ReviewAPIError(
+        409,
+        "frame_request_superseded",
+        "A newer exact frame request superseded this request.",
+    )
+
+
+def _decode_authoritative_frame(
+    path: Path,
+    requested_timestamp_s: float,
+    *,
+    should_cancel: Callable[[], bool] | None = None,
+) -> _AuthoritativeFrame:
+    selected = select_frame_at(
+        path,
+        requested_timestamp_s,
+        should_cancel=should_cancel,
+    )
+    try:
+        pixel_digest = hashlib.sha256()
+        pixel_digest.update(
+            f"{selected.image.mode}:{selected.image.width}x{selected.image.height}\0".encode()
+        )
+        pixel_digest.update(selected.image.tobytes())
+        output = BytesIO()
+        selected.image.save(output, format="PNG")
+        return _AuthoritativeFrame(
+            content=output.getvalue(),
+            requested_timestamp_s=selected.requested_timestamp_s,
+            media_timestamp_s=selected.media_timestamp_s,
+            frame_index=selected.frame_index,
+            pixel_sha256=pixel_digest.hexdigest(),
+        )
+    finally:
+        selected.image.close()
 
 
 def _parse_byte_range(value: str, size: int) -> tuple[int, int] | None:

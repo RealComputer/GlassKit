@@ -5,7 +5,7 @@ This workspace contains the React application served by `glasskit eval review`. 
 ## Features
 
 - Browse cases and targets, filter both lists, and open the case file or eval config file source.
-- Seek and play the case video, follow the most recently crossed sample for the selected target, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the currently displayed frame image.
+- Seek and play the case video, replace paused browser previews with the exact lossless frame used by eval execution, follow the most recently crossed sample for the selected target, change playback rate, enter or nudge the current time, navigate samples, add a sample, and download the exact eval frame.
 - Inspect and scrub all targets on a zoomable timeline, or limit the view to the selected target. Equal typed expectation values receive the same color.
 - Switch between the timeline and a table that groups consecutive equivalent samples for the selected target.
 - Distinguish omitted draft expectations, intentionally unlabeled ignored samples, and explicit `null`; edit sample timing, expectations, comparison settings, notes, and ignore status; or delete samples when valid.
@@ -18,7 +18,7 @@ This workspace contains the React application served by `glasskit eval review`. 
 - `src/App.tsx` composes the application shell and owns application-wide keyboard shortcut dispatch.
 - `src/state/AppContext.tsx` owns document loading, per-case editing and save state, URL selection, and unsaved-change protection. `src/state/reducer.ts` contains state transitions, while `src/state/editing.ts` contains sample mutation rules.
 - `src/api/types.ts` is the frontend model of the review protocol. `src/api/client.ts` is the only HTTP boundary and talks to the Python server under `/api`.
-- `src/components/VideoPanel.tsx` owns playback and frame capture. Helpers for precise seeking and frame downloads live under `src/video/`.
+- `src/components/VideoPanel.tsx` owns native playback and the authoritative paused-frame overlay. `src/api/client.ts` fetches exact frames from the Python server, while helpers for precise browser seeking and frame downloads live under `src/video/`.
 - `src/components/ReviewViews.tsx` switches between the timeline and sample table. Timeline rendering, geometry, and expectation colors live in `src/components/Timeline.tsx` and `src/timeline/`.
 - `src/components/SamplesTable.tsx` renders groups produced by `src/samples/grouping.ts`. `src/components/Inspector.tsx` manages validated sample drafts.
 - `src/components/Overlays.tsx` contains drawers, dialogs, and toasts. `src/utils/shortcuts.ts` centralizes shortcut eligibility.
@@ -29,7 +29,7 @@ This workspace contains the React application served by `glasskit eval review`. 
 ## Invariants
 
 - Treat expanded samples as the user-facing model. `at` versus `range`, `origin`, and `display_groups` are persistence details owned by the Python backend and must not create different timeline or table behavior.
-- Selecting or seeking a sample requests a precise browser preview, but media decoding is still browser-dependent and may present an adjacent encoded frame. Eval execution decodes with PyAV and can choose a different adjacent frame.
+- Native video is only a smooth playback surface. Every paused playhead, including a selected or explicitly sought sample, must be covered by the lossless authoritative frame returned by the Python server's shared eval selector; downloads must use those same bytes. Never present a paused browser-decoded frame as the eval frame.
 
 ## Commands
 

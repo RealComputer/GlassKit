@@ -827,8 +827,6 @@ Options:
 
 Because edits are saved directly to the case file, commit or copy case files before editing if you want an easy way to review or undo the changes. Saving may reformat the YAML and remove ordinary YAML comments; values stored in sample `comment` and `ignore` fields are preserved.
 
-The video is a browser preview and may show an adjacent frame. Playback support depends on the source codec and browser; `glasskit eval run` evaluates the requested timestamps independently of the preview. The review command does not transcode video, so if the preview is unavailable, continue inspecting and editing the case source without playback or convert a copy to a codec supported by your browser.
-
 Exit behavior: exits `0` after a normal `Ctrl+C` shutdown and `2` for an invalid eval path or selector, invalid option combination, or failure to load or start the review UI. Failure to open the browser is nonfatal because the printed URL remains usable.
 
 ### `glasskit eval export-frames`

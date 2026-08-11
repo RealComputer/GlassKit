@@ -77,6 +77,7 @@ export interface ApiErrorBody {
 
 export interface VideoMetadata {
   url: string | null;
+  frame_url: string | null;
   display_path: string;
   content_type: string | null;
   duration_s: number | null;

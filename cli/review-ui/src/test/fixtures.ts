@@ -59,6 +59,7 @@ export function caseFile(
     case_file_source: "video: fixture.mp4\n",
     video: {
       url: "/api/case-files/case-001.yaml/video",
+      frame_url: null,
       display_path: "fixture.mp4",
       content_type: "video/mp4",
       duration_s: 10,
