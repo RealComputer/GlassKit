@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -236,8 +238,101 @@ class RawThresholds(_SchemaModel):
         return value
 
 
+class RawRemoteVideo(_SchemaModel):
+    store: str
+    key: str
+    sha256: str
+
+    @field_validator("store", "key")
+    @classmethod
+    def _strip_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
+        return stripped
+
+    @field_validator("sha256")
+    @classmethod
+    def _validate_sha256(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+            raise ValueError("must be a 64-character hexadecimal SHA-256 digest")
+        return normalized
+
+
+class RawVideoStore(_SchemaModel):
+    type: str = "s3"
+    bucket: str
+    endpoint_url: str | None = None
+    region: str = "us-east-1"
+    public_base_url: str | None = None
+    access_key_id_env: str | None = None
+    secret_access_key_env: str | None = None
+    session_token_env: str | None = None
+
+    @field_validator(
+        "type",
+        "bucket",
+        "endpoint_url",
+        "region",
+        "public_base_url",
+        "access_key_id_env",
+        "secret_access_key_env",
+        "session_token_env",
+    )
+    @classmethod
+    def _strip_store_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
+        return stripped
+
+    @model_validator(mode="after")
+    def _validate_store(self) -> RawVideoStore:
+        if self.type != "s3":
+            raise ValueError("type must be 's3'")
+        if (self.access_key_id_env is None) != (self.secret_access_key_env is None):
+            raise ValueError(
+                "access_key_id_env and secret_access_key_env must be set together"
+            )
+        if self.session_token_env is not None and self.access_key_id_env is None:
+            raise ValueError(
+                "session_token_env requires access_key_id_env and secret_access_key_env"
+            )
+        for field_name in (
+            "access_key_id_env",
+            "secret_access_key_env",
+            "session_token_env",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+                raise ValueError(f"{field_name} must be an environment variable name")
+        for field_name in ("endpoint_url", "public_base_url"):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            parsed = urlsplit(value)
+            if (
+                parsed.scheme not in {"https", "http"}
+                or parsed.hostname is None
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError(
+                    f"{field_name} must be an HTTP(S) URL without credentials, "
+                    "a query, or a fragment"
+                )
+        return self
+
+
 class RawCaseFile(_SchemaModel):
-    video: str
+    video: str | RawRemoteVideo
     description: str | None = None
     sampling: RawSampling = Field(default_factory=RawSampling)
     sample_defaults: RawSampleDefaults = Field(default_factory=RawSampleDefaults)
@@ -245,7 +340,18 @@ class RawCaseFile(_SchemaModel):
     targets: dict[str, RawTarget]
     thresholds: RawThresholds = Field(default_factory=RawThresholds)
 
-    @field_validator("video", "description")
+    @field_validator("video")
+    @classmethod
+    def _strip_video_path(cls, value: str | RawRemoteVideo) -> str | RawRemoteVideo:
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        _validate_unicode_scalar(stripped)
+        return stripped
+
+    @field_validator("description")
     @classmethod
     def _strip_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -267,6 +373,15 @@ class RawCaseFile(_SchemaModel):
 
 class RawEvalConfigFile(_SchemaModel):
     thresholds: RawThresholds = Field(default_factory=RawThresholds)
+    video_stores: dict[str, RawVideoStore] = Field(default_factory=dict)
+
+    @field_validator("video_stores")
+    @classmethod
+    def _validate_video_stores(
+        cls, value: dict[str, RawVideoStore]
+    ) -> dict[str, RawVideoStore]:
+        _validate_mapping_keys(value, label="video_stores")
+        return value
 
 
 def parse_case_file(raw: Any, *, label: str) -> RawCaseFile:

@@ -11,6 +11,7 @@ authors = [
 ]
 dependencies = [
     "av>=18",
+    "boto3>=1.34",
     "pillow",
     "pydantic>=2",
     "pyyaml",

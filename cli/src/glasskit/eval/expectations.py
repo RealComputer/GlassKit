@@ -8,23 +8,29 @@ from typing import Any
 
 import yaml
 
+from .cloud_video import cached_video_path, materialize_video
 from .models import (
     ComparisonConfig,
     EvalCase,
     EvalConfigError,
     EvalDirectory,
+    RemoteVideo,
     SampleDefaults,
     SampleExpectation,
     TargetSpec,
     TargetThreshold,
     Thresholds,
+    VideoStore,
 )
 from .schemas import (
     RawCaseFile,
     RawCompare,
+    RawEvalConfigFile,
+    RawRemoteVideo,
     RawSampleBlock,
     RawSampleDefaults,
     RawThresholds,
+    RawVideoStore,
     parse_case_file,
     parse_eval_config_file,
     workflow_target_metadata,
@@ -49,6 +55,7 @@ def load_eval_directory(
     until_time_s: float | None = None,
     allow_empty: bool = False,
     allow_draft: bool = False,
+    materialize_videos: bool = True,
 ) -> EvalDirectory:
     normalized_at_times = _validate_sample_time_filter(
         case_filter=case_filter,
@@ -57,7 +64,9 @@ def load_eval_directory(
         until_time_s=until_time_s,
     )
     eval_dir = _resolve_eval_dir(eval_dir)
-    thresholds = _load_eval_thresholds(eval_dir)
+    raw_config = _load_eval_config(eval_dir)
+    thresholds = _thresholds_from_raw(raw_config.thresholds)
+    video_stores = _video_stores_from_raw(raw_config.video_stores)
     target_ids = (
         normalize_target_filters(target_filter) if target_filter is not None else None
     )
@@ -67,7 +76,13 @@ def load_eval_directory(
         target_filter=target_ids,
     )
     cases = [
-        load_case(case_path, allow_empty=allow_empty, allow_draft=True)
+        load_case(
+            case_path,
+            allow_empty=allow_empty,
+            allow_draft=True,
+            video_stores=video_stores,
+            resolve_video=materialize_videos,
+        )
         for case_path in case_paths
     ]
     if target_ids is not None:
@@ -98,7 +113,11 @@ def format_sample_schedule(eval_directory: EvalDirectory) -> list[dict[str, Any]
                 rows.append(
                     {
                         "case": case.name,
-                        "video": str(case.video_path),
+                        "video": (
+                            case.remote_video.display_name
+                            if case.remote_video is not None
+                            else str(case.video_path)
+                        ),
                         "target": target.id,
                         "target_label": target.label,
                         "timestamp_s": sample.timestamp_s,
@@ -121,20 +140,47 @@ def _resolve_eval_dir(eval_dir: Path) -> Path:
     return eval_dir
 
 
-def _load_eval_thresholds(eval_dir: Path) -> Thresholds:
+def _load_eval_config(eval_dir: Path) -> RawEvalConfigFile:
     paths = [
         child
         for child in eval_dir.iterdir()
         if child.is_file() and child.name in EVAL_CONFIG_FILE_NAMES
     ]
     if not paths:
-        return Thresholds()
+        return parse_eval_config_file({}, label=str(eval_dir / "config.yaml"))
     if len(paths) > 1:
         names = ", ".join(path.name for path in paths)
         raise EvalConfigError(f"multiple eval config files found: {names}; keep one")
     path = paths[0]
-    raw = parse_eval_config_file(load_yaml_mapping(path), label=str(path))
-    return _thresholds_from_raw(raw.thresholds)
+    return parse_eval_config_file(load_yaml_mapping(path), label=str(path))
+
+
+def load_video_stores(eval_dir: Path) -> dict[str, VideoStore]:
+    """Load named S3-compatible video stores from an eval config file."""
+    resolved = _resolve_eval_dir(eval_dir)
+    return _video_stores_from_raw(_load_eval_config(resolved).video_stores)
+
+
+def _video_stores_from_raw(
+    raw_stores: Mapping[str, RawVideoStore],
+) -> dict[str, VideoStore]:
+    return {
+        name: VideoStore(
+            name=name,
+            bucket=raw.bucket,
+            endpoint_url=raw.endpoint_url,
+            region=raw.region,
+            public_base_url=(
+                raw.public_base_url.rstrip("/")
+                if raw.public_base_url is not None
+                else None
+            ),
+            access_key_id_env=raw.access_key_id_env,
+            secret_access_key_env=raw.secret_access_key_env,
+            session_token_env=raw.session_token_env,
+        )
+        for name, raw in raw_stores.items()
+    }
 
 
 def discover_case_paths(
@@ -276,6 +322,7 @@ def _filter_cases_by_targets(
                 description=case.description,
                 targets=targets,
                 thresholds=case.thresholds,
+                remote_video=case.remote_video,
             )
         )
     return filtered
@@ -362,6 +409,7 @@ def _filter_cases_by_exact_times(
                 description=case.description,
                 targets=filtered_targets,
                 thresholds=case.thresholds,
+                remote_video=case.remote_video,
             )
         )
     return filtered_cases
@@ -424,6 +472,7 @@ def _filter_cases_by_time(
                 description=case.description,
                 targets=filtered_targets,
                 thresholds=case.thresholds,
+                remote_video=case.remote_video,
             )
         )
     return filtered_cases
@@ -446,6 +495,7 @@ def load_case(
     raw_case: RawCaseFile | None = None,
     resolve_video: bool = True,
     allow_draft: bool = False,
+    video_stores: Mapping[str, VideoStore] | None = None,
 ) -> EvalCase:
     """Load one case, optionally expanding an already-parsed in-memory candidate.
 
@@ -458,8 +508,16 @@ def load_case(
     if raw is None:
         raw = parse_case_file(load_yaml_mapping(case_path), label=str(case_path))
 
+    remote_video = _remote_video_from_raw(raw.video)
+    if remote_video is not None and not resolve_video:
+        stores = (
+            video_stores
+            if video_stores is not None
+            else load_video_stores(case_path.parent.parent)
+        )
+        _require_video_store(case_path, remote_video, stores)
     video_path = (
-        resolve_video_path(case_path, raw.video)
+        resolve_video_path(case_path, raw.video, video_stores=video_stores)
         if resolve_video
         else _logical_video_path(case_path, raw.video)
     )
@@ -527,6 +585,7 @@ def load_case(
         description=raw.description,
         targets=targets,
         thresholds=_thresholds_from_raw(raw.thresholds),
+        remote_video=remote_video,
     )
     if not allow_draft:
         _require_expectations([case])
@@ -548,25 +607,84 @@ def load_yaml_mapping(path: Path) -> dict[str, Any]:
     return raw
 
 
-def resolve_video_path(case_path: Path, raw_video: Any) -> Path:
+def resolve_video_path(
+    case_path: Path,
+    raw_video: Any,
+    *,
+    video_stores: Mapping[str, VideoStore] | None = None,
+) -> Path:
     """Resolve and validate a case video using normal eval rules."""
+    if isinstance(raw_video, RawRemoteVideo):
+        remote = _remote_video_from_raw(raw_video)
+        assert remote is not None
+        stores = (
+            video_stores
+            if video_stores is not None
+            else load_video_stores(case_path.parent.parent)
+        )
+        store = _require_video_store(case_path, remote, stores)
+        _validate_video_suffix(Path(remote.key), label=remote.display_name)
+        return materialize_video(remote, store)
     path = _logical_video_path(case_path, raw_video)
     if not path.exists():
         raise EvalConfigError(f"video file does not exist: {path}")
     if not path.is_file():
         raise EvalConfigError(f"video path is not a file: {path}")
-    if path.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
-        supported = ", ".join(sorted(SUPPORTED_VIDEO_SUFFIXES))
-        raise EvalConfigError(
-            f"unsupported video file type for {path}; supported suffixes: {supported}"
-        )
+    _validate_video_suffix(path, label=str(path))
     return path
 
 
 def _logical_video_path(case_path: Path, raw_video: Any) -> Path:
+    if isinstance(raw_video, RawRemoteVideo):
+        remote = _remote_video_from_raw(raw_video)
+        assert remote is not None
+        _validate_video_suffix(Path(remote.key), label=remote.display_name)
+        return cached_video_path(remote)
     if not isinstance(raw_video, str) or not raw_video.strip():
-        raise EvalConfigError(f"{case_path}: video must be a path")
+        raise EvalConfigError(
+            f"{case_path}: video must be a local path or remote object"
+        )
     return (case_path.parent / raw_video).resolve()
+
+
+def format_video_reference(raw_video: str | RawRemoteVideo) -> str:
+    if isinstance(raw_video, str):
+        return raw_video
+    return f"{raw_video.store}:{raw_video.key}"
+
+
+def _remote_video_from_raw(raw_video: Any) -> RemoteVideo | None:
+    if not isinstance(raw_video, RawRemoteVideo):
+        return None
+    return RemoteVideo(
+        store=raw_video.store,
+        key=raw_video.key,
+        sha256=raw_video.sha256,
+    )
+
+
+def _require_video_store(
+    case_path: Path,
+    remote: RemoteVideo,
+    stores: Mapping[str, VideoStore],
+) -> VideoStore:
+    store = stores.get(remote.store)
+    if store is not None:
+        return store
+    available = ", ".join(repr(name) for name in sorted(stores)) or "none"
+    raise EvalConfigError(
+        f"{case_path}: video references unknown store {remote.store!r}; "
+        f"configured stores: {available}"
+    )
+
+
+def _validate_video_suffix(path: Path, *, label: str) -> None:
+    if path.suffix.lower() in SUPPORTED_VIDEO_SUFFIXES:
+        return
+    supported = ", ".join(sorted(SUPPORTED_VIDEO_SUFFIXES))
+    raise EvalConfigError(
+        f"unsupported video file type for {label}; supported suffixes: {supported}"
+    )
 
 
 def _target_config(

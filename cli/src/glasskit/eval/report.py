@@ -108,7 +108,7 @@ class ConsoleReporter:
         self._target_progress.stop()
         self.console.print(
             f"[bold]Case[/bold] {case.name} "
-            f"({sample_count} samples, video={case.video_path.name})",
+            f"({sample_count} samples, video={_case_video_name(case)})",
             highlight=False,
         )
 
@@ -173,7 +173,7 @@ class ConsoleSeedReporter:
         self._target_progress.stop()
         self.console.print(
             f"[bold]Case[/bold] {case.name} "
-            f"({sample_count} expectations, video={case.video_path.name})",
+            f"({sample_count} expectations, video={_case_video_name(case)})",
             highlight=False,
         )
 
@@ -663,6 +663,12 @@ def _target_label_for_case(case: EvalCase, target_id: str) -> str | None:
         (target.label for target in case.targets if target.id == target_id),
         None,
     )
+
+
+def _case_video_name(case: EvalCase) -> str:
+    if case.remote_video is not None:
+        return case.remote_video.display_name
+    return case.video_path.name
 
 
 def _format_target_name(target_id: str, target_label: Any) -> str:

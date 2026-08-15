@@ -14,6 +14,7 @@ from ..expectations import (
     EVAL_CONFIG_FILE_NAMES,
     discover_case_paths,
     expand_sample_timestamps,
+    format_video_reference,
     load_case,
     load_yaml_mapping,
     normalize_case_filter,
@@ -283,7 +284,9 @@ class ReviewRepository:
                 video=_partial_video_from_unparsed_source(source),
             )
 
-        partial_video = VideoDocument(display_path=raw_case.video)
+        partial_video = VideoDocument(
+            display_path=format_video_reference(raw_case.video)
+        )
         try:
             loaded = load_case(
                 path,
@@ -391,7 +394,7 @@ class ReviewRepository:
             video=VideoDocument(
                 url=f"/api/case-files/{quote(path.name, safe='')}/video",
                 frame_url=f"/api/case-files/{quote(path.name, safe='')}/frame",
-                display_path=raw_case.video,
+                display_path=format_video_reference(raw_case.video),
                 content_type=mimetypes.guess_type(video_path.name)[0]
                 or "application/octet-stream",
                 duration_s=metadata.duration_s,
@@ -606,9 +609,20 @@ def _partial_video_from_unparsed_source(source: str) -> VideoDocument | None:
         value = yaml.safe_load(source)
     except (yaml.YAMLError, RecursionError):
         return None
-    if isinstance(value, Mapping) and isinstance(value.get("video"), str):
+    if not isinstance(value, Mapping):
+        return None
+    raw_video = value.get("video")
+    display_path: str | None = None
+    if isinstance(raw_video, str):
+        display_path = raw_video
+    elif isinstance(raw_video, Mapping):
+        store = raw_video.get("store")
+        key = raw_video.get("key")
+        if isinstance(store, str) and isinstance(key, str):
+            display_path = f"{store}:{key}"
+    if display_path is not None:
         try:
-            return VideoDocument(display_path=value["video"])
+            return VideoDocument(display_path=display_path)
         except ValueError:
             return None
     return None

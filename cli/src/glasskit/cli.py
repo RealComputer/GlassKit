@@ -18,10 +18,22 @@ from .eval.checkpoints import (
     checkpoint_path_from_error,
     load_checkpoint,
 )
+from .eval.cloud_video import (
+    materialize_video,
+    prune_video_cache,
+    upload_video,
+    video_cache_dir,
+)
 from .eval.commands import format_command
-from .eval.expectations import load_eval_directory
+from .eval.expectations import load_eval_directory, load_video_stores
 from .eval.frame_export import export_case_frames
-from .eval.models import EvalError, RunOptions, SeedIncompleteError, SeedOptions
+from .eval.models import (
+    EvalConfigError,
+    EvalError,
+    RunOptions,
+    SeedIncompleteError,
+    SeedOptions,
+)
 from .eval.report import (
     ConsoleReporter,
     ConsoleSeedReporter,
@@ -41,7 +53,12 @@ from .eval.seeding import seed_eval, seed_options_from_invocation
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
+cloud_video_app = typer.Typer(
+    no_args_is_help=True,
+    help="Manage videos backed by cloud object storage.",
+)
 app.add_typer(eval_app, name="eval")
+eval_app.add_typer(cloud_video_app, name="cloud-video")
 
 DEFAULT_EVAL_DIR = Path("eval")
 DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
@@ -642,6 +659,7 @@ def eval_list_samples(
             from_time_s=from_time,
             until_time_s=until_time,
             allow_empty=allow_empty,
+            materialize_videos=False,
         )
     except EvalError as error:
         _print_labeled_message(
@@ -649,6 +667,127 @@ def eval_list_samples(
         )
         raise typer.Exit(2) from error
     print_sample_schedule(loaded)
+
+
+@cloud_video_app.command("pull")
+def eval_cloud_video_pull(
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
+    case: Annotated[
+        str | None,
+        typer.Option("--case", help="Only download one case by filename or stem."),
+    ] = None,
+) -> None:
+    """Download and verify remote videos into the local cache."""
+
+    try:
+        loaded = load_eval_directory(
+            eval_dir,
+            case_filter=case,
+            allow_empty=True,
+            allow_draft=True,
+            materialize_videos=False,
+        )
+        stores = load_video_stores(loaded.path)
+        remote_cases = [case for case in loaded.cases if case.remote_video is not None]
+        paths: list[Path] = []
+        seen: set[Path] = set()
+        for loaded_case in remote_cases:
+            remote = loaded_case.remote_video
+            assert remote is not None
+            path = materialize_video(remote, stores[remote.store])
+            if path not in seen:
+                seen.add(path)
+                paths.append(path)
+    except EvalError as error:
+        _print_labeled_message(
+            Console(), "Could not pull cloud videos", str(error), style="red"
+        )
+        raise typer.Exit(2) from error
+    if not remote_cases:
+        typer.echo("No cloud videos are referenced by the selected cases.")
+        return
+    for path in paths:
+        typer.echo(path)
+
+
+@cloud_video_app.command("upload")
+def eval_cloud_video_upload(
+    source: Annotated[
+        Path,
+        typer.Argument(help="Local video file to upload."),
+    ],
+    store_name: Annotated[
+        str,
+        typer.Option("--store", help="Named video store from eval/config.yaml."),
+    ],
+    eval_dir: Annotated[
+        Path, typer.Option("--eval-dir", help="Eval directory.")
+    ] = DEFAULT_EVAL_DIR,
+    key: Annotated[
+        str | None,
+        typer.Option(
+            "--key",
+            help=("Object key. Defaults to an immutable key derived from the SHA-256."),
+        ),
+    ] = None,
+) -> None:
+    """Upload a local video and print its case-file reference."""
+
+    try:
+        stores = load_video_stores(eval_dir)
+        store = stores.get(store_name)
+        if store is None:
+            available = ", ".join(repr(name) for name in sorted(stores)) or "none"
+            raise EvalConfigError(
+                f"unknown video store {store_name!r}; configured stores: {available}"
+            )
+        result = upload_video(source, store, key=key)
+    except EvalError as error:
+        _print_labeled_message(
+            Console(), "Could not upload cloud video", str(error), style="red"
+        )
+        raise typer.Exit(2) from error
+    if result.already_existed:
+        typer.echo("Object already exists with matching size and SHA-256.")
+    typer.echo(
+        yaml.safe_dump(
+            {
+                "video": {
+                    "store": result.store,
+                    "key": result.key,
+                    "sha256": result.sha256,
+                }
+            },
+            sort_keys=False,
+        ).rstrip()
+    )
+
+
+@cloud_video_app.command("prune-cache")
+def eval_cloud_video_prune_cache(
+    all_files: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Remove verified videos too; they will be downloaded again when used.",
+        ),
+    ] = False,
+) -> None:
+    """Remove incomplete transfers, or the complete cloud-video cache."""
+
+    try:
+        count, size = prune_video_cache(remove_verified=all_files)
+    except EvalError as error:
+        _print_labeled_message(
+            Console(), "Could not prune cloud-video cache", str(error), style="red"
+        )
+        raise typer.Exit(2) from error
+    typer.echo(
+        f"Removed {count} cached file{'s' if count != 1 else ''} "
+        f"({_format_byte_count(size)}) from {video_cache_dir()}"
+    )
 
 
 @eval_app.command("export-frames")
@@ -895,6 +1034,15 @@ def _default_adapter_target(eval_dir: Path) -> str:
 
 def _target_filter(targets: list[str] | None) -> tuple[str, ...] | None:
     return tuple(targets) if targets is not None else None
+
+
+def _format_byte_count(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    raise AssertionError("unreachable")
 
 
 def _reject_seed_resume_overrides(

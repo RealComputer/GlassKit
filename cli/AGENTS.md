@@ -17,7 +17,8 @@ GlassKit Eval turns recorded smart-glasses workflows into repeatable evals by sa
 - `pyproject.toml` and `hatch_build.py`: package metadata, `glasskit = "glasskit.cli:app"` console entry point, runtime dependencies, dev tools, and the frontend distribution build hook.
 - `src/glasskit/cli.py`: Typer command definitions and CLI exit-code handling.
 - `src/glasskit/eval/models.py`: dataclasses, protocols, JSON value aliases, result types, and eval errors.
-- `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, timestamp expansion, case/target sample-default resolution, target config merging, and thresholds.
+- `src/glasskit/eval/expectations.py` and `src/glasskit/eval/schemas.py`: eval directory discovery, YAML parsing, local and cloud video reference resolution, timestamp expansion, case/target sample-default resolution, target config merging, and thresholds.
+- `src/glasskit/eval/cloud_video.py`: S3-compatible uploads and authenticated downloads, public HTTP downloads, mandatory SHA-256 verification, content-addressed per-user caching, and cache pruning.
 - `src/glasskit/eval/execution.py`: shared adapter construction and cleanup, on-demand frame cursor consumption, bounded individual-sample concurrency, target-bounded native batch dispatch, adapter timing, JSON observation validation, and cancellation draining.
 - `src/glasskit/eval/checkpoints.py`: durable run and seed manifests, fsynced result journals, input fingerprints, resume validation, and checkpoint discovery.
 - `src/glasskit/eval/seeding.py`: draft expectation selection, adapter-backed labeling, checkpoint recovery, field extraction, deterministic target reconstruction, candidate validation, concurrent-edit protection, and atomic complete-case updates.

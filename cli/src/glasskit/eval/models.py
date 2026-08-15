@@ -36,6 +36,10 @@ class EvalConfigError(EvalError):
     """Raised when an eval directory, case, or CLI option is invalid."""
 
 
+class VideoStoreError(EvalConfigError):
+    """Raised when a remote eval video cannot be transferred or cached."""
+
+
 class AdapterLoadError(EvalError):
     """Raised when an adapter target cannot be imported or constructed."""
 
@@ -116,6 +120,29 @@ class Thresholds:
 
 
 @dataclass(frozen=True)
+class VideoStore:
+    name: str
+    bucket: str
+    endpoint_url: str | None = None
+    region: str = "us-east-1"
+    public_base_url: str | None = None
+    access_key_id_env: str | None = None
+    secret_access_key_env: str | None = None
+    session_token_env: str | None = None
+
+
+@dataclass(frozen=True)
+class RemoteVideo:
+    store: str
+    key: str
+    sha256: str
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.store}:{self.key}"
+
+
+@dataclass(frozen=True)
 class SampleExpectation:
     case_name: str
     target_id: str
@@ -152,6 +179,7 @@ class EvalCase:
     description: str | None
     targets: list[TargetSpec]
     thresholds: Thresholds = dc_field(default_factory=Thresholds)
+    remote_video: RemoteVideo | None = None
 
     @property
     def samples(self) -> list[SampleExpectation]:

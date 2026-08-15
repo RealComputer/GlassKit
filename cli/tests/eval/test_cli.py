@@ -122,6 +122,7 @@ def test_eval_list_samples_passes_exact_sample_times(
 
     assert result.exit_code == 0
     assert captured["at_times_s"] == (167.0, 171.5)
+    assert captured["materialize_videos"] is False
 
 
 @pytest.mark.parametrize(

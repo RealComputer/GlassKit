@@ -399,20 +399,33 @@ def checkpoint_plan_hash(
     for case in eval_directory.cases:
         try:
             source = case.path.read_bytes()
-            video_stat = case.video_path.stat()
         except OSError as error:
             raise EvalConfigError(
                 f"could not fingerprint checkpoint input for {case.name}: {error}"
             ) from error
+        if case.remote_video is not None:
+            video_fingerprint: dict[str, Any] = {
+                "store": case.remote_video.store,
+                "key": case.remote_video.key,
+                "sha256": case.remote_video.sha256,
+            }
+        else:
+            try:
+                video_stat = case.video_path.stat()
+            except OSError as error:
+                raise EvalConfigError(
+                    f"could not fingerprint checkpoint input for {case.name}: {error}"
+                ) from error
+            video_fingerprint = {
+                "path": str(case.video_path.expanduser().resolve()),
+                "size": video_stat.st_size,
+                "mtime_ns": video_stat.st_mtime_ns,
+            }
         cases.append(
             {
                 "path": str(case.path.expanduser().resolve()),
                 "source_sha256": hashlib.sha256(source).hexdigest(),
-                "video": {
-                    "path": str(case.video_path.expanduser().resolve()),
-                    "size": video_stat.st_size,
-                    "mtime_ns": video_stat.st_mtime_ns,
-                },
+                "video": video_fingerprint,
             }
         )
     payload = {"invocation": invocation, "cases": cases}

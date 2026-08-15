@@ -75,7 +75,7 @@ An eval directory is a collection of draft or runnable cases. By default, `glass
 
 A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem.
 
-A video is declared by each case with `video:`. The path is resolved relative to the case file.
+A video is declared by each case with `video:`. The simplest form is a local path resolved relative to the case file. A case can instead reference a SHA-pinned object in a named cloud video store.
 
 A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
 
@@ -221,17 +221,85 @@ your-app-repo/
   eval/
     adapter.py
     adapter.yaml # Optional adapter config file
-    config.yaml # Optional eval config file
+    config.yaml # Optional thresholds and cloud video stores
     cases/
       task-01.yaml # Case file
       task-02.yaml
 ```
 
-You can also keep videos next to the case file and reference them with a local filename such as `video: task-01.mp4`. Tip: You may not want to commit large media files to a regular Git repository because of their size. Consider cloud object storage or Git LFS instead.
+You can also keep videos next to the case file and reference them with a local filename such as `video: task-01.mp4`. Local paths are the simplest setup and remain the default approach.
 
-The `video:` path in the case file is resolved relative to that file.
+The `video:` path in the case file is resolved relative to that file. If recordings are too large to keep locally or share through Git, use a cloud video store as described below.
 
-The adapter config file is optional and must be named `adapter.yaml` for automatic discovery. The eval config file is also optional and supports eval-level `thresholds`; it must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
+The adapter config file is optional and must be named `adapter.yaml` for automatic discovery. The eval config file is also optional and supports eval-level `thresholds` and named `video_stores`; it must be named `config.yaml`. Case files must live directly under `cases/` and use the `.yaml` suffix. Supported video suffixes are `.mp4`, `.mov`, `.m4v`, `.webm`, and `.mkv`. Timestamps in case files are seconds from the start of the decoded clip.
+
+## Cloud-stored Videos
+
+GlassKit supports AWS S3, Cloudflare R2, and other S3-compatible object stores through boto3. Eval commands download a referenced object into a per-user cache, verify its SHA-256, and then use the same local video pipeline as ordinary path-based cases. Repeated runs reuse the verified cache file, and cases that reference identical bytes share one cached copy.
+
+Define a named store in `<eval-dir>/config.yaml`. This R2 example allows anonymous downloads from an `r2.dev` URL while keeping uploads private:
+
+```yaml
+video_stores:
+  origami:
+    type: s3
+    bucket: origami-eval-videos
+    endpoint_url: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+    region: auto
+    public_base_url: https://pub-<R2_DEV_SUBDOMAIN>.r2.dev
+    access_key_id_env: ORIGAMI_R2_ACCESS_KEY_ID
+    secret_access_key_env: ORIGAMI_R2_SECRET_ACCESS_KEY
+```
+
+Then use the store alias in a case:
+
+```yaml
+video:
+  store: origami
+  key: videos/sha256/ab/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789.mp4
+  sha256: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+targets:
+  step_1:
+    samples:
+    - at: 0
+      expect: false
+```
+
+`sha256` is required. It pins the exact recording used by the eval, so replacing an object at the same key cannot silently change labeled frames or checkpoint identity. `size_bytes` is not stored in case YAML; the object store and HTTP response already provide transfer sizes.
+
+When `public_base_url` is set, downloads use ordinary HTTP and require no cloud credentials. Uploads always use the authenticated S3-compatible API. This is useful for a public repository where anyone should be able to run the eval but only maintainers should be able to publish recordings. An R2 `r2.dev` URL is sufficient for development and occasional cached eval downloads; a custom domain is optional.
+
+Without `public_base_url`, downloads and uploads both use boto3 credentials. If the store declares `access_key_id_env` and `secret_access_key_env`, GlassKit reads those exact environment variables. Keep their values in an ignored `.env` file and share them through the team's normal secret manager:
+
+```dotenv
+ORIGAMI_R2_ACCESS_KEY_ID=...
+ORIGAMI_R2_SECRET_ACCESS_KEY=...
+```
+
+If custom credential variable names are omitted, boto3 uses its standard credential chain, including `AWS_ACCESS_KEY_ID`, shared AWS config files, profiles, and instance or task roles. A normal AWS S3 store usually needs only a bucket and region:
+
+```yaml
+video_stores:
+  team-evals:
+    type: s3
+    bucket: team-eval-videos
+    region: us-east-1
+```
+
+Upload a local recording and copy the printed `video:` block into a case:
+
+```sh
+uv run --env-file .env glasskit eval cloud-video upload recordings/task-01.mp4 --store origami
+```
+
+By default, `upload` creates an immutable key from the file's SHA-256 and refuses to overwrite a different existing object. Pass `--key` only when you need a specific object key. Use `pull` to prefetch selected videos, although `run`, `seed`, `validate`, `export-frames`, and the review UI fetch them automatically when needed:
+
+```sh
+uv run glasskit eval cloud-video pull
+uv run glasskit eval cloud-video pull --case task-01
+```
+
+`list-samples` validates cloud references but does not download videos. Cached videos live in the platform's user cache directory. Set `GLASSKIT_EVAL_CACHE_DIR` to override that location. `cloud-video prune-cache` removes stale incomplete transfers; add `--all` to remove verified videos too. Removed videos are downloaded again on demand.
 
 ## Case File Reference
 
@@ -276,7 +344,7 @@ Case fields:
 
 | Field | Required | Description |
 | --- | ---: | --- |
-| `video` | Yes | Video path resolved relative to the case file's directory. |
+| `video` | Yes | Local path resolved relative to the case file, or an object with required `store`, `key`, and `sha256` fields for a cloud video. |
 | `description` | No | Human-readable case note. |
 | `sampling.every_s` | No | Default range sampling interval in seconds. Defaults to `0.5`; must be greater than `0`. |
 | `sample_defaults` | No | Case-wide defaults for sample `field` and `compare`. Target defaults override these values, and sample blocks override both scopes. |
@@ -775,6 +843,23 @@ Commands:
 | `validate` | Check eval structure, videos, sample times, and optional adapter construction without running samples. |
 | `list-samples` | Print the expanded sample schedule for inspection or debugging. |
 | `export-frames` | Export the eval-decoded image at one or more case timestamps. |
+| `cloud-video` | Pull, upload, and prune cached videos backed by cloud object storage. |
+
+### `glasskit eval cloud-video`
+
+Purpose: manage videos backed by an S3-compatible cloud object store. Ordinary eval commands fetch cloud videos automatically.
+
+```sh
+glasskit eval cloud-video --help
+```
+
+Commands:
+
+| Command | Description |
+| --- | --- |
+| `pull` | Download and SHA-verify all selected cloud videos. Accepts `--eval-dir` and optional `--case`. |
+| `upload FILE --store NAME` | Upload a local video through the named store's authenticated S3 API and print a case-file `video:` block. Accepts optional `--key` and `--eval-dir`. |
+| `prune-cache` | Remove stale incomplete transfers. Add `--all` to remove verified cached videos too. |
 
 ### `glasskit eval seed`
 
@@ -954,7 +1039,7 @@ Default values at a glance:
 | `run` adapter | Python target `<eval-dir>/adapter.py:create_evaluator`; replaced when `--adapter-command` is set. |
 | Individual evaluation concurrency | `1`. Increase with `seed --concurrency` or `run --concurrency`. |
 | `<eval-dir>/adapter.yaml` | Optional. Missing file means the adapter receives an empty config object. |
-| `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds. |
+| `<eval-dir>/config.yaml` | Optional. Missing file means no eval-level thresholds or cloud video stores. |
 | Case `sampling.every_s` | `0.5` seconds. |
 | Sample block `every_s` | Inherits the case `sampling.every_s`. |
 | Sample `field` | Inherits target or case `sample_defaults.field`; otherwise compares the whole adapter observation. |
@@ -967,7 +1052,7 @@ Default values at a glance:
 | Frame exports | Written by `export-frames` below `<eval-dir>/runs/frames/<case>/` by default. |
 | Checkpoints | Created automatically below `<eval-dir>/runs/checkpoints/`; completed adapter evaluations are fsynced before the command advances, and new error-only checkpoints are discarded. |
 
-`<eval-dir>/config.yaml` currently supports only eval-level thresholds:
+`<eval-dir>/config.yaml` supports eval-level thresholds and named `video_stores`. Cloud video store examples and credential behavior are documented in [Cloud-stored Videos](#cloud-stored-videos). Thresholds use this form:
 
 ```yaml
 thresholds:
