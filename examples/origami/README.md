@@ -107,13 +107,23 @@ Testing fold checks only by wearing the glasses is slow: every prompt, model, or
 
 Each sample in this project asks whether the current origami step should be considered complete. The default run adapter reuses the live app's reference composition, prompts, Overshoot chat completion, and boolean parsing, but applies them to recorded frames instead of a LiveKit stream. The eval therefore exercises the important production decision path without requiring a live session.
 
-The eval suite lives under `backend/eval/`. `adapter.py` is the default adapter for `glasskit eval run`, `label_adapter.py` uses Gemini to propose draft expectations, and `suggest_criteria.py` and `check_image.py` help investigate and refine step criteria. See the [GlassKit Eval README](../../cli/README.md) for case syntax, command behavior, review controls, filtering, and quality gates.
+The eval suite lives under `backend/eval/`. `adapter.py` is the default adapter for `glasskit eval run`, `label_adapter.py` uses Gemini to propose draft expectations, and `suggest_criteria.py` and `check_image.py` help investigate and refine step criteria. The full-run recording is stored in Cloudflare R2: downloads use its public `r2.dev` URL, while uploads remain authenticated. See the [GlassKit Eval README](../../cli/README.md) for case syntax, cloud video setup, command behavior, review controls, filtering, and quality gates.
 
 The project workflow is: capture a representative run, seed draft labels, review them into fixed ground truth, run the production-like evaluator, diagnose recurring failures, revise the narrowest relevant prompt or criteria, and rerun the fixed suite.
 
 #### Create and Review an Eval
 
-First capture a representative fold-check input recording with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. These recordings contain the camera frames before reference-image composition, so they can be replayed against later evaluator versions. Add or update a case under `backend/eval/cases/` and point it at the recording; `backend/eval/cases/full-run.yaml` is the current full-workflow case.
+First capture a representative fold-check input recording with `ORIGAMI_RECORD_FOLD_CHECK_INPUTS=true`. These recordings contain the camera frames before reference-image composition, so they can be replayed against later evaluator versions. Add or update a case under `backend/eval/cases/`; `backend/eval/cases/full-run.yaml` is the current full-workflow case and points to its SHA-pinned R2 object. Anyone can download that object by running an eval command or `glasskit eval cloud-video pull --case full-run` from `backend/`.
+
+Maintainers can upload a new recording after creating a bucket-scoped R2 Object Read & Write API token and setting `ORIGAMI_R2_ACCESS_KEY_ID` and `ORIGAMI_R2_SECRET_ACCESS_KEY` in the ignored `backend/.env` file:
+
+```sh
+cd backend
+uv run --with-editable ../../../cli --env-file .env \
+  glasskit eval cloud-video upload /path/to/full-run.mp4 --store origami
+```
+
+The command prints the SHA-pinned `video:` block to copy into the case. Readers do not need either R2 variable because `eval/config.yaml` includes the public download URL.
 
 Draft labeling is outside the wearer interaction loop, so it can use a stronger, slower model than the latency-sensitive live evaluator. To propose missing expectations with Gemini, set `GEMINI_API_KEY` in `backend/.env` and explicitly select the labeling adapter:
 

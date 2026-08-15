@@ -1,0 +1,9 @@
+video_stores:
+  origami:
+    type: s3
+    bucket: glasskit-origami-eval-videos
+    endpoint_url: https://04e31e473fd1fdc635f0c6c3be499a62.r2.cloudflarestorage.com
+    region: auto
+    public_base_url: https://pub-322afbdbebb34775ad31da77cc025c3d.r2.dev
+    access_key_id_env: ORIGAMI_R2_ACCESS_KEY_ID
+    secret_access_key_env: ORIGAMI_R2_SECRET_ACCESS_KEY

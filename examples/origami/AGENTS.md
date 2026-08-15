@@ -58,6 +58,7 @@ This project is a server-authoritative origami guide for Rokid Glasses. The glas
 - `src/session_state.py`: session data classes, latest-frame buffer, and grouped fold-check runtime state.
 - `src/origami_config.py`: step config loader.
 - `eval/adapter.py`: recorded-video `glasskit eval` adapter that sends each composed sampled frame through the shared fold-check/Overshoot chat-completion path without LiveKit. It deliberately implements individual `evaluate` calls so `glasskit eval run --concurrency N` can overlap independent requests.
+- `eval/config.yaml` and `eval/cases/full-run.yaml`: public-read/private-upload Cloudflare R2 store configuration and the SHA-pinned full-workflow recording reference. Eval commands download and cache the recording without R2 credentials; maintainers need the ignored R2 upload credentials.
 - `eval/label_adapter.py`: stronger Gemini-backed labeling adapter for proposing draft case expectations through `glasskit eval seed`.
 - `eval/gemini.py`: shared Gemini fold-labeling, image encoding, and sampled-video helpers used by the eval utilities.
 - `eval/check_image.py`: Gemini-backed helper for checking individual camera images against a target step with the seed adapter's labeling path.
