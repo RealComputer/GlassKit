@@ -1,6 +1,6 @@
 video:
   store: origami
-  key: videos/sha256/b3/b3435bca4a34c82a074a89c02e5263ee0d29c037d486ee01334b580a5fa25841.mp4
+  key: b3435bca4a34c82a074a89c02e5263ee0d29c037d486ee01334b580a5fa25841.mp4
   sha256: b3435bca4a34c82a074a89c02e5263ee0d29c037d486ee01334b580a5fa25841
 description: Full origami workflow recording
 sampling:
