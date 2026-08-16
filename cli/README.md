@@ -75,7 +75,7 @@ An eval directory is a collection of draft or runnable cases. By default, `glass
 
 A case file is one YAML file under `<eval-dir>/cases/`. The case name is the filename stem.
 
-A video is declared by each case with `video:`. The simplest form is a local path resolved relative to the case file. A case can instead reference a SHA-pinned object in a named cloud video store.
+A video is declared by each case with `video:`. It can be a local path resolved relative to the case file or an object in a named cloud video store.
 
 A target is one thing the adapter should evaluate, such as `step_1`, `ready_state`, or `detected_objects`.
 
@@ -227,7 +227,7 @@ your-app-repo/
       task-02.yaml
 ```
 
-You can also keep videos next to the case file and reference them with a local filename such as `video: task-01.mp4`. Local paths are the simplest setup and remain the default approach.
+You can also keep videos next to the case file and reference them with a local filename such as `video: task-01.mp4`. Local paths are the simplest setup.
 
 The `video:` path in the case file is resolved relative to that file. If recordings are too large to keep locally or share through Git, use a cloud video store as described below.
 
@@ -235,27 +235,39 @@ The adapter config file is optional and must be named `adapter.yaml` for automat
 
 ## Cloud-stored Videos
 
-GlassKit supports AWS S3, Cloudflare R2, and other S3-compatible object stores through boto3. Eval commands download a referenced object into a per-user cache, verify its SHA-256, and then use the same local video pipeline as ordinary path-based cases. Repeated runs reuse the verified cache file, and cases that reference identical bytes share one cached copy.
+GlassKit supports AWS S3, Cloudflare R2, and other S3-compatible object stores. This keeps large recordings out of your app repository and makes them easier to share with a team. Eval commands download videos when needed and reuse cached copies on later runs.
 
-Define a named store in `<eval-dir>/config.yaml`. This R2 example allows anonymous downloads from an `r2.dev` URL while keeping uploads private:
+Define a named store in `<eval-dir>/config.yaml`. For a private Cloudflare R2 store, configure credentials through environment variables:
 
 ```yaml
 video_stores:
-  origami:
+  team-videos:
     type: s3
-    bucket: origami-eval-videos
+    bucket: team-eval-videos
     endpoint_url: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
     region: auto
-    public_base_url: https://pub-<R2_DEV_SUBDOMAIN>.r2.dev
-    access_key_id_env: ORIGAMI_R2_ACCESS_KEY_ID
-    secret_access_key_env: ORIGAMI_R2_SECRET_ACCESS_KEY
+    access_key_id_env: EVAL_STORAGE_ACCESS_KEY_ID
+    secret_access_key_env: EVAL_STORAGE_SECRET_ACCESS_KEY
 ```
 
-Then use the store alias in a case:
+Keep the credential values in an ignored `.env` file or your team's secret manager:
+
+```dotenv
+EVAL_STORAGE_ACCESS_KEY_ID=...
+EVAL_STORAGE_SECRET_ACCESS_KEY=...
+```
+
+Upload a recording from the directory containing your eval setup:
+
+```sh
+uv run --env-file .env glasskit eval cloud-video upload recordings/task-01.mp4 --store team-videos
+```
+
+The command prints a `video:` block to copy into the case file:
 
 ```yaml
 video:
-  store: origami
+  store: team-videos
   key: videos/sha256/ab/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789.mp4
   sha256: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
 targets:
@@ -265,18 +277,9 @@ targets:
       expect: false
 ```
 
-`sha256` is required. It pins the exact recording used by the eval, so replacing an object at the same key cannot silently change labeled frames or checkpoint identity. `size_bytes` is not stored in case YAML; the object store and HTTP response already provide transfer sizes.
+The `store`, `key`, and `sha256` values identify the uploaded video. Copy them as printed rather than writing them by hand. Ordinary `run`, `seed`, `validate`, `export-frames`, and `review` commands download cloud videos automatically.
 
-When `public_base_url` is set, downloads use ordinary HTTP and require no cloud credentials. Uploads always use the authenticated S3-compatible API. This is useful for a public repository where anyone should be able to run the eval but only maintainers should be able to publish recordings. An R2 `r2.dev` URL is sufficient for development and occasional cached eval downloads; a custom domain is optional.
-
-Without `public_base_url`, downloads and uploads both use boto3 credentials. If the store declares `access_key_id_env` and `secret_access_key_env`, GlassKit reads those exact environment variables. Keep their values in an ignored `.env` file and share them through the team's normal secret manager:
-
-```dotenv
-ORIGAMI_R2_ACCESS_KEY_ID=...
-ORIGAMI_R2_SECRET_ACCESS_KEY=...
-```
-
-If custom credential variable names are omitted, boto3 uses its standard credential chain, including `AWS_ACCESS_KEY_ID`, shared AWS config files, profiles, and instance or task roles. A normal AWS S3 store usually needs only a bucket and region:
+For AWS S3, omit `endpoint_url` and use the bucket's AWS region. You can also omit the custom credential variable names to use the standard AWS credential configuration:
 
 ```yaml
 video_stores:
@@ -286,20 +289,32 @@ video_stores:
     region: us-east-1
 ```
 
-Upload a local recording and copy the printed `video:` block into a case:
+Omit `--key` when uploading to let GlassKit choose an object key. Existing objects are not overwritten. Use `pull` when you want to download selected videos ahead of time:
 
 ```sh
-uv run --env-file .env glasskit eval cloud-video upload recordings/task-01.mp4 --store origami
+uv run --env-file .env glasskit eval cloud-video pull
+uv run --env-file .env glasskit eval cloud-video pull --case task-01
 ```
 
-By default, `upload` creates an immutable key from the file's SHA-256 and refuses to overwrite a different existing object. Pass `--key` only when you need a specific object key. Use `pull` to prefetch selected videos, although `run`, `seed`, `validate`, `export-frames`, and the review UI fetch them automatically when needed:
+`list-samples` validates cloud references without downloading videos. To clear downloaded videos, run `glasskit eval cloud-video prune-cache --all`; they will be downloaded again when needed.
 
-```sh
-uv run glasskit eval cloud-video pull
-uv run glasskit eval cloud-video pull --case task-01
+### Public Downloads
+
+For a public repository, you may want anyone to run the eval without storage credentials while allowing only maintainers to upload. Expose the bucket through a public HTTP URL and add it to the store:
+
+```yaml
+video_stores:
+  public-evals:
+    type: s3
+    bucket: public-eval-videos
+    endpoint_url: https://<S3_API_ENDPOINT>
+    region: <REGION>
+    public_base_url: https://<PUBLIC_BUCKET_HOST>
+    access_key_id_env: EVAL_STORAGE_ACCESS_KEY_ID
+    secret_access_key_env: EVAL_STORAGE_SECRET_ACCESS_KEY
 ```
 
-`list-samples` validates cloud references but does not download videos. Cached videos live in the platform's user cache directory. Set `GLASSKIT_EVAL_CACHE_DIR` to override that location. `cloud-video prune-cache` removes stale incomplete transfers; add `--all` to remove verified videos too. Removed videos are downloaded again on demand.
+Downloads then use `public_base_url` without credentials. Uploads still require the configured credentials.
 
 ## Case File Reference
 
@@ -857,9 +872,9 @@ Commands:
 
 | Command | Description |
 | --- | --- |
-| `pull` | Download and SHA-verify all selected cloud videos. Accepts `--eval-dir` and optional `--case`. |
+| `pull` | Download all selected cloud videos. Accepts `--eval-dir` and optional `--case`. |
 | `upload FILE --store NAME` | Upload a local video through the named store's authenticated S3 API and print a case-file `video:` block. Accepts optional `--key` and `--eval-dir`. |
-| `prune-cache` | Remove stale incomplete transfers. Add `--all` to remove verified cached videos too. |
+| `prune-cache` | Remove stale incomplete downloads. Add `--all` to remove downloaded videos too. |
 
 ### `glasskit eval seed`
 
