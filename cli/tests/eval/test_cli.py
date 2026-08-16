@@ -22,6 +22,10 @@ from glasskit.eval.models import (
 )
 
 
+def _plain_output(output: str) -> str:
+    return " ".join(Text.from_ansi(output).plain.split())
+
+
 def test_root_version_option_prints_installed_package_version() -> None:
     result = CliRunner().invoke(app, ["--version"])
 
@@ -46,6 +50,86 @@ def test_eval_help_lists_current_commands() -> None:
     assert "list-samples" in result.output
     assert "export-frames" in result.output
     assert "init-case" not in result.output
+
+
+def test_root_help_explains_recursive_help_discovery() -> None:
+    result = CliRunner().invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    output = _plain_output(result.output)
+    assert "glasskit COMMAND --help" in output
+    assert "continue recursively" in output
+    assert "glasskit eval video-store upload --help" in output
+
+
+def test_eval_help_documents_case_and_adapter_contracts() -> None:
+    result = CliRunner().invoke(app, ["eval", "--help"])
+
+    assert result.exit_code == 0
+    output = _plain_output(result.output)
+    for expected in (
+        "eval/ adapter.py",
+        "video: task-01.mp4",
+        "expect: null is a real expectation",
+        "range sampled every every_s seconds",
+        "json_subset",
+        "create_evaluator(context)",
+        "evaluate_many(samples, target)",
+        "image, target_id",
+        "dataBase64",
+        '"method":"cancel"',
+        "video-store is another command group",
+    ):
+        assert expected in output
+
+
+def test_eval_run_help_documents_ci_and_recovery_contracts() -> None:
+    result = CliRunner().invoke(app, ["eval", "run", "--help"])
+
+    assert result.exit_code == 0
+    output = _plain_output(result.output)
+    for expected in (
+        "No correctness threshold is enabled by default",
+        "failed comparisons are reported",
+        "setting either suppresses case-level gates",
+        "measures status variation across trials, not correctness",
+        "Resume retries only adapter-error and unfinished slots",
+        "Exit 0 means every configured gate passed",
+        "1 means execution completed but a gate failed",
+        "--min-pass-rate 0.9",
+    ):
+        assert expected in output
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("seed", "mutates selected case YAML"),
+        ("validate", "the default adapter is not loaded"),
+        ("list-samples", "does not download or decode videos"),
+        ("export-frames", "times do not need to be declared eval samples"),
+        ("review", "writes edits directly to case YAML"),
+    ],
+)
+def test_eval_leaf_help_documents_non_obvious_effects(
+    command: str, expected: str
+) -> None:
+    result = CliRunner().invoke(app, ["eval", command, "--help"])
+
+    assert result.exit_code == 0
+    assert expected in _plain_output(result.output)
+
+
+def test_eval_video_store_help_documents_configuration_and_cache_scope() -> None:
+    result = CliRunner().invoke(app, ["eval", "video-store", "--help"])
+
+    assert result.exit_code == 0
+    output = _plain_output(result.output)
+    assert "video_stores:" in output
+    assert "access_key_id_env" in output
+    assert "standard AWS credential chain" in output
+    assert "per-user cache outside the eval directory" in output
+    assert "GLASSKIT_EVAL_CACHE_DIR" in output
 
 
 def test_eval_commands_define_target_filter() -> None:
