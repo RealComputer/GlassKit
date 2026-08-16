@@ -1,16 +1,18 @@
 # GlassKit Eval
 
-GlassKit Eval helps you test smart-glasses apps with recorded videos instead of repeated manual runs. Label the moments that matter, connect your app through a language-agnostic adapter, and rerun the same checks locally or in CI.
+GlassKit Eval turns recorded video into repeatable evals for apps that make decisions from images. Label the moments that matter, connect your app through a language-agnostic adapter, and rerun the same checks locally or in CI.
+
+The eval loop is not tied to glasses or a particular model provider. It works for robotics, camera automation, video-analysis pipelines, multimodal model features, and other systems that can evaluate a sampled frame and return a JSON-like observation.
 
 Use GlassKit Eval through the `glasskit eval` command group. This is its user manual; for contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
 ## Why Use This?
 
-Smart-glasses apps often guide a wearer through a task. They watch the live camera feed, track workflow progress, and provide the next instruction or correction when it is useful.
+Vision-based apps often turn camera input into a structured decision: whether a workflow step is complete, which objects are present, what state a scene is in, or what action should happen next. Recreating those scenes by hand for every prompt, model, or app logic change is slow and makes regressions difficult to reproduce.
 
-These apps are hard to test manually because every prompt, model, or app logic change can mean repeating the same physical workflow. With `glasskit eval`, you provide a workflow recording, label the expected moments, and replay the same checks whenever the app changes.
+With `glasskit eval`, you provide a recording, label expected outputs at selected moments, and replay the same checks whenever the app changes. The adapter boundary lets the eval exercise existing application logic regardless of its implementation language, while quality gates turn the results into a useful local or CI signal.
 
-Use it when you want a reliable way to test the vision path users depend on and enforce quality gates in CI.
+GlassKit Eval is a good fit when your behavior can be tested from sampled video frames and expressed as JSON-like outputs. It is intentionally frame-oriented; apps that require continuous video, audio, or other sensor streams may need an adapter that reconstructs that context.
 
 ## Installation
 
