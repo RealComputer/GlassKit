@@ -168,7 +168,7 @@ def upload_video(
 
 
 def default_object_key(source: Path, digest: str) -> str:
-    return f"videos/sha256/{digest[:2]}/{digest}{source.suffix.lower()}"
+    return f"{digest}{source.suffix.lower()}"
 
 
 def _require_video_suffix(name: str) -> None:

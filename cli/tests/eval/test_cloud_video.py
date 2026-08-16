@@ -278,7 +278,7 @@ def test_upload_uses_immutable_default_key_and_sha_metadata(
 
     result = upload_video(source, VideoStore(name="demo", bucket="evals"))
 
-    expected_key = f"videos/sha256/{digest[:2]}/{digest}.mp4"
+    expected_key = f"{digest}.mp4"
     assert result.key == expected_key
     assert result.sha256 == digest
     assert captured["upload"] == (
@@ -307,15 +307,15 @@ def test_remote_checkpoint_fingerprint_does_not_depend_on_cache_file(
     assert second == first
 
 
-def test_cloud_video_cli_is_distinct_from_local_video_commands() -> None:
+def test_video_store_cli_is_distinct_from_local_video_commands() -> None:
     eval_help = CliRunner().invoke(app, ["eval", "--help"])
-    cloud_help = CliRunner().invoke(app, ["eval", "cloud-video", "--help"])
+    store_help = CliRunner().invoke(app, ["eval", "video-store", "--help"])
 
     assert eval_help.exit_code == 0
-    assert "cloud-video" in eval_help.output
-    assert cloud_help.exit_code == 0
+    assert "video-store" in eval_help.output
+    assert store_help.exit_code == 0
     for command in ("pull", "upload", "prune-cache"):
-        assert command in cloud_help.output
+        assert command in store_help.output
 
 
 def test_cloud_video_pull_ignores_unrelated_missing_local_video(
@@ -342,7 +342,7 @@ def test_cloud_video_pull_ignores_unrelated_missing_local_video(
         )
         result = CliRunner().invoke(
             app,
-            ["eval", "cloud-video", "pull", "--eval-dir", str(eval_dir)],
+            ["eval", "video-store", "pull", "--eval-dir", str(eval_dir)],
         )
 
     assert result.exit_code == 0

@@ -53,12 +53,12 @@ from .eval.seeding import seed_eval, seed_options_from_invocation
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Recorded-video eval tools.")
-cloud_video_app = typer.Typer(
+video_store_app = typer.Typer(
     no_args_is_help=True,
     help="Manage videos backed by cloud object storage.",
 )
 app.add_typer(eval_app, name="eval")
-eval_app.add_typer(cloud_video_app, name="cloud-video")
+eval_app.add_typer(video_store_app, name="video-store")
 
 DEFAULT_EVAL_DIR = Path("eval")
 DEFAULT_ADAPTER_CALLABLE = "create_evaluator"
@@ -669,8 +669,8 @@ def eval_list_samples(
     print_sample_schedule(loaded)
 
 
-@cloud_video_app.command("pull")
-def eval_cloud_video_pull(
+@video_store_app.command("pull")
+def eval_video_store_pull(
     eval_dir: Annotated[
         Path, typer.Option("--eval-dir", help="Eval directory.")
     ] = DEFAULT_EVAL_DIR,
@@ -712,8 +712,8 @@ def eval_cloud_video_pull(
         typer.echo(path)
 
 
-@cloud_video_app.command("upload")
-def eval_cloud_video_upload(
+@video_store_app.command("upload")
+def eval_video_store_upload(
     source: Annotated[
         Path,
         typer.Argument(help="Local video file to upload."),
@@ -765,8 +765,8 @@ def eval_cloud_video_upload(
     )
 
 
-@cloud_video_app.command("prune-cache")
-def eval_cloud_video_prune_cache(
+@video_store_app.command("prune-cache")
+def eval_video_store_prune_cache(
     all_files: Annotated[
         bool,
         typer.Option(
@@ -775,13 +775,13 @@ def eval_cloud_video_prune_cache(
         ),
     ] = False,
 ) -> None:
-    """Remove incomplete transfers, or the complete cloud-video cache."""
+    """Remove incomplete transfers, or the complete downloaded-video cache."""
 
     try:
         count, size = prune_video_cache(remove_verified=all_files)
     except EvalError as error:
         _print_labeled_message(
-            Console(), "Could not prune cloud-video cache", str(error), style="red"
+            Console(), "Could not prune downloaded-video cache", str(error), style="red"
         )
         raise typer.Exit(2) from error
     typer.echo(

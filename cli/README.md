@@ -260,7 +260,7 @@ EVAL_STORAGE_SECRET_ACCESS_KEY=...
 Upload a recording from the directory containing your eval setup:
 
 ```sh
-uv run --env-file .env glasskit eval cloud-video upload recordings/task-01.mp4 --store team-videos
+uv run --env-file .env glasskit eval video-store upload recordings/task-01.mp4 --store team-videos
 ```
 
 The command prints a `video:` block to copy into the case file:
@@ -268,7 +268,7 @@ The command prints a `video:` block to copy into the case file:
 ```yaml
 video:
   store: team-videos
-  key: videos/sha256/ab/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789.mp4
+  key: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789.mp4
   sha256: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
 targets:
   step_1:
@@ -289,14 +289,14 @@ video_stores:
     region: us-east-1
 ```
 
-Omit `--key` when uploading to let GlassKit choose an object key. Existing objects are not overwritten. Use `pull` when you want to download selected videos ahead of time:
+Omit `--key` when uploading to let GlassKit use `<sha256><extension>` as the object key. Existing objects are not overwritten. Use `pull` when you want to download selected videos ahead of time:
 
 ```sh
-uv run --env-file .env glasskit eval cloud-video pull
-uv run --env-file .env glasskit eval cloud-video pull --case task-01
+uv run --env-file .env glasskit eval video-store pull
+uv run --env-file .env glasskit eval video-store pull --case task-01
 ```
 
-`list-samples` validates cloud references without downloading videos. To clear downloaded videos, run `glasskit eval cloud-video prune-cache --all`; they will be downloaded again when needed.
+`list-samples` validates cloud references without downloading videos. To clear downloaded videos, run `glasskit eval video-store prune-cache --all`; they will be downloaded again when needed.
 
 ### Public Downloads
 
@@ -858,14 +858,14 @@ Commands:
 | `validate` | Check eval structure, videos, sample times, and optional adapter construction without running samples. |
 | `list-samples` | Print the expanded sample schedule for inspection or debugging. |
 | `export-frames` | Export the eval-decoded image at one or more case timestamps. |
-| `cloud-video` | Pull, upload, and prune cached videos backed by cloud object storage. |
+| `video-store` | Pull, upload, and prune cached videos backed by cloud object storage. |
 
-### `glasskit eval cloud-video`
+### `glasskit eval video-store`
 
 Purpose: manage videos backed by an S3-compatible cloud object store. Ordinary eval commands fetch cloud videos automatically.
 
 ```sh
-glasskit eval cloud-video --help
+glasskit eval video-store --help
 ```
 
 Commands:
