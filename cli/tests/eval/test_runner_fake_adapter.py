@@ -120,6 +120,10 @@ def test_runner_handles_malformed_evaluate_many_return(tmp_path: Path) -> None:
     asyncio.run(_run_malformed_evaluate_many_return_test(tmp_path))
 
 
+def test_runner_rejects_non_sequence_evaluate_many_return(tmp_path: Path) -> None:
+    asyncio.run(_run_non_sequence_evaluate_many_return_test(tmp_path))
+
+
 def test_runner_reports_ignored_samples_without_evaluating_or_scoring_them(
     tmp_path: Path,
 ) -> None:
@@ -1017,5 +1021,68 @@ def create_evaluator(config):
             RunOptions(
                 eval_dir=eval_dir,
                 adapter=f"{adapter_path}:create_evaluator",
+            )
+        )
+
+
+async def _run_non_sequence_evaluate_many_return_test(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "eval"
+    cases_dir = eval_dir / "cases"
+    cases_dir.mkdir(parents=True)
+    (cases_dir / "case-001.yaml").write_text(
+        f"""
+video: "{TWO_STATE_VIDEO}"
+targets:
+  step_1:
+    samples:
+      - at: 0.0
+        expect: true
+        """,
+        encoding="utf-8",
+    )
+    adapter_path = tmp_path / "fake_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    def __init__(self, observations):
+        self._observations = observations
+
+    async def evaluate_many(self, samples, target):
+        return self._observations
+
+
+def dict_evaluator(config):
+    return Evaluator({"step_1": True})
+
+
+def str_evaluator(config):
+    return Evaluator("x")
+        """,
+        encoding="utf-8",
+    )
+
+    for factory, type_name in (("dict_evaluator", "dict"), ("str_evaluator", "str")):
+        report = await run_eval(
+            RunOptions(
+                eval_dir=eval_dir,
+                adapter=f"{adapter_path}:{factory}",
+                keep_going=True,
+            )
+        )
+        result = report.trials[0].results[0]
+        assert result.status == "error"
+        assert (
+            f"returned {type_name} instead of a sequence of observations"
+            in result.reason
+        )
+
+    with pytest.raises(
+        AdapterRuntimeError,
+        match="returned dict instead of a sequence of observations",
+    ):
+        await run_eval(
+            RunOptions(
+                eval_dir=eval_dir,
+                adapter=f"{adapter_path}:dict_evaluator",
             )
         )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Mapping, Set
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -132,7 +132,13 @@ async def _evaluate_sample_batch(
 ) -> list[EvaluationOutcome]:
     started_at = perf_counter()
     try:
-        observation_items = list(await evaluator.evaluate_many(frames, target))
+        observations = await evaluator.evaluate_many(frames, target)
+        if isinstance(observations, (str, bytes, bytearray, Mapping, Set)):
+            raise AdapterRuntimeError(
+                f"adapter returned {type(observations).__name__} instead of a "
+                f"sequence of observations for target {target.id!r}"
+            )
+        observation_items = list(observations)
         if len(observation_items) != len(samples):
             raise AdapterRuntimeError(
                 f"adapter returned {len(observation_items)} observations for "
