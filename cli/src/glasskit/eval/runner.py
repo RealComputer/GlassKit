@@ -210,12 +210,12 @@ async def run_eval(
             resumed=options.resume_checkpoint is not None,
             resumable_error_count=resumable_error_count,
         )
-        if resumable_error_count == 0:
-            checkpoint.mark_complete()
-        elif not checkpoint.has_reusable_results:
+        if resumable_error_count != 0 and not checkpoint.has_reusable_results:
             discard_checkpoint = True
         if options.output_json is not None:
             write_json_report(report, options.output_json)
+        if resumable_error_count == 0:
+            checkpoint.mark_complete()
         return report
     except BaseException as error:
         if checkpoint.has_reusable_results:

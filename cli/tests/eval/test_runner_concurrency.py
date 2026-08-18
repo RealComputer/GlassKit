@@ -295,6 +295,56 @@ def test_run_resume_reuses_results_before_a_fail_fast_error(
     assert report.success
 
 
+def test_run_report_write_failure_leaves_completed_work_resumable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_dir = _write_eval(
+        tmp_path,
+        """
+  step:
+    samples:
+      - at: 0.0
+        expect: false
+        """,
+    )
+    output_parent = tmp_path / "blocked-output-parent"
+    output_parent.write_text("occupied", encoding="utf-8")
+    output_json = output_parent / "report.json"
+    first = AsyncTrackingEvaluator()
+
+    with pytest.raises(EvalConfigError, match="could not write JSON report") as raised:
+        asyncio.run(
+            _run_with_evaluator(
+                monkeypatch,
+                first,
+                eval_dir=eval_dir,
+                output_json=output_json,
+            )
+        )
+
+    assert first.completed == [0]
+    checkpoint_path = raised.value.checkpoint_path
+    assert checkpoint_path is not None
+    output_parent.unlink()
+    output_parent.mkdir()
+    resumed = AsyncTrackingEvaluator()
+
+    report = asyncio.run(
+        _run_with_evaluator(
+            monkeypatch,
+            resumed,
+            eval_dir=eval_dir,
+            output_json=output_json,
+            resume_checkpoint=checkpoint_path,
+        )
+    )
+
+    assert report.success
+    assert report.resumed
+    assert resumed.completed == []
+    assert output_json.is_file()
+
+
 def test_run_setup_failure_discards_checkpoint_without_exposing_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -471,6 +521,7 @@ async def _run_with_evaluator(
     batch: bool = False,
     callbacks: Any = None,
     resume_checkpoint: Path | None = None,
+    output_json: Path | None = None,
 ) -> Any:
     loaded = LoadedEvaluator(
         evaluate=getattr(evaluator, "evaluate", None),
@@ -489,6 +540,7 @@ async def _run_with_evaluator(
             concurrency=concurrency,
             keep_going=keep_going,
             resume_checkpoint=resume_checkpoint,
+            output_json=output_json,
         ),
         callbacks=callbacks,
     )
