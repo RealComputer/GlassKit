@@ -145,6 +145,19 @@ def _exact_equal(observed: Any, expected: Any) -> bool:
             and isinstance(observed, bool)
             and observed == expected
         )
+    if isinstance(expected, Mapping) or isinstance(observed, Mapping):
+        if not isinstance(expected, Mapping) or not isinstance(observed, Mapping):
+            return False
+        return observed.keys() == expected.keys() and all(
+            _exact_equal(observed[key], expected[key]) for key in expected
+        )
+    if isinstance(expected, list) or isinstance(observed, list):
+        if not isinstance(expected, list) or not isinstance(observed, list):
+            return False
+        return len(observed) == len(expected) and all(
+            _exact_equal(observed_item, expected_item)
+            for observed_item, expected_item in zip(observed, expected, strict=True)
+        )
     return observed == expected
 
 

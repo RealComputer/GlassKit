@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from glasskit.eval.compare import compare_observation
 from glasskit.eval.models import ComparisonConfig, SampleExpectation
 
@@ -12,6 +14,37 @@ def test_exact_boolean_does_not_match_integer() -> None:
     outcome = compare_observation(1, sample)
 
     assert not outcome.passed
+
+
+@pytest.mark.parametrize(
+    ("expected", "observed"),
+    [
+        ({"ready": True}, {"ready": 1}),
+        ([False], [0]),
+        ({"steps": [{"ready": True}]}, {"steps": [{"ready": 1}]}),
+        ({"ready": 1}, {"ready": True}),
+    ],
+)
+def test_exact_nested_boolean_does_not_match_number(
+    expected: object, observed: object
+) -> None:
+    outcome = compare_observation(observed, _sample(expected=expected))
+
+    assert not outcome.passed
+
+
+def test_exact_nested_json_values_match_recursively() -> None:
+    value = {"steps": [{"ready": True, "score": 1}, None]}
+
+    outcome = compare_observation(value, _sample(expected=value))
+
+    assert outcome.passed
+
+
+def test_exact_nested_integer_matches_equivalent_float() -> None:
+    outcome = compare_observation({"score": 1.0}, _sample(expected={"score": 1}))
+
+    assert outcome.passed
 
 
 def test_numeric_tolerance() -> None:
