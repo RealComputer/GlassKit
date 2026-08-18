@@ -1,5 +1,4 @@
 /.env
 /debug/
 __pycache__/
-/eval/runs/generate-case
-/eval/runs/suggest-criteria
+/eval/runs
