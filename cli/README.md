@@ -8,6 +8,8 @@ Use GlassKit Eval through the `glasskit eval` command group. This is its user ma
 
 Contents: [Why Use This?](#why-use-this) · [How It Works](#how-it-works) · [Installation](#installation) · [Quickstart](#quickstart) · [Core Concepts](#core-concepts) · [Common Workflows](#common-workflows) · [Eval Directory Layout](#eval-directory-layout) · [Cloud-stored Videos](#cloud-stored-videos) · [Case File Reference](#case-file-reference) · [Comparison Reference](#comparison-reference) · [Adapter Reference](#adapter-reference) · [Command Reference](#command-reference) · [Configuration](#configuration) · [Environment Variables](#environment-variables) · [Output Formats](#output-formats) · [Exit Codes](#exit-codes) · [Support](#support)
 
+![screenshot](https://github.com/user-attachments/assets/eba04700-6519-40f3-8d03-72b1abc479a0)
+
 ## Why Use This?
 
 Vision-based apps often turn camera input into a structured decision: whether a workflow step is complete, which objects are present, what state a scene is in, or what action should happen next. Recreating those scenes by hand for every prompt, model, or app logic change is slow and makes regressions difficult to reproduce.
