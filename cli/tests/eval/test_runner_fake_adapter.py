@@ -3,14 +3,21 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
-from glasskit.eval.models import AdapterRuntimeError, RunOptions
+from glasskit.eval.models import (
+    AdapterRuntimeError,
+    EvalConfigError,
+    EvalRunReport,
+    RunOptions,
+)
 from glasskit.eval.runner import (
     run_checkpoint_invocation,
     run_eval,
     run_options_from_invocation,
+    write_json_report,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -92,6 +99,17 @@ def test_runner_records_duration_in_report_and_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     asyncio.run(_run_duration_report_test(tmp_path, monkeypatch))
+
+
+def test_json_report_write_errors_are_eval_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    non_directory = tmp_path / "not-a-directory"
+    non_directory.write_text("occupied", encoding="utf-8")
+    monkeypatch.setattr("glasskit.eval.runner._report_to_json", lambda report: {})
+
+    with pytest.raises(EvalConfigError, match="could not write JSON report"):
+        write_json_report(cast(EvalRunReport, object()), non_directory / "report.json")
 
 
 def test_runner_preserves_eval_error_when_close_also_fails(tmp_path: Path) -> None:
