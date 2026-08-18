@@ -26,11 +26,11 @@ case file ─▶ sample schedule ─▶ decoded frames ─▶ adapter ─▶ obs
        exit code ◀─ quality gates ◀─ report ◀─ compare vs expect ◀┘
 ```
 
-1. A case file names a video and declares samples — single `at` timestamps or `range` blocks expanded every `every_s` seconds — with the expected JSON-like value at each one.
+1. A case file names a video and declares samples — single `at` timestamps or `range` blocks expanded every `every_s` seconds. Labeled samples include an expected JSON-like value; drafts omit `expect`, and ignored samples may omit it.
 2. `glasskit eval run` checks the eval structure, videos, and sample times, expands the schedule, and decodes the frame nearest each scheduled timestamp.
 3. Each frame goes to your adapter, which runs your app's logic and returns a JSON-like observation.
-4. The CLI extracts the configured `field` from the observation, if any, and compares the value against the sample's `expect` using the sample's comparison settings, recording a pass, fail, or error for that sample.
-5. Results are printed as tables and optionally written as a JSON report, and any configured quality gates turn them into the run's exit code — the CI signal.
+4. The CLI extracts the configured `field` from the observation, if any, and compares the value against the sample's `expect` using the sample's comparison settings, recording a pass or fail.
+5. Completed runs are printed as tables and optionally written as a JSON report, and any configured quality gates turn them into the run's exit code — the CI signal.
 
 The labeling commands work on the same pipeline: `seed` sends draft samples through the adapter and writes the results back as proposed `expect` values instead of comparing them, and `review` opens a browser UI for checking and editing labels against the video.
 
