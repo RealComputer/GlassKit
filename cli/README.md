@@ -6,7 +6,7 @@ The eval loop is not tied to glasses or a particular model provider. It works fo
 
 Use GlassKit Eval through the `glasskit eval` command group. This is its user manual; for contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
-Contents: [Why Use This?](#why-use-this) · [Installation](#installation) · [Quickstart](#quickstart) · [Core Concepts](#core-concepts) · [Common Workflows](#common-workflows) · [Eval Directory Layout](#eval-directory-layout) · [Cloud-stored Videos](#cloud-stored-videos) · [Case File Reference](#case-file-reference) · [Comparison Reference](#comparison-reference) · [Adapter Reference](#adapter-reference) · [Command Reference](#command-reference) · [Configuration](#configuration) · [Environment Variables](#environment-variables) · [Output Formats](#output-formats) · [Exit Codes](#exit-codes) · [Support](#support)
+Contents: [Why Use This?](#why-use-this) · [How It Works](#how-it-works) · [Installation](#installation) · [Quickstart](#quickstart) · [Core Concepts](#core-concepts) · [Common Workflows](#common-workflows) · [Eval Directory Layout](#eval-directory-layout) · [Cloud-stored Videos](#cloud-stored-videos) · [Case File Reference](#case-file-reference) · [Comparison Reference](#comparison-reference) · [Adapter Reference](#adapter-reference) · [Command Reference](#command-reference) · [Configuration](#configuration) · [Environment Variables](#environment-variables) · [Output Formats](#output-formats) · [Exit Codes](#exit-codes) · [Support](#support)
 
 ## Why Use This?
 
@@ -15,6 +15,24 @@ Vision-based apps often turn camera input into a structured decision: whether a 
 With `glasskit eval`, you provide a recording, label expected outputs at selected moments, and replay the same checks whenever the app changes. The adapter boundary lets the eval exercise existing application logic regardless of its implementation language, while quality gates turn the results into a useful local or CI signal.
 
 GlassKit Eval is a good fit when your behavior can be tested from sampled video frames and expressed as JSON-like outputs. It is intentionally frame-oriented; apps that require continuous video, audio, or other sensor streams may need an adapter that reconstructs that context.
+
+## How It Works
+
+Every eval command is a view of one pipeline:
+
+```text
+case file ─▶ sample schedule ─▶ decoded frames ─▶ adapter ─▶ observations
+                                                                  │
+       exit code ◀─ quality gates ◀─ report ◀─ compare vs expect ◀┘
+```
+
+1. A case file names a video and declares samples — single `at` timestamps or `range` blocks expanded every `every_s` seconds — with the expected JSON-like value at each one.
+2. `glasskit eval run` checks the eval structure, videos, and sample times, expands the schedule, and decodes the frame nearest each scheduled timestamp.
+3. Each frame goes to your adapter, which runs your app's logic and returns a JSON-like observation.
+4. The CLI extracts the configured `field` from the observation, if any, and compares the value against the sample's `expect` using the sample's comparison settings, recording a pass, fail, or error for that sample.
+5. Results are printed as tables and optionally written as a JSON report, and any configured quality gates turn them into the run's exit code — the CI signal.
+
+The labeling commands work on the same pipeline: `seed` sends draft samples through the adapter and writes the results back as proposed `expect` values instead of comparing them, and `review` opens a browser UI for checking and editing labels against the video.
 
 ## Installation
 
