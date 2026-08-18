@@ -219,9 +219,10 @@ SEED_DETAILS = """
 ## Effects and recovery
 
 `seed` mutates selected case YAML. Existing expectations are preserved unless
-`--replace` is set. Candidate files are validated and replaced only after every
-selected expectation succeeds; concurrent case edits are never overwritten. Treat
-generated expectations as proposals and inspect them with `review`.
+`--replace` is set. Candidate files are validated only after every selected
+expectation succeeds. Immediately before each atomic replacement, seed compares the
+current source with the version it loaded and refuses the write when they differ.
+Treat generated expectations as proposals and inspect them with `review`.
 
 Successful adapter results are checkpointed under `<eval-dir>/runs/checkpoints/`.
 With `--keep-going`, errors are retained and other samples continue, but case YAML
@@ -252,7 +253,7 @@ is enabled by default: failed comparisons are reported but do not by themselves
 make the command fail. Configure a CLI or YAML gate for CI.
 """
 
-RUN_DETAILS = """
+RUN_DETAILS = r"""
 ## Selection and gates
 
 `--at`, `--from`, and `--until` filter samples already declared in the selected
@@ -407,15 +408,16 @@ YAML `video` block for a case file. Supported suffixes are `.mp4`, `.mov`, `.m4v
 `.webm`, and `.mkv`.
 """
 
-VIDEO_UPLOAD_DETAILS = """
+VIDEO_UPLOAD_DETAILS = r"""
 Without `--key`, the immutable object key is `<sha256><extension>`. An existing
-object is reused only when its size and SHA-256 metadata match; conflicting objects
-are never overwritten. The named store and its credentials come from
-`<eval-dir>/config.yaml`. Transfer or configuration errors exit `2`.
+object found during the preflight check is reused only when its size and SHA-256
+metadata match; otherwise the upload is refused. Successful uploads are verified
+afterward. The named store and its credentials come from `<eval-dir>/config.yaml`.
+Transfer or configuration errors exit `2`.
 
 ```sh
-glasskit eval video-store upload recordings/task-01.mp4 --store team-videos
-glasskit eval video-store upload recordings/task-01.mp4 --store team-videos \
+glasskit eval video-store upload task-01.mp4 --store team-videos
+glasskit eval video-store upload task-01.mp4 --store team-videos \
   --key tasks/task-01.mp4
 ```
 """

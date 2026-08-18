@@ -132,6 +132,42 @@ def test_eval_video_store_help_documents_configuration_and_cache_scope() -> None
     assert "GLASSKIT_EVAL_CACHE_DIR" in output
 
 
+def test_eval_help_multiline_examples_preserve_shell_continuations() -> None:
+    run_result = CliRunner().invoke(app, ["eval", "run", "--help"])
+    upload_result = CliRunner().invoke(app, ["eval", "video-store", "upload", "--help"])
+
+    assert run_result.exit_code == 0
+    assert upload_result.exit_code == 0
+    run_lines = [line.strip() for line in run_result.output.splitlines()]
+    upload_lines = [line.strip() for line in upload_result.output.splitlines()]
+    run_command = "glasskit eval run --min-pass-rate 0.9 --max-failures 3 \\"
+    upload_command = (
+        "glasskit eval video-store upload task-01.mp4 --store team-videos \\"
+    )
+    assert run_command in run_lines
+    assert run_lines[run_lines.index(run_command) + 1] == (
+        "--output-json eval/runs/results.json"
+    )
+    assert upload_command in upload_lines
+    assert upload_lines[upload_lines.index(upload_command) + 1] == (
+        "--key tasks/task-01.mp4"
+    )
+
+
+def test_eval_help_qualifies_concurrent_write_guarantees() -> None:
+    seed_result = CliRunner().invoke(app, ["eval", "seed", "--help"])
+    upload_result = CliRunner().invoke(app, ["eval", "video-store", "upload", "--help"])
+
+    assert seed_result.exit_code == 0
+    assert upload_result.exit_code == 0
+    seed_output = _plain_output(seed_result.output)
+    upload_output = _plain_output(upload_result.output)
+    assert "compares the current source with the version it loaded" in seed_output
+    assert "object found during the preflight check" in upload_output
+    assert "never overwritten" not in seed_output
+    assert "never overwritten" not in upload_output
+
+
 def test_eval_commands_define_target_filter() -> None:
     root_command = get_command(app)
     assert isinstance(root_command, TyperGroup)
