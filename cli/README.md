@@ -6,6 +6,8 @@ The eval loop is not tied to glasses or a particular model provider. It works fo
 
 Use GlassKit Eval through the `glasskit eval` command group. This is its user manual; for contributor implementation notes, see [AGENTS.md](https://github.com/RealComputer/GlassKit/blob/main/cli/AGENTS.md).
 
+Contents: [Why Use This?](#why-use-this) · [Installation](#installation) · [Quickstart](#quickstart) · [Core Concepts](#core-concepts) · [Common Workflows](#common-workflows) · [Eval Directory Layout](#eval-directory-layout) · [Cloud-stored Videos](#cloud-stored-videos) · [Case File Reference](#case-file-reference) · [Comparison Reference](#comparison-reference) · [Adapter Reference](#adapter-reference) · [Command Reference](#command-reference) · [Configuration](#configuration) · [Environment Variables](#environment-variables) · [Output Formats](#output-formats) · [Exit Codes](#exit-codes) · [Support](#support)
+
 ## Why Use This?
 
 Vision-based apps often turn camera input into a structured decision: whether a workflow step is complete, which objects are present, what state a scene is in, or what action should happen next. Recreating those scenes by hand for every prompt, model, or app logic change is slow and makes regressions difficult to reproduce.
@@ -35,14 +37,15 @@ The `uv run ...` examples below assume the package has been added to your projec
 
 ## Quickstart
 
-Start in an app repository checked out next to a `recordings/` directory. This example uses `../recordings/task-01.mp4` from the shell working directory and creates an `eval/` directory in the app repo.
+Start in your app repository. Any recording that is at least a few seconds long works for this walkthrough. This example copies an MP4 recording into `eval/cases/` so the case file can reference it by filename; [Eval Directory Layout](#eval-directory-layout) lists the supported formats.
 
 Create the eval directory and write a case file that points at the recording:
 
 ```sh
 mkdir -p eval/cases
+cp path/to/any-recording.mp4 eval/cases/task-01.mp4
 cat > eval/cases/task-01.yaml <<'YAML'
-video: ../../../recordings/task-01.mp4
+video: task-01.mp4
 targets:
   step_1:
     samples:
@@ -70,6 +73,8 @@ uv run glasskit eval run
 ```
 
 Expected result: `run` prints case progress, a summary, and a per-target table.
+
+Recordings do not have to live inside the repo; [Eval Directory Layout](#eval-directory-layout) shows how to reference a shared `recordings/` directory, and [Cloud-stored Videos](#cloud-stored-videos) covers recordings too large to keep locally.
 
 ## Core Concepts
 
@@ -291,14 +296,16 @@ video_stores:
     region: us-east-1
 ```
 
-Omit `--key` when uploading to let GlassKit use `<sha256><extension>` as the object key. Existing objects are not overwritten. Use `pull` when you want to download selected videos ahead of time:
+`access_key_id_env` and `secret_access_key_env` must be set together, and temporary credentials can add `session_token_env`. Only `bucket` is required: `type` defaults to `s3` and `region` defaults to `us-east-1`.
+
+Omit `--key` when uploading to let GlassKit use `<sha256><extension>` as the object key. Uploading is idempotent: when the destination object already exists with a matching size and SHA-256, the command reports that and prints the same `video:` block; any other existing object at the key is refused rather than overwritten. Use `pull` when you want to download selected videos ahead of time:
 
 ```sh
 uv run --env-file .env glasskit eval video-store pull
 uv run --env-file .env glasskit eval video-store pull --case task-01
 ```
 
-`list-samples` validates cloud references without downloading videos. To clear downloaded videos, run `glasskit eval video-store prune-cache --all`; they will be downloaded again when needed.
+`list-samples` validates cloud references without downloading videos. Downloads are stored in a per-user cache outside the eval directory — `~/Library/Caches/glasskit/eval/videos` on macOS, `$XDG_CACHE_HOME/glasskit/eval/videos` on Linux, and `%LOCALAPPDATA%\GlassKit\Cache\eval\videos` on Windows — and shared by every eval directory on the machine. Set `GLASSKIT_EVAL_CACHE_DIR` to override the location. To clear downloaded videos, run `glasskit eval video-store prune-cache --all`; they will be downloaded again when needed.
 
 ### Public Downloads
 
@@ -347,7 +354,7 @@ targets:
   step_2:
     label: Step 2
     samples:
-    - at: [4.0, 6.0]
+    - at: [4.0, 6.0] # Two discrete samples, not a range.
       expect: false
 thresholds:
   min_pass_rate: 0.9
@@ -378,7 +385,7 @@ Target fields:
 | `sample_defaults` | No | Target-wide defaults for sample `field` and `compare`. These override case defaults. |
 | `samples` | Yes | List of sample blocks. Empty lists are invalid unless `--allow-empty` is used. |
 
-Most evals should put adapter metadata directly under `targets.<id>.config`. `workflow.targets` is useful when an eval is generated from or synchronized with an app workflow manifest and workflow-owned metadata should stay separate from eval-owned samples, expectations, and per-case overrides. Each workflow target needs an `id`; `label` and extra metadata keys are allowed. Entries are matched by `id`, then merged into the adapter target config before `targets.<id>.config` is applied:
+Most evals should put adapter metadata directly under `targets.<id>.config`. `workflow.targets` is useful when an eval is generated from or synchronized with an app workflow manifest and workflow-owned metadata should stay separate from eval-owned samples, expectations, and per-case overrides. Each workflow target needs an `id`; `label` and extra metadata keys are allowed. Entries are matched by `id`, and their metadata keys other than `id` and `label` are merged into the adapter target config before `targets.<id>.config` is applied. A workflow `label` is used as the target's display label when the target does not define one, and entries whose `id` matches no target are ignored:
 
 ```yaml
 workflow:
@@ -408,7 +415,7 @@ Sample block fields:
 | `comment` | No | Human-readable note retained with the expectation. It does not affect adapter calls or comparison. |
 | `ignore` | No | Nonempty reason for ignoring this block. Ignored samples do not need `expect`; they are reported but are not decoded, sent to the adapter, seeded, or included in pass rates, failure counts, or quality gates. |
 
-Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized.
+Sample times must be finite and nonnegative. Ranges must have `end` greater than `start`. Overlapping or duplicate samples for the same target are invalid; overlap is checked on the declared `at` times and `range` intervals, so two blocks with overlapping ranges are rejected even when their expanded samples would not collide. Expansion is capped at 10,000 samples across all targets in one case; pathological ranges are rejected before their samples are materialized. Unknown keys anywhere in a case file are validation errors, so a misspelled field name fails fast instead of being silently ignored; only `workflow.targets` entries accept extra metadata keys.
 
 Use `ignore` for a known exceptional sample that should remain documented without affecting a run. An ignored `at` list or `range` ignores every expanded sample in that block; use a single `at` timestamp when only one sample is exceptional.
 
@@ -443,7 +450,7 @@ targets:
 
 The adapter observation and the sample `expect` value must both be JSON-like. For simple checks, return only the value you want compared and omit `field`. Use `field` when the adapter naturally returns a structured result but only one nested value should determine correctness. For example, an adapter can return its result alongside diagnostic metadata; selecting the result with `field` makes it the seeded and compared value while preserving the complete adapter response in machine-readable reports and saved failure artifacts.
 
-Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with a `missing field: ...` reason.
+Field paths are dot-separated. Mapping keys are matched by name, and list indexes can be addressed with nonnegative numeric path parts such as `detections.0.label`. Missing fields fail the sample with an `adapter observation is missing configured field: ...` reason.
 
 Supported comparison modes:
 
@@ -540,11 +547,11 @@ An evaluator chooses one of two execution strategies by implementing `evaluate` 
 | Strategy | Adapter method | GlassKit Eval execution | Use when |
 | --- | --- | --- | --- |
 | Individual | `evaluate(sample, target)` | Calls the method once per sample, with at most `--concurrency` calls in flight for the current target. | Each sample maps to an independent request or local operation. This is the recommended default for ordinary model APIs. |
-| Batch | `evaluate_many(samples, target)` | Calls the method once per target with all of that target's decoded samples. GlassKit Eval does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
+| Batch | `evaluate_many(samples, target)` | Calls the method once per target with that target's selected decoded samples. GlassKit Eval does not schedule the samples inside the batch. | The provider has a real multi-input endpoint, or the adapter can materially reuse work across the target's samples. |
 
 Implement at least one strategy. If an evaluator implements both methods, `evaluate_many` takes precedence. Batch evaluation must return exactly one JSON-like observation per input sample in the same order. A batch adapter owns any chunking or internal concurrency it needs; `--concurrency` does not fan out calls inside `evaluate_many`.
 
-Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit Eval schedules the remaining samples in case-file declaration order and passes batch samples in that order.
+Samples with an `ignore` reason are omitted before either strategy runs. They are not decoded and are not present in the `samples` list passed to `evaluate_many`. GlassKit Eval schedules the remaining samples in case-file declaration order and passes batch samples in that order. During `seed` and resumed runs, only samples that still need work are passed, so a batch adapter must not assume it always receives a target's complete sample set.
 
 Prefer `evaluate` when the work consists of independent calls, even if those calls should overlap. GlassKit Eval bounds synchronous and asynchronous calls by `--concurrency` and restores deterministic sample order after calls finish. With `--keep-going`, an individual call failure becomes an error only for that sample.
 
@@ -564,7 +571,7 @@ Factory `config` fields:
 | Field | Description |
 | --- | --- |
 | `eval_dir` | Resolved eval directory path. |
-| `config` | Mapping loaded from `--adapter-config`, or an empty mapping. |
+| `config` | Mapping loaded from the discovered `adapter.yaml` or an explicit `--adapter-config`, or an empty mapping. |
 | `artifacts_dir` | Path from `--artifacts-dir`, or `None`. |
 | `verbose` | Boolean from `--verbose`. |
 
@@ -576,10 +583,12 @@ Sample fields passed to the evaluator:
 | `timestamp_s` | Requested sample timestamp in seconds from the start of the clip, from `at` or the expanded `range`. |
 | `frame_index` | Zero-based decoded video frame index chosen for that timestamp. |
 | `sample_index` | Case-local sample index. |
-| `video_path` | Source video path as a string. |
+| `video_path` | Local video file path as a string. For cloud-stored videos this is the downloaded cache file. |
 | `case_name` | Case filename stem. |
 
-Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. GlassKit applies the source video's display rotation before handing the frame to an adapter, so its pixels and dimensions match normal video playback. For variable-frame-rate videos, `glasskit eval` uses each frame's media timestamp when available; if a video lacks frame timestamps, it estimates them from the frame index and average frame rate.
+Frame sampling is timestamp-based. `sample.timestamp_s` is always the requested eval time, not the actual media timestamp of the selected frame. `sample.image` is the decoded frame whose timestamp is closest to that requested time, with ties choosing the earlier frame. GlassKit applies the source video's display rotation and reflection before handing the frame to an adapter, so its pixels and dimensions match normal video playback. For variable-frame-rate videos, `glasskit eval` uses each frame's media timestamp when available; if a video lacks frame timestamps, it estimates them from the frame index and average frame rate.
+
+`sample.image` is closed when the evaluate call returns. Call `sample.image.copy()` if the adapter needs to keep the frame afterward.
 
 Target fields passed to the evaluator:
 
@@ -588,7 +597,7 @@ Target fields passed to the evaluator:
 | `id` | Target id from the case file. |
 | `index` | Target's zero-based order in the case file. |
 | `label` | Optional target label. |
-| `config` | Adapter-specific target metadata from `targets.<id>.config`, plus any matching optional metadata from `workflow.targets`. |
+| `config` | Adapter-specific target metadata from `targets.<id>.config`, plus matching metadata keys other than `id` and `label` from `workflow.targets`; `targets.<id>.config` wins on conflicts. |
 
 Adapter return values must be JSON-like: `None`, boolean, finite number, string, array, or object with string keys.
 
@@ -602,14 +611,14 @@ glasskit eval run --adapter-command "node eval/adapter.js"
 
 GlassKit Eval parses the command into an argument list, then starts it directly without a shell. Pipes, redirects, variable expansion, and command substitution are therefore unavailable. The command inherits the current working directory and environment, so it can import the app normally and read the same secrets and configuration.
 
-Start from the complete JavaScript file below. Its editable application section passes a factory to `runGlassKitAdapter`; the protocol function handles communication with GlassKit Eval. Stdout belongs to that function, so write application and dependency logs to stderr with `console.error()`.
+Start from the complete JavaScript file below. Its editable application section passes a factory to `runGlassKitAdapter`; the protocol function handles communication with GlassKit Eval. Stdout belongs to that function, so write application and dependency logs to stderr with `console.error()`. GlassKit Eval mirrors adapter stderr to its own stderr and quotes the most recent output in error messages.
 
 The factory runs once per eval trial and receives this context:
 
 | Field | Description |
 | --- | --- |
 | `evalDir` | Absolute eval directory path. |
-| `config` | Object loaded from `--adapter-config`, or an empty object. |
+| `config` | Object loaded from the discovered `adapter.yaml` or an explicit `--adapter-config`, or an empty object. |
 | `artifactsDir` | Absolute path from `--artifacts-dir`, or `null`. |
 | `verbose` | Boolean from `--verbose`. |
 
@@ -627,14 +636,16 @@ Command-adapter samples contain the same information as Python samples, using lo
 
 | Field | Description |
 | --- | --- |
-| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the display-oriented lossless PNG. |
+| `image` | `{mimeType, bytes, width, height}`, where `bytes` is a Node.js `Buffer` containing the display-oriented lossless PNG. On the wire this field arrives as `dataBase64`, a base64 string that the protocol function below decodes into `bytes` before calling the app. |
 | `timestampS` | Requested sample timestamp in seconds. |
 | `frameIndex` | Zero-based decoded video frame index selected for that timestamp. |
 | `sampleIndex` | Case-local sample index. |
-| `videoPath` | Source video path as a string. Do not decode it again; `image` is already the selected frame. |
+| `videoPath` | Local video file path as a string; for cloud-stored videos, the downloaded cache file. Do not decode it again; `image` is already the selected frame. |
 | `caseName` | Case filename stem. |
 
 Targets use the `id`, `index`, `label`, and `config` fields described above. GlassKit-owned fields use lower camel case; keys inside the user-provided factory and target `config` objects are preserved unchanged. `glasskit eval validate --adapter-command ...` constructs and closes the adapter without evaluating samples.
+
+After answering the final `close` request, the adapter process must exit promptly with status `0`; GlassKit Eval waits about five seconds before terminating the process and its children. Protocol messages are limited to 256 MiB in each direction, which bounds how many PNG frames one `evaluateMany` batch can carry.
 
 In this `eval/adapter.js`, replace `createAppClient` and its methods with thin calls into the app, then keep the marked protocol function unchanged. Application clients stay in the factory's closure, and supported methods are detected automatically. The example uses an ECMAScript module; use `.mjs` or set `"type": "module"` in the app's `package.json` when needed.
 
@@ -875,8 +886,8 @@ Commands:
 | Command | Description |
 | --- | --- |
 | `pull` | Download all selected cloud videos. Accepts `--eval-dir` and optional `--case`. |
-| `upload FILE --store NAME` | Upload a local video through the named store's authenticated S3 API and print a case-file `video:` block. Accepts optional `--key` and `--eval-dir`. |
-| `prune-cache` | Remove stale incomplete downloads. Add `--all` to remove downloaded videos too. |
+| `upload SOURCE --store NAME` | Upload a local video through the named store's authenticated S3 API and print a case-file `video:` block. Accepts optional `--key` and `--eval-dir`. |
+| `prune-cache` | Remove abandoned partial downloads older than one hour. Add `--all` to remove downloaded videos too. Operates on the machine-wide cache, not one eval directory. |
 
 ### `glasskit eval seed`
 
@@ -899,14 +910,14 @@ Options:
 | `--concurrency INTEGER` | `1` | Maximum concurrent per-sample `evaluate` calls within a target. Must be greater than zero. Ignored for adapters using `evaluate_many`, which control their own batch execution. |
 | `--replace` | `false` | Evaluate and replace existing expectations in the selected scope as well as filling missing ones. |
 | `--keep-going` | `false` | Checkpoint per-sample adapter or field-extraction errors and continue evaluating. The case YAML remains unchanged unless every selected expectation succeeds. |
-| `--resume PATH` | None | Resume an incomplete seed checkpoint by its printed path or checkpoint id. The checkpoint restores the original adapter, filters, config, concurrency, and seed options, so it cannot be combined with overrides. |
+| `--resume PATH` | None | Resume an incomplete seed checkpoint by its printed path or checkpoint id. The checkpoint restores the original adapter, filters, config, concurrency, and seed options, so it cannot be combined with overrides; only `--eval-dir` may be repeated, to locate a checkpoint given by id. |
 | `--verbose` | `false` | Print every proposed expectation and set the factory config object's `verbose` field. |
 
 When `field` is present on a sample block, `seed` extracts that path from the adapter's observation and writes the extracted value as `expect`; otherwise it writes the complete observation. Existing expectations outside the selected filters, and inside the filters without `--replace`, are preserved. Ignored samples are never seeded, even with `--replace`, and may omit `expect`. Other missing expectations outside the selected filters may remain draft; `run`, `validate`, and `list-samples` reject draft samples only when they fall inside those commands' selected scope.
 
-Each successful adapter result is durably checkpointed before the command advances. If seeding is interrupted or an adapter call fails after at least one result succeeds, the case file is left unchanged and the error output prints an exact `glasskit eval seed --resume ...` command. Setup failures and attempts with no successful results do not print a resume command, because rerunning the original command repeats no completed adapter work. Resume evaluates only checkpointed errors and unfinished samples, including when the original operation used `--replace`. Once all selected expectations are available, `seed` validates and atomically replaces the complete case YAML. Resume does not automatically retry calls; each invocation makes at most one new attempt for each selected pending sample.
+Each successful adapter result is durably checkpointed before the command advances. If seeding is interrupted or an adapter call fails after at least one result succeeds, the case file is left unchanged and the error output prints an exact `glasskit eval seed --resume ...` command. Setup failures and attempts with no successful results do not print a resume command, because rerunning the original command repeats no completed adapter work. Resume evaluates only checkpointed errors and unfinished samples, including when the original operation used `--replace`. Once all selected expectations are available, `seed` validates and atomically replaces the complete case YAML. Resume does not automatically retry calls; each invocation makes at most one new attempt for each selected pending sample. Resume also requires unchanged inputs: if a selected case file or video changed after the checkpoint was written, resuming stops with a `checkpoint inputs changed` error and the operation must be restarted.
 
-Exit behavior: exits `0` after seeding or when the selected scope has nothing to seed, `1` when `--keep-going` attempted the selected scope but one or more expectations remain incomplete, and `2` for invalid input, an adapter failure that aborted evaluation, or a case file that cannot be updated. Interrupted and incomplete operations retain checkpoints only when they contain successful adapter results.
+Exit behavior: exits `0` after seeding or when the selected scope has nothing to seed, `1` when `--keep-going` attempted the selected scope but one or more expectations remain incomplete, `2` for invalid input, an adapter failure that aborted evaluation, or a case file that cannot be updated, and `130` when interrupted with `Ctrl+C`. Interrupted and incomplete operations retain checkpoints only when they contain successful adapter results.
 
 ### `glasskit eval review`
 
@@ -982,18 +993,18 @@ Options:
 | `--max-failures INTEGER` | None | Maximum failed comparisons. Overrides eval-level `thresholds.max_failures` and suppresses case-level gates when set. |
 | `--max-flaky-samples INTEGER` | None | Cross-trial maximum number of samples whose status varies. Must be nonnegative and requires `--repeat` of at least `2`. |
 | `--keep-going` | `false` | Record adapter evaluation or comparison errors as sample results and continue. |
-| `--resume PATH` | None | Resume an incomplete run checkpoint by its printed path or checkpoint id. The checkpoint restores the original adapter and run options, so it cannot be combined with overrides. |
+| `--resume PATH` | None | Resume an incomplete run checkpoint by its printed path or checkpoint id. The checkpoint restores the original adapter and run options, so it cannot be combined with overrides; only `--eval-dir` may be repeated, to locate a checkpoint given by id. |
 | `--verbose` | `false` | Print every sample result and set the factory config object's `verbose` field. |
 | `--output-json PATH` | None | Write a machine-readable JSON report. |
 | `--artifacts-dir PATH` | None | Base directory for generated artifacts. Failure artifacts are written below its `failures/` subdirectory; when omitted, the base is `<eval-dir>/runs/`. |
 | `--save-failures` | `false` | Save failed or errored sample frames and per-result JSON. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
-`--at`, `--from`, and `--until` select samples already scheduled in the case; they do not create samples at arbitrary video times. Repeat `--at` to select multiple timestamps. Each requested timestamp must be present among the samples chosen by `--case` and `--target`. `--from` is inclusive, `--until` is exclusive, and either range bound may be used alone. All three options require `--case`, and `--at` cannot be combined with either range bound. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
+`--at`, `--from`, and `--until` select samples already scheduled in the case; they do not create samples at arbitrary video times. Repeat `--at` to select multiple timestamps. Each requested timestamp must be present among the samples chosen by `--case` and `--target`. `--from` is inclusive, `--until` is exclusive, either range bound may be used alone, and when both are given `--until` must be greater than `--from`. All three options require `--case`, and `--at` cannot be combined with either range bound. Only selected samples are sent to the adapter, and quality gates apply to the selected results.
 
-Every completed sample result is durably checkpointed. If a fail-fast run is interrupted after at least one adapter evaluation completes, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command only when the checkpoint contains completed adapter work. Setup failures and attempts where every adapter call fails do not print a resume command. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically.
+Every completed sample result is durably checkpointed. If a fail-fast run is interrupted after at least one adapter evaluation completes, its error output prints an exact `glasskit eval run --resume ...` command. With `--keep-going`, the normal report still contains adapter errors and fails the automatic `adapter_errors` gate, while its summary prints a resume command only when the checkpoint contains completed adapter work. Setup failures and attempts where every adapter call fails do not print a resume command. Resume reuses successful evaluations, ordinary comparison failures, ignored samples, and comparison-error results; it evaluates only adapter errors and unfinished samples. No adapter call is retried automatically. A resumed run writes a JSON report or failure artifacts only when the original invocation requested them, and resume requires unchanged inputs: if a selected case file or video changed after the checkpoint was written, resuming stops with a `checkpoint inputs changed` error.
 
-Exit behavior: exits `0` when every configured gate passes, `1` when the eval completed but one or more gates failed, and `2` when setup or runtime errors abort the run.
+Exit behavior: exits `0` when every configured gate passes, `1` when the eval completed but one or more gates failed, `2` when setup or runtime errors abort the run, and `130` when interrupted with `Ctrl+C`.
 
 ### `glasskit eval validate`
 
@@ -1017,7 +1028,7 @@ Options:
 
 When `--adapter` or `--adapter-command` is provided, validation also constructs and closes that adapter. It does not evaluate a sample or verify the adapter's observations. Without either option, validation checks only the eval directory and selected cases.
 
-Exit behavior: exits `0` when validation passes and `1` when validation fails.
+Exit behavior: exits `0` when validation passes, `1` when validation fails, and `2` for CLI usage errors such as combining `--adapter` with `--adapter-command`.
 
 ### `glasskit eval list-samples`
 
@@ -1036,7 +1047,7 @@ Options:
 | `--target TEXT` | All targets | Only list this target id from the selected cases. Repeat the option to list multiple targets. Every requested target must exist in the selected case scope. May be used with or without `--case`. |
 | `--at FLOAT` | None | Only list samples scheduled at this time in seconds. Repeat to select multiple times. Requires `--case` and cannot be combined with `--from` or `--until`. |
 | `--from FLOAT` | None | Only list samples scheduled at or after this time in seconds. Requires `--case`. |
-| `--until FLOAT` | None | Only list samples scheduled before this time in seconds. Requires `--case`. |
+| `--until FLOAT` | None | Only list samples scheduled before this time in seconds. Requires `--case` and must be greater than `--from` when both are set. |
 | `--allow-empty` | `false` | Allow evals or cases with no samples. |
 
 The table includes each sample's case, target, timestamp, expectation, comparison mode, field, and source. Range blocks are half-open: for example, `range: [1.0, 2.0]` with `every_s: 0.5` produces samples at `1.0` and `1.5`, not `2.0`.
@@ -1062,7 +1073,7 @@ Default values at a glance:
 | Sample `field` | Inherits target or case `sample_defaults.field`; otherwise compares the whole adapter observation. |
 | Sample `compare.mode` | Inherits target or case `sample_defaults.compare`; otherwise inferred from `expect`: non-boolean numbers use `numeric`; booleans, strings, `null`, arrays, and objects use `exact`. |
 | Numeric `compare.tolerance` | `0.0`. |
-| `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata from `workflow.targets`, with `targets.<id>.config` taking precedence. |
+| `targets.<id>.config` | Empty object. Use this as the default place for adapter-specific target metadata. The final adapter target config also includes matching optional metadata (other than `id` and `label`) from `workflow.targets`, with `targets.<id>.config` taking precedence. |
 | Threshold keys | Unset. Missing `min_pass_rate`, `max_failures`, and `per_target.<target>.min_pass_rate` keys create no corresponding gate. |
 | Adapter config | `<eval-dir>/adapter.yaml` when present, otherwise an empty object; `--adapter-config` overrides discovery. |
 | Failure artifacts | Saved only with `--save-failures`; stored below `<eval-dir>/runs/failures/` by default. |
@@ -1081,6 +1092,8 @@ thresholds:
 ```
 
 All threshold keys default to unset. `glasskit eval` does not treat a missing `min_pass_rate` as `1.0`, `0.0`, or the current pass rate; it skips that pass-rate gate. If every quality threshold is omitted, ordinary failed comparisons still appear in the console report and JSON output, but they do not fail `glasskit eval run`. If another gate is configured, such as `max_failures` or a per-target `min_pass_rate`, ordinary failed comparisons can still fail the run through that gate.
+
+A configured gate with no matching results fails: a `per_target` threshold that names a target absent from the selected results fails at a 0% pass rate rather than passing silently. Per-target gates are skipped only for targets excluded by `--case`, `--target`, or time filters. Pass rates count errored samples in their denominator, so with `--keep-going`, adapter errors lower pass-rate gates in addition to tripping the automatic `adapter_errors` gate.
 
 With `--repeat`, quality gates are calculated separately for every trial, and the overall run fails if any trial fails one. Results are never pooled before applying a quality gate. Flaky samples do not fail the run unless `--max-flaky-samples` is configured. A stable failure satisfies `--max-flaky-samples 0`, so combine stability and quality gates when correctness also matters.
 
@@ -1112,7 +1125,7 @@ Other precedence rules:
 
 ## Environment Variables
 
-`glasskit eval` defines no CLI-specific environment variables and does not read user input from stdin.
+`glasskit eval` reads one CLI-specific environment variable: `GLASSKIT_EVAL_CACHE_DIR` overrides the per-user cache directory for downloaded cloud videos described in [Cloud-stored Videos](#cloud-stored-videos). It does not read user input from stdin.
 
 Adapters may read any environment variables your app needs, such as API keys, backend URLs, or feature flags. Command adapters inherit the GlassKit Eval process environment, and GlassKit Eval reserves their stdin and stdout for the process protocol. Keep secrets out of case files and adapter config files. With `uv`, pass a dotenv file to `uv run`:
 
@@ -1135,6 +1148,7 @@ Checkpoints contain adapter configuration and observations and are written with 
 | `0` | Command succeeded. For `run`, every configured gate passed. | No action needed. |
 | `1` | Validation failed, `seed --keep-going` retained one or more incomplete expectations, or `run` completed but one or more gates failed. | Read the validation issues, incomplete-seed message, or gate tables. Use the printed resume command to retry only adapter errors and unfinished samples. |
 | `2` | A CLI usage error, setup error, config error, video error, adapter loading error, or adapter runtime error aborted the command. | Read the error message and validate the eval directory. If a checkpoint is printed, resume it after resolving the error; use `--keep-going` on a new operation when other samples should continue after an error. |
+| `130` | `run` or `seed` was interrupted with `Ctrl+C`. | Rerun the command, or use the printed `--resume` command when the checkpoint retained completed adapter work. |
 
 ## Support
 
