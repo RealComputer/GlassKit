@@ -61,6 +61,32 @@ def test_detects_native_batch_evaluator(tmp_path: Path) -> None:
     asyncio.run(_run_native_batch_evaluator_test(tmp_path))
 
 
+def test_keyword_only_factory_receives_config(tmp_path: Path) -> None:
+    asyncio.run(_run_keyword_only_factory_test(tmp_path))
+
+
+def test_factory_with_extra_keyword_only_arguments_error_names_them(
+    tmp_path: Path,
+) -> None:
+    adapter_path = tmp_path / "adapter.py"
+    adapter_path.write_text(
+        "def create_evaluator(*, config, api_key): pass\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AdapterLoadError) as exc_info:
+        asyncio.run(
+            load_evaluator(
+                f"{adapter_path}:create_evaluator",
+                AdapterConfig(eval_dir=tmp_path),
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "must accept the factory config as its only required argument" in message
+    assert "config, api_key" in message
+
+
 def test_missing_adapter_callable_error_distinguishes_it_from_eval_targets(
     tmp_path: Path,
 ) -> None:
@@ -214,6 +240,33 @@ def create_evaluator(config):
 
     result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
     assert result == "step_1"
+
+
+async def _run_keyword_only_factory_test(tmp_path: Path) -> None:
+    adapter_path = tmp_path / "kw_only_adapter.py"
+    adapter_path.write_text(
+        """
+class Evaluator:
+    def __init__(self, config):
+        self._config = config
+
+    async def evaluate(self, sample, target):
+        return self._config.verbose
+
+
+def create_evaluator(*, config):
+    return Evaluator(config)
+        """,
+        encoding="utf-8",
+    )
+
+    evaluator = await load_evaluator(
+        f"{adapter_path}:create_evaluator",
+        AdapterConfig(eval_dir=tmp_path, verbose=True),
+    )
+
+    result = await evaluator.evaluate(_sample(), TargetContext(id="step_1", index=0))
+    assert result is True
 
 
 async def _run_native_batch_evaluator_test(tmp_path: Path) -> None:

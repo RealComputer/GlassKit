@@ -25,8 +25,9 @@ async def load_evaluator(adapter_target: str, config: AdapterConfig) -> LoadedEv
     if _looks_like_frame_function(target):
         return _function_evaluator(target)
 
+    args, kwargs = _factory_config_arguments(target, config, adapter_target)
     try:
-        result = target(config) if _callable_accepts_config(target) else target()
+        result = target(*args, **kwargs)
         evaluator = await _maybe_await(result)
     except Exception as error:
         raise AdapterLoadError(
@@ -185,11 +186,13 @@ def _looks_like_frame_function(value: Any) -> bool:
     }
 
 
-def _callable_accepts_config(value: Callable[..., Any]) -> bool:
+def _factory_config_arguments(
+    factory: Callable[..., Any], config: AdapterConfig, adapter_target: str
+) -> tuple[tuple[AdapterConfig, ...], dict[str, AdapterConfig]]:
     try:
-        signature = inspect.signature(value)
+        signature = inspect.signature(factory)
     except (TypeError, ValueError):
-        return True
+        return (config,), {}
     required = [
         parameter
         for parameter in signature.parameters.values()
@@ -201,7 +204,19 @@ def _callable_accepts_config(value: Callable[..., Any]) -> bool:
             inspect.Parameter.KEYWORD_ONLY,
         }
     ]
-    return bool(required)
+    if not required:
+        return (), {}
+    if any(
+        parameter.kind is not inspect.Parameter.KEYWORD_ONLY for parameter in required
+    ):
+        return (config,), {}
+    if len(required) == 1:
+        return (), {required[0].name: config}
+    names = ", ".join(parameter.name for parameter in required)
+    raise AdapterLoadError(
+        f"adapter factory {adapter_target!r} must accept the factory config as "
+        f"its only required argument; it requires keyword-only arguments: {names}"
+    )
 
 
 def _has_evaluation_method(value: Any) -> bool:
