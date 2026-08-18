@@ -11,6 +11,8 @@ from urllib.parse import urlencode
 import typer
 import yaml
 from rich.console import Console
+from rich.default_styles import DEFAULT_STYLES
+from rich.style import Style
 from rich.text import Text
 
 from . import __version__
@@ -50,6 +52,18 @@ from .eval.runner import (
     validate_eval_directory,
 )
 from .eval.seeding import seed_eval, seed_options_from_invocation
+
+
+def _configure_rich_help_styles() -> None:
+    """Keep inline Markdown code readable across terminal color palettes.
+
+    Typer dims detailed help, while Rich defaults inline code to cyan on ANSI
+    black. ANSI black is palette-specific rather than the terminal background.
+    """
+    DEFAULT_STYLES["markdown.code"] = Style(bold=True, dim=False)
+
+
+_configure_rich_help_styles()
 
 ROOT_EPILOG = """
 Run `glasskit COMMAND --help` for a command's options and examples. When a command

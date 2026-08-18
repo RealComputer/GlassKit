@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 import typer
+import typer.rich_utils
+from rich.console import Console
 from rich.text import Text
 from typer.core import TyperGroup, TyperOption
 from typer.main import get_command
@@ -50,6 +52,25 @@ def test_eval_help_lists_current_commands() -> None:
     assert "list-samples" in result.output
     assert "export-frames" in result.output
     assert "init-case" not in result.output
+
+
+def test_eval_help_inline_code_uses_terminal_default_colors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", True)
+
+    result = CliRunner().invoke(app, ["eval", "--help"])
+
+    assert result.exit_code == 0
+    assert "\x1b[" in result.output
+    output = Text.from_ansi(result.output)
+    inline_code_offset = output.plain.index("./eval")
+    inline_code_style = output.get_style_at_offset(Console(), inline_code_offset)
+    assert inline_code_style.bold
+    assert inline_code_style.dim is not True
+    assert inline_code_style.color is None
+    assert inline_code_style.bgcolor is None
 
 
 def test_root_help_explains_recursive_help_discovery() -> None:
