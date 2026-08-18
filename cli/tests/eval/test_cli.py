@@ -138,8 +138,12 @@ def test_eval_help_multiline_examples_preserve_shell_continuations() -> None:
 
     assert run_result.exit_code == 0
     assert upload_result.exit_code == 0
-    run_lines = [line.strip() for line in run_result.output.splitlines()]
-    upload_lines = [line.strip() for line in upload_result.output.splitlines()]
+    run_lines = [
+        line.strip() for line in Text.from_ansi(run_result.output).plain.splitlines()
+    ]
+    upload_lines = [
+        line.strip() for line in Text.from_ansi(upload_result.output).plain.splitlines()
+    ]
     run_command = "glasskit eval run --min-pass-rate 0.9 --max-failures 3 \\"
     upload_command = (
         "glasskit eval video-store upload task-01.mp4 --store team-videos \\"
