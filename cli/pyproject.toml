@@ -1,7 +1,7 @@
 [project]
 name = "glasskit.ai"
 version = "0.1.12"
-description = "Recorded-video eval tools for smart-glasses apps"
+description = "Repeatable evals for AI apps using recorded video"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
