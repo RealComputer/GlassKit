@@ -1,1 +1,1 @@
-GlassKit provides open-source developer tools for building camera-based AI apps. This monorepo includes the `glasskit` CLI for evaluating these apps, along with agent skills and example projects for smart glasses app development.
+GlassKit provides open-source developer tools for building camera-based AI apps. This monorepo includes the `glasskit` CLI (`cli/`) for evaluating these apps, plus smart glasses app development resources: agent skills (`skills/`) and example projects (`examples/`).
