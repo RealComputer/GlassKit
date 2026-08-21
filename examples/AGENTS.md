@@ -1,1 +1,2 @@
 - Commit messages for changes under this directory should start with `example: `.
+- Rokid Glasses are Android-based smart glasses with an outward-facing camera, a monochrome HUD, microphones, speakers, and a temple touchpad.
